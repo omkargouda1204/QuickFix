@@ -1,0 +1,9 @@
+// build.gradle (Groovy)
+android {
+    // ...
+    packagingOptions {
+        resources {
+            excludes.add("path/to/your/unnecessary/resource")
+        }
+    }
+}

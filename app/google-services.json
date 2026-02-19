@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "355620342349",
+    "project_id": "quickfix-1bb09",
+    "storage_bucket": "quickfix-1bb09.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:355620342349:android:dbf3fd7acfb88655a1ea04",
+        "android_client_info": {
+          "package_name": "com.example.quickfix"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "355620342349-er3fdbigrqh2bhc3891rnmc7ns68pcm8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.quickfix",
+            "certificate_hash": "bc769c7b8801472e653c6d86bab8d7e680535205"
+          }
+        },
+        {
+          "client_id": "355620342349-i04r9k4i8lpv91k1e7709n26q5vrhp1f.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAWmZ7wtpzRJxQ-Vbnxs5RLfUIvgRPJwn4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "355620342349-i04r9k4i8lpv91k1e7709n26q5vrhp1f.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

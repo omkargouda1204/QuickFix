@@ -1,0 +1,74 @@
+<resources>
+    <string name="app_name">QuickFix</string>
+    <string name="welcome_text">Welcome to QuickFix</string>
+    <string name="login_screen">Login Screen</string>
+
+    <!-- Google Sign-In Web Client ID -->
+    <string name="default_web_client_id">355620342349-i04r9k4i8lpv91k1e7709n26q5vrhp1f.apps.googleusercontent.com</string>
+
+    <!-- Login Screen -->
+    <string name="login_title">Login</string>
+    <string name="welcome_back">Welcome Back!</string>
+    <string name="login_subtitle">Sign in to continue</string>
+    <string name="email_hint">Email Address</string>
+    <string name="password_hint">Password</string>
+    <string name="login_button">Login</string>
+    <string name="forgot_password">Forgot Password?</string>
+    <string name="or_continue_with">Or continue with</string>
+    <string name="google_sign_in">Sign in with Google</string>
+    <string name="no_account">Don\'t have an account?</string>
+    <string name="sign_up">Sign Up</string>
+
+    <!-- Forgot Password -->
+    <string name="forgot_password_title">Forgot Password</string>
+    <string name="forgot_password_subtitle">Enter your email to receive OTP</string>
+    <string name="send_otp">Send OTP</string>
+    <string name="enter_otp">Enter OTP</string>
+    <string name="verify_otp">Verify OTP</string>
+    <string name="new_password">New Password</string>
+    <string name="confirm_password">Confirm Password</string>
+    <string name="reset_password">Reset Password</string>
+    <string name="back_to_login">Back to Login</string>
+
+    <!-- Validation Messages -->
+    <string name="error_email_required">Email is required</string>
+    <string name="error_invalid_email">Please enter a valid email</string>
+    <string name="error_password_required">Password is required</string>
+    <string name="error_password_length">Password must be at least 6 characters</string>
+    <string name="error_login_failed">Login failed. Please try again</string>
+    <string name="error_network">Network error. Please check your connection</string>
+    <string name="success_login">Login successful!</string>
+    <string name="otp_sent">OTP sent to your email</string>
+    <string name="password_reset_success">Password reset successful</string>
+
+    <!-- Registration Screen -->
+    <string name="registration_title">Create Account</string>
+    <string name="welcome_new_user">Welcome to QuickFix!</string>
+    <string name="registration_subtitle">Join our community</string>
+    <string name="full_name_hint">Full Name</string>
+    <string name="phone_hint">Phone Number</string>
+    <string name="signup_button">Sign Up</string>
+    <string name="google_sign_up">Sign up with Google</string>
+    <string name="have_account">Already have an account?</string>
+    <string name="login_here">Login here</string>
+
+    <!-- OTP Verification -->
+    <string name="otp_verification_title">Verify Email</string>
+    <string name="otp_verification_subtitle">Enter the OTP sent to your email</string>
+    <string name="otp_code_hint">Enter 6-digit OTP</string>
+    <string name="verify_button">Verify</string>
+    <string name="resend_otp">Resend OTP</string>
+    <string name="otp_verified">Email verified successfully!</string>
+    <string name="account_created">Account created successfully!</string>
+
+    <!-- Validation Messages -->
+    <string name="error_fullname_required">Full name is required</string>
+    <string name="error_fullname_length">Name must be at least 3 characters</string>
+    <string name="error_phone_required">Phone number is required</string>
+    <string name="error_phone_invalid">Please enter a valid phone number</string>
+    <string name="error_passwords_not_match">Passwords do not match</string>
+    <string name="error_user_exists">Email already registered. Please login</string>
+    <string name="error_signup_failed">Sign up failed. Please try again</string>
+    <string name="error_otp_invalid">Invalid OTP. Please try again</string>
+    <string name="error_otp_expired">OTP expired. Please request new OTP</string>
+</resources>

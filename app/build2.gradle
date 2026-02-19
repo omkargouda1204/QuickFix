@@ -1,0 +1,9 @@
+// build.gradle (Groovy)
+android {
+    // ...
+    packagingOptions {
+        resources {
+            pickFirsts.add("path/to/your/duplicate/resource")
+        }
+    }
+}
