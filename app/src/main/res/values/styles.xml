@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Widget.QuickFix.TextInputLayout" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="boxBackgroundColor">@color/input_background</item>
+        <item name="boxStrokeColor">@color/input_stroke</item>
+        <item name="boxStrokeErrorColor">@color/splash_blue_dark</item>
+        <item name="hintTextColor">@color/input_hint</item>
+        <item name="startIconTint">@color/input_icon</item>
+        <item name="endIconTint">@color/input_icon</item>
+    </style>
+
+    <style name="Widget.QuickFix.TextInputEditText" parent="Widget.Material3.TextInputEditText.OutlinedBox">
+        <item name="android:textColor">@color/input_text</item>
+        <item name="android:textColorHint">@color/input_hint</item>
+        <item name="android:textSize">16sp</item>
+    </style>
+</resources>

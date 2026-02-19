@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true"
-    android:background="@color/white">
+    android:background="@color/screen_background">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -51,7 +51,7 @@
             android:layout_height="wrap_content"
             android:text="@string/otp_verification_subtitle"
             android:textSize="16sp"
-            android:textColor="#757575"
+            android:textColor="@color/input_hint"
             android:layout_gravity="center"
             android:layout_marginBottom="32dp" />
 
@@ -69,24 +69,29 @@
         <!-- OTP Input -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/otpSignupLayout"
+            style="@style/Widget.QuickFix.TextInputLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
             app:boxBackgroundMode="outline"
+            app:boxBackgroundColor="@color/input_background"
             app:boxCornerRadiusTopStart="12dp"
             app:boxCornerRadiusTopEnd="12dp"
             app:boxCornerRadiusBottomStart="12dp"
             app:boxCornerRadiusBottomEnd="12dp"
-            app:boxStrokeColor="@color/splash_blue"
-            app:hintTextColor="@color/splash_blue">
+            app:boxStrokeColor="@color/input_stroke"
+            app:hintTextColor="@color/input_hint">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/otpSignupInput"
+                style="@style/Widget.QuickFix.TextInputEditText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="@string/otp_code_hint"
                 android:inputType="number"
                 android:maxLength="6"
+                android:textColor="@color/input_text"
+                android:textColorHint="@color/input_hint"
                 android:textSize="16sp"
                 android:padding="16dp"
                 android:gravity="center"
@@ -100,7 +105,7 @@
             android:layout_height="wrap_content"
             android:text="Please enter the 6-digit code sent to your email"
             android:textSize="13sp"
-            android:textColor="#757575"
+            android:textColor="@color/input_hint"
             android:layout_gravity="center"
             android:layout_marginBottom="24dp" />
 
@@ -160,4 +165,3 @@
     </LinearLayout>
 
 </ScrollView>
-

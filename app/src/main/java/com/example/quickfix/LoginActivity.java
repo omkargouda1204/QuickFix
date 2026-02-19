@@ -110,7 +110,9 @@ public class LoginActivity extends AppCompatActivity {
         // Sign Up link click
         signUpLink.setOnClickListener(v -> {
             Intent intent = new Intent(LoginActivity.this, SignupActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             startActivity(intent);
+            finish(); // Close LoginActivity to prevent back navigation loop
         });
     }
 

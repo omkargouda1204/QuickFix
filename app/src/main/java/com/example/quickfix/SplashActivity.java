@@ -22,9 +22,9 @@ public class SplashActivity extends AppCompatActivity {
         // Get the splash container
         LinearLayout splashContainer = findViewById(R.id.splash_container);
 
-        // Load and start the fade-in animation
-        Animation fadeInAnimation = AnimationUtils.loadAnimation(this, R.anim.fade_in);
-        splashContainer.startAnimation(fadeInAnimation);
+        // Load and start the fade-in + scale animation
+        Animation splashAnimation = AnimationUtils.loadAnimation(this, R.anim.splash_fade_scale);
+        splashContainer.startAnimation(splashAnimation);
 
         // Navigate to LoginActivity after 3 seconds
         new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
@@ -33,8 +33,8 @@ public class SplashActivity extends AppCompatActivity {
                 Intent intent = new Intent(SplashActivity.this, LoginActivity.class);
                 startActivity(intent);
                 finish(); // Close splash activity so user can't go back to it
+                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
             }
         }, SPLASH_DURATION);
     }
 }
-
