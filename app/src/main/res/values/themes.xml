@@ -7,11 +7,14 @@
 
     <style name="Theme.QuickFix" parent="Base.Theme.QuickFix" />
 
-    <!-- Splash Screen Theme -->
+    <!-- Splash Screen Theme - gradient background, no action bar, matching system bars -->
     <style name="Theme.QuickFix.Splash" parent="Theme.Material3.Light.NoActionBar">
-        <item name="android:windowBackground">@color/splash_blue</item>
-        <item name="android:statusBarColor">@color/splash_blue_dark</item>
-        <item name="android:navigationBarColor">@color/splash_blue_dark</item>
-        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowBackground">@drawable/splash_gradient_background</item>
+        <item name="android:statusBarColor">@color/splash_gradient_start</item>
+        <item name="android:navigationBarColor">@color/splash_gradient_end</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowTranslucentNavigation">false</item>
+        <item name="android:windowNoTitle">true</item>
     </style>
 </resources>

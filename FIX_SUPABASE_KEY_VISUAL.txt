@@ -1,0 +1,186 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                   🔴 CRITICAL: FIX YOUR SUPABASE KEY                         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  YOUR CURRENT ERROR                                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+ERROR: Invalid API key
+- get_user_by_email failed for omkargouda20@gmail.com: Invalid API key
+- email_exists check failed for omkargouda27@gmail.com: Invalid API key
+- create_user failed for omkargouda27@gmail.com: Invalid API key
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  WHY THIS HAPPENS                                                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Your .env file has the WRONG Supabase key:
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  D:\QuickFix\backend\.env (LINE 12)                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  SUPABASE_SERVICE_ROLE_KEY=sb_publishable_ItRhFA3FRjef6cVFKR2cAQ_HsTVzvN3  │
+│                             ^^^^^^^^^^^^^^^^                                │
+│                             This is the ANON key!                           │
+│                             Backend needs SERVICE_ROLE key!                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  SUPABASE HAS 2 KEYS — YOU NEED THE RIGHT ONE                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║  KEY 1: anon / public (YOU HAVE THIS — WRONG FOR BACKEND)                ║
+╠═══════════════════════════════════════════════════════════════════════════╣
+║  sb_publishable_ItRhFA3FRjef6cVFKR2cAQ_HsTVzvN3                           ║
+║                                                                           ║
+║  ❌ Blocked by Row-Level Security (RLS)                                   ║
+║  ❌ Cannot create users                                                   ║
+║  ❌ Cannot store OTPs                                                     ║
+║  ✅ Used by: Browser/mobile apps (client-side)                           ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║  KEY 2: service_role (YOU NEED THIS — CORRECT FOR BACKEND)               ║
+╠═══════════════════════════════════════════════════════════════════════════╣
+║  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZi...║
+║  (very long — 500+ characters)                                            ║
+║                                                                           ║
+║  ✅ FULL database access                                                  ║
+║  ✅ Bypasses Row-Level Security                                           ║
+║  ✅ Can create users, store OTPs, update passwords                        ║
+║  ✅ Used by: Backend servers ONLY (keep secret!)                          ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  🎯 STEP-BY-STEP FIX                                                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+STEP 1: Open Supabase Dashboard
+────────────────────────────────────────────────────────────────────────────────
+Go to: https://supabase.com/dashboard/project/rddzycqxtgryrpymivfd/settings/api
+
+Or manually:
+1. Go to https://supabase.com/dashboard
+2. Click your project: rddzycqxtgryrpymivfd
+3. Click Settings (⚙️) → API
+
+
+STEP 2: Find the Service Role Key
+────────────────────────────────────────────────────────────────────────────────
+Scroll to "Project API keys" section.
+
+You'll see a table like this:
+
+┌──────────────────┬─────────────────────────────────────────────────────────┐
+│  Name            │  Key                                                    │
+├──────────────────┼─────────────────────────────────────────────────────────┤
+│  anon            │  sb_publishable_ItRhFA3FRjef6cVFKR2cAQ_HsTVzvN3         │
+│  public          │  [Copy]  [Reveal]                                       │
+│                  │  ↑ DON'T USE THIS (you have this now)                   │
+├──────────────────┼─────────────────────────────────────────────────────────┤
+│  service_role    │  •••••••••••••••••••••••••••••••••••••••••••••••••••••  │
+│                  │  [Copy]  [Reveal]                                       │
+│                  │  ↑ USE THIS! Click "Reveal" then "Copy"                 │
+└──────────────────┴─────────────────────────────────────────────────────────┘
+
+
+STEP 3: Copy the Service Role Key
+────────────────────────────────────────────────────────────────────────────────
+1. Click "Reveal" next to service_role
+2. Click "Copy" to copy the FULL key
+3. The key will be very long (500+ characters) and start with: eyJ...
+
+
+STEP 4: Update Your .env File
+────────────────────────────────────────────────────────────────────────────────
+1. Open: D:\QuickFix\backend\.env
+2. Find line 12:
+
+   BEFORE:
+   ───────────────────────────────────────────────────────────────────────────
+   SUPABASE_SERVICE_ROLE_KEY=sb_publishable_ItRhFA3FRjef6cVFKR2cAQ_HsTVzvN3
+   ───────────────────────────────────────────────────────────────────────────
+
+   AFTER:
+   ───────────────────────────────────────────────────────────────────────────
+   SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3M...
+   ───────────────────────────────────────────────────────────────────────────
+   (Paste the FULL key you copied from Supabase)
+
+3. Save the file (Ctrl+S)
+
+
+STEP 5: Restart Backend
+────────────────────────────────────────────────────────────────────────────────
+In your PowerShell backend window:
+
+1. Press Ctrl+C to stop
+2. Run:
+   cd D:\QuickFix\backend
+   python run.py
+
+
+STEP 6: Test
+────────────────────────────────────────────────────────────────────────────────
+Open QuickFix app → Sign Up with new email → Should work! ✅
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  ✅ AFTER FIXING                                                             │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+BEFORE:
+❌ ERROR: get_user_by_email failed: Invalid API key
+❌ ERROR: create_user failed: Invalid API key
+❌ POST /api/auth/signup → 500 Internal Server Error
+
+AFTER:
+✅ User created in Supabase
+✅ OTP stored in database
+✅ Email sent via Gmail SMTP
+✅ POST /api/auth/signup → 201 Created
+✅ Account verification works
+✅ Forgot password works
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  🧪 QUICK VERIFICATION                                                       │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+After updating .env, test with this command:
+
+cd D:\QuickFix\backend
+python -c "from supabase import create_client; import os; from dotenv import load_dotenv; load_dotenv(); client = create_client(os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_SERVICE_ROLE_KEY')); result = client.table('users').select('id').limit(1).execute(); print('SUCCESS: Supabase connected!')"
+
+✅ Should print: "SUCCESS: Supabase connected!"
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  ⚠️  IMPORTANT SECURITY NOTE                                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+The service_role key has FULL database access.
+NEVER:
+  ❌ Commit it to Git
+  ❌ Share it publicly
+  ❌ Use it in mobile/web apps (client-side)
+  ❌ Include it in Android app code
+
+ONLY use it in:
+  ✅ Backend servers (.env file)
+  ✅ Secure server environments
+
+Your .gitignore already excludes .env ✅
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          🎯 ACTION REQUIRED NOW                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+1. Go to: https://supabase.com/dashboard/project/rddzycqxtgryrpymivfd/settings/api
+2. Copy the service_role key (starts with eyJ...)
+3. Update D:\QuickFix\backend\.env line 12
+4. Restart backend: python run.py
+5. Test signup → ✅ Works!
+
+═══════════════════════════════════════════════════════════════════════════════
+

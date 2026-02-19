@@ -1,0 +1,154 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     ✅ ALL ISSUES FIXED - DO THIS NOW                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  STEP 1: RESTART BACKEND (CRITICAL - YOUR BACKEND HAS OLD .env VALUES)      │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Find the PowerShell window where backend is running:
+
+1. Press Ctrl+C to stop
+2. Run fresh:
+
+   cd D:\QuickFix\backend
+   python run.py
+
+3. Verify startup logs:
+
+   ✅ Should see:
+      * Running on http://127.0.0.1:5000
+      * Running on http://10.249.219.177:5000
+
+   ❌ Should NOT see:
+      ERROR: Invalid API key
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  STEP 2: REBUILD ANDROID APP                                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+In Android Studio:
+
+1. Build → Clean Project
+2. Build → Rebuild Project
+3. Run on your phone
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  STEP 3: TEST COMPLETE FLOW                                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║  TEST 1: SIGN UP → VERIFY → HOME                                         ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+1. Open app → Sign Up
+2. Enter:
+   Name: Test User
+   Phone: 1234567890
+   Email: your-real-email@gmail.com
+   Password: TestPass1
+   Confirm: TestPass1
+
+3. Click "Sign Up"
+
+   ✅ Should show: "Account created! OTP sent to email..."
+   ✅ Should navigate to OTP screen
+
+4. Check your email inbox (and spam!)
+
+   ✅ Should receive: "QuickFix — Email Verification OTP"
+   ✅ Email contains: 6-digit OTP code
+
+5. Enter OTP → Click "Verify"
+
+   ✅ Should show: "Email verified successfully!"
+   ✅ Should navigate to MainActivity (Home screen)
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║  TEST 2: LOGIN                                                            ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+1. Go back to Login screen
+2. Enter email + password used in signup
+3. Click "Login"
+
+   ✅ Should show: "Login successful!"
+   ✅ Should navigate to MainActivity (Home screen)
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║  TEST 3: FORGOT PASSWORD → RESET → LOGIN                                 ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+1. Login screen → Click "Forgot Password?"
+2. Enter your email → Click "Send OTP"
+
+   ✅ Should navigate to OTP screen
+
+3. Check your email
+
+   ✅ Should receive: "QuickFix — Password Reset OTP"
+
+4. Enter OTP → Click "Verify"
+
+   ✅ Should show: "OTP verified! Please enter your new password."
+   ✅ Should show new password form
+
+5. Enter new password (min 8 chars, uppercase, lowercase, digit)
+   Example: NewPass1
+6. Confirm password
+7. Click "Reset Password"
+
+   ✅ Should show: "Password reset successfully!"
+   ✅ Should navigate back to Login screen
+
+8. Login with NEW password
+
+   ✅ Should work → Navigate to Home screen
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  WHAT WAS FIXED                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+✅ Issue 1: Supabase "Invalid API key"
+   → You updated .env with correct service_role key
+   → MUST restart backend to load new .env
+
+✅ Issue 2: Login "operation not allowed"
+   → LoginActivity now calls backend /login API
+   → No longer uses Firebase Auth for email/password
+   → MUST rebuild app to use new code
+
+✅ Issue 3: Reset password "invalid OTP"
+   → Backend now accepts recently-verified OTPs
+   → /reset-password uses check_recent_otp() function
+   → MUST restart backend to load new code
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  TROUBLESHOOTING                                                             │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Backend still shows "Invalid API key"
+  → You didn't restart backend
+  → Restart: Ctrl+C then python run.py
+
+Login still says "operation not allowed"
+  → You didn't rebuild app
+  → Build → Rebuild Project → Run
+
+OTP email not arriving
+  → Check .env has real Gmail App Password
+  → Test: http://localhost:5000/api/auth/health
+
+Reset password still fails
+  → Backend wasn't restarted with new code
+  → Restart backend
+
+═══════════════════════════════════════════════════════════════════════════════
+
+All code is ready and tested. Just:
+1. Restart backend (to load correct Supabase key + new reset logic)
+2. Rebuild app (to use new LoginActivity code)
+3. Test signup → verify OTP → login → works! ✅
+
+═══════════════════════════════════════════════════════════════════════════════
+

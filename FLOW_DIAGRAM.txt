@@ -1,0 +1,200 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                        QUICKFIX AUTHENTICATION FLOW                          ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              SIGN UP FLOW                                    │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+   📱 Android App                  🌐 Backend API              📧 Gmail SMTP
+   ─────────────                   ─────────────              ─────────────
+
+1. User fills form
+   (name, email, phone,
+    password, confirm)
+         │
+         │ POST /api/auth/signup
+         │ {name, email, phone, password, role}
+         ├──────────────────────►
+         │                       2. Validate inputs
+         │                       3. Check email not exists
+         │                       4. Hash password (bcrypt)
+         │                       5. Insert user in Supabase
+         │                          (is_verified = false)
+         │                       6. Generate 6-digit OTP (secrets)
+         │                       7. Store OTP in Supabase
+         │                          (expires_at = now + 10 min)
+         │                       8. Send OTP email ───────────►
+         │                                                     9. Gmail sends email
+         │                                                        to user's inbox
+         │◄──────────────────────10. Return success               │
+         │  {email: "user@x.com"}                                 │
+         │                                                         ▼
+11. Navigate to                                           [📧 Email arrives]
+    OTPVerificationActivity                                Subject: QuickFix — Email Verification OTP
+    (email, purpose=verification)                          Body: Your OTP is: 123456
+         │
+         │
+12. User checks email ◄───────────────────────────────────────────┘
+    enters OTP: 123456
+         │
+         │ POST /api/auth/verify-otp
+         │ {email, otp: "123456", purpose: "verification"}
+         ├──────────────────────►
+         │                       13. Check OTP in Supabase
+         │                           - email matches
+         │                           - otp matches (secrets.compare_digest)
+         │                           - is_used = false
+         │                           - expires_at > now
+         │                       14. Mark OTP as used
+         │                       15. Set user.is_verified = true
+         │                       16. Generate JWT token
+         │◄──────────────────────17. Return token + user data
+         │  {token: "eyJ...", user: {...}}
+         │
+18. Navigate to MainActivity
+    ✅ Account activated!
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          FORGOT PASSWORD FLOW                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+   📱 Android App                  🌐 Backend API              📧 Gmail SMTP
+   ─────────────                   ─────────────              ─────────────
+
+1. User clicks "Forgot Password?"
+   enters email
+         │
+         │ POST /api/auth/forgot-password
+         │ {email: "user@example.com"}
+         ├──────────────────────►
+         │                       2. Check user exists & is_verified
+         │                       3. Generate 6-digit OTP (secrets)
+         │                       4. Store OTP in Supabase
+         │                          (purpose=password_reset)
+         │                       5. Send OTP email ───────────►
+         │                                                     6. Gmail sends email
+         │                                                        to user's inbox
+         │◄──────────────────────7. Return success                │
+         │  (always returns 200)                                  │
+         │                                                         ▼
+8. Navigate to                                           [📧 Email arrives]
+   OTPVerificationActivity                                Subject: QuickFix — Password Reset OTP
+   (email, purpose=password_reset)                        Body: Your OTP is: 654321
+         │
+         │
+9. User checks email ◄────────────────────────────────────────────┘
+   enters OTP: 654321
+         │
+         │ POST /api/auth/verify-otp
+         │ {email, otp: "654321", purpose: "password_reset"}
+         ├──────────────────────►
+         │                       10. Verify OTP in Supabase
+         │                       11. Mark OTP as used
+         │◄──────────────────────12. Return success
+         │  {email: "user@example.com"}
+         │
+13. OTPVerificationActivity
+    returns to ForgotPasswordActivity
+    with verified=true, otp="654321"
+         │
+14. ForgotPasswordActivity shows
+    new password input fields
+         │
+15. User enters new password
+    (min 8 chars, uppercase,
+     lowercase, digit)
+         │
+         │ POST /api/auth/reset-password
+         │ {email, otp: "654321", new_password: "NewPass1"}
+         ├──────────────────────►
+         │                       16. Verify OTP again
+         │                       17. Validate new password
+         │                       18. Hash new password (bcrypt)
+         │                       19. Update user.password_hash in Supabase
+         │◄──────────────────────20. Return success
+         │
+21. Navigate to LoginActivity
+    ✅ Password reset complete!
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                               DATA STORAGE                                   │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+📊 Supabase PostgreSQL Database:
+
+┌─────────────┬──────────────────────────────────────────────────────────┐
+│   Table     │  Columns                                                 │
+├─────────────┼──────────────────────────────────────────────────────────┤
+│   users     │  id (UUID)                                               │
+│             │  name (TEXT)                                             │
+│             │  email (TEXT) ← UNIQUE                                   │
+│             │  phone (TEXT)                                            │
+│             │  password_hash (TEXT) ← bcrypt hash, never plain text   │
+│             │  role (TEXT) ← "user" or "provider"                     │
+│             │  is_verified (BOOLEAN) ← false until OTP verified       │
+│             │  created_at (TIMESTAMPTZ)                                │
+│             │  updated_at (TIMESTAMPTZ)                                │
+├─────────────┼──────────────────────────────────────────────────────────┤
+│  otp_codes  │  id (UUID)                                               │
+│             │  email (TEXT)                                            │
+│             │  otp_code (TEXT) ← 6 digits, generated with secrets     │
+│             │  purpose (TEXT) ← "verification" or "password_reset"    │
+│             │  is_used (BOOLEAN) ← false until verified, then true    │
+│             │  expires_at (TIMESTAMPTZ) ← now + 10 minutes            │
+│             │  created_at (TIMESTAMPTZ)                                │
+└─────────────┴──────────────────────────────────────────────────────────┘
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                           NETWORK ARCHITECTURE                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+   📱 Android Phone              💻 Your PC                  ☁️  Cloud
+   ────────────────              ─────────                   ─────────
+
+   QuickFix App                  Flask Backend              Supabase
+   (10.249.219.177)              (10.249.219.177:5000)      (PostgreSQL)
+         │                              │                        │
+         │  HTTP POST                   │                        │
+         │  /api/auth/signup            │  SQL INSERT            │
+         ├─────────────────────────────►├───────────────────────►│
+         │                              │                        │
+         │                              │  User row created      │
+         │                              │◄───────────────────────┤
+         │                              │                        │
+         │                              │  SQL INSERT OTP        │
+         │                              ├───────────────────────►│
+         │                              │                        │
+         │                              │  OTP row created       │
+         │                              │◄───────────────────────┤
+         │                              │
+         │                              │  SMTP (port 587)
+         │                              ├─────────────►  Gmail
+         │                              │               smtp.gmail.com
+         │  HTTP 201 Created            │  Email sent
+         │◄─────────────────────────────┤
+         │                              │
+         ▼                              ▼
+   OTP screen                      [Logs in console]
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                             SECURITY FEATURES                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+✅ Passwords: bcrypt with cost=12 (never stored in plain text)
+✅ OTP Generation: secrets.randbelow() (cryptographically secure)
+✅ OTP Comparison: secrets.compare_digest() (constant-time, prevents timing attacks)
+✅ OTP Expiry: 10 minutes (configurable)
+✅ OTP Reuse Prevention: is_used flag, marked true after verification
+✅ Email Enumeration Prevention: /forgot-password always returns 200
+✅ Input Validation: Email, phone, password strength checked on backend
+✅ HTTPS Ready: CORS configured, can switch to HTTPS in production
+✅ JWT Tokens: HS256, 24-hour expiry (configurable)
+✅ Row-Level Security: Supabase RLS enabled, backend uses service-role key
+
+╚══════════════════════════════════════════════════════════════════════════════╝
+

@@ -1,0 +1,67 @@
+╔═══════════════════════════════════════════════════════════════╗
+║                  QUICKFIX - QUICK START CARD                  ║
+╚═══════════════════════════════════════════════════════════════╝
+
+📍 YOUR PC IP: 10.249.219.177
+
+┌───────────────────────────────────────────────────────────────┐
+│  STEP 1: ALLOW FIREWALL (Run PowerShell AS ADMIN)            │
+└───────────────────────────────────────────────────────────────┘
+
+netsh advfirewall firewall add rule name="Python QuickFix Backend" dir=in action=allow program="C:\Users\Omkar Gouda\AppData\Local\Programs\Python\Python312\python.exe" enable=yes
+
+┌───────────────────────────────────────────────────────────────┐
+│  STEP 2: START BACKEND (Normal PowerShell)                   │
+└───────────────────────────────────────────────────────────────┘
+
+cd D:\QuickFix\backend
+python run.py
+
+✅ Look for: "Running on http://10.249.219.177:5000"
+
+┌───────────────────────────────────────────────────────────────┐
+│  STEP 3: REBUILD & INSTALL APP                               │
+└───────────────────────────────────────────────────────────────┘
+
+Android Studio:
+1. Build → Clean Project
+2. Build → Rebuild Project
+3. Run on phone
+
+┌───────────────────────────────────────────────────────────────┐
+│  QUICK TEST (Before Opening App)                             │
+└───────────────────────────────────────────────────────────────┘
+
+Open Chrome on your phone → visit:
+http://10.249.219.177:5000
+
+✅ Should show: {"status":"ok","message":"QuickFix backend is running"...}
+❌ If not → Firewall still blocking or backend not running
+
+┌───────────────────────────────────────────────────────────────┐
+│  CHECKLIST                                                    │
+└───────────────────────────────────────────────────────────────┘
+
+□ Firewall rule added
+□ Backend running (PowerShell window open)
+□ App rebuilt in Android Studio
+□ Phone and PC on SAME Wi-Fi network
+□ .env has real Gmail App Password
+□ Tested http://10.249.219.177:5000 in phone Chrome
+
+┌───────────────────────────────────────────────────────────────┐
+│  TROUBLESHOOTING                                              │
+└───────────────────────────────────────────────────────────────┘
+
+"CLEARTEXT not permitted" → Rebuild app (Build → Rebuild Project)
+"Cannot connect" → Check firewall step
+"No email" → Check .env SMTP_PASSWORD (Gmail App Password)
+
+═══════════════════════════════════════════════════════════════
+
+All code is READY. Just run the 3 steps above!
+
+See START_HERE_FINAL_STEPS.md for detailed instructions.
+
+═══════════════════════════════════════════════════════════════
+

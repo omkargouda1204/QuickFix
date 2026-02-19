@@ -3,7 +3,7 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="splash_blue">#1E88E5</color>
-    <color name="splash_blue_dark">#1565C0</color>
+    <color name="splash_blue_dark">#0D47A1</color>
     <color name="splash_text">#FFFFFF</color>
     <color name="screen_background">#F4F7FB</color>
     <color name="input_text">#1A1A1A</color>
@@ -11,6 +11,8 @@
     <color name="input_stroke">#1E88E5</color>
     <color name="input_icon">#455A64</color>
     <color name="input_background">#FFFFFF</color>
-    <color name="splash_gradient_start">#1E88E5</color>
-    <color name="splash_gradient_end">#0D47A1</color>
+    <!-- Dark blue gradient for splash screen -->
+    <color name="splash_gradient_start">#1565C0</color>
+    <color name="splash_gradient_center">#0D47A1</color>
+    <color name="splash_gradient_end">#002171</color>
 </resources>
