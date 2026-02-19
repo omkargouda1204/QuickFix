@@ -1,0 +1,27 @@
+  [PASS]  import flask
+  [PASS]  import flask_cors
+  [PASS]  import bcrypt
+  [PASS]  import jwt
+  [PASS]  import dotenv
+  [PASS]  import supabase
+  [PASS]  import app.config
+  [PASS]  import app.utils.validators
+  [PASS]  import app.utils.password_utils
+  [PASS]  import app.utils.jwt_utils
+  [PASS]  import app.utils.response_utils
+  [PASS]  import app.services.email_service
+  [PASS]  import app.services.otp_service
+  [PASS]  import app.models.user_model
+  [PASS]  import app.routes.auth_routes
+  [PASS]  bcrypt hash + verify
+  [PASS]  validators (email / phone / password)
+  [PASS]  OTP generation (secure, 6-digit, 20 samples)
+  [PASS]  JWT create + decode
+  [PASS]  Flask app + root health check
+  [PASS]  All API endpoints return correct HTTP status without DB
+  [PASS]  Email HTML content generation (both purposes)
+  [PASS]  CORS headers present on API routes
+======================================================
+  Total: 23  |  PASS: 23  |  FAIL: 0
+  ALL TESTS PASSED ✓
+======================================================
