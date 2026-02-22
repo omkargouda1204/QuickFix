@@ -43,6 +43,10 @@ public class MainActivity extends AppCompatActivity {
     private CardView featuredCard1, featuredCard2, featuredCard3;
     private TextView seeAllFeatured;
 
+    // ── List Your Business ────────────────────────────────────────────────
+    private CardView listBusinessCard;
+    private com.google.android.material.button.MaterialButton listBusinessBtn;
+
     // ── Bottom Nav ────────────────────────────────────────────────────────
     private LinearLayout navHome, navBookings, navMessages, navProfile;
     private ImageView navHomeIcon, navBookingsIcon, navMessagesIcon, navProfileIcon;
@@ -73,6 +77,7 @@ public class MainActivity extends AppCompatActivity {
         setupFeaturedCardListeners();
         setupBottomNav();
         setupSearchBar();
+        setupListBusiness();
     }
 
     // ── Setup Toolbar ─────────────────────────────────────────────────────
@@ -115,6 +120,9 @@ public class MainActivity extends AppCompatActivity {
         featuredCard2  = findViewById(R.id.featuredCard2);
         featuredCard3  = findViewById(R.id.featuredCard3);
         seeAllFeatured = findViewById(R.id.seeAllFeatured);
+
+        listBusinessCard = findViewById(R.id.listBusinessCard);
+        listBusinessBtn  = findViewById(R.id.listBusinessBtn);
 
         navHome      = findViewById(R.id.navHome);
         navBookings  = findViewById(R.id.navBookings);
@@ -323,6 +331,28 @@ public class MainActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("Close", null)
                 .show();
+    }
+
+    // ── List Your Business ────────────────────────────────────────────────
+
+    private void setupListBusiness() {
+        android.view.View.OnClickListener listBizClick = v ->
+                new AlertDialog.Builder(this)
+                        .setTitle("🏢 List Your Business")
+                        .setMessage("Become a QuickFix service provider!\n\n"
+                                + "• Reach thousands of customers\n"
+                                + "• Manage bookings in one place\n"
+                                + "• Grow your business fast\n\n"
+                                + "Provider registration is coming soon.")
+                        .setPositiveButton("Notify Me", (d, w) ->
+                                Toast.makeText(this,
+                                        "We'll notify you when provider registration opens!",
+                                        Toast.LENGTH_LONG).show())
+                        .setNegativeButton("Cancel", null)
+                        .show();
+
+        if (listBusinessCard != null) listBusinessCard.setOnClickListener(listBizClick);
+        if (listBusinessBtn  != null) listBusinessBtn.setOnClickListener(listBizClick);
     }
 
     // ── Navigation ────────────────────────────────────────────────────────

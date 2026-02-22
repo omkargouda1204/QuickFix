@@ -2,6 +2,7 @@ package com.example.quickfix;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -13,23 +14,34 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
 /**
- * EmailVerificationActivity — shown after signup.
+ * EmailVerificationActivity
+ * ──────────────────────────────────────────────────────────────────────────
+ * Shown immediately after signup (email/password flow only).
+ * The user must verify their email before they can log in.
  *
- * Informs the user to check their inbox and verify their email.
- * "I've Verified" button reloads the Firebase user and checks isEmailVerified().
- * If verified → navigate to MainActivity.
- * If not yet verified → show a toast to wait.
- * "Resend Email" button sends another verification email.
+ * "I've Verified My Email"
+ *   → user.reload() → checks isEmailVerified() from Firebase server
+ *   → if true  → MainActivity
+ *   → if false → shows clear toast to click the link first
+ *
+ * "Resend Verification Email"
+ *   → sendEmailVerification() with addOnSuccessListener + addOnFailureListener
+ *   → no silent failures
+ *
+ * Back / "Back to Login" → sign out → LoginActivity
  */
 public class EmailVerificationActivity extends AppCompatActivity {
 
-    private TextView         emailDisplay;
-    private MaterialButton   checkVerifiedButton, resendEmailButton;
-    private TextView         backToLoginLink;
+    private static final String TAG = "EmailVerificationActivity";
+
+    private TextView       emailDisplay;
+    private MaterialButton checkVerifiedButton, resendEmailButton;
+    private TextView       backToLoginLink;
 
     private FirebaseAuth mAuth;
-    private String email;
+    private String       email;   // passed from SignupActivity
 
+    // ══════════════════════════════════════════════════════════════════════
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -38,114 +50,156 @@ public class EmailVerificationActivity extends AppCompatActivity {
         mAuth = FirebaseAuth.getInstance();
         email = getIntent().getStringExtra("email");
 
-        initializeViews();
+        bindViews();
         setupClickListeners();
 
-        // Handle back press — go to login
-        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
-            @Override
-            public void handleOnBackPressed() {
-                navigateToLogin();
-            }
-        });
+        // Hardware back → go to Login
+        getOnBackPressedDispatcher().addCallback(this,
+                new OnBackPressedCallback(true) {
+                    @Override public void handleOnBackPressed() {
+                        navigateToLogin();
+                    }
+                });
     }
 
-    private void initializeViews() {
+    // ── View binding ───────────────────────────────────────────────────────
+    private void bindViews() {
         emailDisplay        = findViewById(R.id.emailDisplay);
         checkVerifiedButton = findViewById(R.id.checkVerifiedButton);
         resendEmailButton   = findViewById(R.id.resendEmailButton);
         backToLoginLink     = findViewById(R.id.backToLoginLink);
 
-        if (emailDisplay != null && email != null) {
+        if (emailDisplay != null && email != null)
             emailDisplay.setText(email);
-        }
     }
 
+    // ── Click listeners ────────────────────────────────────────────────────
     private void setupClickListeners() {
         if (checkVerifiedButton != null)
-            checkVerifiedButton.setOnClickListener(v -> checkEmailVerified());
+            checkVerifiedButton.setOnClickListener(v -> checkIfVerified());
 
         if (resendEmailButton != null)
-            resendEmailButton.setOnClickListener(v -> resendVerificationEmail());
+            resendEmailButton.setOnClickListener(v -> resendEmail());
 
         if (backToLoginLink != null)
             backToLoginLink.setOnClickListener(v -> navigateToLogin());
     }
 
-    private void checkEmailVerified() {
+    // ══════════════════════════════════════════════════════════════════════
+    //  CHECK VERIFICATION STATUS
+    // ══════════════════════════════════════════════════════════════════════
+    private void checkIfVerified() {
         FirebaseUser user = mAuth.getCurrentUser();
-
         if (user == null) {
-            // User is signed out, go to login
+            // Session expired — go back to login
             navigateToLogin();
             return;
         }
 
-        if (checkVerifiedButton != null) {
-            checkVerifiedButton.setEnabled(false);
-            checkVerifiedButton.setText("Checking…");
-        }
+        setBusy(checkVerifiedButton, true, "Checking…", "I've Verified My Email");
 
-        // Reload user to get fresh verification status from Firebase server
-        user.reload().addOnCompleteListener(task -> {
-            if (checkVerifiedButton != null) {
-                checkVerifiedButton.setEnabled(true);
-                checkVerifiedButton.setText("I've Verified My Email");
-            }
+        // reload() fetches the latest isEmailVerified from Firebase servers
+        user.reload()
+                .addOnSuccessListener(this, unused -> {
+                    setBusy(checkVerifiedButton, false, "Checking…",
+                            "I've Verified My Email");
 
-            if (user.isEmailVerified()) {
-                Toast.makeText(this, "Email verified! Welcome to QuickFix!", Toast.LENGTH_SHORT).show();
-                Intent intent = new Intent(this, MainActivity.class);
-                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                startActivity(intent);
-                finish();
-            } else {
-                Toast.makeText(this,
-                        "Email not verified yet. Please check your inbox and click the verification link.",
-                        Toast.LENGTH_LONG).show();
-            }
-        });
+                    FirebaseUser fresh = mAuth.getCurrentUser();
+                    if (fresh != null && fresh.isEmailVerified()) {
+                        Log.d(TAG, "Email verified — navigating to home");
+                        Toast.makeText(this,
+                                "✅ Email verified! Welcome to QuickFix!",
+                                Toast.LENGTH_SHORT).show();
+                        goHome();
+                    } else {
+                        Log.d(TAG, "Email still not verified");
+                        Toast.makeText(this,
+                                "Your email is NOT verified yet.\n\nPlease check your inbox and click the verification link, then try again.",
+                                Toast.LENGTH_LONG).show();
+                        // Do NOT navigate away
+                    }
+                })
+                .addOnFailureListener(this, e -> {
+                    setBusy(checkVerifiedButton, false, "Checking…",
+                            "I've Verified My Email");
+                    Log.e(TAG, "reload() failed: " + e.getMessage());
+                    Toast.makeText(this,
+                            "Could not check verification status. "
+                            + "Check your internet connection and try again.",
+                            Toast.LENGTH_LONG).show();
+                });
     }
 
-    private void resendVerificationEmail() {
+    // ══════════════════════════════════════════════════════════════════════
+    //  RESEND VERIFICATION EMAIL
+    // ══════════════════════════════════════════════════════════════════════
+    private void resendEmail() {
         FirebaseUser user = mAuth.getCurrentUser();
-
         if (user == null) {
-            Toast.makeText(this, "Please sign in again to resend the verification email.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,
+                    "Session expired. Please sign in again.",
+                    Toast.LENGTH_SHORT).show();
             navigateToLogin();
             return;
         }
 
-        if (resendEmailButton != null) {
-            resendEmailButton.setEnabled(false);
-            resendEmailButton.setText("Sending…");
-        }
+        setBusy(resendEmailButton, true, "Sending…",
+                "Resend Verification Email");
 
         user.sendEmailVerification()
-                .addOnCompleteListener(task -> {
-                    if (resendEmailButton != null) {
-                        resendEmailButton.setEnabled(true);
-                        resendEmailButton.setText("Resend Verification Email");
-                    }
+                .addOnSuccessListener(this, unused -> {
+                    setBusy(resendEmailButton, false, "Sending…",
+                            "Resend Verification Email");
+                    Log.d(TAG, "Verification email resent to " + email);
+                    Toast.makeText(this,
+                            "✅ Verification email resent to " + email
+                            + ".\nCheck your inbox (and spam folder).",
+                            Toast.LENGTH_LONG).show();
+                })
+                .addOnFailureListener(this, e -> {
+                    setBusy(resendEmailButton, false, "Sending…",
+                            "Resend Verification Email");
+                    Log.e(TAG, "resend failed: " + e.getMessage());
 
-                    if (task.isSuccessful()) {
+                    String msg = e.getMessage();
+                    if (msg != null && msg.contains("too many")) {
                         Toast.makeText(this,
-                                "Verification email resent to " + email,
+                                "Too many requests. Wait a few minutes and try again.",
+                                Toast.LENGTH_LONG).show();
+                    } else if (msg != null && (msg.contains("NETWORK")
+                            || msg.contains("network"))) {
+                        Toast.makeText(this,
+                                "No internet connection. Please try again.",
                                 Toast.LENGTH_LONG).show();
                     } else {
-                        String errMsg = task.getException() != null
-                                ? task.getException().getMessage()
-                                : "Failed to resend email.";
-                        Toast.makeText(this, errMsg, Toast.LENGTH_LONG).show();
+                        Toast.makeText(this,
+                                "Failed to resend: "
+                                + (msg != null ? msg : "Unknown error"),
+                                Toast.LENGTH_LONG).show();
                     }
                 });
     }
 
+    // ── Helpers ────────────────────────────────────────────────────────────
+    private void setBusy(MaterialButton btn, boolean busy,
+                          String busyText, String idleText) {
+        if (btn == null) return;
+        btn.setEnabled(!busy);
+        btn.setText(busy ? busyText : idleText);
+    }
+
+    private void goHome() {
+        Intent i = new Intent(this, MainActivity.class);
+        i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(i);
+        finish();
+    }
+
     private void navigateToLogin() {
         mAuth.signOut();
-        Intent intent = new Intent(this, LoginActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-        startActivity(intent);
+        Intent i = new Intent(this, LoginActivity.class);
+        i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(i);
         finish();
     }
 }
