@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="@color/screen_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:gravity="center">
+
+        <!-- Logo -->
+        <ImageView
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:layout_marginTop="48dp"
+            android:layout_marginBottom="32dp"
+            android:src="@drawable/logo_q"
+            android:contentDescription="@string/app_name"
+            android:scaleType="fitCenter" />
+
+        <!-- Email icon -->
+        <ImageView
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_marginBottom="24dp"
+            android:src="@drawable/ic_email"
+            app:tint="@color/splash_blue"
+            android:contentDescription="Email Verification" />
+
+        <!-- Title -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Verify Your Email"
+            android:textSize="26sp"
+            android:textStyle="bold"
+            android:textColor="@color/black"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Subtitle -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="We've sent a verification link to:"
+            android:textSize="15sp"
+            android:textColor="@color/input_hint"
+            android:gravity="center"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Email Display -->
+        <TextView
+            android:id="@+id/emailDisplay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/splash_blue"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Instruction -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Please check your inbox and click the verification link to activate your account. Then come back here and tap the button below."
+            android:textSize="14sp"
+            android:textColor="@color/input_hint"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp"
+            android:layout_marginBottom="32dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
+
+        <!-- Check Verified Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/checkVerifiedButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="I've Verified My Email"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/white"
+            app:backgroundTint="@color/splash_blue"
+            app:cornerRadius="12dp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Resend Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/resendEmailButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="Resend Verification Email"
+            android:textSize="15sp"
+            android:textColor="@color/splash_blue"
+            app:backgroundTint="@android:color/transparent"
+            app:strokeColor="@color/splash_blue"
+            app:strokeWidth="1dp"
+            app:cornerRadius="12dp"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Back to Login link -->
+        <TextView
+            android:id="@+id/backToLoginLink"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Back to Login"
+            android:textSize="14sp"
+            android:textColor="@color/splash_blue"
+            android:textStyle="bold"
+            android:padding="8dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:layout_marginBottom="32dp" />
+
+    </LinearLayout>
+
+</ScrollView>
+

@@ -49,12 +49,13 @@
             android:parentActivityName=".LoginActivity"
             android:windowSoftInputMode="adjustResize" />
 
-        <!-- OTP Verification Activity -->
+        <!-- Email Verification Activity (after signup) -->
         <activity
-            android:name=".OTPVerificationActivity"
-            android:exported="false" />
+            android:name=".EmailVerificationActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
 
-        <!-- Main Activity -->
+        <!-- Main Activity (Home) -->
         <activity
             android:name=".MainActivity"
             android:exported="false" />

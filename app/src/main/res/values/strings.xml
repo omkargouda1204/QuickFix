@@ -21,7 +21,7 @@
 
     <!-- Forgot Password -->
     <string name="forgot_password_title">Forgot Password</string>
-    <string name="forgot_password_subtitle">Enter your email to receive OTP</string>
+    <string name="forgot_password_subtitle">Enter your email to receive a password reset link</string>
     <string name="send_otp">Send OTP</string>
     <string name="enter_otp">Enter OTP</string>
     <string name="verify_otp">Verify OTP</string>
@@ -71,4 +71,41 @@
     <string name="error_signup_failed">Sign up failed. Please try again</string>
     <string name="error_otp_invalid">Invalid OTP. Please try again</string>
     <string name="error_otp_expired">OTP expired. Please request new OTP</string>
+
+    <!-- Home Screen -->
+    <string name="hello_user">Hello, %1$s! 👋</string>
+    <string name="find_services">Find home services near you</string>
+    <string name="search_hint">Search for services…</string>
+    <string name="our_services">Our Services</string>
+    <string name="see_all">See All</string>
+    <string name="featured_services">Featured Services</string>
+    <string name="quick_actions">Quick Actions</string>
+    <string name="book_service">Book Service</string>
+    <string name="emergency_help">Emergency Help</string>
+    <string name="track_booking">Track Booking</string>
+    <string name="cat_plumbing">Plumbing</string>
+    <string name="cat_electrical">Electrical</string>
+    <string name="cat_cleaning">Cleaning</string>
+    <string name="cat_repair">Repair</string>
+    <string name="cat_ac">AC Service</string>
+    <string name="cat_painting">Painting</string>
+    <string name="cat_carpentry">Carpentry</string>
+    <string name="cat_more">More</string>
+    <string name="featured_card1_title">Home Deep Cleaning</string>
+    <string name="featured_card1_sub">Starting ₹499</string>
+    <string name="featured_card1_desc">Professional cleaning for your entire home</string>
+    <string name="featured_card2_title">AC Installation</string>
+    <string name="featured_card2_sub">Starting ₹799</string>
+    <string name="featured_card2_desc">Expert AC fitting and servicing</string>
+    <string name="featured_card3_title">Plumbing Fix</string>
+    <string name="featured_card3_sub">Starting ₹299</string>
+    <string name="featured_card3_desc">Fast leak &amp; pipe repair at your doorstep</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_bookings">Bookings</string>
+    <string name="nav_messages">Messages</string>
+    <string name="nav_profile">Profile</string>
+    <string name="rating_label">4.8 ★</string>
+    <string name="promo_title">Get 20% off your first booking!</string>
+    <string name="promo_subtitle">Use code QUICKFIX20 at checkout</string>
+    <string name="logout">Logout</string>
 </resources>

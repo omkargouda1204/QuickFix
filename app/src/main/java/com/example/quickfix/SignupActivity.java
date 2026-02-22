@@ -25,22 +25,29 @@ import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
+import com.google.firebase.auth.UserProfileChangeRequest;
+import com.google.firebase.firestore.FirebaseFirestore;
 
-import org.json.JSONObject;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * SignupActivity — Registers a new user via the QuickFix backend API.
+ * SignupActivity — Firebase Email/Password Registration.
  *
- * Flow:
+ * Flow (Email/Password):
  *   1. User fills name / phone / email / password.
- *   2. POST /api/auth/signup → backend creates user + sends real OTP email.
- *   3. Navigate to OTPVerificationActivity (email, purpose=verification).
- *   4. OTPVerificationActivity calls POST /api/auth/verify-otp → activates account.
- *   5. On success → MainActivity.
+ *   2. Firebase createUserWithEmailAndPassword → creates account.
+ *   3. Update Firebase display name.
+ *   4. Save profile (name, phone, email, uid, role) to Firestore "users" collection.
+ *   5. Send email verification link via Firebase.
+ *   6. Navigate to EmailVerificationActivity.
+ *
+ * Flow (Google):
+ *   1. Google Sign-In → Firebase credential → save profile to Firestore.
+ *   2. Navigate to MainActivity (already verified).
  */
 public class SignupActivity extends AppCompatActivity {
 
-    // ── UI ────────────────────────────────────────────────────────────────
     private TextInputLayout   fullNameLayout, phoneLayout, emailSignupLayout,
                               passwordSignupLayout, confirmPasswordLayout;
     private TextInputEditText fullNameInput, phoneInput, emailSignupInput,
@@ -49,8 +56,8 @@ public class SignupActivity extends AppCompatActivity {
     private ImageView         backButton;
     private TextView          loginLink;
 
-    // ── Firebase (Google Sign-In only) ────────────────────────────────────
     private FirebaseAuth       mAuth;
+    private FirebaseFirestore  db;
     private GoogleSignInClient mGoogleSignInClient;
     private ActivityResultLauncher<Intent> googleSignupLauncher;
 
@@ -60,15 +67,12 @@ public class SignupActivity extends AppCompatActivity {
         setContentView(R.layout.activity_signup);
 
         mAuth = FirebaseAuth.getInstance();
+        db    = FirebaseFirestore.getInstance();
 
         initializeViews();
         configureGoogleSignUp();
         setupClickListeners();
     }
-
-    // ─────────────────────────────────────────────────────────────────────
-    // Initialisation
-    // ─────────────────────────────────────────────────────────────────────
 
     private void initializeViews() {
         fullNameLayout        = findViewById(R.id.fullNameLayout);
@@ -109,26 +113,16 @@ public class SignupActivity extends AppCompatActivity {
         );
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Click listeners
-    // ─────────────────────────────────────────────────────────────────────
-
     private void setupClickListeners() {
-        if (backButton      != null) backButton.setOnClickListener(v -> finish());
-        if (loginLink       != null) loginLink.setOnClickListener(v -> finish());
-        if (signupButton    != null) signupButton.setOnClickListener(v -> {
-            if (!isFinishing()) signupWithBackend();
-        });
-        if (googleSignupButton != null) googleSignupButton.setOnClickListener(v -> {
-            if (!isFinishing()) signupWithGoogle();
-        });
+        if (backButton         != null) backButton.setOnClickListener(v -> finish());
+        if (loginLink          != null) loginLink.setOnClickListener(v -> finish());
+        if (signupButton       != null) signupButton.setOnClickListener(v -> signupWithFirebase());
+        if (googleSignupButton != null) googleSignupButton.setOnClickListener(v -> signupWithGoogle());
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Backend signup — POST /api/auth/signup
-    // ──────────────────────────────────────────────────────────────���──────
+    // ── Email / Password Signup ───────────────────────────────────────────
 
-    private void signupWithBackend() {
+    private void signupWithFirebase() {
         String fullName        = safeText(fullNameInput);
         String phone           = safeText(phoneInput);
         String email           = safeText(emailSignupInput);
@@ -139,107 +133,82 @@ public class SignupActivity extends AppCompatActivity {
 
         setLoading(true);
 
-        try {
-            JSONObject body = new JSONObject();
-            body.put("name",     fullName);
-            body.put("email",    email);
-            body.put("phone",    phone);
-            body.put("password", password);
-            body.put("role",     "user");
+        mAuth.createUserWithEmailAndPassword(email, password)
+                .addOnCompleteListener(this, task -> {
+                    if (task.isSuccessful()) {
+                        FirebaseUser user = mAuth.getCurrentUser();
+                        if (user != null) {
+                            // Update display name in Firebase Auth
+                            UserProfileChangeRequest profileUpdates = new UserProfileChangeRequest.Builder()
+                                    .setDisplayName(fullName)
+                                    .build();
+                            user.updateProfile(profileUpdates);
 
-            ApiClient.post("/api/auth/signup", body, new ApiClient.ApiCallback() {
-                @Override
-                public void onSuccess(JSONObject response) {
-                    setLoading(false);
-                    // Account created + real OTP email sent by backend
-                    // Navigate to OTP screen — backend verifies OTP
-                    launchOTPScreen(email, "verification");
-                }
-
-                @Override
-                public void onError(String errorMessage) {
-                    setLoading(false);
-                    // Surface specific field errors
-                    if (errorMessage.toLowerCase().contains("email")) {
-                        emailSignupLayout.setError(errorMessage);
-                    } else if (errorMessage.toLowerCase().contains("password")) {
-                        passwordSignupLayout.setError(errorMessage);
-                    } else if (errorMessage.toLowerCase().contains("name")) {
-                        fullNameLayout.setError(errorMessage);
-                    } else if (errorMessage.toLowerCase().contains("phone")) {
-                        phoneLayout.setError(errorMessage);
+                            // Save extra profile data to Firestore
+                            saveUserToFirestore(user.getUid(), fullName, email, phone, () -> {
+                                // Send email verification link
+                                user.sendEmailVerification()
+                                        .addOnCompleteListener(emailTask -> {
+                                            setLoading(false);
+                                            if (emailTask.isSuccessful()) {
+                                                Toast.makeText(this,
+                                                        "Verification email sent to " + email,
+                                                        Toast.LENGTH_LONG).show();
+                                            } else {
+                                                Toast.makeText(this,
+                                                        "Account created! Verification email could not be sent. Try resending from login.",
+                                                        Toast.LENGTH_LONG).show();
+                                            }
+                                            // Sign out — user must verify before logging in
+                                            mAuth.signOut();
+                                            launchEmailVerificationScreen(email);
+                                        });
+                            });
+                        }
                     } else {
-                        Toast.makeText(SignupActivity.this, errorMessage, Toast.LENGTH_LONG).show();
+                        setLoading(false);
+                        String errMsg = task.getException() != null
+                                ? task.getException().getMessage()
+                                : "Sign up failed. Please try again.";
+                        if (errMsg != null && errMsg.contains("email address is already")) {
+                            emailSignupLayout.setError("Email already registered. Please login.");
+                        } else if (errMsg != null && errMsg.contains("weak-password")) {
+                            passwordSignupLayout.setError("Password is too weak.");
+                        } else {
+                            Toast.makeText(this, errMsg, Toast.LENGTH_LONG).show();
+                        }
                     }
-                }
-            });
-
-        } catch (Exception e) {
-            setLoading(false);
-            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
+                });
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Navigate to OTP screen
-    // ─────────────────────────────────────────────────────────────────────
+    private void saveUserToFirestore(String uid, String name, String email,
+                                     String phone, Runnable onComplete) {
+        Map<String, Object> userData = new HashMap<>();
+        userData.put("uid",        uid);
+        userData.put("name",       name);
+        userData.put("email",      email);
+        userData.put("phone",      phone);
+        userData.put("role",       "user");
+        userData.put("verified",   false);
+        userData.put("created_at", com.google.firebase.Timestamp.now());
 
-    private void launchOTPScreen(String email, String purpose) {
-        Intent intent = new Intent(this, OTPVerificationActivity.class);
-        intent.putExtra("email",   email);
-        intent.putExtra("purpose", purpose);   // "verification" or "password_reset"
+        db.collection("users").document(uid)
+                .set(userData)
+                .addOnCompleteListener(t -> {
+                    // Continue regardless of Firestore result
+                    onComplete.run();
+                });
+    }
+
+    private void launchEmailVerificationScreen(String email) {
+        Intent intent = new Intent(this, EmailVerificationActivity.class);
+        intent.putExtra("email", email);
+        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
+        finish();
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Validation
-    // ─────────────────────────────────────────────────────────────────────
-
-    private boolean validateSignupInputs(String fullName, String phone,
-                                          String email, String password,
-                                          String confirmPassword) {
-        boolean valid = true;
-
-        fullNameLayout.setError(null);
-        phoneLayout.setError(null);
-        emailSignupLayout.setError(null);
-        passwordSignupLayout.setError(null);
-        confirmPasswordLayout.setError(null);
-
-        if (TextUtils.isEmpty(fullName) || fullName.length() < 2) {
-            fullNameLayout.setError("Name must be at least 2 characters.");
-            valid = false;
-        }
-        if (TextUtils.isEmpty(phone) || !isValidPhone(phone)) {
-            phoneLayout.setError("Enter a valid phone number (10–15 digits).");
-            valid = false;
-        }
-        if (TextUtils.isEmpty(email) || !Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            emailSignupLayout.setError("Enter a valid email address.");
-            valid = false;
-        }
-        if (TextUtils.isEmpty(password) || password.length() < 8) {
-            passwordSignupLayout.setError("Password must be at least 8 characters.");
-            valid = false;
-        } else if (!password.matches(".*[A-Z].*") || !password.matches(".*[a-z].*") || !password.matches(".*\\d.*")) {
-            passwordSignupLayout.setError("Password needs uppercase, lowercase, and a digit.");
-            valid = false;
-        }
-        if (!password.equals(confirmPassword)) {
-            confirmPasswordLayout.setError("Passwords do not match.");
-            valid = false;
-        }
-        return valid;
-    }
-
-    private boolean isValidPhone(String phone) {
-        String digits = phone.replaceAll("\\D", "");
-        return digits.length() >= 10 && digits.length() <= 15;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────
-    // Google Sign-Up (still uses Firebase Auth)
-    // ─────────────────────────────────────────────────────────────────────
+    // ── Google Sign-Up ─────────────────────────────────────────────────────
 
     private void signupWithGoogle() {
         mGoogleSignInClient.signOut().addOnCompleteListener(this,
@@ -249,45 +218,112 @@ public class SignupActivity extends AppCompatActivity {
     private void handleGoogleSignupResult(Task<GoogleSignInAccount> completedTask) {
         try {
             GoogleSignInAccount account = completedTask.getResult(ApiException.class);
-            if (account != null) {
-                AuthCredential credential = GoogleAuthProvider.getCredential(account.getIdToken(), null);
-                mAuth.signInWithCredential(credential).addOnCompleteListener(this, task -> {
-                    if (task.isSuccessful()) {
-                        FirebaseUser user = mAuth.getCurrentUser();
-                        if (user != null) {
-                            Toast.makeText(this, "Welcome " + user.getDisplayName(), Toast.LENGTH_SHORT).show();
-                            navigateToHome();
-                        }
-                    } else {
-                        String msg = task.getException() != null ? task.getException().getMessage() : "Google auth failed";
-                        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
-                    }
-                });
-            }
+            firebaseAuthWithGoogle(account);
         } catch (ApiException e) {
-            Toast.makeText(this, "Google sign-up failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Google Sign-In failed: " + e.getMessage(),
+                    Toast.LENGTH_LONG).show();
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ─────────────────────────────────────────────────────────────────────
-
-    private void setLoading(boolean loading) {
-        if (signupButton == null) return;
-        signupButton.setEnabled(!loading);
-        signupButton.setText(loading ? "Creating account..." : getString(R.string.signup_button));
+    private void firebaseAuthWithGoogle(GoogleSignInAccount account) {
+        setLoading(true);
+        AuthCredential credential = GoogleAuthProvider.getCredential(account.getIdToken(), null);
+        mAuth.signInWithCredential(credential)
+                .addOnCompleteListener(this, task -> {
+                    if (task.isSuccessful()) {
+                        FirebaseUser user = mAuth.getCurrentUser();
+                        if (user != null) {
+                            String displayName = account.getDisplayName() != null
+                                    ? account.getDisplayName() : "";
+                            String email = account.getEmail() != null
+                                    ? account.getEmail() : "";
+                            saveUserToFirestore(user.getUid(), displayName, email, "", () -> {
+                                setLoading(false);
+                                Toast.makeText(this, "Account created successfully!",
+                                        Toast.LENGTH_SHORT).show();
+                                Intent intent = new Intent(this, MainActivity.class);
+                                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                                startActivity(intent);
+                                finish();
+                            });
+                        }
+                    } else {
+                        setLoading(false);
+                        String msg = task.getException() != null
+                                ? task.getException().getMessage()
+                                : "Google Sign-In failed.";
+                        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+                    }
+                });
     }
 
-    private void navigateToHome() {
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        startActivity(intent);
-        finish();
+    // ── Validation ──────────────────────────────────────────────────────────
+
+    private boolean validateSignupInputs(String fullName, String phone,
+                                          String email, String password,
+                                          String confirmPassword) {
+        boolean isValid = true;
+        clearErrors();
+
+        if (TextUtils.isEmpty(fullName)) {
+            fullNameLayout.setError(getString(R.string.error_fullname_required));
+            isValid = false;
+        } else if (fullName.length() < 3) {
+            fullNameLayout.setError(getString(R.string.error_fullname_length));
+            isValid = false;
+        }
+
+        if (TextUtils.isEmpty(phone)) {
+            phoneLayout.setError(getString(R.string.error_phone_required));
+            isValid = false;
+        } else if (!phone.matches("\\d{10,15}")) {
+            phoneLayout.setError(getString(R.string.error_phone_invalid));
+            isValid = false;
+        }
+
+        if (TextUtils.isEmpty(email)) {
+            emailSignupLayout.setError(getString(R.string.error_email_required));
+            isValid = false;
+        } else if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            emailSignupLayout.setError(getString(R.string.error_invalid_email));
+            isValid = false;
+        }
+
+        if (TextUtils.isEmpty(password)) {
+            passwordSignupLayout.setError(getString(R.string.error_password_required));
+            isValid = false;
+        } else if (password.length() < 6) {
+            passwordSignupLayout.setError(getString(R.string.error_password_length));
+            isValid = false;
+        }
+
+        if (TextUtils.isEmpty(confirmPassword)) {
+            confirmPasswordLayout.setError("Please confirm your password.");
+            isValid = false;
+        } else if (!password.equals(confirmPassword)) {
+            confirmPasswordLayout.setError(getString(R.string.error_passwords_not_match));
+            isValid = false;
+        }
+
+        return isValid;
+    }
+
+    private void clearErrors() {
+        if (fullNameLayout        != null) fullNameLayout.setError(null);
+        if (phoneLayout           != null) phoneLayout.setError(null);
+        if (emailSignupLayout     != null) emailSignupLayout.setError(null);
+        if (passwordSignupLayout  != null) passwordSignupLayout.setError(null);
+        if (confirmPasswordLayout != null) confirmPasswordLayout.setError(null);
     }
 
     private String safeText(TextInputEditText input) {
-        if (input == null || input.getText() == null) return "";
-        return input.getText().toString().trim();
+        return (input != null && input.getText() != null)
+                ? input.getText().toString().trim() : "";
+    }
+
+    private void setLoading(boolean loading) {
+        if (signupButton       != null) signupButton.setEnabled(!loading);
+        if (googleSignupButton != null) googleSignupButton.setEnabled(!loading);
+        if (signupButton       != null) signupButton.setText(loading ? "Creating Account…" : getString(R.string.signup_button));
     }
 }

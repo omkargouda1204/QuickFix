@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Patterns;
+import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -25,26 +26,27 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 
-import org.json.JSONObject;
-
 /**
- * LoginActivity — Login via QuickFix backend API.
+ * LoginActivity — Firebase Email/Password + Google Sign-In.
  *
- * Flow:
+ * Flow (Email/Password):
  *   1. User enters email + password
- *   2. POST /api/auth/login → backend verifies credentials in Supabase
- *   3. If verified → returns JWT token + user data
- *   4. Navigate to MainActivity
+ *   2. Firebase signInWithEmailAndPassword
+ *   3. Check FirebaseUser.isEmailVerified()
+ *   4. If verified → navigate to MainActivity
+ *   5. If NOT verified → prompt to resend verification email
+ *
+ * Flow (Google):
+ *   1. Google Sign-In → Firebase credential
+ *   2. Navigate to MainActivity (Google accounts are auto-verified)
  */
 public class LoginActivity extends AppCompatActivity {
 
-    // ── UI ────────────────────────────────────────────────────────────────
     private TextInputLayout emailLayout, passwordLayout;
     private TextInputEditText emailInput, passwordInput;
     private MaterialButton loginButton, googleSignInButton;
     private TextView forgotPasswordLink, signUpLink;
 
-    // ── Firebase (Google Sign-In only) ────────────────────────────────────
     private FirebaseAuth mAuth;
     private GoogleSignInClient mGoogleSignInClient;
     private ActivityResultLauncher<Intent> googleSignInLauncher;
@@ -56,14 +58,17 @@ public class LoginActivity extends AppCompatActivity {
 
         mAuth = FirebaseAuth.getInstance();
 
+        // If user is already logged in and verified, skip login
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser != null && currentUser.isEmailVerified()) {
+            navigateToHome();
+            return;
+        }
+
         initializeViews();
         configureGoogleSignIn();
         setupClickListeners();
     }
-
-    // ─────────────────────────────────────────────────────────────────────
-    // Initialization
-    // ─────────────────────────────────────────────────────────────────────
 
     private void initializeViews() {
         emailLayout        = findViewById(R.id.emailLayout);
@@ -96,26 +101,29 @@ public class LoginActivity extends AppCompatActivity {
         );
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Click listeners
-    // ─────────────────────────────────────────────────────────────────────
-
     private void setupClickListeners() {
-        if (loginButton        != null) loginButton.setOnClickListener(v -> loginWithBackend());
-        if (googleSignInButton != null) googleSignInButton.setOnClickListener(v -> signInWithGoogle());
-        if (forgotPasswordLink != null) forgotPasswordLink.setOnClickListener(v -> {
-            if (!isFinishing()) startActivity(new Intent(this, ForgotPasswordActivity.class));
-        });
-        if (signUpLink != null) signUpLink.setOnClickListener(v -> {
-            if (!isFinishing()) startActivity(new Intent(this, SignupActivity.class));
-        });
+        if (loginButton != null)
+            loginButton.setOnClickListener(v -> loginWithFirebase());
+
+        if (googleSignInButton != null)
+            googleSignInButton.setOnClickListener(v -> signInWithGoogle());
+
+        if (forgotPasswordLink != null)
+            forgotPasswordLink.setOnClickListener(v -> {
+                if (!isFinishing())
+                    startActivity(new Intent(this, ForgotPasswordActivity.class));
+            });
+
+        if (signUpLink != null)
+            signUpLink.setOnClickListener(v -> {
+                if (!isFinishing())
+                    startActivity(new Intent(this, SignupActivity.class));
+            });
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Backend login — POST /api/auth/login
-    // ─────────────────────────────────────────────────────────────────────
+    // ── Email / Password Login ────────────────────────────────────────────
 
-    private void loginWithBackend() {
+    private void loginWithFirebase() {
         String email    = emailInput    != null && emailInput.getText()    != null
                 ? emailInput.getText().toString().trim()    : "";
         String password = passwordInput != null && passwordInput.getText() != null
@@ -125,48 +133,100 @@ public class LoginActivity extends AppCompatActivity {
 
         setLoading(true);
 
-        try {
-            JSONObject body = new JSONObject();
-            body.put("email",    email);
-            body.put("password", password);
-
-            ApiClient.post("/api/auth/login", body, new ApiClient.ApiCallback() {
-                @Override
-                public void onSuccess(JSONObject response) {
-                    setLoading(false);
-                    // Login successful — backend verified email + password
-                    // and returned JWT token + user data
-                    Toast.makeText(LoginActivity.this, "Login successful!", Toast.LENGTH_SHORT).show();
-                    navigateToHome();
-                }
-
-                @Override
-                public void onError(String errorMessage) {
-                    setLoading(false);
-                    // Show specific error on appropriate field
-                    if (errorMessage.toLowerCase().contains("email")) {
-                        emailLayout.setError(errorMessage);
-                    } else if (errorMessage.toLowerCase().contains("password")) {
-                        passwordLayout.setError(errorMessage);
-                    } else if (errorMessage.toLowerCase().contains("not verified")) {
-                        Toast.makeText(LoginActivity.this,
-                                errorMessage + "\nCheck your email for the OTP.",
-                                Toast.LENGTH_LONG).show();
+        mAuth.signInWithEmailAndPassword(email, password)
+                .addOnCompleteListener(this, task -> {
+                    if (task.isSuccessful()) {
+                        FirebaseUser user = mAuth.getCurrentUser();
+                        if (user != null && user.isEmailVerified()) {
+                            setLoading(false);
+                            Toast.makeText(this, "Login successful!", Toast.LENGTH_SHORT).show();
+                            navigateToHome();
+                        } else {
+                            setLoading(false);
+                            // Email not verified — offer to resend
+                            showEmailNotVerifiedDialog(user);
+                        }
                     } else {
-                        Toast.makeText(LoginActivity.this, errorMessage, Toast.LENGTH_LONG).show();
+                        setLoading(false);
+                        String errMsg = task.getException() != null
+                                ? task.getException().getMessage()
+                                : "Login failed. Please try again.";
+                        // Surface friendly errors
+                        if (errMsg != null && (errMsg.contains("no user record")
+                                || errMsg.contains("user-not-found"))) {
+                            emailLayout.setError("No account found with this email.");
+                        } else if (errMsg != null && (errMsg.contains("password is invalid")
+                                || errMsg.contains("wrong-password"))) {
+                            passwordLayout.setError("Incorrect password.");
+                        } else {
+                            Toast.makeText(this, errMsg, Toast.LENGTH_LONG).show();
+                        }
                     }
-                }
-            });
+                });
+    }
 
-        } catch (Exception e) {
-            setLoading(false);
-            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+    private void showEmailNotVerifiedDialog(FirebaseUser user) {
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Email Not Verified")
+                .setMessage("Please verify your email before logging in.\n\nCheck your inbox for the verification link.")
+                .setPositiveButton("Resend Email", (dialog, which) -> {
+                    if (user != null) {
+                        user.sendEmailVerification()
+                                .addOnCompleteListener(t -> {
+                                    if (t.isSuccessful()) {
+                                        Toast.makeText(this,
+                                                "Verification email sent! Check your inbox.",
+                                                Toast.LENGTH_LONG).show();
+                                    } else {
+                                        Toast.makeText(this,
+                                                "Failed to send email. Try again.",
+                                                Toast.LENGTH_SHORT).show();
+                                    }
+                                });
+                    }
+                    mAuth.signOut();
+                })
+                .setNegativeButton("OK", (dialog, which) -> mAuth.signOut())
+                .setCancelable(false)
+                .show();
+    }
+
+    // ── Google Sign-In ─────────────────────────────────────────────────────
+
+    private void signInWithGoogle() {
+        mGoogleSignInClient.signOut().addOnCompleteListener(this,
+                task -> googleSignInLauncher.launch(mGoogleSignInClient.getSignInIntent()));
+    }
+
+    private void handleGoogleSignInResult(Task<GoogleSignInAccount> completedTask) {
+        try {
+            GoogleSignInAccount account = completedTask.getResult(ApiException.class);
+            firebaseAuthWithGoogle(account.getIdToken());
+        } catch (ApiException e) {
+            Toast.makeText(this, "Google Sign-In failed: " + e.getMessage(),
+                    Toast.LENGTH_LONG).show();
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Validation
-    // ─────────────────────────────────────────────────────────────────────
+    private void firebaseAuthWithGoogle(String idToken) {
+        setLoading(true);
+        AuthCredential credential = GoogleAuthProvider.getCredential(idToken, null);
+        mAuth.signInWithCredential(credential)
+                .addOnCompleteListener(this, task -> {
+                    setLoading(false);
+                    if (task.isSuccessful()) {
+                        Toast.makeText(this, "Login successful!", Toast.LENGTH_SHORT).show();
+                        navigateToHome();
+                    } else {
+                        String msg = task.getException() != null
+                                ? task.getException().getMessage()
+                                : "Google Sign-In failed.";
+                        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+                    }
+                });
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
 
     private boolean validateInputs(String email, String password) {
         boolean isValid = true;
@@ -189,46 +249,10 @@ public class LoginActivity extends AppCompatActivity {
         return isValid;
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Google Sign-In (still uses Firebase Auth)
-    // ─────────────────────────────────────────────────────────────────────
-
-    private void signInWithGoogle() {
-        mGoogleSignInClient.signOut().addOnCompleteListener(this,
-                task -> googleSignInLauncher.launch(mGoogleSignInClient.getSignInIntent()));
-    }
-
-    private void handleGoogleSignInResult(Task<GoogleSignInAccount> completedTask) {
-        try {
-            GoogleSignInAccount account = completedTask.getResult(ApiException.class);
-            if (account != null) {
-                AuthCredential credential = GoogleAuthProvider.getCredential(account.getIdToken(), null);
-                mAuth.signInWithCredential(credential).addOnCompleteListener(this, task -> {
-                    if (task.isSuccessful()) {
-                        FirebaseUser user = mAuth.getCurrentUser();
-                        if (user != null) {
-                            Toast.makeText(this, "Welcome " + user.getDisplayName(), Toast.LENGTH_SHORT).show();
-                            navigateToHome();
-                        }
-                    } else {
-                        String msg = task.getException() != null ? task.getException().getMessage() : "Google auth failed";
-                        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
-                    }
-                });
-            }
-        } catch (ApiException e) {
-            Toast.makeText(this, "Google sign-in failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ─────────────────────────────────────────────────────────────────────
-
     private void setLoading(boolean loading) {
-        if (loginButton == null) return;
-        loginButton.setEnabled(!loading);
-        loginButton.setText(loading ? "Logging in..." : getString(R.string.login_button));
+        if (loginButton        != null) loginButton.setEnabled(!loading);
+        if (googleSignInButton != null) googleSignInButton.setEnabled(!loading);
+        if (loginButton        != null) loginButton.setText(loading ? "Logging in…" : "Login");
     }
 
     private void navigateToHome() {

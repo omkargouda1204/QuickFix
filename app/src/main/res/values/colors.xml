@@ -15,4 +15,32 @@
     <color name="splash_gradient_start">#1565C0</color>
     <color name="splash_gradient_center">#0D47A1</color>
     <color name="splash_gradient_end">#002171</color>
+
+    <!-- Home Screen -->
+    <color name="home_bg">#F0F4FF</color>
+    <color name="card_bg">#FFFFFF</color>
+    <color name="primary">#1E88E5</color>
+    <color name="primary_dark">#1565C0</color>
+    <color name="primary_light">#E3F2FD</color>
+    <color name="accent_orange">#FF7043</color>
+    <color name="accent_green">#43A047</color>
+    <color name="accent_purple">#8E24AA</color>
+    <color name="accent_teal">#00897B</color>
+    <color name="text_primary">#1A1A2E</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="divider">#E5E7EB</color>
+    <color name="bottom_nav_bg">#FFFFFF</color>
+    <color name="toolbar_bg">#FFFFFF</color>
+    <color name="search_bg">#F0F4FF</color>
+    <color name="cat_plumbing">#1E88E5</color>
+    <color name="cat_electrical">#F9A825</color>
+    <color name="cat_cleaning">#43A047</color>
+    <color name="cat_repair">#E53935</color>
+    <color name="cat_ac">#00ACC1</color>
+    <color name="cat_painting">#8E24AA</color>
+    <color name="cat_carpentry">#6D4C41</color>
+    <color name="cat_more">#546E7A</color>
+    <color name="emergency_red">#D32F2F</color>
+    <color name="featured_gradient_start">#1565C0</color>
+    <color name="featured_gradient_end">#42A5F5</color>
 </resources>
