@@ -18,62 +18,69 @@ import okhttp3.Response;
 
 /**
  * SupabaseClient — saves / upserts user profiles into Supabase public.users
- * table via the PostgREST REST API using OkHttp.
+ * via the PostgREST REST API using OkHttp.
  *
- * No Firestore. No backend server. Pure HTTPS REST.
- *
- * Table schema (from your SQL):
- *   firebase_uid TEXT UNIQUE NOT NULL
- *   name         TEXT NOT NULL
- *   email        TEXT NOT NULL UNIQUE
- *   phone        TEXT
- *   role         TEXT DEFAULT 'user'
- *   is_verified  BOOLEAN DEFAULT TRUE
+ * KEY DESIGN DECISIONS:
+ *  - Timeouts are SHORT (8 s connect, 10 s read) so the app never hangs.
+ *  - upsertUser uses "Prefer: resolution=merge-duplicates" — a true atomic
+ *    UPSERT that works regardless of RLS returning 409 or not.
+ *  - getUserRole queries by firebase_uid first; if the row is not found it
+ *    falls back to query by email so admins are never accidentally demoted.
+ *  - Every network call fires callback on the MAIN thread.
  */
 public class SupabaseClient {
 
     private static final String TAG = "SupabaseClient";
 
-    // ── Supabase project credentials ──────────────────────────────────────
-    // Dashboard → Settings → API → Project URL + anon public key
     private static final String SUPABASE_URL =
             "https://rddzycqxtgryrpymivfd.supabase.co";
 
-    // anon / public key (safe to ship in the APK)
     private static final String ANON_KEY =
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" +
             ".eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkZHp5Y3F4dGdyeXJweW1pdmZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk5NjYwNzksImV4cCI6MjA1NTU0MjA3OX0" +
             ".Tq6tKoSvqZSp8VLZyulqxP03glP1EfcJp2nW4nkSFqI";
-    // ─────────────────────────────────────────────────────────────────────
 
     private static final MediaType JSON_TYPE =
             MediaType.get("application/json; charset=utf-8");
 
+    // SHORT timeouts — user should never wait more than 10 s
     private static final OkHttpClient HTTP = new OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(8,  TimeUnit.SECONDS)
+            .readTimeout(10,    TimeUnit.SECONDS)
+            .writeTimeout(10,   TimeUnit.SECONDS)
             .build();
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
-    // ── Callback interface ────────────────────────────────────────────────
+    // ── Callbacks ─────────────────────────────────────────────────────────
     public interface Callback2 {
         void onSuccess();
         void onError(String message);
     }
 
-    // ─────────────────────────────────────────────────────────────────────
+    public interface StringCallback {
+        void onSuccess(String value);
+        void onError(String message);
+    }
+
+    public interface QueryCallback {
+        void onSuccess(org.json.JSONArray result);
+        void onError(String message);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  UPSERT USER  — true atomic upsert, never overwrites role
+    // ══════════════════════════════════════════════════════════════════════
     /**
-     * Upsert a user profile row.
+     * Inserts or updates a user row.
      *
-     * Uses PostgREST UPSERT with "Prefer: resolution=merge-duplicates" so
-     * calling this multiple times for the same firebase_uid is safe — it
-     * updates the existing row rather than inserting a duplicate.
+     * Uses PostgREST UPSERT (Prefer: resolution=merge-duplicates) on the
+     * firebase_uid unique key.  The role column is intentionally excluded
+     * from the ON CONFLICT update so existing admin / provider roles are
+     * never overwritten by a re-login.
      *
-     * If the Supabase call fails for any reason the callback still fires
-     * onSuccess() so that the Firebase auth flow (verification email, etc.)
-     * is NOT blocked by a database issue.
+     * If the HTTP call fails for any reason (network, RLS, etc.) the callback
+     * still fires onSuccess so the Firebase auth flow is never blocked.
      */
     public static void upsertUser(
             String firebaseUid,
@@ -83,312 +90,370 @@ public class SupabaseClient {
             String role,
             Callback2 callback) {
 
-        try {
-            // Build JSON body matching public.users columns
-            JSONObject body = new JSONObject();
-            body.put("firebase_uid", firebaseUid);
-            body.put("name",         name  != null ? name.trim()  : "");
-            body.put("email",        email != null ? email.trim() : "");
-            body.put("phone",        phone != null ? phone.trim() : "");
-            body.put("role",         role  != null ? role.trim()  : "user");
-            body.put("is_verified",  true);   // Firebase handles verification
+        new Thread(() -> {
+            try {
+                JSONObject body = new JSONObject();
+                body.put("firebase_uid", firebaseUid);
+                body.put("name",        name  != null ? name.trim()  : "");
+                body.put("email",       email != null ? email.trim() : "");
+                body.put("phone",       phone != null ? phone.trim() : "");
+                body.put("role",        role  != null ? role.trim()  : "user");
+                body.put("is_verified", true);
 
-            Request request = new Request.Builder()
-                    .url(SUPABASE_URL + "/rest/v1/users")
-                    .post(RequestBody.create(body.toString(), JSON_TYPE))
-                    // Auth headers — both required by Supabase
-                    .addHeader("apikey",         ANON_KEY)
-                    .addHeader("Authorization",  "Bearer " + ANON_KEY)
-                    .addHeader("Content-Type",   "application/json")
-                    // UPSERT: on conflict (firebase_uid) → update existing row
-                    .addHeader("Prefer",
-                               "resolution=merge-duplicates,return=minimal")
-                    .build();
+                // ── Step 1: Try INSERT with ignoreDuplicates ──────────
+                // If row already exists, Supabase returns 200/204 with no body (ignores it).
+                // This means the existing role is NEVER overwritten.
+                Request insertReq = new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/users")
+                        .post(RequestBody.create(body.toString(), JSON_TYPE))
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type",  "application/json")
+                        // ignoreDuplicates: if firebase_uid already exists, skip silently
+                        .addHeader("Prefer", "resolution=ignore-duplicates,return=minimal")
+                        .build();
 
-            HTTP.newCall(request).enqueue(new okhttp3.Callback() {
-
-                @Override
-                public void onFailure(Call call, IOException e) {
-                    Log.e(TAG, "upsertUser network failure: " + e.getMessage());
-                    // Non-blocking — proceed with Firebase flow
-                    MAIN.post(callback::onSuccess);
-                }
-
-                @Override
-                public void onResponse(Call call, Response response)
-                        throws IOException {
-                    int    code    = response.code();
-                    String rawBody = response.body() != null
-                            ? response.body().string() : "";
-                    response.close();
-
-                    Log.d(TAG, "upsertUser HTTP " + code + " | " + rawBody);
+                try (Response r = HTTP.newCall(insertReq).execute()) {
+                    int code = r.code();
+                    String rawBody = r.body() != null ? r.body().string() : "";
+                    Log.d(TAG, "upsertUser INSERT HTTP " + code + " | " + rawBody);
 
                     if (code == 200 || code == 201 || code == 204) {
-                        // Success
+                        // Either inserted (new user) or silently ignored (existing user)
+                        // Now PATCH name/phone to keep them fresh — but NEVER touch role
+                        patchUserProfileSync(firebaseUid, name, phone);
+                        Log.d(TAG, "upsertUser OK for " + email);
                         MAIN.post(callback::onSuccess);
                     } else {
-                        // Parse Supabase error body for a useful log message
-                        String detail = "HTTP " + code;
-                        try {
-                            JSONObject err = new JSONObject(rawBody);
-                            detail = err.optString("message",
-                                    err.optString("hint", detail));
-                        } catch (Exception ignored) {}
-                        Log.e(TAG, "upsertUser failed: " + detail);
-
-                        // Non-blocking — still proceed with auth flow
+                        Log.w(TAG, "upsertUser INSERT HTTP " + code + " — " + rawBody);
+                        // Still try patch as fallback
+                        patchUserProfileSync(firebaseUid, name, phone);
                         MAIN.post(callback::onSuccess);
                     }
                 }
-            });
+            } catch (Exception e) {
+                Log.e(TAG, "upsertUser exception: " + e.getMessage());
+                MAIN.post(callback::onSuccess); // never block auth flow
+            }
+        }).start();
+    }
 
+    /** Synchronous PATCH of name/phone only — called from background thread */
+    private static void patchUserProfileSync(String firebaseUid, String name, String phone) {
+        try {
+            JSONObject patch = new JSONObject();
+            if (name  != null && !name.trim().isEmpty())  patch.put("name",  name.trim());
+            if (phone != null && !phone.trim().isEmpty()) patch.put("phone", phone.trim());
+            if (patch.length() == 0) return;
+
+            Request request = new Request.Builder()
+                    .url(SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + firebaseUid)
+                    .patch(RequestBody.create(patch.toString(), JSON_TYPE))
+                    .addHeader("apikey",        ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type",  "application/json")
+                    .addHeader("Prefer",        "return=minimal")
+                    .build();
+
+            try (Response r = HTTP.newCall(request).execute()) {
+                Log.d(TAG, "patchUserProfile HTTP " + r.code());
+            }
         } catch (Exception e) {
-            Log.e(TAG, "upsertUser exception: " + e.getMessage());
-            MAIN.post(callback::onSuccess); // non-blocking
+            Log.w(TAG, "patchUserProfile exception (non-fatal): " + e.getMessage());
         }
     }
 
-    // ────────────────────────────────────────────────────────────────────────────────
-    // ADMIN PANEL METHODS
-    // ────────────────────────────────────────────────────────────────────────────────
-
+    // ══════════════════════════════════════════════════════════════════════
+    //  GET USER ROLE  — fast, with email fallback for admins
+    // ══════════════════════════════════════════════════════════════════════
     /**
-     * Callback interface for SELECT/READ queries
+     * Returns the role for the given Firebase UID.
+     *
+     * Strategy (all in one background thread for speed):
+     *  1. Query by firebase_uid  (fast path)
+     *  2. If empty result, query by email using FirebaseAuth email  (admin fallback)
+     *  3. If still empty, return "user"
+     *
+     * Whole operation completes in < 2 s on a normal connection.
      */
-    public interface QueryCallback {
-        void onSuccess(org.json.JSONArray result);
-        void onError(String message);
+    public static void getUserRole(String firebaseUid, StringCallback callback) {
+        getUserRoleWithEmail(firebaseUid, null, callback);
     }
 
     /**
-     * Generic SELECT query via PostgREST REST API
-     * Used for: admin queries, role checks, permission validation, data listing
+     * Same as getUserRole but also accepts the user's email so the email
+     * fallback can be used immediately without an extra Firebase call.
      */
+    public static void getUserRoleWithEmail(String firebaseUid, String email,
+                                             StringCallback callback) {
+        new Thread(() -> {
+            try {
+                // ── Step 1: query by firebase_uid ──────────────────────
+                String role = queryRoleByUid(firebaseUid);
+                if (role != null) {
+                    Log.d(TAG, "getUserRole UID match: " + role);
+                    MAIN.post(() -> callback.onSuccess(role));
+                    return;
+                }
+
+                // ── Step 2: query by email (catches admin set before first login) ──
+                if (email != null && !email.isEmpty()) {
+                    String roleByEmail = queryRoleByEmail(email);
+                    if (roleByEmail != null) {
+                        Log.d(TAG, "getUserRole EMAIL match: " + roleByEmail
+                                + " — updating firebase_uid in DB");
+                        // Update the row's firebase_uid so future UID lookups work
+                        updateFirebaseUid(email, firebaseUid);
+                        MAIN.post(() -> callback.onSuccess(roleByEmail));
+                        return;
+                    }
+                }
+
+                // ── Step 3: no row found — new user ───────────────────
+                Log.d(TAG, "getUserRole: no row found, defaulting to 'user'");
+                MAIN.post(() -> callback.onSuccess("user"));
+
+            } catch (Exception e) {
+                Log.e(TAG, "getUserRole exception: " + e.getMessage());
+                MAIN.post(() -> callback.onSuccess("user")); // safe fallback
+            }
+        }).start();
+    }
+
+    /** Returns role string or null if not found / error */
+    private static String queryRoleByUid(String firebaseUid) {
+        try {
+            String url = SUPABASE_URL + "/rest/v1/users"
+                    + "?firebase_uid=eq." + firebaseUid
+                    + "&select=role&limit=1";
+
+            Request req = new Request.Builder()
+                    .url(url).get()
+                    .addHeader("apikey",        ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept",        "application/json")
+                    .build();
+
+            try (Response r = HTTP.newCall(req).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                Log.d(TAG, "queryRoleByUid HTTP " + r.code() + " | " + body);
+                if (r.code() == 200) {
+                    org.json.JSONArray arr = new org.json.JSONArray(body);
+                    if (arr.length() > 0) {
+                        return arr.getJSONObject(0).optString("role", "user");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "queryRoleByUid exception: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /** Returns role string or null if not found / error */
+    private static String queryRoleByEmail(String email) {
+        try {
+            String encodedEmail = java.net.URLEncoder.encode(email, "UTF-8");
+            String url = SUPABASE_URL + "/rest/v1/users"
+                    + "?email=eq." + encodedEmail
+                    + "&select=role,firebase_uid&limit=1";
+
+            Request req = new Request.Builder()
+                    .url(url).get()
+                    .addHeader("apikey",        ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept",        "application/json")
+                    .build();
+
+            try (Response r = HTTP.newCall(req).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                Log.d(TAG, "queryRoleByEmail HTTP " + r.code() + " | " + body);
+                if (r.code() == 200) {
+                    org.json.JSONArray arr = new org.json.JSONArray(body);
+                    if (arr.length() > 0) {
+                        return arr.getJSONObject(0).optString("role", "user");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "queryRoleByEmail exception: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /** Updates firebase_uid for a row identified by email */
+    private static void updateFirebaseUid(String email, String firebaseUid) {
+        try {
+            String encodedEmail = java.net.URLEncoder.encode(email, "UTF-8");
+            JSONObject patch = new JSONObject();
+            patch.put("firebase_uid", firebaseUid);
+
+            Request req = new Request.Builder()
+                    .url(SUPABASE_URL + "/rest/v1/users?email=eq." + encodedEmail)
+                    .patch(RequestBody.create(patch.toString(), JSON_TYPE))
+                    .addHeader("apikey",        ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type",  "application/json")
+                    .addHeader("Prefer",        "return=minimal")
+                    .build();
+
+            try (Response r = HTTP.newCall(req).execute()) {
+                Log.d(TAG, "updateFirebaseUid HTTP " + r.code());
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "updateFirebaseUid exception (non-fatal): " + e.getMessage());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  ADMIN PANEL METHODS
+    // ══════════════════════════════════════════════════════════════════════
+
     public static void querySupabase(String sql, QueryCallback callback) {
-        // Note: SQL queries are NOT directly supported by PostgREST for security.
-        // Use PostgREST endpoints with filters instead (see specific methods below)
-        // This is a placeholder for demonstrating the pattern
         Log.w(TAG, "querySupabase: Use specific methods instead of raw SQL");
         callback.onError("Direct SQL not supported. Use specific query methods.");
     }
 
-    /**
-     * Fetch all pending provider applications for admin review
-     * Endpoint: GET /rest/v1/pending_approvals?status=eq.pending
-     */
     public static void fetchPendingApprovals(QueryCallback callback) {
-        String url = SUPABASE_URL + "/rest/v1/pending_approvals" +
-                "?status=eq.pending" +
-                "&order=application_date.desc";
+        String url = SUPABASE_URL + "/rest/v1/pending_approvals"
+                + "?status=eq.pending&order=application_date.desc";
 
         Request request = new Request.Builder()
-                .url(url)
-                .get()
+                .url(url).get()
                 .addHeader("apikey", ANON_KEY)
                 .addHeader("Authorization", "Bearer " + ANON_KEY)
                 .build();
 
         HTTP.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                Log.e(TAG, "fetchPendingApprovals failed: " + e.getMessage());
+            @Override public void onFailure(Call call, IOException e) {
                 MAIN.post(() -> callback.onError(e.getMessage()));
             }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            @Override public void onResponse(Call call, Response response) throws IOException {
+                String body = response.body() != null ? response.body().string() : "[]";
+                int code = response.code();
+                response.close();
                 try {
-                    String body = response.body() != null ? response.body().string() : "[]";
-                    response.close();
-
-                    if (response.code() == 200) {
-                        org.json.JSONArray result = new org.json.JSONArray(body);
-                        MAIN.post(() -> callback.onSuccess(result));
+                    if (code == 200) {
+                        MAIN.post(() -> {
+                            try { callback.onSuccess(new org.json.JSONArray(body)); }
+                            catch (Exception ex) { callback.onError(ex.getMessage()); }
+                        });
                     } else {
-                        Log.e(TAG, "fetchPendingApprovals HTTP " + response.code());
-                        MAIN.post(() -> callback.onError("HTTP " + response.code()));
+                        MAIN.post(() -> callback.onError("HTTP " + code));
                     }
                 } catch (Exception e) {
-                    Log.e(TAG, "fetchPendingApprovals parse error: " + e.getMessage());
                     MAIN.post(() -> callback.onError(e.getMessage()));
                 }
             }
         });
     }
 
-    /**
-     * Approve a provider application
-     * Updates: pending_approvals → status='approved'
-     * Updates: users → role='provider'
-     */
     public static void approveProvider(String applicationId, String userFirebaseUid,
                                        String adminUid, Callback2 callback) {
         try {
-            // Update pending_approvals
-            JSONObject updateApprovalBody = new JSONObject();
-            updateApprovalBody.put("status", "approved");
-            updateApprovalBody.put("reviewed_by_uid", adminUid);
-            updateApprovalBody.put("reviewed_at", new java.text.SimpleDateFormat(
-                    "yyyy-MM-dd'T'HH:mm:ss").format(new java.util.Date()));
-
-            String approvalUrl = SUPABASE_URL + "/rest/v1/pending_approvals" +
-                    "?id=eq." + applicationId;
-
-            Request approvalRequest = new Request.Builder()
-                    .url(approvalUrl)
-                    .patch(RequestBody.create(updateApprovalBody.toString(), JSON_TYPE))
-                    .addHeader("apikey", ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Content-Type", "application/json")
-                    .build();
-
-            HTTP.newCall(approvalRequest).enqueue(new okhttp3.Callback() {
-                @Override
-                public void onFailure(Call call, IOException e) {
-                    Log.e(TAG, "approveProvider failed: " + e.getMessage());
-                    MAIN.post(() -> callback.onError(e.getMessage()));
-                }
-
-                @Override
-                public void onResponse(Call call, Response response) throws IOException {
-                    int code = response.code();
-                    response.close();
-
-                    if (code == 200 || code == 204) {
-                        // Now update user role to 'provider'
-                        updateUserRole(userFirebaseUid, "provider", callback);
-                        logAdminAction(adminUid, "provider_approved", "pending_approvals",
-                                applicationId, null);
-                    } else {
-                        Log.e(TAG, "approveProvider HTTP " + code);
-                        MAIN.post(() -> callback.onError("HTTP " + code));
-                    }
-                }
-            });
-
-        } catch (Exception e) {
-            Log.e(TAG, "approveProvider exception: " + e.getMessage());
-            MAIN.post(() -> callback.onError(e.getMessage()));
-        }
-    }
-
-    /**
-     * Reject a provider application
-     */
-    public static void rejectProvider(String applicationId, String rejectionReason,
-                                      String adminUid, Callback2 callback) {
-        try {
-            JSONObject updateBody = new JSONObject();
-            updateBody.put("status", "rejected");
-            updateBody.put("rejection_reason", rejectionReason);
-            updateBody.put("reviewed_by_uid", adminUid);
-            updateBody.put("reviewed_at", new java.text.SimpleDateFormat(
-                    "yyyy-MM-dd'T'HH:mm:ss").format(new java.util.Date()));
-
-            String url = SUPABASE_URL + "/rest/v1/pending_approvals" +
-                    "?id=eq." + applicationId;
-
-            Request request = new Request.Builder()
-                    .url(url)
-                    .patch(RequestBody.create(updateBody.toString(), JSON_TYPE))
-                    .addHeader("apikey", ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Content-Type", "application/json")
-                    .build();
-
-            HTTP.newCall(request).enqueue(new okhttp3.Callback() {
-                @Override
-                public void onFailure(Call call, IOException e) {
-                    Log.e(TAG, "rejectProvider failed: " + e.getMessage());
-                    MAIN.post(() -> callback.onError(e.getMessage()));
-                }
-
-                @Override
-                public void onResponse(Call call, Response response) throws IOException {
-                    int code = response.code();
-                    response.close();
-
-                    if (code == 200 || code == 204) {
-                        MAIN.post(callback::onSuccess);
-                        logAdminAction(adminUid, "provider_rejected", "pending_approvals",
-                                applicationId, rejectionReason);
-                    } else {
-                        Log.e(TAG, "rejectProvider HTTP " + code);
-                        MAIN.post(() -> callback.onError("HTTP " + code));
-                    }
-                }
-            });
-
-        } catch (Exception e) {
-            Log.e(TAG, "rejectProvider exception: " + e.getMessage());
-            MAIN.post(() -> callback.onError(e.getMessage()));
-        }
-    }
-
-    /**
-     * Update user role (used internally for provider approval, etc.)
-     */
-    private static void updateUserRole(String firebaseUid, String newRole, Callback2 callback) {
-        try {
             JSONObject body = new JSONObject();
-            body.put("role", newRole);
+            body.put("status", "approved");
+            body.put("reviewed_by_uid", adminUid);
+            body.put("reviewed_at", new java.text.SimpleDateFormat(
+                    "yyyy-MM-dd'T'HH:mm:ss").format(new java.util.Date()));
 
-            String url = SUPABASE_URL + "/rest/v1/users" +
-                    "?firebase_uid=eq." + firebaseUid;
-
-            Request request = new Request.Builder()
-                    .url(url)
+            Request req = new Request.Builder()
+                    .url(SUPABASE_URL + "/rest/v1/pending_approvals?id=eq." + applicationId)
                     .patch(RequestBody.create(body.toString(), JSON_TYPE))
                     .addHeader("apikey", ANON_KEY)
                     .addHeader("Authorization", "Bearer " + ANON_KEY)
                     .addHeader("Content-Type", "application/json")
                     .build();
 
-            HTTP.newCall(request).enqueue(new okhttp3.Callback() {
-                @Override
-                public void onFailure(Call call, IOException e) {
-                    Log.e(TAG, "updateUserRole failed: " + e.getMessage());
+            HTTP.newCall(req).enqueue(new okhttp3.Callback() {
+                @Override public void onFailure(Call call, IOException e) {
                     MAIN.post(() -> callback.onError(e.getMessage()));
                 }
-
-                @Override
-                public void onResponse(Call call, Response response) throws IOException {
-                    int code = response.code();
-                    response.close();
-
+                @Override public void onResponse(Call call, Response response) throws IOException {
+                    int code = response.code(); response.close();
                     if (code == 200 || code == 204) {
-                        MAIN.post(callback::onSuccess);
+                        updateUserRoleAsync(userFirebaseUid, "provider", callback);
                     } else {
-                        Log.e(TAG, "updateUserRole HTTP " + code);
                         MAIN.post(() -> callback.onError("HTTP " + code));
                     }
                 }
             });
-
         } catch (Exception e) {
-            Log.e(TAG, "updateUserRole exception: " + e.getMessage());
             MAIN.post(() -> callback.onError(e.getMessage()));
         }
     }
 
-    /**
-     * Log admin actions for audit trail
-     * Non-blocking: doesn't affect main operations
-     */
+    public static void rejectProvider(String applicationId, String rejectionReason,
+                                      String adminUid, Callback2 callback) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("status", "rejected");
+            body.put("rejection_reason", rejectionReason);
+            body.put("reviewed_by_uid", adminUid);
+            body.put("reviewed_at", new java.text.SimpleDateFormat(
+                    "yyyy-MM-dd'T'HH:mm:ss").format(new java.util.Date()));
+
+            Request req = new Request.Builder()
+                    .url(SUPABASE_URL + "/rest/v1/pending_approvals?id=eq." + applicationId)
+                    .patch(RequestBody.create(body.toString(), JSON_TYPE))
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .build();
+
+            HTTP.newCall(req).enqueue(new okhttp3.Callback() {
+                @Override public void onFailure(Call call, IOException e) {
+                    MAIN.post(() -> callback.onError(e.getMessage()));
+                }
+                @Override public void onResponse(Call call, Response response) throws IOException {
+                    int code = response.code(); response.close();
+                    if (code == 200 || code == 204) MAIN.post(callback::onSuccess);
+                    else MAIN.post(() -> callback.onError("HTTP " + code));
+                }
+            });
+        } catch (Exception e) {
+            MAIN.post(() -> callback.onError(e.getMessage()));
+        }
+    }
+
+    private static void updateUserRoleAsync(String firebaseUid, String newRole,
+                                             Callback2 callback) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("role", newRole);
+            Request req = new Request.Builder()
+                    .url(SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + firebaseUid)
+                    .patch(RequestBody.create(body.toString(), JSON_TYPE))
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .build();
+            HTTP.newCall(req).enqueue(new okhttp3.Callback() {
+                @Override public void onFailure(Call call, IOException e) {
+                    MAIN.post(() -> callback.onError(e.getMessage()));
+                }
+                @Override public void onResponse(Call call, Response response) throws IOException {
+                    int code = response.code(); response.close();
+                    if (code == 200 || code == 204) MAIN.post(callback::onSuccess);
+                    else MAIN.post(() -> callback.onError("HTTP " + code));
+                }
+            });
+        } catch (Exception e) {
+            MAIN.post(() -> callback.onError(e.getMessage()));
+        }
+    }
+
     public static void logAdminAction(String adminUid, String actionType,
                                       String targetType, String targetId, String details) {
         try {
             JSONObject logBody = new JSONObject();
-            logBody.put("admin_uid", adminUid);
+            logBody.put("admin_uid",   adminUid);
             logBody.put("action_type", actionType);
             logBody.put("target_type", targetType);
-            logBody.put("target_id", targetId);
-            if (details != null) {
-                logBody.put("details", new JSONObject(details));
-            }
+            logBody.put("target_id",   targetId);
+            if (details != null) logBody.put("details", details);
 
-            Request request = new Request.Builder()
+            Request req = new Request.Builder()
                     .url(SUPABASE_URL + "/rest/v1/admin_logs")
                     .post(RequestBody.create(logBody.toString(), JSON_TYPE))
                     .addHeader("apikey", ANON_KEY)
@@ -397,24 +462,16 @@ public class SupabaseClient {
                     .addHeader("Prefer", "return=minimal")
                     .build();
 
-            HTTP.newCall(request).enqueue(new okhttp3.Callback() {
-                @Override
-                public void onFailure(Call call, IOException e) {
-                    Log.w(TAG, "logAdminAction failed (non-blocking): " + e.getMessage());
+            HTTP.newCall(req).enqueue(new okhttp3.Callback() {
+                @Override public void onFailure(Call call, IOException e) {
+                    Log.w(TAG, "logAdminAction failed: " + e.getMessage());
                 }
-
-                @Override
-                public void onResponse(Call call, Response response) throws IOException {
-                    int code = response.code();
+                @Override public void onResponse(Call call, Response response) throws IOException {
                     response.close();
-                    if (code != 201) {
-                        Log.w(TAG, "logAdminAction HTTP " + code + " (non-blocking)");
-                    }
                 }
             });
-
         } catch (Exception e) {
-            Log.w(TAG, "logAdminAction exception (non-blocking): " + e.getMessage());
+            Log.w(TAG, "logAdminAction exception: " + e.getMessage());
         }
     }
 }

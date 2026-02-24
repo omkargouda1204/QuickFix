@@ -940,13 +940,15 @@
 
             <!-- ── LIST YOUR BUSINESS BANNER ──────────────────────────── -->
             <LinearLayout
+                android:id="@+id/listBusinessSection"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:paddingStart="20dp"
                 android:paddingEnd="20dp"
                 android:paddingTop="24dp"
-                android:paddingBottom="8dp">
+                android:paddingBottom="8dp"
+                android:visibility="gone">
 
                 <androidx.cardview.widget.CardView
                     android:id="@+id/listBusinessCard"
@@ -1013,6 +1015,95 @@
                             android:layout_width="wrap_content"
                             android:layout_height="40dp"
                             android:text="Start"
+                            android:textColor="#4F46E5"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            app:backgroundTint="#FFFFFF"
+                            app:cornerRadius="20dp"
+                            android:paddingStart="16dp"
+                            android:paddingEnd="16dp" />
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+            </LinearLayout>
+
+            <!-- ── PROVIDER DASHBOARD BANNER ───────────────────────────── -->
+            <!-- Shown only when role = provider -->
+            <LinearLayout
+                android:id="@+id/providerDashboardSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:paddingTop="24dp"
+                android:paddingBottom="8dp"
+                android:visibility="gone">
+
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/providerDashboardCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clickable="true"
+                    android:focusable="true"
+                    app:cardCornerRadius="18dp"
+                    app:cardElevation="8dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_list_business"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:padding="20dp">
+
+                        <FrameLayout
+                            android:layout_width="52dp"
+                            android:layout_height="52dp"
+                            android:background="#33FFFFFF">
+
+                            <ImageView
+                                android:layout_width="28dp"
+                                android:layout_height="28dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_business"
+                                android:contentDescription="Provider" />
+
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingStart="14dp"
+                            android:paddingEnd="8dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Your Provider Dashboard"
+                                android:textColor="#FFFFFF"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="Manage bookings, services &amp; business analytics"
+                                android:textColor="#DDEEFF"
+                                android:textSize="12sp" />
+
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/providerDashboardBtn"
+                            android:layout_width="wrap_content"
+                            android:layout_height="40dp"
+                            android:text="Open"
                             android:textColor="#4F46E5"
                             android:textSize="13sp"
                             android:textStyle="bold"

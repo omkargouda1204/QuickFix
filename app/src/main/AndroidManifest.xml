@@ -60,6 +60,12 @@
             android:name=".MainActivity"
             android:exported="false" />
 
+        <!-- Provider Dashboard (shown when role = provider) -->
+        <activity
+            android:name=".ProviderDashboardActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
         <!-- ═════════════════════════════════════════════════════════════ -->
         <!-- ADMIN PANEL ACTIVITIES                                        -->
         <!-- ═════════════════════════════════════════════════════════════ -->

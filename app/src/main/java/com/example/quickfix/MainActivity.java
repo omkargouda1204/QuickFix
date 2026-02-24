@@ -44,8 +44,14 @@ public class MainActivity extends AppCompatActivity {
     private TextView seeAllFeatured;
 
     // ── List Your Business ────────────────────────────────────────────────
+    private android.view.View listBusinessSection;
     private CardView listBusinessCard;
     private com.google.android.material.button.MaterialButton listBusinessBtn;
+
+    // ── Provider Dashboard ────────────────────────────────────────────────
+    private android.view.View providerDashboardSection;
+    private CardView providerDashboardCard;
+    private com.google.android.material.button.MaterialButton providerDashboardBtn;
 
     // ── Bottom Nav ────────────────────────────────────────────────────────
     private LinearLayout navHome, navBookings, navMessages, navProfile;
@@ -77,7 +83,8 @@ public class MainActivity extends AppCompatActivity {
         setupFeaturedCardListeners();
         setupBottomNav();
         setupSearchBar();
-        setupListBusiness();
+        // Load role from Supabase to show/hide provider dashboard
+        loadRoleAndSetupBanner(currentUser.getUid());
     }
 
     // ── Setup Toolbar ─────────────────────────────────────────────────────
@@ -121,8 +128,13 @@ public class MainActivity extends AppCompatActivity {
         featuredCard3  = findViewById(R.id.featuredCard3);
         seeAllFeatured = findViewById(R.id.seeAllFeatured);
 
-        listBusinessCard = findViewById(R.id.listBusinessCard);
-        listBusinessBtn  = findViewById(R.id.listBusinessBtn);
+        listBusinessSection      = findViewById(R.id.listBusinessSection);
+        listBusinessCard         = findViewById(R.id.listBusinessCard);
+        listBusinessBtn          = findViewById(R.id.listBusinessBtn);
+
+        providerDashboardSection = findViewById(R.id.providerDashboardSection);
+        providerDashboardCard    = findViewById(R.id.providerDashboardCard);
+        providerDashboardBtn     = findViewById(R.id.providerDashboardBtn);
 
         navHome      = findViewById(R.id.navHome);
         navBookings  = findViewById(R.id.navBookings);
@@ -333,6 +345,50 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    // ── Role-aware banner setup ───────────────────────────────────────────
+
+    private void loadRoleAndSetupBanner(String firebaseUid) {
+        SupabaseClient.getUserRole(firebaseUid, new SupabaseClient.StringCallback() {
+            @Override
+            public void onSuccess(String role) {
+                if ("provider".equalsIgnoreCase(role)) {
+                    // Provider: show Provider Dashboard, hide List Business
+                    if (providerDashboardSection != null)
+                        providerDashboardSection.setVisibility(android.view.View.VISIBLE);
+                    if (listBusinessSection != null)
+                        listBusinessSection.setVisibility(android.view.View.GONE);
+                    setupProviderDashboard();
+                } else {
+                    // Regular user: show List Business, hide Provider Dashboard
+                    if (listBusinessSection != null)
+                        listBusinessSection.setVisibility(android.view.View.VISIBLE);
+                    if (providerDashboardSection != null)
+                        providerDashboardSection.setVisibility(android.view.View.GONE);
+                    setupListBusiness();
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                // Fallback: show List Business
+                if (listBusinessSection != null)
+                    listBusinessSection.setVisibility(android.view.View.VISIBLE);
+                setupListBusiness();
+            }
+        });
+    }
+
+    // ── Provider Dashboard button ─────────────────────────────────────────
+
+    private void setupProviderDashboard() {
+        android.view.View.OnClickListener click = v -> {
+            Intent i = new Intent(this, ProviderDashboardActivity.class);
+            startActivity(i);
+        };
+        if (providerDashboardCard != null) providerDashboardCard.setOnClickListener(click);
+        if (providerDashboardBtn  != null) providerDashboardBtn.setOnClickListener(click);
+    }
+
     // ── List Your Business ────────────────────────────────────────────────
 
     private void setupListBusiness() {
@@ -343,10 +399,10 @@ public class MainActivity extends AppCompatActivity {
                                 + "• Reach thousands of customers\n"
                                 + "• Manage bookings in one place\n"
                                 + "• Grow your business fast\n\n"
-                                + "Provider registration is coming soon.")
-                        .setPositiveButton("Notify Me", (d, w) ->
+                                + "Submit your application and wait for admin approval.")
+                        .setPositiveButton("Apply Now", (d, w) ->
                                 Toast.makeText(this,
-                                        "We'll notify you when provider registration opens!",
+                                        "Provider application — coming soon!",
                                         Toast.LENGTH_LONG).show())
                         .setNegativeButton("Cancel", null)
                         .show();
