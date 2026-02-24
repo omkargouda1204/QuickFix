@@ -59,6 +59,47 @@
         <activity
             android:name=".MainActivity"
             android:exported="false" />
+
+        <!-- ═════════════════════════════════════════════════════════════ -->
+        <!-- ADMIN PANEL ACTIVITIES                                        -->
+        <!-- ═════════════════════════════════════════════════════════════ -->
+
+        <!-- Admin Login Activity -->
+        <activity
+            android:name=".AdminLoginActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Admin Dashboard Activity -->
+        <activity
+            android:name=".AdminDashboardActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Business Approval Activity -->
+        <activity
+            android:name=".BusinessApprovalActivity"
+            android:exported="false"
+            android:parentActivityName=".AdminDashboardActivity" />
+
+        <!-- User Management Activity -->
+        <activity
+            android:name=".UserManagementActivity"
+            android:exported="false"
+            android:parentActivityName=".AdminDashboardActivity" />
+
+        <!-- Service Management Activity -->
+        <activity
+            android:name=".ServiceManagementActivity"
+            android:exported="false"
+            android:parentActivityName=".AdminDashboardActivity" />
+
+        <!-- Content Management Activity -->
+        <activity
+            android:name=".ContentManagementActivity"
+            android:exported="false"
+            android:parentActivityName=".AdminDashboardActivity" />
     </application>
 
 </manifest>

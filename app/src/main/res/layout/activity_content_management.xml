@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/home_bg"
+    android:orientation="vertical">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/primary"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Content Management"
+            android:textColor="@color/white"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+    <!-- Tabs: Categories / Featured -->
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/contentTabs"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="@color/primary">
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Categories" />
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Featured" />
+
+    </com.google.android.material.tabs.TabLayout>
+
+    <!-- Categories Section -->
+    <LinearLayout
+        android:id="@+id/categoriesSection"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="16dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/addCategoryButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Add New Category"
+                android:textSize="14sp"
+                android:backgroundTint="@color/primary" />
+
+        </LinearLayout>
+
+        <ListView
+            android:id="@+id/categoriesListView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="16dp"
+            android:divider="@android:color/transparent"
+            android:dividerHeight="12dp" />
+
+    </LinearLayout>
+
+    <!-- Featured Section -->
+    <LinearLayout
+        android:id="@+id/featuredSection"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="16dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/addFeaturedButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Add to Featured"
+                android:textSize="14sp"
+                android:backgroundTint="@color/primary" />
+
+        </LinearLayout>
+
+        <ListView
+            android:id="@+id/featuredListView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="16dp"
+            android:divider="@android:color/transparent"
+            android:dividerHeight="12dp" />
+
+    </LinearLayout>
+
+    <!-- Refresh Button -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        android:background="@color/white">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/refreshButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Refresh"
+            android:textSize="14sp"
+            android:backgroundTint="@color/primary" />
+
+    </LinearLayout>
+
+</LinearLayout>
+
