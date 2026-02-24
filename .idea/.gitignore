@@ -1,3 +1,8 @@
 # Default ignored files
 /shelf/
 /workspace.xml
+# Ignore all .idea files except for code styles, run configs, and inspections
+.idea/*
+!.idea/codeStyles/
+!.idea/runConfigurations/
+!.idea/inspectionProfiles/
