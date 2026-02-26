@@ -100,6 +100,14 @@ public class ForgotPasswordActivity extends AppCompatActivity {
             return;
         }
 
+        // Fast-fail: show a clear message if there's no internet at all
+        if (!NetworkHelper.isOnline(this)) {
+            Toast.makeText(this,
+                    "No internet connection. Please enable WiFi or mobile data and try again.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+
         setBusy(true);
 
         // ── Firebase sendPasswordResetEmail ────────────────────────────────
@@ -172,9 +180,16 @@ public class ForgotPasswordActivity extends AppCompatActivity {
                 && (msg.contains("NETWORK_ERROR")
                 || msg.contains("network")
                 || msg.contains("NETWORK"))) {
-            Toast.makeText(this,
-                    "No internet connection. Check your network and try again.",
-                    Toast.LENGTH_LONG).show();
+            if (!NetworkHelper.isOnline(this)) {
+                Toast.makeText(this,
+                        "No internet connection. Please enable WiFi or mobile data and try again.",
+                        Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(this,
+                        "Unable to reach server. This may be a network provider (ISP) or DNS issue. "
+                        + "Please try switching to mobile data, using a VPN, or try again later.",
+                        Toast.LENGTH_LONG).show();
+            }
 
         } else {
             Toast.makeText(this,

@@ -177,8 +177,9 @@ public class ApiClient {
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                String msg = buildNetworkErrorMessage(e);
-                Log.e(TAG, "upsertUser failed: " + e.getMessage());
+                NetworkHelper.FailureType type = NetworkHelper.classify(e);
+                String msg = NetworkHelper.buildMessage(type, true);
+                Log.e(TAG, "upsertUser failed type=" + type + ": " + e.getMessage());
                 mainHandler.post(() -> callback.onError(msg));
             }
 

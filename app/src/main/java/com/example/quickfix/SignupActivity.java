@@ -159,6 +159,12 @@ public class SignupActivity extends AppCompatActivity {
 
         if (!validate(name, phone, email, pass, confirm)) return;
 
+        // Fast-fail: show a clear message if there's no internet at all
+        if (!NetworkHelper.isOnline(this)) {
+            toast("No internet connection. Please enable WiFi or mobile data and try again.");
+            return;
+        }
+
         isLoading = true;
         setButtonsEnabled(false);
         showOverlay("Creating your account…");
@@ -246,7 +252,12 @@ public class SignupActivity extends AppCompatActivity {
             toast("Email/Password sign-up is disabled. Enable it in Firebase Console.");
         } else if (msg != null && (msg.contains("NETWORK_ERROR")
                 || msg.contains("network") || msg.contains("NETWORK"))) {
-            toast("No internet connection. Check your network and try again.");
+            if (!NetworkHelper.isOnline(this)) {
+                toast("No internet connection. Please enable WiFi or mobile data and try again.");
+            } else {
+                toast("Unable to reach server. This may be a network provider (ISP) or DNS issue. "
+                        + "Please try switching to mobile data, using a VPN, or try again later.");
+            }
         } else {
             toast("Sign up failed: " + (msg != null ? msg : "Unknown error"));
         }
@@ -257,6 +268,12 @@ public class SignupActivity extends AppCompatActivity {
     // ══════════════════════════════════════════════════════════════════════
     private void doGoogleSignup() {
         if (isLoading) return;
+
+        // Fast-fail: show a clear message if there's no internet at all
+        if (!NetworkHelper.isOnline(this)) {
+            toast("No internet connection. Please enable WiFi or mobile data and try again.");
+            return;
+        }
 
         isLoading = true;
         setButtonsEnabled(false);

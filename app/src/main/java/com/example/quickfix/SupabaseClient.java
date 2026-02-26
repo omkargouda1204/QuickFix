@@ -239,7 +239,17 @@ public class SupabaseClient {
 
             } catch (Exception e) {
                 Log.e(TAG, "getUserRole exception: " + e.getMessage());
-                MAIN.post(() -> callback.onError("NETWORK_ERROR: " + e.getMessage()));
+                // Unwrap RuntimeException wrapping from queryRoleBy* helpers
+                Throwable cause = e.getCause() != null ? e.getCause() : e;
+                String errorMsg;
+                if (cause instanceof IOException) {
+                    NetworkHelper.FailureType type = NetworkHelper.classify((IOException) cause);
+                    errorMsg = NetworkHelper.buildMessage(type, true);
+                    Log.e(TAG, "getUserRole network type=" + type + " msg=" + cause.getMessage());
+                } else {
+                    errorMsg = "NETWORK_ERROR: " + e.getMessage();
+                }
+                MAIN.post(() -> callback.onError(errorMsg));
             }
         }).start();
     }

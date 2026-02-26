@@ -239,8 +239,12 @@ public class LoginActivity extends AppCompatActivity {
             toast("Email/password login is not enabled. Enable it in Firebase Console.");
 
         } else if (msg != null && (msg.contains("NETWORK") || msg.contains("network"))) {
-            toast("No internet connection. Check your network and try again.");
-
+            if (!NetworkHelper.isOnline(this)) {
+                toast("No internet connection. Please enable WiFi or mobile data and try again.");
+            } else {
+                toast("Unable to reach server. This may be a network provider (ISP) or DNS issue. "
+                        + "Please try switching to mobile data, using a VPN, or try again later.");
+            }
         } else {
             toast("Login failed: " + (msg != null ? msg : "Unknown error"));
         }
