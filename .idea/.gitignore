@@ -2,6 +2,9 @@
 /shelf/
 /workspace.xml
 # Ignore all .idea files except for code styles, run configs, and inspections
+# Android Studio / IntelliJ
+.idea/
+*.iml
 .idea/*
 !.idea/codeStyles/
 !.idea/runConfigurations/
