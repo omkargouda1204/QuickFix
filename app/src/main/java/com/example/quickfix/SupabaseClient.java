@@ -32,13 +32,9 @@ public class SupabaseClient {
 
     private static final String TAG = "SupabaseClient";
 
-    private static final String SUPABASE_URL =
-            "https://rddzycqxtgryrpymivfd.supabase.co";
-
-    private static final String ANON_KEY =
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" +
-            ".eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkZHp5Y3F4dGdyeXJweW1pdmZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk5NjYwNzksImV4cCI6MjA1NTU0MjA3OX0" +
-            ".Tq6tKoSvqZSp8VLZyulqxP03glP1EfcJp2nW4nkSFqI";
+    // Keys are injected at build time from supabase.properties — never hardcoded
+    private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
+    private static final String ANON_KEY     = BuildConfig.SUPABASE_ANON_KEY;
 
     private static final MediaType JSON_TYPE =
             MediaType.get("application/json; charset=utf-8");
@@ -68,6 +64,23 @@ public class SupabaseClient {
         void onError(String message);
     }
 
+    // RoleInfo: holds user role booleans
+    public static class RoleInfo {
+        public boolean isUser;
+        public boolean isServiceProvider;
+        public boolean isAdmin;
+        public RoleInfo(boolean isUser, boolean isServiceProvider, boolean isAdmin) {
+            this.isUser = isUser;
+            this.isServiceProvider = isServiceProvider;
+            this.isAdmin = isAdmin;
+        }
+    }
+
+    public interface RoleInfoCallback {
+        void onSuccess(RoleInfo info);
+        void onError(String message);
+    }
+
     // ══════════════════════════════════════════════════════════════════════
     //  UPSERT USER  — true atomic upsert, never overwrites role
     // ══════════════════════════════════════════════════════════════════════
@@ -87,7 +100,9 @@ public class SupabaseClient {
             String name,
             String email,
             String phone,
-            String role,
+            boolean isUser,
+            boolean isServiceProvider,
+            boolean isAdmin,
             Callback2 callback) {
 
         new Thread(() -> {
@@ -97,7 +112,9 @@ public class SupabaseClient {
                 body.put("name",        name  != null ? name.trim()  : "");
                 body.put("email",       email != null ? email.trim() : "");
                 body.put("phone",       phone != null ? phone.trim() : "");
-                body.put("role",        role  != null ? role.trim()  : "user");
+                body.put("is_user", isUser);
+                body.put("is_service_provider", isServiceProvider);
+                body.put("is_admin", isAdmin);
                 body.put("is_verified", true);
 
                 // ── Step 1: Try INSERT with ignoreDuplicates ──────────
@@ -164,144 +181,163 @@ public class SupabaseClient {
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  GET USER ROLE  — fast, with email fallback for admins
+    //  GET USER ROLE  — email-first strategy, hard error on missing record
     // ══════════════════════════════════════════════════════════════════════
     /**
-     * Returns the role for the given Firebase UID.
+     * Fetches is_admin / is_service_provider / is_user from Supabase.
      *
-     * Strategy (all in one background thread for speed):
-     *  1. Query by firebase_uid  (fast path)
-     *  2. If empty result, query by email using FirebaseAuth email  (admin fallback)
-     *  3. If still empty, return "user"
+     * Strategy (runs in a single background thread):
+     *   1. Query by EMAIL  — most reliable; admins set manually in DB are
+     *      always found here even before their first login (firebase_uid
+     *      may not be stored yet).
+     *   2. If no row by email → query by firebase_uid  (fallback for rows
+     *      whose email field is blank or was stored differently).
+     *   3. If still no row → callback.onError("USER_NOT_FOUND") so the
+     *      caller can show an error instead of silently opening home.
+     *   4. If a network/parse exception occurs → callback.onError(message).
      *
-     * Whole operation completes in < 2 s on a normal connection.
+     * IMPORTANT: onError is NEVER silently swallowed. The caller in
+     * LoginActivity decides what to show / do when the record is missing.
      */
-    public static void getUserRole(String firebaseUid, StringCallback callback) {
+    public static void getUserRole(String firebaseUid, RoleInfoCallback callback) {
         getUserRoleWithEmail(firebaseUid, null, callback);
     }
 
-    /**
-     * Same as getUserRole but also accepts the user's email so the email
-     * fallback can be used immediately without an extra Firebase call.
-     */
-    public static void getUserRoleWithEmail(String firebaseUid, String email,
-                                             StringCallback callback) {
+    public static void getUserRoleWithEmail(String firebaseUid,
+                                             String email,
+                                             RoleInfoCallback callback) {
         new Thread(() -> {
             try {
-                // ── Step 1: query by firebase_uid ──────────────────────
-                String role = queryRoleByUid(firebaseUid);
-                if (role != null) {
-                    Log.d(TAG, "getUserRole UID match: " + role);
-                    MAIN.post(() -> callback.onSuccess(role));
-                    return;
-                }
-
-                // ── Step 2: query by email (catches admin set before first login) ──
-                if (email != null && !email.isEmpty()) {
-                    String roleByEmail = queryRoleByEmail(email);
-                    if (roleByEmail != null) {
-                        Log.d(TAG, "getUserRole EMAIL match: " + roleByEmail
-                                + " — updating firebase_uid in DB");
-                        // Update the row's firebase_uid so future UID lookups work
-                        updateFirebaseUid(email, firebaseUid);
-                        MAIN.post(() -> callback.onSuccess(roleByEmail));
+                // ── 1. Email-first lookup (catches manually-set admins) ──
+                if (email != null && !email.trim().isEmpty()) {
+                    RoleInfo byEmail = queryRoleByEmail(email.trim());
+                    if (byEmail != null) {
+                        Log.d(TAG, "getUserRole: found by email=" + email);
+                        // Also back-fill firebase_uid so future UID lookups work
+                        if (firebaseUid != null && !firebaseUid.isEmpty()) {
+                            backfillFirebaseUid(email.trim(), firebaseUid);
+                        }
+                        MAIN.post(() -> callback.onSuccess(byEmail));
                         return;
                     }
                 }
 
-                // ── Step 3: no row found — new user ───────────────────
-                Log.d(TAG, "getUserRole: no row found, defaulting to 'user'");
-                MAIN.post(() -> callback.onSuccess("user"));
+                // ── 2. UID fallback ──────────────────────────────────────
+                if (firebaseUid != null && !firebaseUid.isEmpty()) {
+                    RoleInfo byUid = queryRoleByUid(firebaseUid);
+                    if (byUid != null) {
+                        Log.d(TAG, "getUserRole: found by uid=" + firebaseUid);
+                        MAIN.post(() -> callback.onSuccess(byUid));
+                        return;
+                    }
+                }
+
+                // ── 3. No row found — hard error, NOT a silent default ───
+                Log.w(TAG, "getUserRole: no row found for email=" + email
+                        + " uid=" + firebaseUid);
+                MAIN.post(() -> callback.onError("USER_NOT_FOUND"));
 
             } catch (Exception e) {
                 Log.e(TAG, "getUserRole exception: " + e.getMessage());
-                MAIN.post(() -> callback.onSuccess("user")); // safe fallback
+                MAIN.post(() -> callback.onError("NETWORK_ERROR: " + e.getMessage()));
             }
         }).start();
     }
 
-    /** Returns role string or null if not found / error */
-    private static String queryRoleByUid(String firebaseUid) {
+    /** Queries by email; returns null on empty result or HTTP error */
+    private static RoleInfo queryRoleByEmail(String email) {
         try {
+            String encoded = java.net.URLEncoder.encode(email, "UTF-8");
             String url = SUPABASE_URL + "/rest/v1/users"
-                    + "?firebase_uid=eq." + firebaseUid
-                    + "&select=role&limit=1";
-
+                    + "?email=eq." + encoded
+                    + "&select=is_user,is_service_provider,is_admin,firebase_uid"
+                    + "&limit=1";
             Request req = new Request.Builder()
                     .url(url).get()
                     .addHeader("apikey",        ANON_KEY)
                     .addHeader("Authorization", "Bearer " + ANON_KEY)
                     .addHeader("Accept",        "application/json")
                     .build();
-
             try (Response r = HTTP.newCall(req).execute()) {
                 String body = r.body() != null ? r.body().string() : "[]";
-                Log.d(TAG, "queryRoleByUid HTTP " + r.code() + " | " + body);
+                Log.d(TAG, "queryRoleByEmail HTTP " + r.code() + " body=" + body);
                 if (r.code() == 200) {
                     org.json.JSONArray arr = new org.json.JSONArray(body);
                     if (arr.length() > 0) {
-                        return arr.getJSONObject(0).optString("role", "user");
-                    }
-                }
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "queryRoleByUid exception: " + e.getMessage());
-        }
-        return null;
-    }
-
-    /** Returns role string or null if not found / error */
-    private static String queryRoleByEmail(String email) {
-        try {
-            String encodedEmail = java.net.URLEncoder.encode(email, "UTF-8");
-            String url = SUPABASE_URL + "/rest/v1/users"
-                    + "?email=eq." + encodedEmail
-                    + "&select=role,firebase_uid&limit=1";
-
-            Request req = new Request.Builder()
-                    .url(url).get()
-                    .addHeader("apikey",        ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Accept",        "application/json")
-                    .build();
-
-            try (Response r = HTTP.newCall(req).execute()) {
-                String body = r.body() != null ? r.body().string() : "[]";
-                Log.d(TAG, "queryRoleByEmail HTTP " + r.code() + " | " + body);
-                if (r.code() == 200) {
-                    org.json.JSONArray arr = new org.json.JSONArray(body);
-                    if (arr.length() > 0) {
-                        return arr.getJSONObject(0).optString("role", "user");
+                        JSONObject o = arr.getJSONObject(0);
+                        return new RoleInfo(
+                                o.optBoolean("is_user",             true),
+                                o.optBoolean("is_service_provider", false),
+                                o.optBoolean("is_admin",            false)
+                        );
                     }
                 }
             }
         } catch (Exception e) {
             Log.w(TAG, "queryRoleByEmail exception: " + e.getMessage());
+            throw new RuntimeException(e); // bubble up to getUserRoleWithEmail
         }
         return null;
     }
 
-    /** Updates firebase_uid for a row identified by email */
-    private static void updateFirebaseUid(String email, String firebaseUid) {
+    /** Queries by firebase_uid; returns null on empty result or HTTP error */
+    private static RoleInfo queryRoleByUid(String firebaseUid) {
         try {
-            String encodedEmail = java.net.URLEncoder.encode(email, "UTF-8");
+            String url = SUPABASE_URL + "/rest/v1/users"
+                    + "?firebase_uid=eq." + firebaseUid
+                    + "&select=is_user,is_service_provider,is_admin"
+                    + "&limit=1";
+            Request req = new Request.Builder()
+                    .url(url).get()
+                    .addHeader("apikey",        ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept",        "application/json")
+                    .build();
+            try (Response r = HTTP.newCall(req).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                Log.d(TAG, "queryRoleByUid HTTP " + r.code() + " body=" + body);
+                if (r.code() == 200) {
+                    org.json.JSONArray arr = new org.json.JSONArray(body);
+                    if (arr.length() > 0) {
+                        JSONObject o = arr.getJSONObject(0);
+                        return new RoleInfo(
+                                o.optBoolean("is_user",             true),
+                                o.optBoolean("is_service_provider", false),
+                                o.optBoolean("is_admin",            false)
+                        );
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "queryRoleByUid exception: " + e.getMessage());
+            throw new RuntimeException(e);
+        }
+        return null;
+    }
+
+    /**
+     * Silently back-fills firebase_uid on a row that was found by email.
+     * Called after a successful email-lookup so the UID path works on next login.
+     * Runs on the background thread that called getUserRoleWithEmail — fire and forget.
+     */
+    private static void backfillFirebaseUid(String email, String firebaseUid) {
+        try {
+            String encoded = java.net.URLEncoder.encode(email, "UTF-8");
             JSONObject patch = new JSONObject();
             patch.put("firebase_uid", firebaseUid);
-
             Request req = new Request.Builder()
-                    .url(SUPABASE_URL + "/rest/v1/users?email=eq." + encodedEmail)
+                    .url(SUPABASE_URL + "/rest/v1/users?email=eq." + encoded)
                     .patch(RequestBody.create(patch.toString(), JSON_TYPE))
                     .addHeader("apikey",        ANON_KEY)
                     .addHeader("Authorization", "Bearer " + ANON_KEY)
                     .addHeader("Content-Type",  "application/json")
                     .addHeader("Prefer",        "return=minimal")
                     .build();
-
             try (Response r = HTTP.newCall(req).execute()) {
-                Log.d(TAG, "updateFirebaseUid HTTP " + r.code());
+                Log.d(TAG, "backfillFirebaseUid HTTP " + r.code());
             }
         } catch (Exception e) {
-            Log.w(TAG, "updateFirebaseUid exception (non-fatal): " + e.getMessage());
+            Log.w(TAG, "backfillFirebaseUid (non-fatal): " + e.getMessage());
         }
     }
 

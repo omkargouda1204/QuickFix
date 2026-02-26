@@ -34,19 +34,12 @@ public class MainActivity extends AppCompatActivity {
     // ── Categories ────────────────────────────────────────────────────────
     private LinearLayout catPlumbing, catElectrical, catCleaning, catRepair;
     private LinearLayout catAC, catPainting, catCarpentry, catMore;
-    private TextView seeAllServices;
 
     // ── Quick Actions ─────────────────────────────────────────────────────
     private LinearLayout quickBookService, quickEmergency, quickTrackBooking;
 
     // ── Featured ──────────────────────────────────────────────────────────
     private CardView featuredCard1, featuredCard2, featuredCard3;
-    private TextView seeAllFeatured;
-
-    // ── List Your Business ────────────────────────────────────────────────
-    private android.view.View listBusinessSection;
-    private CardView listBusinessCard;
-    private com.google.android.material.button.MaterialButton listBusinessBtn;
 
     // ── Provider Dashboard ────────────────────────────────────────────────
     private android.view.View providerDashboardSection;
@@ -68,9 +61,12 @@ public class MainActivity extends AppCompatActivity {
 
         mAuth = FirebaseAuth.getInstance();
 
-        // Guard: must be logged in + email verified
+        // Guard: must be logged in.
+        // NOTE: We do NOT block on isEmailVerified() here because Google Sign-In users
+        // are verified by Google and may have isEmailVerified()=false in cached token.
+        // LoginActivity already gates on verification before routing here.
         FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser == null || !currentUser.isEmailVerified()) {
+        if (currentUser == null) {
             redirectToLogin();
             return;
         }
@@ -83,8 +79,9 @@ public class MainActivity extends AppCompatActivity {
         setupFeaturedCardListeners();
         setupBottomNav();
         setupSearchBar();
-        // Load role from Supabase to show/hide provider dashboard
-        loadRoleAndSetupBanner(currentUser.getUid());
+        // Hide provider dashboard section — only providers/admins are routed elsewhere
+        if (providerDashboardSection != null)
+            providerDashboardSection.setVisibility(View.GONE);
     }
 
     // ── Setup Toolbar ─────────────────────────────────────────────────────
@@ -117,7 +114,6 @@ public class MainActivity extends AppCompatActivity {
         catPainting   = findViewById(R.id.catPainting);
         catCarpentry  = findViewById(R.id.catCarpentry);
         catMore       = findViewById(R.id.catMore);
-        seeAllServices = findViewById(R.id.seeAllServices);
 
         quickBookService   = findViewById(R.id.quickBookService);
         quickEmergency     = findViewById(R.id.quickEmergency);
@@ -126,11 +122,6 @@ public class MainActivity extends AppCompatActivity {
         featuredCard1  = findViewById(R.id.featuredCard1);
         featuredCard2  = findViewById(R.id.featuredCard2);
         featuredCard3  = findViewById(R.id.featuredCard3);
-        seeAllFeatured = findViewById(R.id.seeAllFeatured);
-
-        listBusinessSection      = findViewById(R.id.listBusinessSection);
-        listBusinessCard         = findViewById(R.id.listBusinessCard);
-        listBusinessBtn          = findViewById(R.id.listBusinessBtn);
 
         providerDashboardSection = findViewById(R.id.providerDashboardSection);
         providerDashboardCard    = findViewById(R.id.providerDashboardCard);
@@ -216,8 +207,6 @@ public class MainActivity extends AppCompatActivity {
         catPainting.setOnClickListener(categoryClick);
         catCarpentry.setOnClickListener(categoryClick);
         catMore.setOnClickListener(categoryClick);
-        seeAllServices.setOnClickListener(v ->
-                Toast.makeText(this, "All Services — coming soon!", Toast.LENGTH_SHORT).show());
     }
 
     // ── Quick Action Listeners ────────────────────────────────────────────
@@ -254,8 +243,6 @@ public class MainActivity extends AppCompatActivity {
         featuredCard1.setOnClickListener(featuredClick);
         featuredCard2.setOnClickListener(featuredClick);
         featuredCard3.setOnClickListener(featuredClick);
-        seeAllFeatured.setOnClickListener(v ->
-                Toast.makeText(this, "All Featured Services — coming soon!", Toast.LENGTH_SHORT).show());
     }
 
     // ── Search Bar ────────────────────────────────────────────────────────
@@ -345,71 +332,6 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-    // ── Role-aware banner setup ───────────────────────────────────────────
-
-    private void loadRoleAndSetupBanner(String firebaseUid) {
-        SupabaseClient.getUserRole(firebaseUid, new SupabaseClient.StringCallback() {
-            @Override
-            public void onSuccess(String role) {
-                if ("provider".equalsIgnoreCase(role)) {
-                    // Provider: show Provider Dashboard, hide List Business
-                    if (providerDashboardSection != null)
-                        providerDashboardSection.setVisibility(android.view.View.VISIBLE);
-                    if (listBusinessSection != null)
-                        listBusinessSection.setVisibility(android.view.View.GONE);
-                    setupProviderDashboard();
-                } else {
-                    // Regular user: show List Business, hide Provider Dashboard
-                    if (listBusinessSection != null)
-                        listBusinessSection.setVisibility(android.view.View.VISIBLE);
-                    if (providerDashboardSection != null)
-                        providerDashboardSection.setVisibility(android.view.View.GONE);
-                    setupListBusiness();
-                }
-            }
-
-            @Override
-            public void onError(String message) {
-                // Fallback: show List Business
-                if (listBusinessSection != null)
-                    listBusinessSection.setVisibility(android.view.View.VISIBLE);
-                setupListBusiness();
-            }
-        });
-    }
-
-    // ── Provider Dashboard button ─────────────────────────────────────────
-
-    private void setupProviderDashboard() {
-        android.view.View.OnClickListener click = v -> {
-            Intent i = new Intent(this, ProviderDashboardActivity.class);
-            startActivity(i);
-        };
-        if (providerDashboardCard != null) providerDashboardCard.setOnClickListener(click);
-        if (providerDashboardBtn  != null) providerDashboardBtn.setOnClickListener(click);
-    }
-
-    // ── List Your Business ────────────────────────────────────────────────
-
-    private void setupListBusiness() {
-        android.view.View.OnClickListener listBizClick = v ->
-                new AlertDialog.Builder(this)
-                        .setTitle("🏢 List Your Business")
-                        .setMessage("Become a QuickFix service provider!\n\n"
-                                + "• Reach thousands of customers\n"
-                                + "• Manage bookings in one place\n"
-                                + "• Grow your business fast\n\n"
-                                + "Submit your application and wait for admin approval.")
-                        .setPositiveButton("Apply Now", (d, w) ->
-                                Toast.makeText(this,
-                                        "Provider application — coming soon!",
-                                        Toast.LENGTH_LONG).show())
-                        .setNegativeButton("Cancel", null)
-                        .show();
-
-        if (listBusinessCard != null) listBusinessCard.setOnClickListener(listBizClick);
-        if (listBusinessBtn  != null) listBusinessBtn.setOnClickListener(listBizClick);
-    }
 
     // ── Navigation ────────────────────────────────────────────────────────
 

@@ -1,17 +1,20 @@
 package com.example.quickfix;
 
-import android.app.ProgressDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Patterns;
+import android.view.View;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
@@ -31,32 +34,25 @@ import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.auth.UserProfileChangeRequest;
 
 /**
- * SignupActivity
- * ──────────────────────────────────────────────────────────────────────────
- * Email / Password flow
- *   1. Validate inputs locally (name, phone, email, password, confirm).
- *   2. createUserWithEmailAndPassword  → Firebase Auth account created.
- *   3. updateProfile  → set display name.
- *   4. SupabaseClient.upsertUser  → save profile to Supabase (non-blocking).
- *   5. sendEmailVerification  → Firebase emails a verification link.
- *      • addOnSuccessListener  → toast + sign-out + open EmailVerification screen.
- *      • addOnFailureListener  → toast warning but still proceed to that screen.
- *   6. mAuth.signOut()  → user MUST verify before logging in.
- *   7. Start EmailVerificationActivity.
+ * SignupActivity — Email/Password account creation + Google Sign-Up.
  *
- * Google Sign-In flow
- *   1. signOut first → account-chooser always appears.
- *   2. Firebase signInWithCredential.
- *   3. SupabaseClient.upsertUser  → save / update profile.
- *   4. Navigate to MainActivity (Google = already verified by Google).
+ * Email flow:
+ *   1. Validate → createUserWithEmailAndPassword → setDisplayName
+ *   2. upsertUser in Supabase (is_user=true, non-blocking)
+ *   3. sendEmailVerification → sign out → EmailVerificationActivity
  *
- * NO Firestore. NO backend server. Pure Firebase Auth + Supabase REST.
+ * Google flow:
+ *   1. Google account chooser → Firebase credential
+ *   2. If new: upsertUser in Supabase, then role-navigate
+ *   3. If existing: role-navigate directly (don't overwrite role)
+ *
+ * Role routing same as LoginActivity.
  */
 public class SignupActivity extends AppCompatActivity {
 
     private static final String TAG = "SignupActivity";
 
-    // ── Views ──────────────────────────────────────────────────────────────
+    // ── Views ─────────────────────────────────────────────────────────────
     private TextInputLayout   fullNameLayout, phoneLayout,
                               emailSignupLayout, passwordSignupLayout,
                               confirmPasswordLayout;
@@ -67,13 +63,18 @@ public class SignupActivity extends AppCompatActivity {
     private ImageView         backButton;
     private TextView          loginLink;
 
-    // ── Progress dialog for Google flow ───────────────────────────────────
-    private ProgressDialog progressDialog;
+    // Loading overlay
+    private LinearLayout loadingOverlay;
+    private ProgressBar  loadingSpinner;
+    private TextView     loadingMessage;
 
-    // ── Auth ───────────────────────────────────────────────────────────────
+    // ── Auth ──────────────────────────────────────────────────────────────
     private FirebaseAuth       mAuth;
     private GoogleSignInClient mGoogleClient;
     private ActivityResultLauncher<Intent> googleLauncher;
+
+    private boolean isLoading    = false;
+    private boolean isNavigating = false;
 
     // ══════════════════════════════════════════════════════════════════════
     @Override
@@ -82,9 +83,7 @@ public class SignupActivity extends AppCompatActivity {
         setContentView(R.layout.activity_signup);
 
         mAuth = FirebaseAuth.getInstance();
-
         bindViews();
-        setupProgressDialog();
         setupGoogleSignIn();
         setupClickListeners();
     }
@@ -107,24 +106,20 @@ public class SignupActivity extends AppCompatActivity {
         googleSignupButton = findViewById(R.id.googleSignupButton);
         backButton         = findViewById(R.id.backButton);
         loginLink          = findViewById(R.id.loginLink);
-    }
 
-    // ── Progress dialog setup ──────────────────────────────────────────────
-    private void setupProgressDialog() {
-        progressDialog = new ProgressDialog(this);
-        progressDialog.setMessage("Signing in with Google…");
-        progressDialog.setIndeterminate(true);
-        progressDialog.setCancelable(false);
+        loadingOverlay = findViewById(R.id.loadingOverlay);
+        loadingSpinner = findViewById(R.id.loadingSpinner);
+        loadingMessage = findViewById(R.id.loadingMessage);
     }
 
     // ── Google Sign-In setup ───────────────────────────────────────────────
     private void setupGoogleSignIn() {
-        GoogleSignInOptions gso =
-                new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                        .requestIdToken(getString(R.string.default_web_client_id))
-                        .requestEmail()
-                        .requestProfile()
-                        .build();
+        GoogleSignInOptions gso = new GoogleSignInOptions
+                .Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(getString(R.string.default_web_client_id))
+                .requestEmail()
+                .requestProfile()
+                .build();
 
         mGoogleClient = GoogleSignIn.getClient(this, gso);
 
@@ -132,12 +127,10 @@ public class SignupActivity extends AppCompatActivity {
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                        // Still showing progress dialog — keep it visible
                         handleGoogleResult(
                                 GoogleSignIn.getSignedInAccountFromIntent(result.getData()));
                     } else {
-                        // User cancelled account picker
-                        hideGoogleProgress();
+                        resetLoadingState();
                         Log.w(TAG, "Google sign-up cancelled or no data");
                     }
                 });
@@ -145,16 +138,19 @@ public class SignupActivity extends AppCompatActivity {
 
     // ── Click listeners ────────────────────────────────────────────────────
     private void setupClickListeners() {
-        if (backButton         != null) backButton.setOnClickListener(v -> finish());
-        if (loginLink          != null) loginLink.setOnClickListener(v -> finish());
-        if (signupButton       != null) signupButton.setOnClickListener(v -> doEmailSignup());
-        if (googleSignupButton != null) googleSignupButton.setOnClickListener(v -> doGoogleSignup());
+        if (backButton  != null) backButton.setOnClickListener(v -> { if (!isLoading) finish(); });
+        if (loginLink   != null) loginLink.setOnClickListener(v ->  { if (!isLoading) finish(); });
+        if (signupButton!= null) signupButton.setOnClickListener(v -> doEmailSignup());
+        if (googleSignupButton != null)
+            googleSignupButton.setOnClickListener(v -> doGoogleSignup());
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  EMAIL / PASSWORD SIGNUP  (manual flow — only affects signupButton)
+    //  EMAIL / PASSWORD SIGNUP
     // ══════════════════════════════════════════════════════════════════════
     private void doEmailSignup() {
+        if (isLoading) return;
+
         final String name    = text(fullNameInput);
         final String phone   = text(phoneInput);
         final String email   = text(emailSignupInput);
@@ -163,59 +159,60 @@ public class SignupActivity extends AppCompatActivity {
 
         if (!validate(name, phone, email, pass, confirm)) return;
 
-        showEmailBusy(true);
+        isLoading = true;
+        setButtonsEnabled(false);
+        showOverlay("Creating your account…");
 
         mAuth.createUserWithEmailAndPassword(email, pass)
                 .addOnSuccessListener(this, authResult -> {
                     FirebaseUser user = mAuth.getCurrentUser();
                     if (user == null) {
-                        showEmailBusy(false);
-                        toast("Account created but user is null — please try logging in.");
+                        resetLoadingState();
+                        toast("Account creation failed — please try again.");
                         return;
                     }
                     Log.d(TAG, "Account created uid=" + user.getUid());
 
-                    // Set display name
+                    // Set display name (non-blocking)
                     user.updateProfile(new UserProfileChangeRequest.Builder()
                             .setDisplayName(name).build())
                             .addOnCompleteListener(t ->
-                                    Log.d(TAG, "displayName update: " + (t.isSuccessful() ? "OK" : "failed")));
+                                    Log.d(TAG, "displayName=" + (t.isSuccessful() ? "OK" : "failed")));
 
-                    // Save to Supabase, then send verification email
+                    // Save to Supabase then send verification email
+                    updateOverlay("Saving your profile…");
                     SupabaseClient.upsertUser(
-                            user.getUid(), name, email, phone, "user",
+                            user.getUid(), name, email, phone,
+                            true, false, false,
                             new SupabaseClient.Callback2() {
                                 @Override public void onSuccess() {
-                                    Log.d(TAG, "Supabase profile saved for " + email);
+                                    updateOverlay("Sending verification email…");
                                     sendVerificationEmail(user, email);
                                 }
                                 @Override public void onError(String err) {
                                     Log.w(TAG, "Supabase upsert failed (non-fatal): " + err);
+                                    updateOverlay("Sending verification email…");
                                     sendVerificationEmail(user, email);
                                 }
                             });
                 })
                 .addOnFailureListener(this, e -> {
-                    showEmailBusy(false);
+                    resetLoadingState();
                     handleSignupError(e);
                 });
     }
 
     private void sendVerificationEmail(FirebaseUser user, String email) {
         user.sendEmailVerification()
-                .addOnSuccessListener(this, unused -> {
-                    showEmailBusy(false);
-                    Log.d(TAG, "Verification email sent to " + email);
-                    toast("✅ Verification email sent to " + email
-                            + ". Check your inbox (and spam folder).");
-                    mAuth.signOut();
-                    openVerificationScreen(email);
-                })
-                .addOnFailureListener(this, e -> {
-                    showEmailBusy(false);
-                    Log.w(TAG, "sendEmailVerification failed: " + e.getMessage());
-                    toast("⚠️ Account created but verification email could not be sent."
-                            + " You can resend it on the next screen.");
+                .addOnCompleteListener(this, task -> {
+                    resetLoadingState();
+                    if (task.isSuccessful()) {
+                        Log.d(TAG, "Verification email sent to " + email);
+                        toast("✅ Verification email sent to " + email + ". Check your inbox.");
+                    } else {
+                        Log.w(TAG, "sendEmailVerification failed");
+                        toast("⚠️ Account created but verification email could not be sent.");
+                    }
                     mAuth.signOut();
                     openVerificationScreen(email);
                 });
@@ -229,7 +226,6 @@ public class SignupActivity extends AppCompatActivity {
         finish();
     }
 
-    // ── Firebase signup error mapping ──────────────────────────────────────
     private void handleSignupError(Exception ex) {
         String msg  = ex.getMessage();
         String code = (ex instanceof FirebaseAuthException)
@@ -247,22 +243,25 @@ public class SignupActivity extends AppCompatActivity {
             err(emailSignupLayout, "Invalid email address format.");
         } else if ("ERROR_OPERATION_NOT_ALLOWED".equals(code)
                 || (msg != null && msg.contains("operation-not-allowed"))) {
-            toast("❌ Email/Password sign-up is DISABLED.\n"
-                    + "Go to Firebase Console → Authentication → Sign-in method → Enable.");
+            toast("Email/Password sign-up is disabled. Enable it in Firebase Console.");
         } else if (msg != null && (msg.contains("NETWORK_ERROR")
                 || msg.contains("network") || msg.contains("NETWORK"))) {
-            toast("No internet connection. Please check your network and try again.");
+            toast("No internet connection. Check your network and try again.");
         } else {
             toast("Sign up failed: " + (msg != null ? msg : "Unknown error"));
         }
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  GOOGLE SIGN-UP  (independent from email button)
+    //  GOOGLE SIGN-UP
     // ══════════════════════════════════════════════════════════════════════
     private void doGoogleSignup() {
-        showGoogleProgress("Connecting to Google…");
-        // Force account chooser every time
+        if (isLoading) return;
+
+        isLoading = true;
+        setButtonsEnabled(false);
+        showOverlay("Connecting to Google…");
+
         mGoogleClient.signOut().addOnCompleteListener(this,
                 t -> googleLauncher.launch(mGoogleClient.getSignInIntent()));
     }
@@ -271,17 +270,17 @@ public class SignupActivity extends AppCompatActivity {
         try {
             GoogleSignInAccount acct = task.getResult(ApiException.class);
             if (acct == null) {
-                hideGoogleProgress();
+                resetLoadingState();
                 toast("Google Sign-In returned no account. Try again.");
                 return;
             }
-            updateProgress("Verifying with Firebase…");
+            updateOverlay("Verifying with Firebase…");
             firebaseAuthWithGoogle(acct);
         } catch (ApiException e) {
-            hideGoogleProgress();
+            resetLoadingState();
             Log.e(TAG, "Google ApiException status=" + e.getStatusCode());
             if (e.getStatusCode() == 10) {
-                toast("Google Sign-In config error. Ensure SHA-1 is added in Firebase Console.");
+                toast("Google Sign-In config error. Check SHA-1 in Firebase Console.");
             } else {
                 toast("Google Sign-In failed (code " + e.getStatusCode() + ").");
             }
@@ -295,7 +294,7 @@ public class SignupActivity extends AppCompatActivity {
                 .addOnSuccessListener(this, authResult -> {
                     FirebaseUser user = mAuth.getCurrentUser();
                     if (user == null) {
-                        hideGoogleProgress();
+                        resetLoadingState();
                         toast("Google Sign-In succeeded but user is null. Try again.");
                         return;
                     }
@@ -305,82 +304,113 @@ public class SignupActivity extends AppCompatActivity {
                                     authResult.getAdditionalUserInfo().isNewUser());
 
                     String gName  = acct.getDisplayName() != null ? acct.getDisplayName() : "";
-                    String gEmail = acct.getEmail()        != null ? acct.getEmail()        : "";
+                    String gEmail = acct.getEmail() != null ? acct.getEmail()
+                            : (user.getEmail() != null ? user.getEmail() : "");
 
                     Log.d(TAG, "Google auth OK uid=" + user.getUid()
                             + " isNew=" + isNew + " email=" + gEmail);
 
                     if (isNew) {
-                        // Brand new account — save to Supabase
-                        updateProgress("Creating your profile…");
+                        updateOverlay("Creating your profile…");
                         SupabaseClient.upsertUser(
-                                user.getUid(), gName, gEmail, "", "user",
+                                user.getUid(), gName, gEmail, "",
+                                true, false, false,
                                 new SupabaseClient.Callback2() {
-                                    @Override
-                                    public void onSuccess() {
+                                    @Override public void onSuccess() {
                                         Log.d(TAG, "Supabase profile saved: " + gEmail);
-                                        updateProgress("Almost done…");
-                                        checkRoleAndNavigate(user.getUid(), true, gName);
+                                        updateOverlay("Almost done…");
+                                        checkRoleAndNavigate(user.getUid(), gEmail, true, gName);
                                     }
-                                    @Override
-                                    public void onError(String err) {
-                                        Log.e(TAG, "Supabase save FAILED for " + gEmail + ": " + err);
-                                        updateProgress("Almost done…");
-                                        checkRoleAndNavigate(user.getUid(), true, gName);
+                                    @Override public void onError(String err) {
+                                        Log.w(TAG, "Supabase save failed (non-fatal): " + err);
+                                        updateOverlay("Almost done…");
+                                        checkRoleAndNavigate(user.getUid(), gEmail, true, gName);
                                     }
                                 });
                     } else {
-                        // Existing account — skip upsert, don't overwrite role
-                        hideGoogleProgress();
-                        toast("Welcome back, " + firstName(gName) + "!");
-                        checkRoleAndNavigate(user.getUid(), false, gName);
+                        updateOverlay("Checking your account…");
+                        checkRoleAndNavigate(user.getUid(), gEmail, false, gName);
                     }
                 })
                 .addOnFailureListener(this, e -> {
-                    hideGoogleProgress();
+                    resetLoadingState();
                     Log.e(TAG, "Firebase Google credential failed: " + e.getMessage());
                     toast("Google Sign-In failed: " + e.getMessage());
                 });
     }
 
-    /**
-     * After Google sign-in succeeds + Supabase save attempted:
-     * fetch role and route to the correct screen.
-     *   admin    → AdminDashboardActivity
-     *   provider → MainActivity (provider dashboard banner shown)
-     *   user     → MainActivity
-     */
-    private void checkRoleAndNavigate(String firebaseUid, boolean isNew, String displayName) {
-        // Pass email for admin fallback lookup
-        FirebaseUser u = mAuth.getCurrentUser();
-        String email = (u != null && u.getEmail() != null) ? u.getEmail() : "";
+    // ══════════════════════════════════════════════════════════════════════
+    //  ROLE-BASED NAVIGATION
+    // ══════════════════════════════════════════════════════════════════════
+    private void checkRoleAndNavigate(String firebaseUid, String email,
+                                       boolean isNew, String displayName) {
+        if (isNavigating) return;
 
-        SupabaseClient.getUserRoleWithEmail(firebaseUid, email,
-                new SupabaseClient.StringCallback() {
+        String safeEmail = (email != null && !email.isEmpty()) ? email : "";
+        if (safeEmail.isEmpty()) {
+            FirebaseUser u = mAuth.getCurrentUser();
+            if (u != null && u.getEmail() != null) safeEmail = u.getEmail();
+        }
+        final String finalEmail = safeEmail;
+
+        Log.d(TAG, "checkRoleAndNavigate uid=" + firebaseUid + " email=" + finalEmail);
+        updateOverlay("Checking your account…");
+
+        SupabaseClient.getUserRoleWithEmail(firebaseUid, finalEmail,
+                new SupabaseClient.RoleInfoCallback() {
             @Override
-            public void onSuccess(String role) {
-                hideGoogleProgress();
-                Log.d(TAG, "Role for Google user: " + role + " email=" + email);
-                if ("admin".equalsIgnoreCase(role)) {
-                    toast("Welcome, Admin!");
-                    Intent i = new Intent(SignupActivity.this, AdminDashboardActivity.class);
-                    i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                    startActivity(i);
-                    finish();
+            public void onSuccess(SupabaseClient.RoleInfo info) {
+                if (isNavigating || isFinishing()) return;
+                isNavigating = true;
+                hideOverlay();
+
+                Log.d(TAG, "Role → admin=" + info.isAdmin
+                        + " provider=" + info.isServiceProvider + " email=" + finalEmail);
+
+                String welcomeMsg = isNew
+                        ? "✅ Welcome to QuickFix, " + firstName(displayName) + "!"
+                        : "Welcome back, " + firstName(displayName) + "!";
+                toast(welcomeMsg);
+
+                final Intent target;
+                if (info.isAdmin) {
+                    target = new Intent(SignupActivity.this, AdminDashboardActivity.class);
+                } else if (info.isServiceProvider) {
+                    target = new Intent(SignupActivity.this, ProviderDashboardActivity.class);
                 } else {
-                    toast(isNew
-                            ? "✅ Account created! Welcome to QuickFix, " + firstName(displayName) + "!"
-                            : "Welcome back, " + firstName(displayName) + "!");
-                    goHome();
+                    target = new Intent(SignupActivity.this, MainActivity.class);
                 }
+                target.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(target);
+                finish();
             }
 
             @Override
             public void onError(String message) {
-                hideGoogleProgress();
-                Log.w(TAG, "Role check failed, defaulting to home: " + message);
-                toast(isNew ? "✅ Account created! Welcome to QuickFix!" : "Welcome back!");
-                goHome();
+                if (isFinishing()) return;
+                resetLoadingState();
+                Log.e(TAG, "Role fetch failed: " + message);
+
+                if ("USER_NOT_FOUND".equals(message)) {
+                    toast("Account created in Firebase but profile not found in database. "
+                            + "Please try logging in.");
+                    mAuth.signOut();
+                } else {
+                    new AlertDialog.Builder(SignupActivity.this)
+                            .setTitle("Connection Error")
+                            .setMessage("Could not load your account details.\n\n"
+                                    + "Please check your internet and try again.")
+                            .setPositiveButton("Retry", (d, w) -> {
+                                isNavigating = false;
+                                isLoading    = true;
+                                showOverlay("Retrying…");
+                                setButtonsEnabled(false);
+                                checkRoleAndNavigate(firebaseUid, finalEmail, isNew, displayName);
+                            })
+                            .setNegativeButton("Cancel", (d, w) -> mAuth.signOut())
+                            .setCancelable(false)
+                            .show();
+                }
             }
         });
     }
@@ -437,42 +467,46 @@ public class SignupActivity extends AppCompatActivity {
     }
 
     private void clearErrors() {
-        err(fullNameLayout, null);
-        err(phoneLayout, null);
-        err(emailSignupLayout, null);
-        err(passwordSignupLayout, null);
+        err(fullNameLayout, null); err(phoneLayout, null);
+        err(emailSignupLayout, null); err(passwordSignupLayout, null);
         err(confirmPasswordLayout, null);
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────
+    // ── Loading helpers ────────────────────────────────────────────────────
 
-    /** Only affects the manual Sign Up button — never the Google button */
-    private void showEmailBusy(boolean busy) {
-        if (signupButton != null) {
-            signupButton.setEnabled(!busy);
-            signupButton.setText(busy ? "Creating Account…" : getString(R.string.signup_button));
+    private void showOverlay(String message) {
+        if (loadingOverlay != null) {
+            if (loadingMessage != null) loadingMessage.setText(message);
+            loadingOverlay.setVisibility(View.VISIBLE);
         }
     }
 
-    /** Show progress dialog for Google flow — never touches the Sign Up button */
-    private void showGoogleProgress(String message) {
-        if (googleSignupButton != null) googleSignupButton.setEnabled(false);
-        progressDialog.setMessage(message);
-        if (!progressDialog.isShowing()) progressDialog.show();
+    private void updateOverlay(String message) {
+        if (loadingOverlay != null && loadingOverlay.getVisibility() == View.VISIBLE
+                && loadingMessage != null) {
+            loadingMessage.setText(message);
+        }
     }
 
-    private void updateProgress(String message) {
-        if (progressDialog.isShowing()) progressDialog.setMessage(message);
+    private void hideOverlay() {
+        if (loadingOverlay != null) loadingOverlay.setVisibility(View.GONE);
     }
 
-    private void hideGoogleProgress() {
-        if (googleSignupButton != null) googleSignupButton.setEnabled(true);
-        if (progressDialog.isShowing()) progressDialog.dismiss();
+    private void resetLoadingState() {
+        isLoading = false;
+        hideOverlay();
+        setButtonsEnabled(true);
     }
+
+    private void setButtonsEnabled(boolean enabled) {
+        if (signupButton       != null) signupButton.setEnabled(enabled);
+        if (googleSignupButton != null) googleSignupButton.setEnabled(enabled);
+    }
+
+    // ── Misc helpers ───────────────────────────────────────────────────────
 
     private String text(TextInputEditText v) {
-        return (v != null && v.getText() != null)
-                ? v.getText().toString().trim() : "";
+        return (v != null && v.getText() != null) ? v.getText().toString().trim() : "";
     }
 
     private void err(TextInputLayout l, String msg) {
@@ -484,7 +518,7 @@ public class SignupActivity extends AppCompatActivity {
     }
 
     private String firstName(String fullName) {
-        if (fullName == null || fullName.isEmpty()) return "there";
+        if (fullName == null || fullName.trim().isEmpty()) return "there";
         return fullName.trim().split("\\s+")[0];
     }
 
@@ -498,8 +532,6 @@ public class SignupActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (progressDialog != null && progressDialog.isShowing()) {
-            progressDialog.dismiss();
-        }
+        hideOverlay();
     }
 }

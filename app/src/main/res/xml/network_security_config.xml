@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Config for QuickFix
+    ─────────────────────────────────────
+    All traffic goes to Supabase over HTTPS — no cleartext (HTTP) permitted.
+    The old backend IP (10.249.219.177) entry has been removed.
+    Android's default policy already blocks cleartext; this file is kept for
+    clarity and in case certificate pinning is added in future.
+-->
 <network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">10.249.219.177</domain>
-    </domain-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>

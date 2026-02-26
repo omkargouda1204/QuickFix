@@ -1,5 +1,10 @@
 <resources>
     <string name="app_name">QuickFix</string>
+
+    <!-- Admin Bottom Nav (new entries) -->
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_providers">Providers</string>
+
     <string name="welcome_text">Welcome to QuickFix</string>
     <string name="login_screen">Login Screen</string>
 

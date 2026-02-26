@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+# Supabase credentials — never commit
+supabase.properties

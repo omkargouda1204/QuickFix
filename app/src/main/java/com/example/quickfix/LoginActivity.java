@@ -1,11 +1,13 @@
 package com.example.quickfix;
 
-import android.app.ProgressDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Patterns;
+import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -30,19 +32,17 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 
 /**
- * LoginActivity
- * ──────────────────────────────────────────────────────────────────────────
- * Email / Password flow
- *   1. signInWithEmailAndPassword.
- *   2. user.reload() to get the LATEST isEmailVerified flag from Firebase.
- *   3. If verified → MainActivity.
- *   4. If NOT verified → dialog offering Resend or "I've verified" re-check.
+ * LoginActivity — Email/Password + Google Sign-In with role-based navigation.
  *
- * Google Sign-In flow
- *   1. Google One-Tap → Firebase credential → upsert Supabase → MainActivity.
- *      (Google accounts are always email-verified in Firebase.)
+ * Role routing (from Supabase):
+ *   is_admin = true          → AdminDashboardActivity
+ *   is_service_provider = true → ProviderDashboardActivity
+ *   otherwise                → MainActivity  (regular user home)
  *
- * NO Firestore. NO backend.
+ * Loading UX:
+ *   - Email login  : loginButton changes text + disabled, overlay shown
+ *   - Google login : googleSignInButton disabled, overlay shown with status text
+ *   - Both buttons disabled while ANY operation is running (isLoading flag)
  */
 public class LoginActivity extends AppCompatActivity {
 
@@ -50,15 +50,24 @@ public class LoginActivity extends AppCompatActivity {
 
     // ── Views ─────────────────────────────────────────────────────────────
     private TextInputLayout   emailLayout, passwordLayout;
-    private TextInputEditText emailInput, passwordInput;
+    private TextInputEditText emailInput,  passwordInput;
     private MaterialButton    loginButton, googleSignInButton;
     private TextView          forgotPasswordLink, signUpLink;
 
-    // ── Firebase / Google ─────────────────────────────────────────────────
+    // Loading overlay views (full-screen dimmed overlay with spinner + message)
+    private LinearLayout loadingOverlay;
+    private ProgressBar  loadingSpinner;
+    private TextView     loadingMessage;
+
+    // ── Auth ──────────────────────────────────────────────────────────────
     private FirebaseAuth       mAuth;
     private GoogleSignInClient mGoogleClient;
     private ActivityResultLauncher<Intent> googleLauncher;
-    private ProgressDialog     googleProgressDialog;
+
+    // Guard: prevent double-navigation if user taps fast
+    private boolean isNavigating = false;
+    // Guard: prevent re-entry into checkRoleAndNavigate
+    private boolean isLoading    = false;
 
     // ─────────────────────────────────────────────────────────────────────
     @Override
@@ -69,63 +78,62 @@ public class LoginActivity extends AppCompatActivity {
         mAuth = FirebaseAuth.getInstance();
 
         bindViews();
-        setupGoogleProgressDialog();
         setupGoogleSignIn();
         setupClickListeners();
 
-        // If already signed-in + verified, skip login screen entirely
+        // Auto-login: if already signed in and verified, skip login screen
         FirebaseUser current = mAuth.getCurrentUser();
         if (current != null) {
-            current.reload()
-                    .addOnSuccessListener(t -> {
-                        FirebaseUser u = mAuth.getCurrentUser();
-                        if (u != null && u.isEmailVerified()) {
-                            checkRoleAndNavigate(u.getUid());
-                        }
-                    })
-                    // Silently ignore reload failure on startup — show login normally
-                    .addOnFailureListener(e ->
-                            Log.w(TAG, "Startup reload failed (network?): " + e.getMessage()));
+            // Google users are always considered verified; email users need the flag
+            boolean alreadyVerified = current.isEmailVerified()
+                    || isGoogleUser(current);
+            if (alreadyVerified) {
+                showOverlay("Signing you in…");
+                checkRoleAndNavigate(current.getUid(), current.getEmail());
+            }
         }
     }
 
     // ── View binding ──────────────────────────────────────────────────────
 
     private void bindViews() {
-        emailLayout        = findViewById(R.id.emailLayout);
-        passwordLayout     = findViewById(R.id.passwordLayout);
-        emailInput         = findViewById(R.id.emailInput);
-        passwordInput      = findViewById(R.id.passwordInput);
-        loginButton        = findViewById(R.id.loginButton);
+        emailLayout    = findViewById(R.id.emailLayout);
+        passwordLayout = findViewById(R.id.passwordLayout);
+        emailInput     = findViewById(R.id.emailInput);
+        passwordInput  = findViewById(R.id.passwordInput);
+        loginButton    = findViewById(R.id.loginButton);
         googleSignInButton = findViewById(R.id.googleSignInButton);
         forgotPasswordLink = findViewById(R.id.forgotPasswordLink);
         signUpLink         = findViewById(R.id.signUpLink);
+
+        loadingOverlay = findViewById(R.id.loadingOverlay);
+        loadingSpinner = findViewById(R.id.loadingSpinner);
+        loadingMessage = findViewById(R.id.loadingMessage);
     }
 
-    // ── Google Sign-In setup ──────────────────────────────────────────────
+    // ── Google Sign-In ────────────────────────────────────────────────────
 
     private void setupGoogleSignIn() {
-        GoogleSignInOptions gso =
-                new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                        .requestIdToken(getString(R.string.default_web_client_id))
-                        .requestEmail()
-                        .requestProfile()
-                        .build();
+        GoogleSignInOptions gso = new GoogleSignInOptions
+                .Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(getString(R.string.default_web_client_id))
+                .requestEmail()
+                .requestProfile()
+                .build();
 
         mGoogleClient = GoogleSignIn.getClient(this, gso);
 
         googleLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
-                    if (result.getResultCode() == RESULT_OK
-                            && result.getData() != null) {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                         Task<GoogleSignInAccount> task =
-                                GoogleSignIn.getSignedInAccountFromIntent(
-                                        result.getData());
+                                GoogleSignIn.getSignedInAccountFromIntent(result.getData());
                         handleGoogleResult(task);
                     } else {
-                        showGoogleBusy(false);
-                        Log.w(TAG, "Google sign-in cancelled");
+                        hideOverlay();
+                        setButtonsEnabled(true);
+                        Log.w(TAG, "Google sign-in cancelled or no data");
                     }
                 });
     }
@@ -141,13 +149,13 @@ public class LoginActivity extends AppCompatActivity {
 
         if (forgotPasswordLink != null)
             forgotPasswordLink.setOnClickListener(v -> {
-                if (!isFinishing())
+                if (!isLoading && !isFinishing())
                     startActivity(new Intent(this, ForgotPasswordActivity.class));
             });
 
         if (signUpLink != null)
             signUpLink.setOnClickListener(v -> {
-                if (!isFinishing())
+                if (!isLoading && !isFinishing())
                     startActivity(new Intent(this, SignupActivity.class));
             });
     }
@@ -157,59 +165,49 @@ public class LoginActivity extends AppCompatActivity {
     // ══════════════════════════════════════════════════════════════════════
 
     private void doEmailLogin() {
+        if (isLoading) return;
+
         String email = text(emailInput);
         String pass  = text(passwordInput);
-
         if (!validateInputs(email, pass)) return;
 
-        showEmailBusy(true);
+        isLoading = true;
+        clearErrors();
+        showOverlay("Signing in…");
+        setButtonsEnabled(false);
 
         mAuth.signInWithEmailAndPassword(email, pass)
                 .addOnSuccessListener(this, authResult -> {
                     FirebaseUser user = mAuth.getCurrentUser();
                     if (user == null) {
-                        showEmailBusy(false);
+                        resetLoadingState();
                         toast("Login failed — please try again.");
                         return;
                     }
 
-                    // Fast path: if local cache already says verified, skip network reload
-                    if (user.isEmailVerified()) {
-                        Log.d(TAG, "Login OK — email verified (cached)");
-                        showEmailBusy(false);
-                        toast("Login successful!");
-                        checkRoleAndNavigate(user.getUid());
-                        return;
+                    // Google provider users are always verified
+                    if (user.isEmailVerified() || isGoogleUser(user)) {
+                        updateOverlay("Checking your account…");
+                        checkRoleAndNavigate(user.getUid(), user.getEmail());
+                    } else {
+                        // Fresh reload to get latest verification status
+                        user.reload().addOnCompleteListener(this, t -> {
+                            FirebaseUser fresh = mAuth.getCurrentUser();
+                            if (fresh != null && (fresh.isEmailVerified() || isGoogleUser(fresh))) {
+                                updateOverlay("Checking your account…");
+                                checkRoleAndNavigate(fresh.getUid(), fresh.getEmail());
+                            } else {
+                                resetLoadingState();
+                                showVerificationDialog(fresh != null ? fresh : user);
+                            }
+                        });
                     }
-
-                    // Slow path: not verified in cache — do a reload to get fresh status
-                    user.reload()
-                            .addOnSuccessListener(this, unused -> {
-                                showEmailBusy(false);
-                                FirebaseUser fresh = mAuth.getCurrentUser();
-                                if (fresh != null && fresh.isEmailVerified()) {
-                                    Log.d(TAG, "Login OK — email verified (reloaded)");
-                                    toast("Login successful!");
-                                    checkRoleAndNavigate(fresh.getUid());
-                                } else {
-                                    Log.w(TAG, "Login OK — email NOT verified");
-                                    showVerificationDialog(fresh);
-                                }
-                            })
-                            .addOnFailureListener(this, e -> {
-                                showEmailBusy(false);
-                                Log.e(TAG, "reload() failed: " + e.getMessage());
-                                toast("Could not verify email status. Check your internet.");
-                                mAuth.signOut();
-                            });
                 })
                 .addOnFailureListener(this, e -> {
-                    showEmailBusy(false);
+                    resetLoadingState();
                     handleLoginError(e);
                 });
     }
-
-    // ──────────────────────────────────────────────────────────────────────
 
     private void handleLoginError(Exception ex) {
         if (ex == null) { toast("Login failed. Please try again."); return; }
@@ -220,94 +218,66 @@ public class LoginActivity extends AppCompatActivity {
 
         Log.e(TAG, "Login error code=" + code + " msg=" + msg);
 
-        if (code.equals("ERROR_USER_NOT_FOUND")
+        if ("ERROR_USER_NOT_FOUND".equals(code)
                 || (msg != null && msg.contains("no user record"))) {
-            err(emailLayout,
-                    "No account found with this email. Please sign up.");
+            err(emailLayout, "No account found with this email.");
 
-        } else if (code.equals("ERROR_WRONG_PASSWORD")
+        } else if ("ERROR_WRONG_PASSWORD".equals(code)
                 || (msg != null && (msg.contains("password is invalid")
                 || msg.contains("INVALID_LOGIN_CREDENTIALS")))) {
-            err(passwordLayout,
-                    "Incorrect password. Try again or use Forgot Password.");
+            err(passwordLayout, "Incorrect password. Try Forgot Password.");
 
-        } else if (code.equals("ERROR_INVALID_EMAIL")
+        } else if ("ERROR_INVALID_EMAIL".equals(code)
                 || (msg != null && msg.contains("badly formatted"))) {
             err(emailLayout, "Invalid email address format.");
 
-        } else if (code.equals("ERROR_TOO_MANY_REQUESTS")
+        } else if ("ERROR_TOO_MANY_REQUESTS".equals(code)
                 || (msg != null && msg.contains("too many"))) {
-            toast("Too many failed attempts. Account temporarily blocked."
-                    + " Try again later or reset your password.");
+            toast("Too many failed attempts. Try again later or reset your password.");
 
-        } else if (code.equals("ERROR_OPERATION_NOT_ALLOWED")) {
-            toast("Email/password login is not enabled. "
-                    + "Enable it in Firebase Console → Authentication "
-                    + "→ Sign-in method → Email/Password.");
+        } else if ("ERROR_OPERATION_NOT_ALLOWED".equals(code)) {
+            toast("Email/password login is not enabled. Enable it in Firebase Console.");
 
-        } else if (msg != null && (msg.contains("NETWORK")
-                || msg.contains("network"))) {
-            toast("Network error. Check your internet connection.");
+        } else if (msg != null && (msg.contains("NETWORK") || msg.contains("network"))) {
+            toast("No internet connection. Check your network and try again.");
 
         } else {
             toast("Login failed: " + (msg != null ? msg : "Unknown error"));
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-
     private void showVerificationDialog(FirebaseUser user) {
         new AlertDialog.Builder(this)
                 .setTitle("Email Not Verified")
-                .setMessage("Your email has not been verified yet.\n\n"
-                        + "1. Check your inbox (and spam folder) for the verification link.\n"
-                        + "2. Click the link to verify.\n"
+                .setMessage("Please verify your email before logging in.\n\n"
+                        + "1. Check your inbox (and spam folder).\n"
+                        + "2. Click the verification link.\n"
                         + "3. Tap \"I've Verified\" to continue.")
                 .setPositiveButton("Resend Email", (d, w) -> {
                     if (user == null) { mAuth.signOut(); return; }
                     user.sendEmailVerification()
-                            .addOnSuccessListener(this, unused -> {
-                                Log.d(TAG, "Verification email resent");
-                                toast("✅ Verification email sent! Check your inbox.");
-                                mAuth.signOut();
-                            })
-                            .addOnFailureListener(this, e -> {
-                                Log.e(TAG, "Resend verification failed: " + e.getMessage());
-                                String msg = e.getMessage();
-                                if (msg != null && msg.contains("too many")) {
-                                    toast("Too many requests. Wait a few minutes and try again.");
-                                } else {
-                                    toast("Could not resend: "
-                                            + (msg != null ? msg : "Unknown error"));
-                                }
-                                mAuth.signOut();
-                            });
+                            .addOnSuccessListener(this, unused ->
+                                    toast("✅ Verification email sent! Check your inbox."))
+                            .addOnFailureListener(this, e ->
+                                    toast("Could not resend: " + e.getMessage()));
+                    mAuth.signOut();
                 })
                 .setNeutralButton("I've Verified", (d, w) -> {
                     if (user == null) { mAuth.signOut(); return; }
-                    showBusy(true);
-                    user.reload()
-                            .addOnSuccessListener(this, unused -> {
-                                showBusy(false);
-                                FirebaseUser r = mAuth.getCurrentUser();
-                                if (r != null && r.isEmailVerified()) {
-                                    Log.d(TAG, "Post-dialog reload: now verified");
-                                    toast("✅ Email verified! Logging you in…");
-                                    goHome();
-                                } else {
-                                    Log.w(TAG, "Post-dialog reload: still not verified");
-                                    toast("Email still not verified. "
-                                            + "Click the link in your inbox first.");
-                                    mAuth.signOut();
-                                }
-                            })
-                            .addOnFailureListener(this, e -> {
-                                showBusy(false);
-                                Log.e(TAG, "reload() in dialog failed: " + e.getMessage());
-                                toast("Could not check verification status. "
-                                        + "Check your internet and try logging in again.");
-                                mAuth.signOut();
-                            });
+                    showOverlay("Checking verification…");
+                    setButtonsEnabled(false);
+                    isLoading = true;
+                    user.reload().addOnCompleteListener(this, t -> {
+                        FirebaseUser r = mAuth.getCurrentUser();
+                        if (r != null && r.isEmailVerified()) {
+                            updateOverlay("Checking your account…");
+                            checkRoleAndNavigate(r.getUid(), r.getEmail());
+                        } else {
+                            resetLoadingState();
+                            toast("Email still not verified. Click the link in your inbox.");
+                            mAuth.signOut();
+                        }
+                    });
                 })
                 .setNegativeButton("Cancel", (d, w) -> mAuth.signOut())
                 .setCancelable(false)
@@ -315,11 +285,17 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  GOOGLE LOGIN
+    //  GOOGLE SIGN-IN
     // ══════════════════════════════════════════════════════════════════════
 
     private void doGoogleLogin() {
-        showGoogleBusy(true);
+        if (isLoading) return;
+
+        isLoading = true;
+        setButtonsEnabled(false);
+        showOverlay("Connecting to Google…");
+
+        // Always sign out first so account chooser appears
         mGoogleClient.signOut().addOnCompleteListener(this,
                 t -> googleLauncher.launch(mGoogleClient.getSignInIntent()));
     }
@@ -328,30 +304,31 @@ public class LoginActivity extends AppCompatActivity {
         try {
             GoogleSignInAccount acct = task.getResult(ApiException.class);
             if (acct == null) {
-                showGoogleBusy(false);
+                resetLoadingState();
                 toast("Google Sign-In failed: no account returned.");
                 return;
             }
+            updateOverlay("Verifying with Firebase…");
             firebaseWithGoogle(acct);
         } catch (ApiException e) {
-            showGoogleBusy(false);
+            resetLoadingState();
             Log.e(TAG, "Google ApiException code=" + e.getStatusCode());
-            toast("Google Sign-In failed (code " + e.getStatusCode()
-                    + "). Ensure SHA-1 is registered in Firebase Console.");
+            if (e.getStatusCode() == 10) {
+                toast("Google Sign-In config error. Check SHA-1 in Firebase Console.");
+            } else {
+                toast("Google Sign-In failed (code " + e.getStatusCode() + ").");
+            }
         }
     }
 
     private void firebaseWithGoogle(GoogleSignInAccount acct) {
-        AuthCredential cred =
-                GoogleAuthProvider.getCredential(acct.getIdToken(), null);
-
-        updateGoogleProgress("Verifying with Firebase…");
+        AuthCredential cred = GoogleAuthProvider.getCredential(acct.getIdToken(), null);
 
         mAuth.signInWithCredential(cred)
                 .addOnSuccessListener(this, authResult -> {
                     FirebaseUser user = mAuth.getCurrentUser();
                     if (user == null) {
-                        showGoogleBusy(false);
+                        resetLoadingState();
                         toast("Google login succeeded but user is null. Try again.");
                         return;
                     }
@@ -361,52 +338,186 @@ public class LoginActivity extends AppCompatActivity {
                                     authResult.getAdditionalUserInfo().isNewUser());
 
                     String name  = acct.getDisplayName() != null ? acct.getDisplayName() : "";
-                    String email = acct.getEmail()        != null ? acct.getEmail()        : "";
+                    String email = acct.getEmail()        != null ? acct.getEmail()        : user.getEmail() != null ? user.getEmail() : "";
 
                     Log.d(TAG, "Google auth OK uid=" + user.getUid()
                             + " isNew=" + isNew + " email=" + email);
 
                     if (isNew) {
-                        // NEW account — save profile to Supabase then navigate
-                        updateGoogleProgress("Creating your profile…");
+                        updateOverlay("Creating your profile…");
                         SupabaseClient.upsertUser(
-                                user.getUid(), name, email, "", "user",
+                                user.getUid(), name, email, "",
+                                true, false, false,
                                 new SupabaseClient.Callback2() {
                                     @Override public void onSuccess() {
-                                        showGoogleBusy(false);
-                                        toast("Account created! Welcome to QuickFix!");
-                                        checkRoleAndNavigate(user.getUid());
+                                        updateOverlay("Almost done…");
+                                        checkRoleAndNavigate(user.getUid(), email);
                                     }
-                                    @Override public void onError(String e) {
-                                        showGoogleBusy(false);
-                                        Log.e(TAG, "Supabase save failed for new user: " + e);
+                                    @Override public void onError(String err) {
+                                        Log.w(TAG, "Supabase save failed (non-fatal): " + err);
+                                        updateOverlay("Almost done…");
                                         // Still navigate — Firebase auth succeeded
-                                        checkRoleAndNavigate(user.getUid());
+                                        checkRoleAndNavigate(user.getUid(), email);
                                     }
                                 });
                     } else {
-                        // EXISTING account — skip upsert (don't overwrite role!)
-                        // Just check role and navigate immediately
-                        showGoogleBusy(false);
-                        toast("Login successful!");
-                        checkRoleAndNavigate(user.getUid());
+                        updateOverlay("Checking your account…");
+                        checkRoleAndNavigate(user.getUid(), email);
                     }
                 })
                 .addOnFailureListener(this, e -> {
-                    showGoogleBusy(false);
+                    resetLoadingState();
                     Log.e(TAG, "Google Firebase auth failed: " + e.getMessage());
                     toast("Google Sign-In failed: " + e.getMessage());
                 });
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  HELPERS
+    //  ROLE-BASED NAVIGATION  — core routing logic
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Queries Supabase for is_admin / is_service_provider / is_user using
+     * the user's email (primary) with firebase_uid as fallback, then
+     * navigates to the correct activity.
+     *
+     * Priority:
+     *   is_admin = true           → AdminDashboardActivity
+     *   is_service_provider = true → ProviderDashboardActivity
+     *   else                       → MainActivity
+     *
+     * Errors (missing record / network failure) are shown to the user —
+     * the app NEVER silently opens the wrong screen.
+     */
+    private void checkRoleAndNavigate(String firebaseUid, String email) {
+        if (isNavigating) return;
+
+        // Always pass a non-null email so the email-first path in SupabaseClient works
+        String safeEmail = (email != null && !email.isEmpty()) ? email : "";
+        if (safeEmail.isEmpty()) {
+            // Last resort: try to get email from current Firebase user
+            FirebaseUser u = mAuth.getCurrentUser();
+            if (u != null && u.getEmail() != null) safeEmail = u.getEmail();
+        }
+
+        final String finalEmail = safeEmail;
+
+        Log.d(TAG, "checkRoleAndNavigate uid=" + firebaseUid + " email=" + finalEmail);
+        updateOverlay("Checking your account…");
+
+        SupabaseClient.getUserRoleWithEmail(firebaseUid, finalEmail,
+                new SupabaseClient.RoleInfoCallback() {
+
+            @Override
+            public void onSuccess(SupabaseClient.RoleInfo info) {
+                if (isNavigating || isFinishing()) return;
+                isNavigating = true;
+                hideOverlay();
+
+                Log.d(TAG, "Role resolved → admin=" + info.isAdmin
+                        + " provider=" + info.isServiceProvider
+                        + " user=" + info.isUser
+                        + " | email=" + finalEmail);
+
+                // ── Priority routing ──────────────────────────────────
+                final Intent target;
+                if (info.isAdmin) {
+                    Log.d(TAG, "→ AdminDashboardActivity");
+                    target = new Intent(LoginActivity.this, AdminDashboardActivity.class);
+                } else if (info.isServiceProvider) {
+                    Log.d(TAG, "→ ProviderDashboardActivity");
+                    target = new Intent(LoginActivity.this, ProviderDashboardActivity.class);
+                } else {
+                    Log.d(TAG, "→ MainActivity");
+                    target = new Intent(LoginActivity.this, MainActivity.class);
+                }
+                target.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(target);
+                finish();
+            }
+
+            @Override
+            public void onError(String message) {
+                // Do NOT navigate anywhere on error — show the problem to the user
+                if (isFinishing()) return;
+                resetLoadingState();
+                Log.e(TAG, "Role fetch failed: " + message);
+
+                if ("USER_NOT_FOUND".equals(message)) {
+                    // Account exists in Firebase but not in Supabase users table
+                    new AlertDialog.Builder(LoginActivity.this)
+                            .setTitle("Account Not Found")
+                            .setMessage("Your account was authenticated but your profile "
+                                    + "was not found in our database.\n\n"
+                                    + "Please sign up again or contact support.")
+                            .setPositiveButton("Sign Up", (d, w) -> {
+                                mAuth.signOut();
+                                startActivity(new Intent(LoginActivity.this, SignupActivity.class));
+                            })
+                            .setNegativeButton("Cancel", (d, w) -> mAuth.signOut())
+                            .setCancelable(false)
+                            .show();
+                } else {
+                    // Network error or unexpected failure
+                    new AlertDialog.Builder(LoginActivity.this)
+                            .setTitle("Connection Error")
+                            .setMessage("Could not load your account details.\n\n"
+                                    + "Please check your internet connection and try again.")
+                            .setPositiveButton("Retry", (d, w) -> {
+                                isNavigating = false;
+                                isLoading    = true;
+                                showOverlay("Retrying…");
+                                setButtonsEnabled(false);
+                                checkRoleAndNavigate(firebaseUid, finalEmail);
+                            })
+                            .setNegativeButton("Cancel", (d, w) -> mAuth.signOut())
+                            .setCancelable(false)
+                            .show();
+                }
+            }
+        });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  LOADING OVERLAY HELPERS
+    // ══════════════════════════════════════════════════════════════════════
+
+    private void showOverlay(String message) {
+        if (loadingOverlay != null) {
+            if (loadingMessage != null) loadingMessage.setText(message);
+            loadingOverlay.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void updateOverlay(String message) {
+        if (loadingOverlay != null && loadingOverlay.getVisibility() == View.VISIBLE) {
+            if (loadingMessage != null) loadingMessage.setText(message);
+        }
+    }
+
+    private void hideOverlay() {
+        if (loadingOverlay != null) loadingOverlay.setVisibility(View.GONE);
+    }
+
+    /** Re-enable both buttons and hide the overlay. Call on any failure path. */
+    private void resetLoadingState() {
+        isLoading = false;
+        hideOverlay();
+        setButtonsEnabled(true);
+    }
+
+    private void setButtonsEnabled(boolean enabled) {
+        if (loginButton       != null) loginButton.setEnabled(enabled);
+        if (googleSignInButton!= null) googleSignInButton.setEnabled(enabled);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  VALIDATION & HELPERS
     // ══════════════════════════════════════════════════════════════════════
 
     private boolean validateInputs(String email, String pass) {
         clearErrors();
         boolean ok = true;
-
         if (TextUtils.isEmpty(email)) {
             err(emailLayout, "Email address is required.");
             ok = false;
@@ -414,23 +525,20 @@ public class LoginActivity extends AppCompatActivity {
             err(emailLayout, "Enter a valid email address.");
             ok = false;
         }
-
         if (TextUtils.isEmpty(pass)) {
             err(passwordLayout, "Password is required.");
             ok = false;
         }
-
         return ok;
     }
 
     private void clearErrors() {
-        err(emailLayout,    null);
+        err(emailLayout, null);
         err(passwordLayout, null);
     }
 
     private String text(TextInputEditText v) {
-        return (v != null && v.getText() != null)
-                ? v.getText().toString().trim() : "";
+        return (v != null && v.getText() != null) ? v.getText().toString().trim() : "";
     }
 
     private void err(TextInputLayout l, String msg) {
@@ -441,76 +549,6 @@ public class LoginActivity extends AppCompatActivity {
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
     }
 
-    /** Busy state for email/password button only */
-    private void showEmailBusy(boolean busy) {
-        if (loginButton != null) {
-            loginButton.setEnabled(!busy);
-            loginButton.setText(busy ? "Logging in…" : "Login");
-        }
-    }
-
-    private void setupGoogleProgressDialog() {
-        googleProgressDialog = new ProgressDialog(this);
-        googleProgressDialog.setMessage("Signing in with Google…");
-        googleProgressDialog.setIndeterminate(true);
-        googleProgressDialog.setCancelable(false);
-    }
-
-    /** Show spinner for Google flow — never touches the Login button */
-    private void showGoogleBusy(boolean busy) {
-        if (googleSignInButton != null) googleSignInButton.setEnabled(!busy);
-        if (busy) {
-            googleProgressDialog.setMessage("Connecting to Google…");
-            if (!googleProgressDialog.isShowing()) googleProgressDialog.show();
-        } else {
-            if (googleProgressDialog.isShowing()) googleProgressDialog.dismiss();
-        }
-    }
-
-    private void updateGoogleProgress(String msg) {
-        if (googleProgressDialog.isShowing()) googleProgressDialog.setMessage(msg);
-    }
-
-    /** Legacy helper — kept for email verification dialog path */
-    private void showBusy(boolean busy) {
-        showEmailBusy(busy);
-    }
-
-    /**
-     * After a successful, verified login — fetch the user's role from Supabase
-     * and navigate to the correct screen:
-     *   - role == "admin"  → AdminDashboardActivity
-     *   - everything else  → MainActivity (home)
-     */
-    private void checkRoleAndNavigate(String firebaseUid) {
-        // Pass email too — so admin rows set by email before first login are found
-        FirebaseUser u = mAuth.getCurrentUser();
-        String email = (u != null && u.getEmail() != null) ? u.getEmail() : "";
-
-        SupabaseClient.getUserRoleWithEmail(firebaseUid, email,
-                new SupabaseClient.StringCallback() {
-            @Override
-            public void onSuccess(String role) {
-                Log.d(TAG, "Role fetched: " + role + " for " + email);
-                if ("admin".equalsIgnoreCase(role)) {
-                    Log.d(TAG, "Admin — going to AdminDashboardActivity");
-                    Intent i = new Intent(LoginActivity.this, AdminDashboardActivity.class);
-                    i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                    startActivity(i);
-                    finish();
-                } else {
-                    goHome();
-                }
-            }
-
-            @Override
-            public void onError(String message) {
-                Log.w(TAG, "Role check failed (fallback to home): " + message);
-                goHome();
-            }
-        });
-    }
-
     private void goHome() {
         Intent i = new Intent(this, MainActivity.class);
         i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
@@ -518,11 +556,19 @@ public class LoginActivity extends AppCompatActivity {
         finish();
     }
 
+    /** Returns true if the user authenticated via Google provider */
+    private boolean isGoogleUser(FirebaseUser user) {
+        if (user == null) return false;
+        for (com.google.firebase.auth.UserInfo info : user.getProviderData()) {
+            if (GoogleAuthProvider.PROVIDER_ID.equals(info.getProviderId())) return true;
+        }
+        return false;
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (googleProgressDialog != null && googleProgressDialog.isShowing()) {
-            googleProgressDialog.dismiss();
-        }
+        // Prevent window leaked if activity destroyed while loading
+        hideOverlay();
     }
 }

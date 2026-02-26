@@ -4,3 +4,49 @@ plugins {
     alias(libs.plugins.android.application) apply false
     id 'com.google.gms.google-services' version '4.4.4' apply false
 }
+
+// ── Supabase connection test ───────────────────────────────────────────────
+// Usage:  gradlew testSupabaseConnection
+// Reads credentials from supabase.properties (never from source code).
+task testSupabaseConnection {
+    group       = "verification"
+    description = "Compile and run SupabaseTest.java to verify DB connectivity"
+
+    doLast {
+        def javaHome  = org.gradle.internal.jvm.Jvm.current().javaHome.absolutePath
+        def isWindows = System.getProperty("os.name").toLowerCase().contains("win")
+        def ext       = isWindows ? ".exe" : ""
+        def javac     = "${javaHome}${File.separator}bin${File.separator}javac${ext}"
+        def javaExe   = "${javaHome}${File.separator}bin${File.separator}java${ext}"
+        def src       = file("SupabaseTest.java").absolutePath
+        def outDir    = file("${buildDir}/supabase-test")
+        def propsFile = file("supabase.properties").absolutePath
+
+        if (!file("supabase.properties").exists()) {
+            throw new GradleException("supabase.properties not found in project root.")
+        }
+
+        outDir.mkdirs()
+
+        // ── Helper: run process, stream output, throw on non-zero exit ────
+        def runCmd = { String[] cmd ->
+            def pb   = new ProcessBuilder(cmd)
+            pb.directory(projectDir)
+            pb.redirectErrorStream(true)
+            def proc = pb.start()
+            proc.inputStream.eachLine { line -> println "  ${line}" }
+            def code = proc.waitFor()
+            if (code != 0) throw new GradleException("Command failed (exit ${code}): ${cmd[0]}")
+        }
+
+        // ── 1. Compile ─────────────────────────────────────────────────
+        println "\n▶  Compiling SupabaseTest.java..."
+        println "   JDK : ${javaHome}"
+        runCmd([javac, "-d", outDir.absolutePath, src] as String[])
+
+        // ── 2. Run ─────────────────────────────────────────────────────
+        println "\n▶  Running Supabase connection tests...\n"
+        runCmd([javaExe, "-cp", outDir.absolutePath, "SupabaseTest", propsFile] as String[])
+    }
+}
+

@@ -1,290 +1,794 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/home_bg"
-    android:orientation="vertical">
+    android:background="#F0F4FF">
 
-    <!-- Toolbar -->
-    <androidx.appcompat.widget.Toolbar
-        android:id="@+id/adminToolbar"
-        android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:background="@color/primary"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center_vertical"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="QuickFix Admin"
-                android:textColor="@color/white"
-                android:textSize="20sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/adminWelcomeText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Welcome, Admin"
-                android:textColor="@color/white"
-                android:textSize="12sp" />
-
-        </LinearLayout>
-
-    </androidx.appcompat.widget.Toolbar>
-
-    <!-- Content -->
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
-
-        <LinearLayout
-            android:id="@+id/featureContainer"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
-
-            <!-- Business Approvals Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:elevation="4dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="📋 Business Approvals"
-                        android:textColor="@color/text_primary"
-                        android:textSize="16sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="Review and approve provider applications"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnBusinessApprovals"
-                        android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:layout_marginTop="12dp"
-                        android:text="View Pending Applications"
-                        android:textSize="14sp"
-                        android:backgroundTint="@color/primary" />
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- User Management Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:elevation="4dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="👥 User Management"
-                        android:textColor="@color/text_primary"
-                        android:textSize="16sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="View, suspend, and delete user accounts"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnUserManagement"
-                        android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:layout_marginTop="12dp"
-                        android:text="Manage Users"
-                        android:textSize="14sp"
-                        android:backgroundTint="@color/primary" />
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Service Management Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:elevation="4dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="🔧 Service Management"
-                        android:textColor="@color/text_primary"
-                        android:textSize="16sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="Add, edit, and delete services"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnServiceManagement"
-                        android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:layout_marginTop="12dp"
-                        android:text="Manage Services"
-                        android:textSize="14sp"
-                        android:backgroundTint="@color/primary" />
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Content Management Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:elevation="4dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="📚 Content Management"
-                        android:textColor="@color/text_primary"
-                        android:textSize="16sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="Manage categories and featured services"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnContentManagement"
-                        android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:layout_marginTop="12dp"
-                        android:text="Manage Content"
-                        android:textSize="14sp"
-                        android:backgroundTint="@color/primary" />
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- View Logs Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:elevation="4dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="📊 Admin Logs"
-                        android:textColor="@color/text_primary"
-                        android:textSize="16sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="View audit trail and admin actions"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnViewLogs"
-                        android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:layout_marginTop="12dp"
-                        android:text="View Logs"
-                        android:textSize="14sp"
-                        android:backgroundTint="@color/primary" />
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
-
-        </LinearLayout>
-
-    </ScrollView>
-
-    <!-- Logout Button -->
-    <LinearLayout
+    <!-- ═══════════════════════════════════════════════════════════
+         APP BAR — gradient blue→indigo header
+         ═══════════════════════════════════════════════════════════ -->
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/adminAppBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/white"
-        android:padding="16dp">
+        android:background="@drawable/bg_admin_header_gradient"
+        app:elevation="0dp"
+        app:liftOnScroll="true">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnLogout"
+        <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="Logout"
-            android:textColor="@color/white"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:backgroundTint="@color/error_red" />
+            android:layout_height="72dp"
+            android:paddingHorizontal="20dp">
 
-    </LinearLayout>
+            <!-- Left: App name + subtitle -->
+            <LinearLayout
+                android:id="@+id/headerTitles"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_vertical"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toStartOf="@+id/headerActions"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent">
 
-</LinearLayout>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="QuickFix"
+                    android:textColor="#FFFFFF"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.02" />
 
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Administrator Panel"
+                    android:textColor="#BFDBFE"
+                    android:textSize="12sp"
+                    android:layout_marginTop="1dp" />
+            </LinearLayout>
+
+            <!-- Right: Notifications + Avatar -->
+            <LinearLayout
+                android:id="@+id/headerActions"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent">
+
+                <!-- Notification bell -->
+                <FrameLayout
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginEnd="8dp">
+
+                    <ImageView
+                        android:id="@+id/btnNotifications"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_notification"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:clickable="true"
+                        android:focusable="true"
+                        app:tint="#FFFFFF" />
+
+                    <!-- Badge dot -->
+                    <View
+                        android:id="@+id/notificationBadge"
+                        android:layout_width="8dp"
+                        android:layout_height="8dp"
+                        android:layout_gravity="top|end"
+                        android:layout_marginTop="6dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/bg_stat_orange"
+                        android:visibility="visible" />
+                </FrameLayout>
+
+                <!-- Admin avatar circle with initial -->
+                <FrameLayout
+                    android:id="@+id/btnAdminAvatar"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <TextView
+                        android:id="@+id/avatarInitial"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:gravity="center"
+                        android:text="A"
+                        android:textColor="#1565C0"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:background="@drawable/bg_admin_avatar" />
+                </FrameLayout>
+            </LinearLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         MAIN SCROLLABLE CONTENT
+         ═══════════════════════════════════════════════════════════ -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/adminScrollView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior"
+        android:clipToPadding="false"
+        android:paddingBottom="80dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- ── WELCOME BANNER ── -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_admin_header_gradient"
+                android:paddingHorizontal="20dp"
+                android:paddingTop="0dp"
+                android:paddingBottom="28dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/welcomeText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Welcome back, Admin 👋"
+                    android:textColor="#FFFFFF"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Here's what's happening today"
+                    android:textColor="#BFDBFE"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <!-- ── QUICK STATS CARDS (overlapping the header) ── -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="-16dp"
+                android:paddingHorizontal="16dp">
+
+                <androidx.cardview.widget.CardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardCornerRadius="20dp"
+                    app:cardElevation="8dp"
+                    app:cardBackgroundColor="#FFFFFF">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Quick Stats"
+                            android:textColor="#1A1A2E"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:layout_marginBottom="12dp" />
+
+                        <!-- Stats row 1 -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:weightSum="2">
+
+                            <!-- Total Users -->
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:layout_marginEnd="8dp"
+                                android:background="@drawable/bg_stat_blue"
+                                android:orientation="vertical"
+                                android:padding="14dp"
+                                android:gravity="start">
+
+                                <ImageView
+                                    android:layout_width="22dp"
+                                    android:layout_height="22dp"
+                                    android:src="@drawable/ic_users"
+                                    app:tint="#FFFFFF" />
+
+                                <TextView
+                                    android:id="@+id/statTotalUsers"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="—"
+                                    android:textColor="#FFFFFF"
+                                    android:textSize="22sp"
+                                    android:textStyle="bold"
+                                    android:layout_marginTop="6dp" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Total Users"
+                                    android:textColor="#BFDBFE"
+                                    android:textSize="11sp" />
+                            </LinearLayout>
+
+                            <!-- Total Providers -->
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_stat_green"
+                                android:orientation="vertical"
+                                android:padding="14dp"
+                                android:gravity="start">
+
+                                <ImageView
+                                    android:layout_width="22dp"
+                                    android:layout_height="22dp"
+                                    android:src="@drawable/ic_approval"
+                                    app:tint="#FFFFFF" />
+
+                                <TextView
+                                    android:id="@+id/statTotalProviders"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="—"
+                                    android:textColor="#FFFFFF"
+                                    android:textSize="22sp"
+                                    android:textStyle="bold"
+                                    android:layout_marginTop="6dp" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Providers"
+                                    android:textColor="#D1FAE5"
+                                    android:textSize="11sp" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <!-- Stats row 2 -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:weightSum="2"
+                            android:layout_marginTop="10dp">
+
+                            <!-- Active Bookings -->
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:layout_marginEnd="8dp"
+                                android:background="@drawable/bg_stat_orange"
+                                android:orientation="vertical"
+                                android:padding="14dp"
+                                android:gravity="start">
+
+                                <ImageView
+                                    android:layout_width="22dp"
+                                    android:layout_height="22dp"
+                                    android:src="@drawable/ic_bookings"
+                                    app:tint="#FFFFFF" />
+
+                                <TextView
+                                    android:id="@+id/statActiveBookings"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="—"
+                                    android:textColor="#FFFFFF"
+                                    android:textSize="22sp"
+                                    android:textStyle="bold"
+                                    android:layout_marginTop="6dp" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Bookings"
+                                    android:textColor="#FFE4D9"
+                                    android:textSize="11sp" />
+                            </LinearLayout>
+
+                            <!-- Pending Approvals -->
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_stat_purple"
+                                android:orientation="vertical"
+                                android:padding="14dp"
+                                android:gravity="start">
+
+                                <ImageView
+                                    android:layout_width="22dp"
+                                    android:layout_height="22dp"
+                                    android:src="@drawable/ic_analytics"
+                                    app:tint="#FFFFFF" />
+
+                                <TextView
+                                    android:id="@+id/statPendingApprovals"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="—"
+                                    android:textColor="#FFFFFF"
+                                    android:textSize="22sp"
+                                    android:textStyle="bold"
+                                    android:layout_marginTop="6dp" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Pending"
+                                    android:textColor="#EDE9FE"
+                                    android:textSize="11sp" />
+                            </LinearLayout>
+                        </LinearLayout>
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+            </LinearLayout>
+
+            <!-- ── VIEW USER APP CARD (prominent) ── -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="16dp">
+
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/cardOpenUserView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="6dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_user_view_card"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:padding="20dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Open User App View"
+                                android:textColor="#FFFFFF"
+                                android:textSize="17sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:text="Preview the user experience"
+                                android:textColor="#BFDBFE"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <FrameLayout
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:background="@drawable/bg_admin_avatar">
+
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_home"
+                                app:tint="#1565C0" />
+                        </FrameLayout>
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+            </LinearLayout>
+
+            <!-- ── SECTION LABEL: Admin Controls ── -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Admin Controls"
+                android:textColor="#1A1A2E"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="4dp" />
+
+            <!-- ══════════════════════════════════════════
+                 DASHBOARD FEATURE CARDS
+                 ══════════════════════════════════════════ -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingBottom="8dp">
+
+                <!-- ── Card 1: Business Approvals ── -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/cardBusinessApprovals"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="4dp"
+                    app:cardBackgroundColor="#FFFFFF">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:padding="18dp">
+
+                        <!-- Icon box -->
+                        <FrameLayout
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:background="@drawable/bg_card_icon">
+
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_approval"
+                                app:tint="#1E88E5" />
+                        </FrameLayout>
+
+                        <!-- Text -->
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:layout_marginHorizontal="14dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Business Approvals"
+                                android:textColor="#1A1A2E"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="Review provider applications"
+                                android:textColor="#6B7280"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <!-- Action button -->
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnBusinessApprovals"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="View"
+                            android:textSize="12sp"
+                            android:textColor="#FFFFFF"
+                            style="@style/Widget.Material3.Button"
+                            app:backgroundTint="#1E88E5"
+                            app:cornerRadius="8dp" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <!-- ── Card 2: User Management ── -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/cardUserManagement"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="4dp"
+                    app:cardBackgroundColor="#FFFFFF">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:padding="18dp">
+
+                        <FrameLayout
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:background="@drawable/bg_card_icon">
+
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_users"
+                                app:tint="#43A047" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:layout_marginHorizontal="14dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="User Management"
+                                android:textColor="#1A1A2E"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="Manage user accounts"
+                                android:textColor="#6B7280"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnUserManagement"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="Manage"
+                            android:textSize="12sp"
+                            android:textColor="#FFFFFF"
+                            style="@style/Widget.Material3.Button"
+                            app:backgroundTint="#43A047"
+                            app:cornerRadius="8dp" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <!-- ── Card 3: Service Management ── -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/cardServiceManagement"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="4dp"
+                    app:cardBackgroundColor="#FFFFFF">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:padding="18dp">
+
+                        <FrameLayout
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:background="@drawable/bg_card_icon">
+
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_services"
+                                app:tint="#FF7043" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:layout_marginHorizontal="14dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Service Management"
+                                android:textColor="#1A1A2E"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="Add/edit/delete services"
+                                android:textColor="#6B7280"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnServiceManagement"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="Manage"
+                            android:textSize="12sp"
+                            android:textColor="#FFFFFF"
+                            style="@style/Widget.Material3.Button"
+                            app:backgroundTint="#FF7043"
+                            app:cornerRadius="8dp" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <!-- ── Card 4: Content Management ── -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/cardContentManagement"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="4dp"
+                    app:cardBackgroundColor="#FFFFFF">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:padding="18dp">
+
+                        <FrameLayout
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:background="@drawable/bg_card_icon">
+
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_content"
+                                app:tint="#8E24AA" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:layout_marginHorizontal="14dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Content Management"
+                                android:textColor="#1A1A2E"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="Manage banners &amp; categories"
+                                android:textColor="#6B7280"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnContentManagement"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="Manage"
+                            android:textSize="12sp"
+                            android:textColor="#FFFFFF"
+                            style="@style/Widget.Material3.Button"
+                            app:backgroundTint="#8E24AA"
+                            app:cornerRadius="8dp" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <!-- ── Card 5: Reports & Analytics ── -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/cardReports"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="4dp"
+                    app:cardBackgroundColor="#FFFFFF">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:padding="18dp">
+
+                        <FrameLayout
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:background="@drawable/bg_card_icon">
+
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_analytics"
+                                app:tint="#00897B" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:layout_marginHorizontal="14dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Reports &amp; Analytics"
+                                android:textColor="#1A1A2E"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="View platform statistics"
+                                android:textColor="#6B7280"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnViewReports"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="View"
+                            android:textSize="12sp"
+                            android:textColor="#FFFFFF"
+                            style="@style/Widget.Material3.Button"
+                            app:backgroundTint="#00897B"
+                            app:cornerRadius="8dp" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+            </LinearLayout>
+            <!-- end cards -->
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         BOTTOM NAVIGATION BAR
+         ═══════════════════════════════════════════════════════════ -->
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/adminBottomNav"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="#FFFFFF"
+        app:elevation="12dp"
+        app:menu="@menu/admin_bottom_nav_menu"
+        app:itemIconTint="@color/admin_bottom_nav_colors"
+        app:itemTextColor="@color/admin_bottom_nav_colors"
+        app:labelVisibilityMode="labeled" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -6,6 +6,15 @@ plugins {
 
 }
 
+// ── Load Supabase credentials from supabase.properties (never in source) ──
+def supabasePropsFile = rootProject.file("supabase.properties")
+def supabaseProps = new Properties()
+if (supabasePropsFile.exists()) {
+    supabasePropsFile.withInputStream { supabaseProps.load(it) }
+} else {
+    logger.warn("WARNING: supabase.properties not found — BuildConfig fields will be empty")
+}
+
 android {
     namespace 'com.example.quickfix'
     compileSdk 36
@@ -18,6 +27,14 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // Inject secrets as BuildConfig constants
+        buildConfigField "String", "SUPABASE_URL",      "\"${supabaseProps.getProperty('SUPABASE_URL', '')}\""
+        buildConfigField "String", "SUPABASE_ANON_KEY", "\"${supabaseProps.getProperty('SUPABASE_ANON_KEY', '')}\""
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     buildTypes {
