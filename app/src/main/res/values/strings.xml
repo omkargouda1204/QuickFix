@@ -113,4 +113,41 @@
     <string name="promo_title">Get 20% off your first booking!</string>
     <string name="promo_subtitle">Use code QUICKFIX20 at checkout</string>
     <string name="logout">Logout</string>
+
+    <!-- List Your Business Card -->
+    <string name="list_business_title">List Your Business</string>
+    <string name="list_business_subtitle">Start for FREE</string>
+    <string name="list_business_cta">Start</string>
+
+    <!-- Provider Onboarding -->
+    <string name="onboarding_title">Grow your business with QuickFix</string>
+    <string name="onboarding_benefit_1">✅  Get customers near you</string>
+    <string name="onboarding_benefit_2">✅  Manage bookings easily</string>
+    <string name="onboarding_benefit_3">✅  Increase visibility</string>
+    <string name="onboarding_benefit_4">✅  No upfront cost</string>
+    <string name="onboarding_terms_title">Terms &amp; Conditions</string>
+    <string name="onboarding_terms_body">By registering as a service provider on QuickFix, you agree to:\n\n• Provide accurate business information.\n• Deliver services as advertised to customers.\n• Maintain professional conduct at all times.\n• Allow QuickFix to display your profile publicly.\n• Accept QuickFix\'s commission structure on completed bookings.\n• Not engage in fraudulent or misleading activities.\n• QuickFix reserves the right to suspend or remove listings that violate guidelines.\n\nFull terms available at quickfix.app/terms</string>
+    <string name="onboarding_terms_agree">I agree to Terms &amp; Conditions</string>
+    <string name="onboarding_hint_business_name">Business Name *</string>
+    <string name="onboarding_hint_owner_name">Owner Name *</string>
+    <string name="onboarding_hint_phone">Phone Number *</string>
+    <string name="onboarding_hint_email">Email Address *</string>
+    <string name="onboarding_hint_address">Business Address / Location *</string>
+    <string name="onboarding_hint_experience">Years of Experience *</string>
+    <string name="onboarding_hint_description">Business Description (optional)</string>
+    <string name="onboarding_upload_id">📎  Upload ID / Proof (Required)</string>
+    <string name="onboarding_upload_business_img">🖼️  Add Business Image (Optional)</string>
+    <string name="onboarding_file_selected">✅  %1$s</string>
+    <string name="onboarding_img_selected">✅  %1$s</string>
+    <string name="onboarding_submit">Submit Application</string>
+    <string name="onboarding_success_title">Application Submitted! 🎉</string>
+    <string name="onboarding_success_msg">Our team will review your request and get back to you within 24–48 hours.</string>
+    <string name="onboarding_back_home">Back to Home</string>
+    <string name="onboarding_service_category">Service Category *</string>
+    <string name="onboarding_section_details">Business Details</string>
+    <string name="onboarding_success_emoji">🎉</string>
+    <string name="onboarding_hint_city">City *</string>
+    <string name="onboarding_screen_title">Become a Service Provider</string>
+    <string name="onboarding_screen_subtitle">List your business for free</string>
+    <string name="onboarding_terms_body_full">By registering as a service provider on QuickFix, you agree to the following:\n\n1. Genuine Services\n   • You must deliver genuine, high-quality services as advertised.\n   • Misrepresentation of services may result in account suspension.\n\n2. Service Quality\n   • You are fully responsible for the quality of work delivered.\n   • QuickFix is not liable for disputes between providers and customers.\n\n3. Commission Rules\n   • QuickFix may apply a platform commission on completed bookings.\n   • Commission rates will be communicated upon approval.\n\n4. Account Violations\n   • Fraudulent activity, fake reviews, or policy violations may lead to permanent removal.\n\n5. Privacy &amp; Data\n   • You must respect the privacy of customer data at all times.\n   • Do not share, sell, or misuse customer information.\n\n6. Emergency Misuse\n   • Misuse of emergency service flags will lead to immediate removal.\n\n7. Liability\n   • QuickFix platform is not liable for service disputes, damages, or losses.\n   • You accept full responsibility for your services and conduct.\n\nFull terms available at quickfix.app/terms</string>
 </resources>
