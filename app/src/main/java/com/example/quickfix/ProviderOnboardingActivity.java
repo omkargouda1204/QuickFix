@@ -267,23 +267,25 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
     private void setupTermsScroll() {
         // Checkbox disabled until terms fully scrolled
         checkboxTerms.setEnabled(false);
-
-        termsScrollView.getViewTreeObserver().addOnScrollChangedListener(() -> {
-            if (!termsRead) {
-                View child = termsScrollView.getChildAt(0);
-                if (child != null) {
-                    int scrollY      = termsScrollView.getScrollY();
-                    int visibleH     = termsScrollView.getHeight();
-                    int contentH     = child.getHeight();
-                    boolean atBottom = (scrollY + visibleH) >= (contentH - 20);
-                    if (atBottom) {
-                        termsRead = true;
-                        checkboxTerms.setEnabled(true);
-                        tvReadStatus.setText("✅ Read");
-                        tvReadStatus.setTextColor(getColor(R.color.accent_green));
-                        tvTermsNote.setText("You may now agree to the terms");
-                        tvTermsNote.setTextColor(getColor(R.color.accent_green));
-                        animateFadeIn(checkboxTerms);
+        termsRead = false;
+        termsScrollView.setOnScrollChangeListener(new View.OnScrollChangeListener() {
+            @Override
+            public void onScrollChange(View v, int scrollX, int scrollY, int oldScrollX, int oldScrollY) {
+                if (!termsRead) {
+                    View child = termsScrollView.getChildAt(0);
+                    if (child != null) {
+                        int visibleH = termsScrollView.getHeight();
+                        int contentH = child.getHeight();
+                        boolean atBottom = (termsScrollView.getScrollY() + visibleH) >= (contentH - 10);
+                        if (atBottom) {
+                            termsRead = true;
+                            checkboxTerms.setEnabled(true);
+                            tvReadStatus.setText("✅ Read");
+                            tvReadStatus.setTextColor(getColor(R.color.accent_green));
+                            tvTermsNote.setText("You may now agree to the terms");
+                            tvTermsNote.setTextColor(getColor(R.color.accent_green));
+                            animateFadeIn(checkboxTerms);
+                        }
                     }
                 }
             }
@@ -694,7 +696,14 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
     private byte[] readBytes(Uri uri) {
         try (InputStream is = getContentResolver().openInputStream(uri)) {
             if (is == null) return null;
-            return is.readAllBytes();
+            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+            byte[] data = new byte[4096];
+            int nRead;
+            while ((nRead = is.read(data, 0, data.length)) != -1) {
+                buffer.write(data, 0, nRead);
+            }
+            buffer.flush();
+            return buffer.toByteArray();
         } catch (Exception e) {
             Log.w(TAG, "readBytes failed: " + e.getMessage());
             return null;
