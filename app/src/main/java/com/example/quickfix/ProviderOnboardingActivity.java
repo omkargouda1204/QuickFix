@@ -19,7 +19,6 @@ import android.widget.AutoCompleteTextView;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -55,13 +54,10 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
 
     private static final String TAG = "ProviderOnboarding";
 
-    // ── Bucket config — stored in BuildConfig (never hardcoded) ──────────
-    // ID proof bucket  → BuildConfig.SUPABASE_BUCKET_ID_PROOF
-    // Business image bucket → BuildConfig.SUPABASE_BUCKET_BUSINESS_IMG
-    private static final String SUPABASE_URL      = BuildConfig.SUPABASE_URL;
-    private static final String SUPABASE_KEY      = BuildConfig.SUPABASE_ANON_KEY;
-    private static final String BUCKET_ID_PROOF   = BuildConfig.SUPABASE_BUCKET_ID_PROOF;
-    private static final String BUCKET_BIZ_IMG    = BuildConfig.SUPABASE_BUCKET_BUSINESS_IMG;
+    private static final String SUPABASE_URL    = BuildConfig.SUPABASE_URL;
+    private static final String SUPABASE_KEY    = BuildConfig.SUPABASE_ANON_KEY;
+    private static final String BUCKET_ID_PROOF = BuildConfig.SUPABASE_BUCKET_ID_PROOF;
+    private static final String BUCKET_BIZ_IMG  = BuildConfig.SUPABASE_BUCKET_BUSINESS_IMG;
 
     // ── Form fields ───────────────────────────────────────────────────────
     private TextInputLayout tilBusinessName, tilOwnerName, tilPhone, tilEmail,
@@ -70,17 +66,17 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
             etAddress, etExperience, etCity, etDescription;
     private AutoCompleteTextView actvServiceCategory;
 
-    // ── Upload section — ID proof ─────────────────────────────────────────
+    // ── Upload — ID proof ─────────────────────────────────────────────────
     private LinearLayout idUploadZone, idUploadSuccess;
     private TextView tvUploadedFileName, tvChangeId, tvIdError;
 
-    // ── Upload section — Business image ──────────────────────────────────
+    // ── Upload — Business image ───────────────────────────────────────────
     private LinearLayout businessImgUploadZone, businessImgSuccess;
     private ImageView ivBusinessImgPreview;
     private TextView tvBusinessImgName, tvChangeBusinessImg;
 
     // ── Terms ─────────────────────────────────────────────────────────────
-    private ScrollView termsScrollView;
+    private NestedScrollView termsScrollContainer;
     private TextView tvReadStatus, tvTermsNote;
     private MaterialCheckBox checkboxTerms;
 
@@ -93,15 +89,15 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
     private FrameLayout loadingOverlay, successIconFrame;
 
     // ── State ─────────────────────────────────────────────────────────────
-    private Uri idProofUri      = null;   // mandatory
-    private Uri businessImgUri  = null;   // optional
-    private boolean termsRead   = false;
+    private Uri idProofUri     = null;
+    private Uri businessImgUri = null;
+    private boolean termsRead  = false;
     private ObjectAnimator pulseAnimator;
 
     private final OkHttpClient http = new OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
             .build();
 
     // ── File pickers ──────────────────────────────────────────────────────
@@ -109,8 +105,7 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
                 if (uri != null) {
                     idProofUri = uri;
-                    String name = resolveFileName(uri);
-                    tvUploadedFileName.setText(name);
+                    tvUploadedFileName.setText(resolveFileName(uri));
                     idUploadZone.setVisibility(View.GONE);
                     idUploadSuccess.setVisibility(View.VISIBLE);
                     tvIdError.setVisibility(View.GONE);
@@ -122,9 +117,7 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
                 if (uri != null) {
                     businessImgUri = uri;
-                    String name = resolveFileName(uri);
-                    tvBusinessImgName.setText(name);
-                    // Load thumbnail
+                    tvBusinessImgName.setText(resolveFileName(uri));
                     try {
                         InputStream is = getContentResolver().openInputStream(uri);
                         if (is != null) {
@@ -152,7 +145,6 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_provider_onboarding);
-
         setupToolbar();
         initViews();
         setupCategoryDropdown();
@@ -164,7 +156,6 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         animateScreenIn();
     }
 
-    // ── Toolbar ───────────────────────────────────────────────────────────
     private void setupToolbar() {
         Toolbar toolbar = findViewById(R.id.onboardingToolbar);
         setSupportActionBar(toolbar);
@@ -175,9 +166,7 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         toolbar.setNavigationOnClickListener(v -> finish());
     }
 
-    // ── Init Views ────────────────────────────────────────────────────────
     private void initViews() {
-        // Form
         tilBusinessName    = findViewById(R.id.tilBusinessName);
         tilOwnerName       = findViewById(R.id.tilOwnerName);
         tilPhone           = findViewById(R.id.tilPhone);
@@ -197,60 +186,50 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         etDescription      = findViewById(R.id.etDescription);
         actvServiceCategory = findViewById(R.id.actvServiceCategory);
 
-        // ID proof upload
         idUploadZone       = findViewById(R.id.idUploadZone);
         idUploadSuccess    = findViewById(R.id.idUploadSuccess);
         tvUploadedFileName = findViewById(R.id.tvUploadedFileName);
         tvChangeId         = findViewById(R.id.tvChangeId);
         tvIdError          = findViewById(R.id.tvIdError);
 
-        // Business image upload
         businessImgUploadZone = findViewById(R.id.businessImgUploadZone);
         businessImgSuccess    = findViewById(R.id.businessImgSuccess);
         ivBusinessImgPreview  = findViewById(R.id.ivBusinessImgPreview);
         tvBusinessImgName     = findViewById(R.id.tvBusinessImgName);
         tvChangeBusinessImg   = findViewById(R.id.tvChangeBusinessImg);
 
-        // Terms
-        termsScrollView = findViewById(R.id.termsScrollView);
-        tvReadStatus    = findViewById(R.id.tvReadStatus);
-        tvTermsNote     = findViewById(R.id.tvTermsNote);
-        checkboxTerms   = findViewById(R.id.checkboxTerms);
+        termsScrollContainer = findViewById(R.id.termsScrollContainer);
+        tvReadStatus         = findViewById(R.id.tvReadStatus);
+        tvTermsNote          = findViewById(R.id.tvTermsNote);
+        checkboxTerms        = findViewById(R.id.checkboxTerms);
 
-        // Submit
         btnSubmitApplication = findViewById(R.id.btnSubmitApplication);
+        onboardingScroll     = findViewById(R.id.onboardingScroll);
+        successOverlay       = findViewById(R.id.successOverlay);
+        loadingOverlay       = findViewById(R.id.loadingOverlay);
+        successIconFrame     = findViewById(R.id.successIconFrame);
 
-        // Screens
-        onboardingScroll  = findViewById(R.id.onboardingScroll);
-        successOverlay    = findViewById(R.id.successOverlay);
-        loadingOverlay    = findViewById(R.id.loadingOverlay);
-        successIconFrame  = findViewById(R.id.successIconFrame);
+        // Locked by default — must scroll terms first
+        checkboxTerms.setEnabled(false);
+        btnSubmitApplication.setEnabled(false);
     }
 
-    // ── Screen fade-in ────────────────────────────────────────────────────
     private void animateScreenIn() {
         onboardingScroll.setAlpha(0f);
         onboardingScroll.setTranslationY(40f);
         onboardingScroll.animate()
                 .alpha(1f).translationY(0f)
-                .setDuration(420).setInterpolator(new DecelerateInterpolator())
-                .start();
+                .setDuration(420).setInterpolator(new DecelerateInterpolator()).start();
     }
 
-    // ── Category Dropdown ─────────────────────────────────────────────────
     private void setupCategoryDropdown() {
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                this, android.R.layout.simple_dropdown_item_1line, CATEGORIES);
-        actvServiceCategory.setAdapter(adapter);
+        actvServiceCategory.setAdapter(new ArrayAdapter<>(
+                this, android.R.layout.simple_dropdown_item_1line, CATEGORIES));
     }
 
-    // ── Upload Zones ──────────────────────────────────────────────────────
     private void setupUploadZones() {
-        // ID proof zone taps
         idUploadZone.setOnClickListener(v -> launchIdProofPicker());
         tvChangeId.setOnClickListener(v -> launchIdProofPicker());
-
-        // Business image zone taps
         businessImgUploadZone.setOnClickListener(v -> launchBusinessImgPicker());
         tvChangeBusinessImg.setOnClickListener(v -> launchBusinessImgPicker());
     }
@@ -263,39 +242,44 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         businessImgPicker.launch(new String[]{"image/*"});
     }
 
-    // ── Terms Scroll — detect when user has scrolled to bottom ───────────
+    // ── Terms Scroll — detect when user scrolls to the very bottom ────────
     private void setupTermsScroll() {
-        // Checkbox disabled until terms fully scrolled
-        checkboxTerms.setEnabled(false);
         termsRead = false;
-        termsScrollView.setOnScrollChangeListener(new View.OnScrollChangeListener() {
-            @Override
-            public void onScrollChange(View v, int scrollX, int scrollY, int oldScrollX, int oldScrollY) {
-                if (!termsRead) {
-                    View child = termsScrollView.getChildAt(0);
-                    if (child != null) {
-                        int visibleH = termsScrollView.getHeight();
-                        int contentH = child.getHeight();
-                        boolean atBottom = (termsScrollView.getScrollY() + visibleH) >= (contentH - 10);
-                        if (atBottom) {
-                            termsRead = true;
-                            checkboxTerms.setEnabled(true);
-                            tvReadStatus.setText("✅ Read");
-                            tvReadStatus.setTextColor(getColor(R.color.accent_green));
-                            tvTermsNote.setText("You may now agree to the terms");
-                            tvTermsNote.setTextColor(getColor(R.color.accent_green));
-                            animateFadeIn(checkboxTerms);
+        checkboxTerms.setEnabled(false);
+
+        termsScrollContainer.setOnScrollChangeListener(
+                (NestedScrollView.OnScrollChangeListener) (v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+                    if (!termsRead) {
+                        View child = termsScrollContainer.getChildAt(0);
+                        if (child != null) {
+                            int contentHeight    = child.getMeasuredHeight();
+                            int scrollViewHeight = termsScrollContainer.getMeasuredHeight();
+                            // 30px tolerance so it works on all screen sizes
+                            boolean reachedBottom = (scrollY + scrollViewHeight) >= (contentHeight - 30);
+                            if (reachedBottom) {
+                                termsRead = true;
+                                checkboxTerms.setEnabled(true);
+
+                                tvReadStatus.setText("✅ Read");
+                                tvReadStatus.setTextColor(getColor(R.color.accent_green));
+
+                                tvTermsNote.setText("✅ You may now agree to the terms");
+                                tvTermsNote.setTextColor(getColor(R.color.accent_green));
+
+                                animateFadeIn(checkboxTerms);
+                                Toast.makeText(this,
+                                        "You have read all terms! Tick the checkbox to agree.",
+                                        Toast.LENGTH_SHORT).show();
+                            }
                         }
                     }
-                }
-            }
-        });
+                });
     }
 
     // ── Terms Checkbox ────────────────────────────────────────────────────
     private void setupTermsCheckbox() {
         checkboxTerms.setOnCheckedChangeListener((btn, isChecked) -> {
-            if (!termsRead && isChecked) {
+            if (isChecked && !termsRead) {
                 checkboxTerms.setChecked(false);
                 Toast.makeText(this,
                         "Please scroll and read all terms first", Toast.LENGTH_SHORT).show();
@@ -307,7 +291,6 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         });
     }
 
-    // ── Pulse on Submit button ────────────────────────────────────────────
     private void startPulseAnimation() {
         if (pulseAnimator != null && pulseAnimator.isRunning()) return;
         pulseAnimator = ObjectAnimator.ofFloat(btnSubmitApplication, "scaleX", 1f, 1.03f);
@@ -328,7 +311,6 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         btnSubmitApplication.setScaleY(1f);
     }
 
-    // ── Submit Button ─────────────────────────────────────────────────────
     private void setupSubmitButton() {
         btnSubmitApplication.setOnClickListener(v -> {
             stopPulseAnimation();
@@ -342,7 +324,6 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         });
     }
 
-    // ── Pre-fill email from Firebase ──────────────────────────────────────
     private void prefillEmail() {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user != null) {
@@ -406,27 +387,28 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         }
 
         if (TextUtils.isEmpty(address)) {
-            tilAddress.setError("Business address is required");
-            valid = false;
+            tilAddress.setError("Business address is required"); valid = false;
         } else tilAddress.setError(null);
 
         if (TextUtils.isEmpty(city)) {
-            tilCity.setError("City is required");
-            valid = false;
+            tilCity.setError("City is required"); valid = false;
         } else tilCity.setError(null);
 
-        // ID proof is MANDATORY
         if (idProofUri == null) {
             tvIdError.setVisibility(View.VISIBLE);
             tvIdError.startAnimation(android.view.animation.AnimationUtils
                     .loadAnimation(this, android.R.anim.fade_in));
             valid = false;
-        } else {
-            tvIdError.setVisibility(View.GONE);
-        }
+        } else tvIdError.setVisibility(View.GONE);
 
-        if (!checkboxTerms.isChecked()) {
-            Toast.makeText(this, "Please accept Terms & Conditions to continue",
+        if (!termsRead) {
+            Toast.makeText(this,
+                    "Please scroll and read all Terms & Conditions first",
+                    Toast.LENGTH_LONG).show();
+            valid = false;
+        } else if (!checkboxTerms.isChecked()) {
+            Toast.makeText(this,
+                    "Please accept Terms & Conditions to continue",
                     Toast.LENGTH_SHORT).show();
             valid = false;
         }
@@ -434,16 +416,20 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         return valid;
     }
 
-    // ── Submit to Supabase ────────────────────────────────────────────────
+    // ── Submit ────────────────────────────────────────────────────────────
     private void submitApplication() {
-        showLoading(true);
-
+        // Guard: Firebase user must be signed in
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        String firebaseUid = user != null ? user.getUid() : "";
+        if (user == null || TextUtils.isEmpty(user.getUid())) {
+            Toast.makeText(this,
+                    "Session expired. Please log in again.", Toast.LENGTH_LONG).show();
+            return;
+        }
 
-        // Step 1: Upload ID proof (mandatory), then submit form
+        showLoading(true);
+        final String firebaseUid = user.getUid();
+
         uploadIdProof(firebaseUid, idProofUri, idProofUrl -> {
-            // Step 2: Upload business image if provided (optional, different bucket)
             if (businessImgUri != null) {
                 uploadBusinessImage(firebaseUid, businessImgUri, bizImgUrl ->
                         submitFormData(firebaseUid, idProofUrl, bizImgUrl));
@@ -453,66 +439,78 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         });
     }
 
-    // ── Upload ID proof to id-proof bucket ───────────────────────────────
+    // ── Upload ID proof — correct Supabase REST Storage URL ───────────────
     private void uploadIdProof(String uid, Uri uri, UploadCallback callback) {
         new Thread(() -> {
             try {
                 byte[] bytes = readBytes(uri);
-                if (bytes == null) {
+                if (bytes == null || bytes.length == 0) {
                     runOnUiThread(() -> {
                         showLoading(false);
-                        Toast.makeText(this, "Could not read ID file. Please try again.",
-                                Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this,
+                                "Could not read ID file. Please select a valid file.",
+                                Toast.LENGTH_LONG).show();
                     });
                     return;
                 }
+
                 String ext      = getExtension(uri);
-                String path     = "id_proofs/" + uid + "_" + System.currentTimeMillis() + "." + ext;
+                String fileName = uid + "_id_" + System.currentTimeMillis() + "." + ext;
+                String path     = "id_proofs/" + fileName;
                 String mimeType = getMimeType(ext);
 
+                // ✅ Correct Supabase Storage REST endpoint
+                String uploadUrl = SUPABASE_URL + "/storage/v1/object/" + BUCKET_ID_PROOF + "/" + path;
+                Log.d(TAG, "ID upload URL: " + uploadUrl + " | size=" + bytes.length + " | mime=" + mimeType);
+
                 Request req = new Request.Builder()
-                        .url(SUPABASE_URL + "/storage/v1/object/" + BUCKET_ID_PROOF + "/" + path)
+                        .url(uploadUrl)
                         .post(RequestBody.create(bytes, MediaType.parse(mimeType)))
-                        .addHeader("apikey",         SUPABASE_KEY)
-                        .addHeader("Authorization",  "Bearer " + SUPABASE_KEY)
-                        .addHeader("Content-Type",   mimeType)
-                        .addHeader("x-upsert",       "true")
+                        .addHeader("apikey",        SUPABASE_KEY)
+                        .addHeader("Authorization", "Bearer " + SUPABASE_KEY)
+                        .addHeader("Content-Type",  mimeType)
+                        .addHeader("x-upsert",      "true")
                         .build();
 
                 try (Response r = http.newCall(req).execute()) {
+                    String respBody = r.body() != null ? r.body().string() : "";
+                    Log.d(TAG, "ID upload: HTTP " + r.code() + " | " + respBody);
+
                     if (r.isSuccessful()) {
+                        // ✅ Public URL stored in DB
                         String publicUrl = SUPABASE_URL + "/storage/v1/object/public/"
                                 + BUCKET_ID_PROOF + "/" + path;
-                        Log.d(TAG, "ID proof uploaded: " + publicUrl);
+                        Log.d(TAG, "ID proof uploaded OK. URL: " + publicUrl);
                         runOnUiThread(() -> callback.onDone(publicUrl));
                     } else {
-                        String body = r.body() != null ? r.body().string() : "";
-                        Log.w(TAG, "ID upload failed HTTP " + r.code() + " " + body);
+                        Log.e(TAG, "ID upload failed HTTP " + r.code() + ": " + respBody);
                         runOnUiThread(() -> {
                             showLoading(false);
-                            Toast.makeText(this,
-                                    "ID upload failed. Please try again.", Toast.LENGTH_SHORT).show();
+                            String msg = "ID upload failed (HTTP " + r.code() + ").";
+                            if (r.code() == 400)
+                                msg += "\nCheck bucket name/RLS policy in Supabase.";
+                            else if (r.code() == 401 || r.code() == 403)
+                                msg += "\nUnauthorised — check SUPABASE_ANON_KEY.";
+                            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
                         });
                     }
                 }
             } catch (Exception e) {
-                Log.e(TAG, "uploadIdProof exception: " + e.getMessage());
+                Log.e(TAG, "uploadIdProof exception: " + e.getMessage(), e);
                 runOnUiThread(() -> {
                     showLoading(false);
-                    Toast.makeText(this, "Upload error: " + e.getMessage(),
-                            Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Upload error: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
         }).start();
     }
 
-    // ── Upload business image to business-images bucket ───────────────────
+    // ── Upload business image ─────────────────────────────────────────────
     private void uploadBusinessImage(String uid, Uri uri, UploadCallback callback) {
         new Thread(() -> {
             try {
                 byte[] bytes = readBytes(uri);
-                if (bytes == null) {
-                    // Non-fatal: continue without business image
+                if (bytes == null || bytes.length == 0) {
                     runOnUiThread(() -> callback.onDone(null));
                     return;
                 }
@@ -533,74 +531,140 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
                     String publicUrl = r.isSuccessful()
                             ? SUPABASE_URL + "/storage/v1/object/public/" + BUCKET_BIZ_IMG + "/" + path
                             : null;
-                    Log.d(TAG, "Biz image uploaded: " + publicUrl + " HTTP " + r.code());
+                    Log.d(TAG, "Biz image: HTTP " + r.code() + " | url=" + publicUrl);
                     runOnUiThread(() -> callback.onDone(publicUrl));
                 }
             } catch (Exception e) {
-                Log.w(TAG, "uploadBusinessImage (non-fatal): " + e.getMessage());
-                runOnUiThread(() -> callback.onDone(null)); // continue without it
+                Log.w(TAG, "uploadBusinessImage non-fatal: " + e.getMessage());
+                runOnUiThread(() -> callback.onDone(null));
             }
         }).start();
     }
 
-    // ── Submit form data to provider_applications table ───────────────────
+    // ── Submit form data — column names MATCH Supabase provider_applications table ──
     private void submitFormData(String firebaseUid, String idProofUrl, String bizImgUrl) {
+
+        // ── 1. Collect & validate all required fields before sending ──────
+        String userName     = text(etOwnerName);
+        String userEmail    = text(etEmail);
+        String businessName = text(etBusinessName);
+        String category     = text(actvServiceCategory);
+        String phone        = text(etPhone);
+        String address      = text(etAddress);
+        String city         = text(etCity);
+        String description  = text(etDescription);
+        int    experienceYrs = safeInt(text(etExperience));
+
+        // Hard guard — these are the required DB columns
+        if (TextUtils.isEmpty(firebaseUid)) {
+            showLoading(false);
+            Toast.makeText(this, "Session error — please log in again.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (TextUtils.isEmpty(userName)) {
+            showLoading(false);
+            tilOwnerName.setError("Owner name is required");
+            return;
+        }
+        if (TextUtils.isEmpty(userEmail)) {
+            showLoading(false);
+            tilEmail.setError("Email is required");
+            return;
+        }
+        if (TextUtils.isEmpty(businessName)) {
+            showLoading(false);
+            tilBusinessName.setError("Business name is required");
+            return;
+        }
+        if (TextUtils.isEmpty(category)) {
+            showLoading(false);
+            tilServiceCategory.setError("Please select a service category");
+            return;
+        }
+        if (!checkboxTerms.isChecked()) {
+            showLoading(false);
+            Toast.makeText(this, "You must accept the Terms & Conditions.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // ── 2. Build JSON payload with exact DB column names ──────────────
         try {
             JSONObject payload = new JSONObject();
-            payload.put("firebase_uid",      firebaseUid);
-            payload.put("business_name",     text(etBusinessName));
-            payload.put("owner_name",        text(etOwnerName));
-            payload.put("phone",             text(etPhone));
-            payload.put("email",             text(etEmail));
-            payload.put("service_category",  text(actvServiceCategory));
-            payload.put("years_experience",  safeInt(text(etExperience)));
-            payload.put("address",           text(etAddress));
-            payload.put("city",              text(etCity));
-            payload.put("description",       text(etDescription));
-            payload.put("status",            "pending");
-            payload.put("id_proof_url",      idProofUrl != null ? idProofUrl : "");
+
+            // Required columns
+            payload.put("firebase_uid",   firebaseUid);          // firebase_uid
+            payload.put("user_name",      userName);              // user_name
+            payload.put("user_email",     userEmail);             // user_email
+            payload.put("business_name",  businessName);          // business_name
+            payload.put("category",       category);              // category
+            payload.put("terms_accepted", true);                  // terms_accepted
+
+            // Optional but included columns
+            payload.put("phone",          phone);
+            payload.put("experience_yrs", experienceYrs);         // experience_yrs
+            payload.put("address",        address);
+            payload.put("city",           city);
+            payload.put("description",    description);
+            payload.put("status",         "pending");
+            payload.put("id_proof_url",   idProofUrl != null ? idProofUrl : "");
             if (bizImgUrl != null) payload.put("business_image_url", bizImgUrl);
 
-            RequestBody body = RequestBody.create(
-                    payload.toString(),
-                    MediaType.parse("application/json; charset=utf-8"));
+            Log.d(TAG, "Submitting payload → " + payload.toString(2));
+
+            // ── 3. Send to Supabase REST API ──────────────────────────────
+            String endpoint = SUPABASE_URL + "/rest/v1/provider_applications";
+            Log.d(TAG, "POST → " + endpoint);
 
             Request request = new Request.Builder()
-                    .url(SUPABASE_URL + "/rest/v1/provider_applications")
-                    .post(body)
+                    .url(endpoint)
+                    .post(RequestBody.create(
+                            payload.toString(),
+                            MediaType.parse("application/json; charset=utf-8")))
                     .addHeader("apikey",        SUPABASE_KEY)
                     .addHeader("Authorization", "Bearer " + SUPABASE_KEY)
                     .addHeader("Content-Type",  "application/json")
                     .addHeader("Prefer",        "return=minimal")
                     .build();
 
+            // ── 4. Handle response ────────────────────────────────────────
             http.newCall(request).enqueue(new Callback() {
+
                 @Override
                 public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    Log.e(TAG, "Submit failed: " + e.getMessage());
+                    Log.e(TAG, "Network failure submitting application: " + e.getMessage(), e);
                     runOnUiThread(() -> {
                         showLoading(false);
                         Toast.makeText(ProviderOnboardingActivity.this,
-                                "Network error. Please check connection and try again.",
+                                "Network error: " + e.getMessage()
+                                        + "\nCheck your internet connection and try again.",
                                 Toast.LENGTH_LONG).show();
                         if (checkboxTerms.isChecked()) startPulseAnimation();
                     });
                 }
 
                 @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    int code = response.code();
-                    String respBody = response.body() != null ? response.body().string() : "";
+                public void onResponse(@NonNull Call call, @NonNull Response response)
+                        throws IOException {
+                    int    code     = response.code();
+                    String respBody = response.body() != null ? response.body().string() : "(empty)";
                     response.close();
-                    Log.d(TAG, "Submit response: " + code + " body: " + respBody);
+
+                    // Always log the full server response for debugging
+                    Log.d(TAG, "DB submit → HTTP " + code);
+                    Log.d(TAG, "DB response body → " + respBody);
+
                     runOnUiThread(() -> {
                         showLoading(false);
-                        if (code == 201 || code == 200) {
+                        if (code == 200 || code == 201) {
+                            // ── 5. Success ────────────────────────────────
+                            Log.d(TAG, "Application submitted successfully.");
                             showSuccess();
                         } else {
+                            // ── 6. Error — show descriptive message ───────
+                            String userMsg = buildErrorMessage(code, respBody);
+                            Log.e(TAG, "Submission error: " + userMsg);
                             Toast.makeText(ProviderOnboardingActivity.this,
-                                    "Submission failed (code " + code + "). Please try again.",
-                                    Toast.LENGTH_LONG).show();
+                                    userMsg, Toast.LENGTH_LONG).show();
                             if (checkboxTerms.isChecked()) startPulseAnimation();
                         }
                     });
@@ -608,34 +672,65 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
             });
 
         } catch (Exception e) {
-            Log.e(TAG, "JSON build error: " + e.getMessage());
+            Log.e(TAG, "JSON build / submit error: " + e.getMessage(), e);
             showLoading(false);
-            Toast.makeText(this, "Unexpected error. Please try again.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,
+                    "Unexpected error building request. Please try again.",
+                    Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /** Turns an HTTP error code + raw Supabase body into a user-friendly message. */
+    private String buildErrorMessage(int code, String rawBody) {
+        // Try to extract Supabase "message" field from JSON error body
+        String serverMsg = "";
+        try {
+            JSONObject err = new JSONObject(rawBody);
+            if (err.has("message"))   serverMsg = err.getString("message");
+            else if (err.has("hint")) serverMsg = err.getString("hint");
+            else if (err.has("details")) serverMsg = err.getString("details");
+        } catch (Exception ignored) {
+            serverMsg = rawBody;
+        }
+
+        switch (code) {
+            case 400:
+                return "Bad request (400). Check all fields match DB columns.\n" + serverMsg;
+            case 401:
+                return "Unauthorised (401). Invalid API key.\n" + serverMsg;
+            case 403:
+                return "Forbidden (403). Check Supabase RLS policies.\n" + serverMsg;
+            case 404:
+                return "Table not found (404). Check table name 'provider_applications'.\n" + serverMsg;
+            case 409:
+                return "Conflict (409). Application may already exist.\n" + serverMsg;
+            case 422:
+                return "Validation error (422).\n" + serverMsg;
+            case 500:
+                return "Server error (500). Please try again later.\n" + serverMsg;
+            default:
+                return "Submission failed (HTTP " + code + ").\n" + serverMsg;
         }
     }
 
     // ── Success Screen ────────────────────────────────────────────────────
     private void showSuccess() {
         onboardingScroll.animate()
-                .alpha(0f).translationY(-30f)
-                .setDuration(300).setInterpolator(new DecelerateInterpolator())
+                .alpha(0f).translationY(-30f).setDuration(300)
+                .setInterpolator(new DecelerateInterpolator())
                 .withEndAction(() -> {
                     onboardingScroll.setVisibility(View.GONE);
                     successOverlay.setVisibility(View.VISIBLE);
                     successOverlay.setAlpha(0f);
                     successOverlay.setTranslationY(40f);
-                    successOverlay.animate()
-                            .alpha(1f).translationY(0f)
-                            .setDuration(400).setInterpolator(new DecelerateInterpolator())
-                            .start();
+                    successOverlay.animate().alpha(1f).translationY(0f)
+                            .setDuration(400).setInterpolator(new DecelerateInterpolator()).start();
                     if (successIconFrame != null) {
                         successIconFrame.setScaleX(0f);
                         successIconFrame.setScaleY(0f);
-                        successIconFrame.animate()
-                                .scaleX(1f).scaleY(1f)
+                        successIconFrame.animate().scaleX(1f).scaleY(1f)
                                 .setStartDelay(200).setDuration(500)
-                                .setInterpolator(new OvershootInterpolator(1.5f))
-                                .start();
+                                .setInterpolator(new OvershootInterpolator(1.5f)).start();
                     }
                 }).start();
 
@@ -687,23 +782,21 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
 
     private String getMimeType(String ext) {
         switch (ext) {
-            case "pdf":  return "application/pdf";
-            case "png":  return "image/png";
-            default:     return "image/jpeg";
+            case "pdf": return "application/pdf";
+            case "png": return "image/png";
+            default:    return "image/jpeg";
         }
     }
 
     private byte[] readBytes(Uri uri) {
         try (InputStream is = getContentResolver().openInputStream(uri)) {
             if (is == null) return null;
-            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
-            byte[] data = new byte[4096];
-            int nRead;
-            while ((nRead = is.read(data, 0, data.length)) != -1) {
-                buffer.write(data, 0, nRead);
-            }
-            buffer.flush();
-            return buffer.toByteArray();
+            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+            byte[] data = new byte[8192];
+            int n;
+            while ((n = is.read(data)) != -1) buf.write(data, 0, n);
+            buf.flush();
+            return buf.toByteArray();
         } catch (Exception e) {
             Log.w(TAG, "readBytes failed: " + e.getMessage());
             return null;
@@ -721,9 +814,6 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         stopPulseAnimation();
     }
 
-    // ── Upload callback interface ─────────────────────────────────────────
-    interface UploadCallback {
-        void onDone(String url);
-    }
+    interface UploadCallback { void onDone(String url); }
 }
 
