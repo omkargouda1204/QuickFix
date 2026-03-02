@@ -233,7 +233,11 @@ public class ProviderApplicationActivity extends AppCompatActivity {
 
             ProviderApplicationRepository.submitApplication(
                     uid, name, email, phone,
-                    businessName, category, description, city, experience,
+                    businessName, category, description,
+                    "",   // address (not collected separately in this form)
+                    city, experience,
+                    null, // businessImageUrl
+                    null, // idProofUrl
                     new ProviderApplicationRepository.Callback() {
                         @Override
                         public void onSuccess() {

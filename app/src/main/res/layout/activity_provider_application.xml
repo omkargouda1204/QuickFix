@@ -102,7 +102,7 @@
                         app:boxCornerRadiusTopEnd="12dp"
                         app:boxCornerRadiusBottomStart="12dp"
                         app:boxCornerRadiusBottomEnd="12dp"
-                        app:hintText="Business Name *">
+                        android:hint="Business Name *">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etBusinessName"
@@ -126,7 +126,7 @@
                         app:boxCornerRadiusTopEnd="12dp"
                         app:boxCornerRadiusBottomStart="12dp"
                         app:boxCornerRadiusBottomEnd="12dp"
-                        app:hintText="Owner / Your Full Name *">
+                        android:hint="Owner / Your Full Name *">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etOwnerName"
@@ -150,7 +150,7 @@
                         app:boxCornerRadiusTopEnd="12dp"
                         app:boxCornerRadiusBottomStart="12dp"
                         app:boxCornerRadiusBottomEnd="12dp"
-                        app:hintText="Phone Number *">
+                        android:hint="Phone Number *">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etPhone"
@@ -174,7 +174,7 @@
                         app:boxCornerRadiusTopEnd="12dp"
                         app:boxCornerRadiusBottomStart="12dp"
                         app:boxCornerRadiusBottomEnd="12dp"
-                        app:hintText="Email Address *">
+                        android:hint="Email Address *">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etEmail"
@@ -226,7 +226,7 @@
                         app:boxCornerRadiusTopEnd="12dp"
                         app:boxCornerRadiusBottomStart="12dp"
                         app:boxCornerRadiusBottomEnd="12dp"
-                        app:hintText="Service Category *">
+                        android:hint="Service Category *">
 
                         <AutoCompleteTextView
                             android:id="@+id/spinnerCategory"
@@ -252,7 +252,7 @@
                         app:boxCornerRadiusTopEnd="12dp"
                         app:boxCornerRadiusBottomStart="12dp"
                         app:boxCornerRadiusBottomEnd="12dp"
-                        app:hintText="City *">
+                        android:hint="City *">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etCity"
@@ -276,7 +276,7 @@
                         app:boxCornerRadiusBottomStart="12dp"
                         app:boxCornerRadiusBottomEnd="12dp"
                         app:suffixText="years"
-                        app:hintText="Years of Experience *">
+                        android:hint="Years of Experience *">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etExperience"
@@ -300,7 +300,7 @@
                         app:boxCornerRadiusBottomEnd="12dp"
                         app:counterEnabled="true"
                         app:counterMaxLength="300"
-                        app:hintText="Business Description *">
+                        android:hint="Business Description *">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etDescription"

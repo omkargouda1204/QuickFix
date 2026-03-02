@@ -29,6 +29,7 @@ public class ProviderApplicationAdapter
     public interface OnActionListener {
         void onApprove(ProviderApplication application);
         void onReject(ProviderApplication application);
+        void onViewDetails(ProviderApplication application);
     }
 
     private final Context context;
@@ -85,7 +86,7 @@ public class ProviderApplicationAdapter
 
         final TextView tvBusinessName, tvOwnerName, tvCategory,
                 tvCity, tvExperience, tvDate, tvStatus;
-        final MaterialButton btnApprove, btnReject;
+        final MaterialButton btnApprove, btnReject, btnDetails;
         final MaterialCardView card;
 
         ViewHolder(@NonNull View itemView) {
@@ -100,6 +101,7 @@ public class ProviderApplicationAdapter
             tvStatus       = itemView.findViewById(R.id.tvStatus);
             btnApprove     = itemView.findViewById(R.id.btnApprove);
             btnReject      = itemView.findViewById(R.id.btnReject);
+            btnDetails     = itemView.findViewById(R.id.btnDetails);
         }
 
         void bind(ProviderApplication app) {
@@ -136,14 +138,19 @@ public class ProviderApplicationAdapter
             boolean isPending = "pending".equals(status);
             btnApprove.setEnabled(isPending);
             btnReject.setEnabled(isPending);
+            btnDetails.setEnabled(!isPending);
             btnApprove.setAlpha(isPending ? 1f : 0.4f);
             btnReject.setAlpha(isPending ? 1f : 0.4f);
+            btnDetails.setAlpha(!isPending ? 1f : 0.4f);
 
             btnApprove.setOnClickListener(v -> {
                 if (listener != null) listener.onApprove(app);
             });
             btnReject.setOnClickListener(v -> {
                 if (listener != null) listener.onReject(app);
+            });
+            btnDetails.setOnClickListener(v -> {
+                if (listener != null) listener.onViewDetails(app);
             });
         }
 

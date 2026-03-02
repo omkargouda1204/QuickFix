@@ -46,6 +46,14 @@
     <string name="otp_sent">OTP sent to your email</string>
     <string name="password_reset_success">Password reset successful</string>
 
+    <!-- Provider Approval Strings -->
+    <string name="approve_success">Provider application approved successfully</string>
+    <string name="reject_success">Provider application rejected</string>
+    <string name="reject_dialog_title">Reject Application</string>
+    <string name="reject_dialog_message">Please provide a reason for rejection:</string>
+    <string name="reject_reason_hint">Enter rejection reason…</string>
+    <string name="error_reject_reason_empty">Rejection reason is required</string>
+
     <!-- Registration Screen -->
     <string name="registration_title">Create Account</string>
     <string name="welcome_new_user">Welcome to QuickFix!</string>
@@ -170,12 +178,6 @@
     <!-- Admin Provider Approval -->
     <string name="admin_approval_title">Provider Applications</string>
     <string name="admin_approval_subtitle">Review and manage provider requests</string>
-    <string name="reject_dialog_title">Reject Application</string>
-    <string name="reject_dialog_message">Please enter the reason for rejection:</string>
-    <string name="reject_reason_hint">Rejection reason…</string>
-    <string name="approve_success">Provider approved successfully!</string>
-    <string name="reject_success">Application rejected.</string>
-    <string name="error_reject_reason_empty">Please enter a rejection reason</string>
     <string name="status_pending">Pending</string>
     <string name="status_approved">Approved</string>
     <string name="status_rejected">Rejected</string>

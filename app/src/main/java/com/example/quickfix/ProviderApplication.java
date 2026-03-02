@@ -18,35 +18,35 @@ public class ProviderApplication {
     public String address;
     public String city;
     public String experience;
-    public String status;           // pending | approved | rejected
-    public String rejectionReason;
+    public String businessImageUrl;
+    public String idProofUrl;
+    public String status;
     public String submittedAt;
     public String reviewedAt;
     public String reviewedByUid;
-    public String businessImageUrl;
-    public String idProofUrl;
+    public String rejectionReason;
 
     /** Parse a single row returned by PostgREST */
     public static ProviderApplication fromJson(JSONObject o) {
-        ProviderApplication a = new ProviderApplication();
-        a.id              = o.optString("id");
-        a.firebaseUid     = o.optString("firebase_uid");
-        a.name            = o.optString("name");
-        a.email           = o.optString("email");
-        a.phone           = o.optString("phone");
-        a.businessName    = o.optString("business_name");
-        a.category        = o.optString("category");
-        a.description     = o.optString("description");
-        a.address         = o.optString("address");
-        a.city            = o.optString("city");
-        a.experience      = o.optString("experience");
-        a.status          = o.optString("status", "pending");
-        a.rejectionReason = o.optString("rejection_reason");
-        a.submittedAt     = o.optString("submitted_at");
-        a.reviewedAt      = o.optString("reviewed_at");
-        a.reviewedByUid   = o.optString("reviewed_by_uid");
-        a.businessImageUrl = o.optString("business_image_url");
-        a.idProofUrl       = o.optString("id_proof_url");
-        return a;
+        ProviderApplication app = new ProviderApplication();
+        app.id               = o.optString("id");
+        app.firebaseUid      = o.optString("firebase_uid");
+        app.name             = o.optString("name");
+        app.email            = o.optString("email");
+        app.phone            = o.optString("phone");
+        app.businessName     = o.optString("business_name");
+        app.category         = o.optString("category");
+        app.description      = o.optString("description");
+        app.address          = o.optString("address");
+        app.city             = o.optString("city");
+        app.experience       = o.optString("experience");
+        app.businessImageUrl = o.optString("business_image_url");
+        app.idProofUrl       = o.optString("id_proof_url");
+        app.status           = o.optString("status");
+        app.submittedAt      = o.optString("submitted_at");
+        app.reviewedAt       = o.optString("reviewed_at");
+        app.reviewedByUid    = o.optString("reviewed_by_uid");
+        app.rejectionReason  = o.optString("rejection_reason");
+        return app;
     }
 }

@@ -378,6 +378,34 @@ public class AdminProviderApprovalActivity extends AppCompatActivity
                 });
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    //  VIEW DETAILS ACTION
+    // ═══════════════════════════════════════════════════════════════════════
+    @Override
+    public void onViewDetails(ProviderApplication application) {
+        // TODO: Show details bottom sheet or dialog for the selected application
+        // For now, show a simple dialog with all details
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Application Details");
+        StringBuilder sb = new StringBuilder();
+        sb.append("Business: ").append(application.businessName).append("\n");
+        sb.append("Owner: ").append(application.name).append("\n");
+        sb.append("Email: ").append(application.email).append("\n");
+        sb.append("Phone: ").append(application.phone).append("\n");
+        sb.append("Category: ").append(application.category).append("\n");
+        sb.append("City: ").append(application.city).append("\n");
+        sb.append("Experience: ").append(application.experience).append("\n");
+        sb.append("Address: ").append(application.address).append("\n");
+        sb.append("Description: ").append(application.description).append("\n");
+        sb.append("Status: ").append(application.status).append("\n");
+        if (application.rejectionReason != null && !application.rejectionReason.isEmpty()) {
+            sb.append("Rejection Reason: ").append(application.rejectionReason).append("\n");
+        }
+        builder.setMessage(sb.toString());
+        builder.setPositiveButton("Close", null);
+        builder.show();
+    }
+
     // ── UI state helpers ──────────────────────────────────────────────────
     private void showLoading(boolean show) {
         progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
@@ -419,4 +447,3 @@ public class AdminProviderApprovalActivity extends AppCompatActivity
         finish();
     }
 }
-

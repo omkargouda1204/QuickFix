@@ -1,81 +1,341 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/home_bg"
-    android:orientation="vertical">
+    android:background="@color/home_bg">
 
-    <!-- Header -->
+    <!-- ═══ GRADIENT HEADER ═══ -->
     <LinearLayout
+        android:id="@+id/headerLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/primary"
-        android:gravity="center"
         android:orientation="vertical"
-        android:padding="16dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="User Management"
-            android:textColor="@color/white"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-    </LinearLayout>
-
-    <!-- Action Buttons -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="16dp"
-        android:orientation="horizontal"
-        android:gravity="center">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/refreshButton"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:layout_marginEnd="8dp"
-            android:text="Refresh"
-            android:textSize="12sp"
-            android:backgroundTint="@color/primary" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/suspendButton"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:layout_marginStart="4dp"
-            android:layout_marginEnd="4dp"
-            android:text="Suspend"
-            android:textSize="12sp"
-            android:backgroundTint="@color/text_secondary" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/deleteButton"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:text="Delete"
-            android:textSize="12sp"
-            android:backgroundTint="@color/error_red" />
-
-    </LinearLayout>
-
-    <!-- Users List -->
-    <ListView
-        android:id="@+id/userListView"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:background="@drawable/bg_user_mgmt_header"
         android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingBottom="16dp"
-        android:divider="@android:color/transparent"
-        android:dividerHeight="12dp" />
+        android:paddingEnd="12dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="24dp">
 
-</LinearLayout>
+        <!-- Title row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
+            <ImageButton
+                android:id="@+id/btnBack"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_arrow_back_white"
+                android:contentDescription="Back"
+                android:tint="@color/white"/>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="8dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="User Management"
+                    android:textColor="@color/white"
+                    android:textSize="22sp"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="View, manage and control all users"
+                    android:textColor="#CCE3FF"
+                    android:textSize="12sp"
+                    android:layout_marginTop="2dp"/>
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Search bar -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            app:boxBackgroundColor="#FFFFFF"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:boxStrokeColor="@android:color/transparent"
+            app:startIconDrawable="@drawable/ic_search"
+            app:startIconTint="#9E9E9E">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etSearch"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:hint="Search name, email or phone…"
+                android:textColor="#000000"
+                android:textColorHint="#9E9E9E"
+                android:textSize="13sp"
+                android:imeOptions="actionSearch"
+                android:inputType="text"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+    </LinearLayout>
+
+    <!-- ═══ SCROLLABLE CONTENT (below header) ═══ -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipeRefresh"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="168dp">
+
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingBottom="32dp">
+
+                <!-- ═══ STATS SECTION ═══ -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="20dp"
+                    android:layout_marginTop="16dp"
+                    android:layout_marginBottom="10dp"
+                    android:text="Overview"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold"/>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="12dp">
+
+                    <!-- Total -->
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical" android:gravity="center"
+                        android:background="@drawable/bg_stat_blue" android:padding="12dp"
+                        android:layout_marginHorizontal="4dp" android:elevation="3dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="👥" android:textSize="20sp"/>
+                        <TextView android:id="@+id/tvStatTotal" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:text="—"
+                            android:textColor="@color/white" android:textSize="20sp"
+                            android:textStyle="bold" android:layout_marginTop="4dp"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Total" android:textColor="#CCE3FF" android:textSize="10sp"/>
+                    </LinearLayout>
+
+                    <!-- Providers -->
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical" android:gravity="center"
+                        android:background="@drawable/bg_stat_green" android:padding="12dp"
+                        android:layout_marginHorizontal="4dp" android:elevation="3dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="🛠️" android:textSize="20sp"/>
+                        <TextView android:id="@+id/tvStatProviders" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:text="—"
+                            android:textColor="@color/white" android:textSize="20sp"
+                            android:textStyle="bold" android:layout_marginTop="4dp"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Providers" android:textColor="#C8E6C9" android:textSize="10sp"/>
+                    </LinearLayout>
+
+                    <!-- Admins -->
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical" android:gravity="center"
+                        android:background="@drawable/bg_stat_purple" android:padding="12dp"
+                        android:layout_marginHorizontal="4dp" android:elevation="3dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="🛡️" android:textSize="20sp"/>
+                        <TextView android:id="@+id/tvStatAdmins" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:text="—"
+                            android:textColor="@color/white" android:textSize="20sp"
+                            android:textStyle="bold" android:layout_marginTop="4dp"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Admins" android:textColor="#E1BEE7" android:textSize="10sp"/>
+                    </LinearLayout>
+
+                    <!-- Verified -->
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical" android:gravity="center"
+                        android:background="@drawable/bg_stat_orange" android:padding="12dp"
+                        android:layout_marginHorizontal="4dp" android:elevation="3dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="✅" android:textSize="20sp"/>
+                        <TextView android:id="@+id/tvStatVerified" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:text="—"
+                            android:textColor="@color/white" android:textSize="20sp"
+                            android:textStyle="bold" android:layout_marginTop="4dp"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Verified" android:textColor="#FFE0B2" android:textSize="10sp"/>
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <!-- ═══ FILTER CHIPS ═══ -->
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:scrollbars="none">
+
+                    <com.google.android.material.chip.ChipGroup
+                        android:id="@+id/chipGroupFilter"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="16dp"
+                        app:singleSelection="true"
+                        app:selectionRequired="true">
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipAll"
+                            style="@style/Widget.MaterialComponents.Chip.Filter"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="All" android:checked="true"/>
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipUsers"
+                            style="@style/Widget.MaterialComponents.Chip.Filter"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Users"/>
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipProviders"
+                            style="@style/Widget.MaterialComponents.Chip.Filter"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Providers"/>
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipAdmins"
+                            style="@style/Widget.MaterialComponents.Chip.Filter"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Admins"/>
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipVerified"
+                            style="@style/Widget.MaterialComponents.Chip.Filter"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Verified"/>
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipUnverified"
+                            style="@style/Widget.MaterialComponents.Chip.Filter"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Unverified"/>
+
+                    </com.google.android.material.chip.ChipGroup>
+                </HorizontalScrollView>
+
+                <!-- ═══ COUNT + SORT ROW ═══ -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="16dp"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginBottom="4dp">
+
+                    <TextView
+                        android:id="@+id/tvUserCount"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Loading…"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"/>
+
+                    <Spinner
+                        android:id="@+id/spinnerSort"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@null"/>
+
+                </LinearLayout>
+
+                <!-- ═══ SHIMMER LOADING STATE ═══ -->
+                <LinearLayout
+                    android:id="@+id/loadingLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="visible">
+                    <include layout="@layout/item_user_shimmer"/>
+                    <include layout="@layout/item_user_shimmer"/>
+                    <include layout="@layout/item_user_shimmer"/>
+                </LinearLayout>
+
+                <!-- ═══ ERROR STATE ═══ -->
+                <LinearLayout
+                    android:id="@+id/errorLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:paddingVertical="48dp"
+                    android:visibility="gone">
+
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="⚠️" android:textSize="48sp"/>
+                    <TextView android:id="@+id/tvErrorMsg" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:layout_marginTop="12dp"
+                        android:text="Failed to load users" android:gravity="center"
+                        android:textColor="@color/text_primary" android:textSize="15sp"
+                        android:textStyle="bold"/>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnRetry"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp" android:text="Retry"
+                        app:cornerRadius="12dp" app:backgroundTint="@color/primary"/>
+                </LinearLayout>
+
+                <!-- ═══ EMPTY STATE ═══ -->
+                <LinearLayout
+                    android:id="@+id/emptyLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:paddingVertical="48dp"
+                    android:visibility="gone">
+
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="👤" android:textSize="48sp"/>
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp" android:text="No users found"
+                        android:textColor="@color/text_primary" android:textSize="16sp"
+                        android:textStyle="bold"/>
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp" android:text="Try a different filter or search"
+                        android:textColor="@color/text_secondary" android:textSize="13sp"/>
+                </LinearLayout>
+
+                <!-- ═══ USER RECYCLERVIEW ═══ -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerUsers"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"
+                    android:paddingTop="4dp"
+                    android:visibility="gone"/>
+
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

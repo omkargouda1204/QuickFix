@@ -469,5 +469,37 @@ public class ProviderApplicationRepository {
             }
         }).start();
     }
-}
 
+    // ═══════════════════════════════════════════════════════════════════════
+    //  FETCH PENDING APPLICATIONS (admin)
+    // ═══════════════════════════════════════════════════════════════════════
+    public static void fetchPendingApplications(ApplicationListCallback cb) {
+        new Thread(() -> {
+            try {
+                String url = SUPABASE_URL + "/rest/v1/provider_applications"
+                        + "?select=*&status=eq.pending&order=created_at.desc";
+                try (Response r = HTTP.newCall(new Request.Builder().url(url)
+                        .get()
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept",        "application/json")
+                        .build()).execute()) {
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    if (r.code() == 200) {
+                        JSONArray arr = new JSONArray(body);
+                        List<ProviderApplication> list = new ArrayList<>();
+                        for (int i = 0; i < arr.length(); i++)
+                            list.add(ProviderApplication.fromJson(arr.getJSONObject(i)));
+                        MAIN.post(() -> cb.onSuccess(list));
+                    } else {
+                        MAIN.post(() -> cb.onError("HTTP " + r.code() + ": " + body));
+                    }
+                }
+            } catch (Exception e) {
+                MAIN.post(() -> cb.onError("Error: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    // Approve/Reject methods to be added...
+}
