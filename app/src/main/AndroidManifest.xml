@@ -68,6 +68,13 @@
             android:parentActivityName=".MainActivity"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Provider Application — "Become a Service Provider" form -->
+        <activity
+            android:name=".ProviderApplicationActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- Provider Dashboard (shown when role = provider) -->
         <activity
             android:name=".ProviderDashboardActivity"
