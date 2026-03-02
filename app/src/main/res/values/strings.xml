@@ -150,4 +150,33 @@
     <string name="onboarding_screen_title">Become a Service Provider</string>
     <string name="onboarding_screen_subtitle">List your business for free</string>
     <string name="onboarding_terms_body_full">By registering as a service provider on QuickFix, you agree to the following:\n\n1. Genuine Services\n   • You must deliver genuine, high-quality services as advertised.\n   • Misrepresentation of services may result in account suspension.\n\n2. Service Quality\n   • You are fully responsible for the quality of work delivered.\n   • QuickFix is not liable for disputes between providers and customers.\n\n3. Commission Rules\n   • QuickFix may apply a platform commission on completed bookings.\n   • Commission rates will be communicated upon approval.\n\n4. Account Violations\n   • Fraudulent activity, fake reviews, or policy violations may lead to permanent removal.\n\n5. Privacy &amp; Data\n   • You must respect the privacy of customer data at all times.\n   • Do not share, sell, or misuse customer information.\n\n6. Emergency Misuse\n   • Misuse of emergency service flags will lead to immediate removal.\n\n7. Liability\n   • QuickFix platform is not liable for service disputes, damages, or losses.\n   • You accept full responsibility for your services and conduct.\n\nFull terms available at quickfix.app/terms</string>
+
+    <!-- Provider Application Screen -->
+    <string name="provider_app_title">Become a Service Provider</string>
+    <string name="provider_app_subtitle">Start earning with QuickFix</string>
+    <string name="provider_terms_full">PROVIDER TERMS &amp; CONDITIONS\n\nEffective Date: January 1, 2025\n\nBy submitting a provider application on QuickFix, you agree to the following terms:\n\n1. ELIGIBILITY\n   • You must be 18 years or older.\n   • You must possess the necessary skills and qualifications for the service category you apply for.\n   • You must provide accurate and truthful information in this application.\n\n2. SERVICE STANDARDS\n   • You must deliver services as described and agreed upon with customers.\n   • All work must meet professional quality standards.\n   • You must arrive on time and communicate proactively with customers.\n   • Any misrepresentation of your services may result in account suspension.\n\n3. PLATFORM COMMISSION\n   • QuickFix charges a platform commission on completed bookings.\n   • Commission rates will be communicated upon approval of your application.\n   • You agree to accept the commission structure in force at the time of booking.\n\n4. CUSTOMER DATA &amp; PRIVACY\n   • You must respect the privacy of all customer information shared with you.\n   • Customer contact details must only be used for service delivery purposes.\n   • Sharing, selling, or misusing customer data is strictly prohibited.\n\n5. PROFESSIONAL CONDUCT\n   • You must maintain professional and respectful conduct at all times.\n   • Harassment, discrimination, or abuse toward customers is grounds for immediate termination.\n   • You must not solicit customers to transact outside the QuickFix platform.\n\n6. ACCOUNT VIOLATIONS\n   • Fraudulent activity, fake reviews, or any form of deception will lead to permanent removal.\n   • Repeated complaints or low ratings may result in suspension pending review.\n   • QuickFix reserves the right to remove any provider listing that violates these guidelines.\n\n7. SAFETY &amp; LIABILITY\n   • You are responsible for your own safety and the safety of your tools and equipment.\n   • QuickFix is not liable for injuries, damages, or losses arising from your services.\n   • You agree to indemnify QuickFix against any claims arising from your conduct.\n\n8. MODIFICATIONS\n   • QuickFix may update these terms at any time.\n   • Continued use of the platform after changes constitutes acceptance of the new terms.\n\n9. TERMINATION\n   • Either party may terminate the provider relationship at any time.\n   • QuickFix may suspend or terminate accounts that violate these terms without prior notice.\n\nBy checking the agreement box, you confirm that you have read, understood, and agree to be bound by these Terms and Conditions.\n\nFor questions, contact: support@quickfix.app\nFull terms: quickfix.app/terms</string>
+
+    <!-- Provider Application Validation -->
+    <string name="error_business_name_required">Business name is required</string>
+    <string name="error_owner_name_required">Owner name is required</string>
+    <string name="error_category_required">Please select a service category</string>
+    <string name="error_city_required">City is required</string>
+    <string name="error_experience_required">Years of experience is required</string>
+    <string name="error_description_required">Business description is required</string>
+    <string name="error_terms_not_accepted">Please read and accept the Terms &amp; Conditions</string>
+    <string name="error_duplicate_application">You already have a pending or approved application</string>
+    <string name="error_network_retry">Network error. Please check your connection and try again.</string>
+
+    <!-- Admin Provider Approval -->
+    <string name="admin_approval_title">Provider Applications</string>
+    <string name="admin_approval_subtitle">Review and manage provider requests</string>
+    <string name="reject_dialog_title">Reject Application</string>
+    <string name="reject_dialog_message">Please enter the reason for rejection:</string>
+    <string name="reject_reason_hint">Rejection reason…</string>
+    <string name="approve_success">Provider approved successfully!</string>
+    <string name="reject_success">Application rejected.</string>
+    <string name="error_reject_reason_empty">Please enter a rejection reason</string>
+    <string name="status_pending">Pending</string>
+    <string name="status_approved">Approved</string>
+    <string name="status_rejected">Rejected</string>
 </resources>
