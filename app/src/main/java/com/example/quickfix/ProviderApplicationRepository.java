@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
-import okhttp3.Call;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -24,13 +23,23 @@ import okhttp3.Response;
 
 /**
  * ProviderApplicationRepository — All Supabase REST calls for the
- * Provider Application flow.  Follows the same OkHttp / PostgREST
- * pattern used throughout SupabaseClient.
+ * Provider Application flow.
  *
  * Tables involved:
  *   • provider_applications  — submission, status updates
  *   • provider_profiles       — created when admin approves
  *   • users                   — is_service_provider patched on approve
+ *
+ * SQL to add columns (run once in Supabase SQL editor):
+ *   ALTER TABLE provider_applications
+ *     ADD COLUMN IF NOT EXISTS address TEXT,
+ *     ADD COLUMN IF NOT EXISTS business_image_url TEXT,
+ *     ADD COLUMN IF NOT EXISTS id_proof_url TEXT;
+ *
+ *   ALTER TABLE provider_profiles
+ *     ADD COLUMN IF NOT EXISTS address TEXT,
+ *     ADD COLUMN IF NOT EXISTS business_image_url TEXT,
+ *     ADD COLUMN IF NOT EXISTS id_proof_url TEXT;
  */
 public class ProviderApplicationRepository {
 
@@ -66,7 +75,8 @@ public class ProviderApplicationRepository {
     // ═══════════════════════════════════════════════════════════════════════
     /**
      * Insert a new row in provider_applications.
-     * Checks for duplicate submission first (same firebase_uid + pending/approved).
+     * Checks for duplicate (pending/approved) first.
+     * Includes address, businessImageUrl, idProofUrl.
      */
     public static void submitApplication(
             String firebaseUid,
@@ -76,8 +86,11 @@ public class ProviderApplicationRepository {
             String businessName,
             String category,
             String description,
+            String address,
             String city,
             String experience,
+            String businessImageUrl,
+            String idProofUrl,
             Callback callback) {
 
         new Thread(() -> {
@@ -112,17 +125,22 @@ public class ProviderApplicationRepository {
                         "yyyy-MM-dd'T'HH:mm:ss", Locale.US).format(new Date());
 
                 JSONObject body = new JSONObject();
-                body.put("firebase_uid",  firebaseUid);
-                body.put("name",          name.trim());
-                body.put("email",         email.trim());
-                body.put("phone",         phone.trim());
-                body.put("business_name", businessName.trim());
-                body.put("category",      category.trim());
-                body.put("description",   description.trim());
-                body.put("city",          city.trim());
-                body.put("experience",    experience.trim());
-                body.put("status",        "pending");
-                body.put("submitted_at",  timestamp);
+                body.put("firebase_uid",        firebaseUid);
+                body.put("name",                name.trim());
+                body.put("email",               email.trim());
+                body.put("phone",               phone.trim());
+                body.put("business_name",       businessName.trim());
+                body.put("category",            category.trim());
+                body.put("description",         description.trim());
+                body.put("address",             address != null ? address.trim() : "");
+                body.put("city",                city.trim());
+                body.put("experience",          experience.trim());
+                body.put("status",              "pending");
+                body.put("submitted_at",        timestamp);
+                if (businessImageUrl != null && !businessImageUrl.isEmpty())
+                    body.put("business_image_url", businessImageUrl);
+                if (idProofUrl != null && !idProofUrl.isEmpty())
+                    body.put("id_proof_url", idProofUrl);
 
                 Request insertReq = new Request.Builder()
                         .url(SUPABASE_URL + "/rest/v1/provider_applications")
@@ -239,19 +257,24 @@ public class ProviderApplicationRepository {
 
                 // ── Step 2: Insert provider_profiles ─────────────────────
                 JSONObject profile = new JSONObject();
-                profile.put("firebase_uid",   app.firebaseUid);
-                profile.put("application_id", app.id);
-                profile.put("business_name",  app.businessName);
-                profile.put("owner_name",     app.name);
-                profile.put("phone",          app.phone);
-                profile.put("email",          app.email);
-                profile.put("category",       app.category);
-                profile.put("city",           app.city);
-                profile.put("experience",     app.experience);
-                profile.put("description",    app.description);
-                profile.put("is_active",      true);
-                profile.put("is_approved",    true);
-                profile.put("approved_at",    timestamp);
+                profile.put("firebase_uid",       app.firebaseUid);
+                profile.put("application_id",     app.id);
+                profile.put("business_name",      app.businessName);
+                profile.put("owner_name",         app.name);
+                profile.put("phone",              app.phone);
+                profile.put("email",              app.email);
+                profile.put("category",           app.category);
+                profile.put("city",               app.city);
+                profile.put("address",            app.address != null ? app.address : "");
+                profile.put("experience",         app.experience);
+                profile.put("description",        app.description);
+                profile.put("is_active",          true);
+                profile.put("is_approved",        true);
+                profile.put("approved_at",        timestamp);
+                if (app.businessImageUrl != null && !app.businessImageUrl.isEmpty())
+                    profile.put("business_image_url", app.businessImageUrl);
+                if (app.idProofUrl != null && !app.idProofUrl.isEmpty())
+                    profile.put("id_proof_url", app.idProofUrl);
 
                 Request step2 = new Request.Builder()
                         .url(SUPABASE_URL + "/rest/v1/provider_profiles")
@@ -268,7 +291,6 @@ public class ProviderApplicationRepository {
                     if (c2 != 200 && c2 != 201 && c2 != 204) {
                         String err = r2.body() != null ? r2.body().string() : "";
                         Log.w(TAG, "provider_profiles insert warning (continuing): " + err);
-                        // Non-fatal: still proceed to update user role
                     }
                 }
 
@@ -353,9 +375,16 @@ public class ProviderApplicationRepository {
 
     // ═══════════════════════════════════════════════════════════════════════
     //  CHECK EXISTING APPLICATION STATUS (for user)
+    //  Returns the latest application row for the user (all fields).
     // ═══════════════════════════════════════════════════════════════════════
     public interface StatusCallback {
         void onFound(String status);
+        void onNotFound();
+        void onError(String message);
+    }
+
+    public interface ApplicationCallback {
+        void onFound(ProviderApplication application);
         void onNotFound();
         void onError(String message);
     }
@@ -385,6 +414,47 @@ public class ProviderApplicationRepository {
                         if (arr.length() > 0) {
                             String status = arr.getJSONObject(0).optString("status", "pending");
                             MAIN.post(() -> callback.onFound(status));
+                        } else {
+                            MAIN.post(callback::onNotFound);
+                        }
+                    } else {
+                        MAIN.post(() -> callback.onError("HTTP " + code));
+                    }
+                }
+            } catch (IOException e) {
+                MAIN.post(() -> callback.onError("NETWORK_ERROR"));
+            } catch (Exception e) {
+                MAIN.post(() -> callback.onError(e.getMessage()));
+            }
+        }).start();
+    }
+
+    /** Fetch the full latest application row for a user (for status screen) */
+    public static void fetchLatestApplication(String firebaseUid, ApplicationCallback callback) {
+        new Thread(() -> {
+            try {
+                String url = SUPABASE_URL
+                        + "/rest/v1/provider_applications"
+                        + "?firebase_uid=eq." + firebaseUid
+                        + "&order=submitted_at.desc"
+                        + "&limit=1";
+
+                Request req = new Request.Builder()
+                        .url(url).get()
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept",        "application/json")
+                        .build();
+
+                try (Response r = HTTP.newCall(req).execute()) {
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    int code = r.code();
+                    Log.d(TAG, "fetchLatestApplication HTTP " + code);
+                    if (code == 200) {
+                        JSONArray arr = new JSONArray(body);
+                        if (arr.length() > 0) {
+                            ProviderApplication app = ProviderApplication.fromJson(arr.getJSONObject(0));
+                            MAIN.post(() -> callback.onFound(app));
                         } else {
                             MAIN.post(callback::onNotFound);
                         }

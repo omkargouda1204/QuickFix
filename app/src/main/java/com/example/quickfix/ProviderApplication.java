@@ -15,6 +15,7 @@ public class ProviderApplication {
     public String businessName;
     public String category;
     public String description;
+    public String address;
     public String city;
     public String experience;
     public String status;           // pending | approved | rejected
@@ -22,6 +23,8 @@ public class ProviderApplication {
     public String submittedAt;
     public String reviewedAt;
     public String reviewedByUid;
+    public String businessImageUrl;
+    public String idProofUrl;
 
     /** Parse a single row returned by PostgREST */
     public static ProviderApplication fromJson(JSONObject o) {
@@ -34,6 +37,7 @@ public class ProviderApplication {
         a.businessName    = o.optString("business_name");
         a.category        = o.optString("category");
         a.description     = o.optString("description");
+        a.address         = o.optString("address");
         a.city            = o.optString("city");
         a.experience      = o.optString("experience");
         a.status          = o.optString("status", "pending");
@@ -41,7 +45,8 @@ public class ProviderApplication {
         a.submittedAt     = o.optString("submitted_at");
         a.reviewedAt      = o.optString("reviewed_at");
         a.reviewedByUid   = o.optString("reviewed_by_uid");
+        a.businessImageUrl = o.optString("business_image_url");
+        a.idProofUrl       = o.optString("id_proof_url");
         return a;
     }
 }
-
