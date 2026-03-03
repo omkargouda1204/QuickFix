@@ -98,9 +98,21 @@
             android:exported="false"
             android:screenOrientation="portrait" />
 
-        <!-- Business Approval Activity -->
+        <!-- Business Approval Activity (redirects to AdminProviderApprovalActivity) -->
         <activity
             android:name=".BusinessApprovalActivity"
+            android:exported="false"
+            android:parentActivityName=".AdminDashboardActivity" />
+
+        <!-- Admin Provider Approval Activity — full management screen -->
+        <activity
+            android:name=".AdminProviderApprovalActivity"
+            android:exported="false"
+            android:parentActivityName=".AdminDashboardActivity" />
+
+        <!-- Provider Approval Activity (legacy) -->
+        <activity
+            android:name=".ProviderApprovalActivity"
             android:exported="false"
             android:parentActivityName=".AdminDashboardActivity" />
 

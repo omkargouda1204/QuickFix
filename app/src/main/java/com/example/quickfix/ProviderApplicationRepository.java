@@ -179,7 +179,7 @@ public class ProviderApplicationRepository {
         new Thread(() -> {
             try {
                 String url = SUPABASE_URL + "/rest/v1/provider_applications"
-                        + "?order=submitted_at.desc";
+                        + "?select=*&order=submitted_at.desc";
                 if (statusFilter != null && !statusFilter.isEmpty()
                         && !statusFilter.equalsIgnoreCase("all")) {
                     url += "&status=eq." + statusFilter;

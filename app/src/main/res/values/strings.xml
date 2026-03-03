@@ -53,6 +53,11 @@
     <string name="reject_dialog_message">Please provide a reason for rejection:</string>
     <string name="reject_reason_hint">Enter rejection reason…</string>
     <string name="error_reject_reason_empty">Rejection reason is required</string>
+    <string name="approval_details_title">Application Details</string>
+    <string name="approval_approve_btn">Approve</string>
+    <string name="approval_reject_btn">Reject</string>
+    <string name="approval_close_btn">Close</string>
+    <string name="approval_tap_to_view">Tap to view image</string>
 
     <!-- Registration Screen -->
     <string name="registration_title">Create Account</string>

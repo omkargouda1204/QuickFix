@@ -17,12 +17,8 @@ import com.google.android.material.card.MaterialCardView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
-/**
- * ProviderApplicationAdapter — RecyclerView adapter for the Admin Provider
- * Approval screen.  Displays each application as a MaterialCardView with
- * colour-coded status badge and Approve / Reject action buttons.
- */
 public class ProviderApplicationAdapter
         extends RecyclerView.Adapter<ProviderApplicationAdapter.ViewHolder> {
 
@@ -33,29 +29,28 @@ public class ProviderApplicationAdapter
     }
 
     private final Context context;
-    private final List<ProviderApplication> items;
+    private final List<ProviderApplication> items = new ArrayList<>();
     private OnActionListener listener;
 
     public ProviderApplicationAdapter(Context context) {
         this.context = context;
-        this.items   = new ArrayList<>();
     }
 
     public void setOnActionListener(OnActionListener listener) {
         this.listener = listener;
     }
 
-    /** Replace the whole dataset and refresh */
     public void setData(List<ProviderApplication> data) {
         items.clear();
         if (data != null) items.addAll(data);
         notifyDataSetChanged();
     }
 
-    /** Update a single item in-place after approve/reject */
     public void updateItem(ProviderApplication updated) {
+        if (updated == null || updated.id == null || updated.id.isEmpty()) return;
         for (int i = 0; i < items.size(); i++) {
-            if (items.get(i).id.equals(updated.id)) {
+            ProviderApplication item = items.get(i);
+            if (item != null && updated.id.equals(item.id)) {
                 items.set(i, updated);
                 notifyItemChanged(i);
                 return;
@@ -74,96 +69,108 @@ public class ProviderApplicationAdapter
     @Override
     public void onBindViewHolder(@NonNull ViewHolder h, int position) {
         ProviderApplication app = items.get(position);
-        h.bind(app);
+        if (app == null) return;
+        h.bindData(app, listener);
     }
 
     @Override
     public int getItemCount() { return items.size(); }
 
-    // ── ViewHolder ─────────────────────────────────────────────────────────
+    static class ViewHolder extends RecyclerView.ViewHolder {
 
-    class ViewHolder extends RecyclerView.ViewHolder {
-
-        final TextView tvBusinessName, tvOwnerName, tvCategory,
-                tvCity, tvExperience, tvDate, tvStatus;
-        final MaterialButton btnApprove, btnReject, btnDetails;
         final MaterialCardView card;
+        final TextView         tvBusinessName, tvOwnerName, tvCategory,
+                               tvCity, tvExperience, tvDate, tvStatus;
+        final MaterialButton   btnApprove, btnReject, btnDetails;
 
-        ViewHolder(@NonNull View itemView) {
-            super(itemView);
-            card          = itemView.findViewById(R.id.cardRoot);
-            tvBusinessName = itemView.findViewById(R.id.tvBusinessName);
-            tvOwnerName    = itemView.findViewById(R.id.tvOwnerName);
-            tvCategory     = itemView.findViewById(R.id.tvCategory);
-            tvCity         = itemView.findViewById(R.id.tvCity);
-            tvExperience   = itemView.findViewById(R.id.tvExperience);
-            tvDate         = itemView.findViewById(R.id.tvDate);
-            tvStatus       = itemView.findViewById(R.id.tvStatus);
-            btnApprove     = itemView.findViewById(R.id.btnApprove);
-            btnReject      = itemView.findViewById(R.id.btnReject);
-            btnDetails     = itemView.findViewById(R.id.btnDetails);
+        ViewHolder(@NonNull View v) {
+            super(v);
+            card           = v.findViewById(R.id.cardRoot);
+            tvBusinessName = v.findViewById(R.id.tvBusinessName);
+            tvOwnerName    = v.findViewById(R.id.tvOwnerName);
+            tvCategory     = v.findViewById(R.id.tvCategory);
+            tvCity         = v.findViewById(R.id.tvCity);
+            tvExperience   = v.findViewById(R.id.tvExperience);
+            tvDate         = v.findViewById(R.id.tvDate);
+            tvStatus       = v.findViewById(R.id.tvStatus);
+            btnApprove     = v.findViewById(R.id.btnApprove);
+            btnReject      = v.findViewById(R.id.btnReject);
+            btnDetails     = v.findViewById(R.id.btnDetails);
         }
 
-        void bind(ProviderApplication app) {
-            tvBusinessName.setText(app.businessName);
-            tvOwnerName.setText("Owner: " + app.name);
-            tvCategory.setText(app.category);
-            tvCity.setText("📍 " + app.city);
-            tvExperience.setText(app.experience + " yrs exp");
+        void bindData(@NonNull ProviderApplication app, OnActionListener listener) {
+            set(tvBusinessName, app.businessName, "-");
+            set(tvOwnerName,    "Owner: " + str(app.name));
+            set(tvCategory,     str(app.category));
+            set(tvCity,         str(app.city));
+            set(tvExperience,   expText(app.experience));
+            set(tvDate,         "Applied: " + fmtDate(app.submittedAt));
 
-            // Format submitted date (ISO → dd MMM yyyy)
-            tvDate.setText("Applied: " + formatDate(app.submittedAt));
-
-            // Status badge
-            String status = app.status != null ? app.status.toLowerCase() : "pending";
-            switch (status) {
-                case "approved":
-                    tvStatus.setText("✅ Approved");
-                    tvStatus.setBackgroundResource(R.drawable.bg_status_approved);
-                    tvStatus.setTextColor(Color.parseColor("#1B5E20"));
-                    break;
-                case "rejected":
-                    tvStatus.setText("❌ Rejected");
-                    tvStatus.setBackgroundResource(R.drawable.bg_status_rejected);
-                    tvStatus.setTextColor(Color.parseColor("#B71C1C"));
-                    break;
-                default:
-                    tvStatus.setText("⏳ Pending");
-                    tvStatus.setBackgroundResource(R.drawable.bg_status_pending);
-                    tvStatus.setTextColor(Color.parseColor("#E65100"));
-                    break;
+            String status = (app.status != null) ? app.status.toLowerCase(Locale.US) : "pending";
+            if (tvStatus != null) {
+                switch (status) {
+                    case "approved":
+                        tvStatus.setText("Approved");
+                        tvStatus.setBackgroundResource(R.drawable.bg_status_approved);
+                        tvStatus.setTextColor(Color.parseColor("#1B5E20"));
+                        break;
+                    case "rejected":
+                        tvStatus.setText("Rejected");
+                        tvStatus.setBackgroundResource(R.drawable.bg_status_rejected);
+                        tvStatus.setTextColor(Color.parseColor("#B71C1C"));
+                        break;
+                    default:
+                        tvStatus.setText("Pending");
+                        tvStatus.setBackgroundResource(R.drawable.bg_status_pending);
+                        tvStatus.setTextColor(Color.parseColor("#E65100"));
+                        break;
+                }
             }
 
-            // Buttons — disable if already processed
             boolean isPending = "pending".equals(status);
-            btnApprove.setEnabled(isPending);
-            btnReject.setEnabled(isPending);
-            btnDetails.setEnabled(!isPending);
-            btnApprove.setAlpha(isPending ? 1f : 0.4f);
-            btnReject.setAlpha(isPending ? 1f : 0.4f);
-            btnDetails.setAlpha(!isPending ? 1f : 0.4f);
+            btnEnabled(btnApprove, isPending);
+            btnEnabled(btnReject,  isPending);
+            if (btnDetails != null) { btnDetails.setEnabled(true); btnDetails.setAlpha(1f); }
 
-            btnApprove.setOnClickListener(v -> {
-                if (listener != null) listener.onApprove(app);
-            });
-            btnReject.setOnClickListener(v -> {
-                if (listener != null) listener.onReject(app);
-            });
-            btnDetails.setOnClickListener(v -> {
-                if (listener != null) listener.onViewDetails(app);
-            });
+            if (btnApprove != null) btnApprove.setOnClickListener(
+                    v -> { if (listener != null) listener.onApprove(app); });
+            if (btnReject  != null) btnReject.setOnClickListener(
+                    v -> { if (listener != null) listener.onReject(app); });
+            if (btnDetails != null) btnDetails.setOnClickListener(
+                    v -> { if (listener != null) listener.onViewDetails(app); });
         }
 
-        private String formatDate(String iso) {
-            if (iso == null || iso.isEmpty()) return "—";
+        private static String str(String v)  { return v != null ? v : ""; }
+
+        private static String expText(String exp) {
+            return (exp != null && !exp.trim().isEmpty()) ? exp.trim() + " yrs exp" : "-";
+        }
+
+        private static void set(TextView tv, String text, String fallback) {
+            if (tv == null) return;
+            tv.setText((text != null && !text.isEmpty()) ? text : fallback);
+        }
+
+        private static void set(TextView tv, String text) {
+            if (tv == null) return;
+            tv.setText(text != null ? text : "-");
+        }
+
+        private static void btnEnabled(MaterialButton btn, boolean enabled) {
+            if (btn == null) return;
+            btn.setEnabled(enabled);
+            btn.setAlpha(enabled ? 1f : 0.4f);
+        }
+
+        private static String fmtDate(String iso) {
+            if (iso == null || iso.isEmpty()) return "-";
             try {
-                java.text.SimpleDateFormat sdf =
-                        new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss",
-                                java.util.Locale.US);
-                java.util.Date d = sdf.parse(iso.length() > 19 ? iso.substring(0, 19) : iso);
-                java.text.SimpleDateFormat out =
-                        new java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.US);
-                return out.format(d);
+                String s = iso.length() > 19 ? iso.substring(0, 19) : iso;
+                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat(
+                        "yyyy-MM-dd'T'HH:mm:ss", Locale.US);
+                java.util.Date d = sdf.parse(s);
+                if (d == null) return iso.length() >= 10 ? iso.substring(0, 10) : iso;
+                return new java.text.SimpleDateFormat("dd MMM yyyy", Locale.US).format(d);
             } catch (Exception e) {
                 return iso.length() >= 10 ? iso.substring(0, 10) : iso;
             }

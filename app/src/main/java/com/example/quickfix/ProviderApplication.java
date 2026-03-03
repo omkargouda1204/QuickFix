@@ -26,27 +26,38 @@ public class ProviderApplication {
     public String reviewedByUid;
     public String rejectionReason;
 
-    /** Parse a single row returned by PostgREST */
+    /** Parse a single row returned by PostgREST. Never returns null fields — uses "". */
     public static ProviderApplication fromJson(JSONObject o) {
+        if (o == null) return new ProviderApplication();
         ProviderApplication app = new ProviderApplication();
-        app.id               = o.optString("id");
-        app.firebaseUid      = o.optString("firebase_uid");
-        app.name             = o.optString("name");
-        app.email            = o.optString("email");
-        app.phone            = o.optString("phone");
-        app.businessName     = o.optString("business_name");
-        app.category         = o.optString("category");
-        app.description      = o.optString("description");
-        app.address          = o.optString("address");
-        app.city             = o.optString("city");
-        app.experience       = o.optString("experience");
-        app.businessImageUrl = o.optString("business_image_url");
-        app.idProofUrl       = o.optString("id_proof_url");
-        app.status           = o.optString("status");
-        app.submittedAt      = o.optString("submitted_at");
-        app.reviewedAt       = o.optString("reviewed_at");
-        app.reviewedByUid    = o.optString("reviewed_by_uid");
-        app.rejectionReason  = o.optString("rejection_reason");
+        app.id               = s(o, "id");
+        app.firebaseUid      = s(o, "firebase_uid");
+        app.name             = s(o, "name");
+        app.email            = s(o, "email");
+        app.phone            = s(o, "phone");
+        app.businessName     = s(o, "business_name");
+        app.category         = s(o, "category");
+        app.description      = s(o, "description");
+        app.address          = s(o, "address");
+        app.city             = s(o, "city");
+        app.experience       = s(o, "experience");
+        app.businessImageUrl = s(o, "business_image_url");
+        app.idProofUrl       = s(o, "id_proof_url");
+        app.status           = s(o, "status");
+        app.submittedAt      = s(o, "submitted_at");
+        app.reviewedAt       = s(o, "reviewed_at");
+        app.reviewedByUid    = s(o, "reviewed_by_uid");
+        app.rejectionReason  = s(o, "rejection_reason");
         return app;
+    }
+
+    /**
+     * Safe string getter: returns "" for null, missing, or literal "null" values.
+     * Prevents the string "null" from appearing in the UI.
+     */
+    private static String s(JSONObject o, String key) {
+        if (o.isNull(key)) return "";
+        String v = o.optString(key, "");
+        return "null".equals(v) ? "" : v;
     }
 }
