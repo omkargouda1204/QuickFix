@@ -193,9 +193,13 @@ public class MainActivity extends AppCompatActivity {
             userEmail.setText(getString(R.string.find_services));
         }
 
-        // Profile avatar click → show logout dialog
+        // Profile avatar click → open ProfileActivity
         if (profileAvatar != null) {
-            profileAvatar.setOnClickListener(v -> showProfileMenu(displayName, email));
+            profileAvatar.setOnClickListener(v -> {
+                Intent profileIntent = new Intent(this, ProfileActivity.class);
+                startActivity(profileIntent);
+                overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+            });
         }
 
         // Notification
@@ -302,10 +306,9 @@ public class MainActivity extends AppCompatActivity {
 
         navProfile.setOnClickListener(v -> {
             setNavSelected(3);
-            showProfileMenu(
-                    mAuth.getCurrentUser() != null ? mAuth.getCurrentUser().getDisplayName() : null,
-                    mAuth.getCurrentUser() != null ? mAuth.getCurrentUser().getEmail() : null
-            );
+            Intent profileIntent = new Intent(this, ProfileActivity.class);
+            startActivity(profileIntent);
+            overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
         });
     }
 

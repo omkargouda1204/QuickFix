@@ -134,6 +134,26 @@
             android:exported="false"
             android:parentActivityName=".AdminDashboardActivity" />
 
+        <!-- Profile Activity -->
+        <activity
+            android:name=".ProfileActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Settings Activity -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".ProfileActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- FullScreen Image Activity -->
+        <activity
+            android:name=".FullScreenImageActivity"
+            android:exported="false"
+            android:parentActivityName=".AdminProviderApprovalActivity" />
+
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- FCM SERVICE — handles token refresh & incoming push messages   -->
         <!-- Token is stored silently in Supabase; NEVER shown in the UI    -->
