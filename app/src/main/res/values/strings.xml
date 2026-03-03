@@ -186,4 +186,46 @@
     <string name="status_pending">Pending</string>
     <string name="status_approved">Approved</string>
     <string name="status_rejected">Rejected</string>
+
+    <!-- Profile Screen -->
+    <string name="profile_title">My Profile</string>
+    <string name="profile_account_section">Account</string>
+    <string name="profile_services_section">Services</string>
+    <string name="profile_preferences_section">Preferences</string>
+    <string name="profile_information_section">Information</string>
+    <string name="profile_my_profile">My Profile</string>
+    <string name="profile_settings">Settings</string>
+    <string name="profile_list_business">List Your Business</string>
+    <string name="profile_list_business_sub">Start earning for FREE</string>
+    <string name="profile_my_bookings">My Bookings</string>
+    <string name="profile_notifications">Notifications</string>
+    <string name="profile_language">Language</string>
+    <string name="profile_dark_mode">Dark Mode</string>
+    <string name="profile_help_support">Help &amp; Support</string>
+    <string name="profile_privacy_policy">Privacy Policy</string>
+    <string name="profile_terms">Terms &amp; Conditions</string>
+    <string name="profile_about_app">About App</string>
+    <string name="profile_logout">Logout</string>
+    <string name="profile_admin_dashboard">Admin Dashboard</string>
+    <string name="profile_provider_dashboard">Provider Dashboard</string>
+    <string name="profile_logout_confirm_title">Logout</string>
+    <string name="profile_logout_confirm_msg">Are you sure you want to logout?</string>
+    <string name="profile_version">QuickFix v1.0 · Made with ❤️</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_push_notif">Push Notifications</string>
+    <string name="settings_email_notif">Email Notifications</string>
+    <string name="settings_booking_reminders">Booking Reminders</string>
+    <string name="settings_dark_mode">Dark Mode</string>
+    <string name="settings_change_password">Change Password</string>
+    <string name="settings_delete_account">Delete Account</string>
+
+    <!-- Profile placeholders -->
+    <string name="profile_avatar_initial">U</string>
+    <string name="profile_role_default">User</string>
+    <string name="profile_lang_english">🇬🇧  English</string>
+    <string name="profile_lang_kannada">🇮🇳  ಕನ್ನಡ (Kannada)</string>
+    <string name="profile_lang_hindi">🇮🇳  हिन्दी (Hindi)</string>
+    <string name="profile_lang_current_default">English</string>
 </resources>

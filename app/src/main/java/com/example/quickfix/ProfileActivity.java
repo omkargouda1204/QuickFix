@@ -1,0 +1,436 @@
+package com.example.quickfix;
+
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
+
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.switchmaterial.SwitchMaterial;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+
+/**
+ * ProfileActivity — Complete Profile / Account screen.
+ * Gradient header · avatar · role badge · sectioned menu cards
+ * Supabase user fetch · language picker · dark mode · logout
+ */
+public class ProfileActivity extends AppCompatActivity {
+
+    private static final String TAG           = "ProfileActivity";
+    private static final String PREFS_NAME    = "quickfix_prefs";
+    private static final String KEY_LANGUAGE  = "selected_language";
+    private static final String KEY_DARK_MODE = "dark_mode_enabled";
+    private static final String KEY_NOTIF     = "notifications_enabled";
+
+    // ── Header ────────────────────────────────────────────────────────────
+    private TextView  tvAvatarInitial, tvUserName, tvUserEmail, tvRoleBadge;
+    private ImageView btnBack;
+
+    // ── Menu rows ─────────────────────────────────────────────────────────
+    private LinearLayout menuMyProfile, menuSettings, menuListBusiness,
+            menuMyBookings, menuNotifications, menuLanguage,
+            menuDarkMode, menuHelpSupport, menuPrivacyPolicy,
+            menuTerms, menuAboutApp, menuLogout,
+            menuAdminDashboard, menuProviderDashboard;
+    private androidx.cardview.widget.CardView cardRoleDashboard;
+
+    // ── Toggles ───────────────────────────────────────────────────────────
+    private SwitchMaterial switchNotifications, switchDarkMode;
+    private TextView       tvCurrentLanguage;
+    private FrameLayout    profileLoadingOverlay;
+
+    // ── State (volatile — written on background thread, read on main) ─────
+    private volatile boolean isAdmin    = false;
+    private volatile boolean isProvider = false;
+    private volatile boolean hasApplied = false;
+    private volatile String  applicationStatus = "";
+
+    // ── Firebase + HTTP ───────────────────────────────────────────────────
+    private FirebaseAuth mAuth;
+    private static final OkHttpClient HTTP = new OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build();
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    private SharedPreferences prefs;
+
+    // ═════════════════════════════════════════════════════════════════════
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        applyDarkModeFromPrefs();
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_profile);
+
+        mAuth = FirebaseAuth.getInstance();
+        FirebaseUser user = mAuth.getCurrentUser();
+        if (user == null) { redirectToLogin(); return; }
+
+        bindViews();
+        applyLanguageFromPrefs();
+        prefillFromFirebase(user);
+        setupTogglesFromPrefs();
+        setupClickListeners();
+        loadUserDataFromSupabase(user);
+    }
+
+    // ── Bind ──────────────────────────────────────────────────────────────
+    private void bindViews() {
+        tvAvatarInitial       = findViewById(R.id.tvAvatarInitial);
+        tvUserName            = findViewById(R.id.tvUserName);
+        tvUserEmail           = findViewById(R.id.tvUserEmail);
+        tvRoleBadge           = findViewById(R.id.tvRoleBadge);
+        btnBack               = findViewById(R.id.btnBack);
+        menuMyProfile         = findViewById(R.id.menuMyProfile);
+        menuSettings          = findViewById(R.id.menuSettings);
+        menuListBusiness      = findViewById(R.id.menuListBusiness);
+        menuMyBookings        = findViewById(R.id.menuMyBookings);
+        menuNotifications     = findViewById(R.id.menuNotifications);
+        menuLanguage          = findViewById(R.id.menuLanguage);
+        menuDarkMode          = findViewById(R.id.menuDarkMode);
+        menuHelpSupport       = findViewById(R.id.menuHelpSupport);
+        menuPrivacyPolicy     = findViewById(R.id.menuPrivacyPolicy);
+        menuTerms             = findViewById(R.id.menuTerms);
+        menuAboutApp          = findViewById(R.id.menuAboutApp);
+        menuLogout            = findViewById(R.id.menuLogout);
+        menuAdminDashboard    = findViewById(R.id.menuAdminDashboard);
+        menuProviderDashboard = findViewById(R.id.menuProviderDashboard);
+        cardRoleDashboard     = findViewById(R.id.cardRoleDashboard);
+        switchNotifications   = findViewById(R.id.switchNotifications);
+        switchDarkMode        = findViewById(R.id.switchDarkMode);
+        tvCurrentLanguage     = findViewById(R.id.tvCurrentLanguage);
+        profileLoadingOverlay = findViewById(R.id.profileLoadingOverlay);
+    }
+
+    // ── Pre-fill from Firebase (instant, no network) ──────────────────────
+    private void prefillFromFirebase(FirebaseUser user) {
+        String name  = user.getDisplayName();
+        String email = user.getEmail();
+        if (email != null) tvUserEmail.setText(email);
+        if (name != null && !name.isEmpty()) {
+            tvUserName.setText(name);
+            tvAvatarInitial.setText(String.valueOf(name.charAt(0)).toUpperCase());
+        } else if (email != null && !email.isEmpty()) {
+            tvUserName.setText(email.split("@")[0]);
+            tvAvatarInitial.setText(String.valueOf(email.charAt(0)).toUpperCase());
+        } else {
+            tvUserName.setText(R.string.app_name);
+            tvAvatarInitial.setText("U");
+        }
+        applyRoleBadge("User");
+    }
+
+    // ── Load user data from Supabase ──────────────────────────────────────
+    private void loadUserDataFromSupabase(FirebaseUser user) {
+        showLoading(true);
+        final String uid   = user.getUid();
+        final String email = user.getEmail() != null ? user.getEmail() : "";
+
+        new Thread(() -> {
+            UserModel model = fetchUserRow(uid, email);
+            MAIN.post(() -> { showLoading(false); if (model != null) applyUserModel(model); });
+            checkProviderApplication(uid);
+        }).start();
+    }
+
+    private UserModel fetchUserRow(String uid, String email) {
+        try {
+            // Try by UID first
+            String url = BuildConfig.SUPABASE_URL
+                    + "/rest/v1/users?firebase_uid=eq." + uid
+                    + "&select=name,email,is_user,is_service_provider,is_admin&limit=1";
+            try (Response r = HTTP.newCall(buildGet(url)).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                if (r.code() == 200) {
+                    JSONArray arr = new JSONArray(body);
+                    if (arr.length() > 0) return parseUser(arr.getJSONObject(0));
+                }
+            }
+            // Fallback by email
+            if (!email.isEmpty()) {
+                String enc = java.net.URLEncoder.encode(email, "UTF-8");
+                String urlE = BuildConfig.SUPABASE_URL
+                        + "/rest/v1/users?email=eq." + enc
+                        + "&select=name,email,is_user,is_service_provider,is_admin&limit=1";
+                try (Response r2 = HTTP.newCall(buildGet(urlE)).execute()) {
+                    String body2 = r2.body() != null ? r2.body().string() : "[]";
+                    if (r2.code() == 200) {
+                        JSONArray arr2 = new JSONArray(body2);
+                        if (arr2.length() > 0) return parseUser(arr2.getJSONObject(0));
+                    }
+                }
+            }
+        } catch (Exception e) { Log.e(TAG, "fetchUserRow: " + e.getMessage()); }
+        return null;
+    }
+
+    private UserModel parseUser(JSONObject o) {
+        UserModel m = new UserModel();
+        m.name              = o.optString("name", "");
+        m.email             = o.optString("email", "");
+        m.isAdmin           = o.optBoolean("is_admin", false);
+        m.isServiceProvider = o.optBoolean("is_service_provider", false);
+        m.isUser            = o.optBoolean("is_user", true);
+        return m;
+    }
+
+    private void applyUserModel(UserModel m) {
+        if (m.name  != null && !m.name.isEmpty())  { tvUserName.setText(m.name);  tvAvatarInitial.setText(String.valueOf(m.name.charAt(0)).toUpperCase()); }
+        if (m.email != null && !m.email.isEmpty())   tvUserEmail.setText(m.email);
+        isAdmin    = m.isAdmin;
+        isProvider = m.isServiceProvider;
+        applyRoleBadge(isAdmin ? "Admin" : isProvider ? "Provider" : "User");
+        if (isAdmin || isProvider) {
+            cardRoleDashboard.setVisibility(View.VISIBLE);
+            cardRoleDashboard.animate().alpha(1f).setDuration(300).start();
+        }
+        if (isAdmin)    menuAdminDashboard.setVisibility(View.VISIBLE);
+        if (isProvider) menuProviderDashboard.setVisibility(View.VISIBLE);
+    }
+
+    private void applyRoleBadge(String role) {
+        tvRoleBadge.setText(role);
+        switch (role) {
+            case "Admin":
+                tvRoleBadge.setBackgroundResource(R.drawable.bg_role_badge_admin);
+                tvRoleBadge.setTextColor(0xFF6A1B9A); break;
+            case "Provider":
+                tvRoleBadge.setBackgroundResource(R.drawable.bg_role_badge_provider);
+                tvRoleBadge.setTextColor(0xFF2E7D32); break;
+            default:
+                tvRoleBadge.setBackgroundResource(R.drawable.bg_role_badge_user);
+                tvRoleBadge.setTextColor(0xFF1565C0); break;
+        }
+    }
+
+    private void checkProviderApplication(String uid) {
+        try {
+            String url = BuildConfig.SUPABASE_URL
+                    + "/rest/v1/provider_applications?firebase_uid=eq." + uid
+                    + "&select=status&order=submitted_at.desc&limit=1";
+            try (Response r = HTTP.newCall(buildGet(url)).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                if (r.code() == 200) {
+                    JSONArray arr = new JSONArray(body);
+                    if (arr.length() > 0) {
+                        hasApplied        = true;
+                        applicationStatus = arr.getJSONObject(0).optString("status", "pending");
+                    }
+                }
+            }
+        } catch (Exception e) { Log.e(TAG, "checkProviderApplication: " + e.getMessage()); }
+    }
+
+    // ── Click Listeners ───────────────────────────────────────────────────
+    private void setupClickListeners() {
+        if (btnBack != null) btnBack.setOnClickListener(v -> finish());
+
+        menuMyProfile.setOnClickListener(v ->
+                Toast.makeText(this, "Edit Profile — coming soon!", Toast.LENGTH_SHORT).show());
+
+        menuSettings.setOnClickListener(v -> {
+            startActivity(new Intent(this, SettingsActivity.class));
+            overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+        });
+
+        menuListBusiness.setOnClickListener(v -> handleListBusinessClick());
+
+        menuMyBookings.setOnClickListener(v ->
+                Toast.makeText(this, "My Bookings — coming soon!", Toast.LENGTH_SHORT).show());
+
+        menuNotifications.setOnClickListener(v -> switchNotifications.toggle());
+        switchNotifications.setOnCheckedChangeListener((btn, checked) -> {
+            prefs.edit().putBoolean(KEY_NOTIF, checked).apply();
+            Toast.makeText(this, checked ? "Notifications enabled" : "Notifications disabled",
+                    Toast.LENGTH_SHORT).show();
+        });
+
+        menuLanguage.setOnClickListener(v -> showLanguageBottomSheet());
+
+        menuDarkMode.setOnClickListener(v -> switchDarkMode.toggle());
+        switchDarkMode.setOnCheckedChangeListener((btn, checked) -> {
+            prefs.edit().putBoolean(KEY_DARK_MODE, checked).apply();
+            AppCompatDelegate.setDefaultNightMode(
+                    checked ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO);
+        });
+
+        menuHelpSupport.setOnClickListener(v ->
+                Toast.makeText(this, "Help & Support — coming soon!", Toast.LENGTH_SHORT).show());
+
+        menuPrivacyPolicy.setOnClickListener(v -> showInfoDialog(
+                getString(R.string.profile_privacy_policy),
+                "Your privacy is important to us. We collect minimal data necessary to provide the QuickFix service.\n\nFull policy: quickfix.app/privacy\nSupport: support@quickfix.app"));
+
+        menuTerms.setOnClickListener(v -> showInfoDialog(
+                getString(R.string.profile_terms),
+                getString(R.string.onboarding_terms_body)));
+
+        menuAboutApp.setOnClickListener(v -> showInfoDialog(
+                getString(R.string.profile_about_app),
+                "QuickFix v1.0\n\nYour trusted home services platform.\n\nConnect with skilled professionals for plumbing, electrical, cleaning and more.\n\n© 2026 QuickFix. All rights reserved."));
+
+        menuAdminDashboard.setOnClickListener(v ->
+                startActivity(new Intent(this, AdminDashboardActivity.class)));
+
+        menuProviderDashboard.setOnClickListener(v ->
+                startActivity(new Intent(this, ProviderDashboardActivity.class)));
+
+        menuLogout.setOnClickListener(v -> showLogoutDialog());
+    }
+
+    // ── List Your Business ────────────────────────────────────────────────
+    private void handleListBusinessClick() {
+        if (!hasApplied) {
+            startActivity(new Intent(this, ProviderOnboardingActivity.class));
+            overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+            return;
+        }
+        switch (applicationStatus) {
+            case "approved":
+                startActivity(new Intent(this, ProviderDashboardActivity.class));
+                break;
+            case "rejected":
+                new AlertDialog.Builder(this)
+                        .setTitle("Re-apply?")
+                        .setMessage("Your previous application was rejected. Submit a new one?")
+                        .setPositiveButton("Apply Again", (d, w) ->
+                                startActivity(new Intent(this, ProviderOnboardingActivity.class)))
+                        .setNegativeButton("Cancel", null).show();
+                break;
+            default:
+                new AlertDialog.Builder(this)
+                        .setTitle("⏳ Application Pending")
+                        .setMessage("Your application is under review.\nWe'll get back to you within 24–48 hours.")
+                        .setPositiveButton("OK", null).show();
+                break;
+        }
+    }
+
+    // ── Language Bottom Sheet ─────────────────────────────────────────────
+    private void showLanguageBottomSheet() {
+        BottomSheetDialog dialog = new BottomSheetDialog(this);
+        View view = LayoutInflater.from(this)
+                .inflate(R.layout.bottom_sheet_language, findViewById(android.R.id.content), false);
+        dialog.setContentView(view);
+
+        String current = prefs.getString(KEY_LANGUAGE, "English");
+        view.<ImageView>findViewById(R.id.checkEnglish).setVisibility("English".equals(current) ? View.VISIBLE : View.GONE);
+        view.<ImageView>findViewById(R.id.checkKannada).setVisibility("Kannada".equals(current) ? View.VISIBLE : View.GONE);
+        view.<ImageView>findViewById(R.id.checkHindi)  .setVisibility("Hindi".equals(current)   ? View.VISIBLE : View.GONE);
+
+        view.findViewById(R.id.optionEnglish).setOnClickListener(v -> { applyLanguage("English", "en"); dialog.dismiss(); });
+        view.findViewById(R.id.optionKannada).setOnClickListener(v -> { applyLanguage("Kannada", "kn"); dialog.dismiss(); });
+        view.findViewById(R.id.optionHindi)  .setOnClickListener(v -> { applyLanguage("Hindi",   "hi"); dialog.dismiss(); });
+        dialog.show();
+    }
+
+    private void applyLanguage(String displayName, String localeCode) {
+        prefs.edit().putString(KEY_LANGUAGE, displayName).apply();
+        tvCurrentLanguage.setText(displayName);
+        Locale locale = new Locale(localeCode);
+        Locale.setDefault(locale);
+        Configuration config = new Configuration(getResources().getConfiguration());
+        config.setLocale(locale);
+        getResources().updateConfiguration(config, getResources().getDisplayMetrics());
+        Toast.makeText(this, "Language: " + displayName, Toast.LENGTH_SHORT).show();
+        recreate();
+    }
+
+    private void applyLanguageFromPrefs() {
+        String saved = prefs.getString(KEY_LANGUAGE, "English");
+        if (tvCurrentLanguage != null) tvCurrentLanguage.setText(saved);
+        String code = "en";
+        if ("Kannada".equals(saved)) code = "kn";
+        else if ("Hindi".equals(saved)) code = "hi";
+        Locale locale = new Locale(code);
+        Locale.setDefault(locale);
+        Configuration config = new Configuration(getResources().getConfiguration());
+        config.setLocale(locale);
+        getResources().updateConfiguration(config, getResources().getDisplayMetrics());
+    }
+
+    // ── Dark Mode ─────────────────────────────────────────────────────────
+    private void applyDarkModeFromPrefs() {
+        boolean dark = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_DARK_MODE, false);
+        AppCompatDelegate.setDefaultNightMode(
+                dark ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO);
+    }
+
+    private void setupTogglesFromPrefs() {
+        switchNotifications.setChecked(prefs.getBoolean(KEY_NOTIF, true));
+        switchDarkMode.setChecked(prefs.getBoolean(KEY_DARK_MODE, false));
+        String lang = prefs.getString(KEY_LANGUAGE, "English");
+        tvCurrentLanguage.setText(lang);
+    }
+
+    // ── Logout ────────────────────────────────────────────────────────────
+    private void showLogoutDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.profile_logout_confirm_title)
+                .setMessage(R.string.profile_logout_confirm_msg)
+                .setPositiveButton(R.string.profile_logout, (d, w) -> performLogout())
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void performLogout() {
+        showLoading(true);
+        mAuth.signOut();
+        new Handler(Looper.getMainLooper()).postDelayed(this::redirectToLogin, 400);
+    }
+
+    private void redirectToLogin() {
+        Intent i = new Intent(this, LoginActivity.class);
+        i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(i);
+        finish();
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+    private void showInfoDialog(String title, String message) {
+        new AlertDialog.Builder(this)
+                .setTitle(title).setMessage(message)
+                .setPositiveButton(android.R.string.ok, null).show();
+    }
+
+    private void showLoading(boolean show) {
+        if (profileLoadingOverlay != null)
+            profileLoadingOverlay.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+
+    private static Request buildGet(String url) {
+        return new Request.Builder().url(url).get()
+                .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Accept",        "application/json")
+                .build();
+    }
+}
+
