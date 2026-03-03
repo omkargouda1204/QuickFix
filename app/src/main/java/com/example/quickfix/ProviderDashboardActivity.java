@@ -88,19 +88,19 @@ public class ProviderDashboardActivity extends AppCompatActivity {
     private void setupClickListeners() {
         if (cardMyBookings != null)
             cardMyBookings.setOnClickListener(v ->
-                    Toast.makeText(this, "My Bookings — coming soon!", Toast.LENGTH_SHORT).show());
+                    startActivity(new Intent(this, MyBookingsActivity.class)));
 
         if (cardMyServices != null)
             cardMyServices.setOnClickListener(v ->
-                    Toast.makeText(this, "My Services — coming soon!", Toast.LENGTH_SHORT).show());
+                    startActivity(new Intent(this, MyServicesActivity.class)));
 
         if (cardEarnings != null)
             cardEarnings.setOnClickListener(v ->
-                    Toast.makeText(this, "Earnings — coming soon!", Toast.LENGTH_SHORT).show());
+                    startActivity(new Intent(this, EarningsActivity.class)));
 
         if (cardProfile != null)
             cardProfile.setOnClickListener(v ->
-                    Toast.makeText(this, "Business Profile — coming soon!", Toast.LENGTH_SHORT).show());
+                    startActivity(new Intent(this, BusinessProfileActivity.class)));
 
         if (btnBackToHome != null)
             btnBackToHome.setOnClickListener(v -> {

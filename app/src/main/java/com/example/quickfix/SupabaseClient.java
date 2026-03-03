@@ -48,6 +48,36 @@ public class SupabaseClient {
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
+    // Static initializer to validate credentials
+    static {
+        validateCredentials();
+    }
+
+    /**
+     * Validates that Supabase credentials are properly configured.
+     * Logs detailed errors if missing, which helps diagnose the issue.
+     */
+    private static void validateCredentials() {
+        boolean urlMissing = SUPABASE_URL == null || SUPABASE_URL.isEmpty() || SUPABASE_URL.contains("YOUR_");
+        boolean keyMissing = ANON_KEY == null || ANON_KEY.isEmpty() || ANON_KEY.contains("YOUR_");
+
+        if (urlMissing || keyMissing) {
+            String msg = "❌ SUPABASE CREDENTIALS MISSING!\n" +
+                    "📁 File needed: supabase.properties (in project root)\n" +
+                    "🔧 URL configured: " + (urlMissing ? "❌ NO" : "✅ YES") + "\n" +
+                    "🔑 API Key configured: " + (keyMissing ? "❌ NO" : "✅ YES") + "\n" +
+                    "📝 Instructions:\n" +
+                    "1. Get credentials from: https://supabase.com/dashboard/project/_/settings/api\n" +
+                    "2. Create supabase.properties in project root with:\n" +
+                    "   SUPABASE_URL=https://YOUR_PROJECT.supabase.co\n" +
+                    "   SUPABASE_ANON_KEY=YOUR_ANON_KEY\n" +
+                    "3. Rebuild the project";
+            Log.e(TAG, msg);
+        } else {
+            Log.i(TAG, "✅ Supabase credentials configured: " + SUPABASE_URL);
+        }
+    }
+
     // ── Callbacks ─────────────────────────────────────────────────────────
     public interface Callback2 {
         void onSuccess();

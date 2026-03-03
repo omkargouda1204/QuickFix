@@ -155,6 +155,37 @@
             android:parentActivityName=".AdminProviderApprovalActivity" />
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- PROVIDER DASHBOARD ACTIVITIES                                  -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+
+        <!-- My Bookings Activity -->
+        <activity
+            android:name=".MyBookingsActivity"
+            android:exported="false"
+            android:parentActivityName=".ProviderDashboardActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- My Services Activity -->
+        <activity
+            android:name=".MyServicesActivity"
+            android:exported="false"
+            android:parentActivityName=".ProviderDashboardActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Earnings Activity -->
+        <activity
+            android:name=".EarningsActivity"
+            android:exported="false"
+            android:parentActivityName=".ProviderDashboardActivity" />
+
+        <!-- Business Profile Activity -->
+        <activity
+            android:name=".BusinessProfileActivity"
+            android:exported="false"
+            android:parentActivityName=".ProviderDashboardActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- FCM SERVICE — handles token refresh & incoming push messages   -->
         <!-- Token is stored silently in Supabase; NEVER shown in the UI    -->
         <!-- ═══════════════════════════════════════════════════════════════ -->

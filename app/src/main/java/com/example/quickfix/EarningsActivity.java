@@ -1,0 +1,240 @@
+package com.example.quickfix;
+
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
+import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
+import com.example.quickfix.adapters.EarningsAdapter;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+
+/**
+ * EarningsActivity — Provider's earnings and transaction history
+ */
+public class EarningsActivity extends AppCompatActivity {
+
+    private static final String TAG = "EarningsActivity";
+    private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
+    private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
+
+    private TextView tvTotalEarnings, tvMonthEarnings, tvCompletedJobs;
+    private RecyclerView recyclerView;
+    private EarningsAdapter adapter;
+    private SwipeRefreshLayout swipeRefresh;
+    private ProgressBar progressBar;
+    private LinearLayout emptyState;
+
+    private FirebaseAuth mAuth;
+    private String providerId;
+    private List<Booking> completedBookings = new ArrayList<>();
+
+    private final OkHttpClient httpClient = new OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build();
+
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_earnings);
+
+        mAuth = FirebaseAuth.getInstance();
+        FirebaseUser user = mAuth.getCurrentUser();
+        if (user == null) {
+            finish();
+            return;
+        }
+        providerId = user.getUid();
+
+        setupToolbar();
+        initViews();
+        setupRecyclerView();
+        loadEarnings();
+    }
+
+    private void setupToolbar() {
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setTitle("Earnings");
+        }
+        toolbar.setNavigationOnClickListener(v -> finish());
+    }
+
+    private void initViews() {
+        tvTotalEarnings = findViewById(R.id.tvTotalEarnings);
+        tvMonthEarnings = findViewById(R.id.tvMonthEarnings);
+        tvCompletedJobs = findViewById(R.id.tvCompletedJobs);
+        recyclerView = findViewById(R.id.recyclerView);
+        swipeRefresh = findViewById(R.id.swipeRefresh);
+        progressBar = findViewById(R.id.progressBar);
+        emptyState = findViewById(R.id.emptyState);
+
+        swipeRefresh.setOnRefreshListener(this::loadEarnings);
+    }
+
+    private void setupRecyclerView() {
+        adapter = new EarningsAdapter(this);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        recyclerView.setAdapter(adapter);
+    }
+
+    private void loadEarnings() {
+        showLoading(true);
+
+        if (providerId == null || providerId.isEmpty()) {
+            showLoading(false);
+            Toast.makeText(this, "Provider ID not available", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Query completed bookings for this provider using their firebase UID
+        // Note: Column is firebase_uid in database (matching users table pattern)
+        String url = SUPABASE_URL + "/rest/v1/bookings" +
+                "?firebase_uid=eq." + providerId +
+                "&status=eq.completed" +
+                "&order=completed_at.desc" +
+                "&select=*";
+
+        Log.d(TAG, "loadEarnings URL: " + url);
+
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                mainHandler.post(() -> {
+                    showLoading(false);
+                    Toast.makeText(EarningsActivity.this,
+                            "Failed to load earnings: " + e.getMessage(),
+                            Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                String body = response.body() != null ? response.body().string() : "[]";
+                int code = response.code();
+                response.close();
+
+                Log.d(TAG, "loadEarnings response: HTTP " + code + " | Body: " + body);
+
+                mainHandler.post(() -> {
+                    showLoading(false);
+                    if (code == 200) {
+                        parseEarnings(body);
+                    } else {
+                        Toast.makeText(EarningsActivity.this,
+                                "Error: HTTP " + code + " | " + body,
+                                Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        });
+    }
+
+    private void parseEarnings(String json) {
+        try {
+            JSONArray arr = new JSONArray(json);
+            completedBookings.clear();
+
+            double totalEarnings = 0;
+            double monthEarnings = 0;
+            int completedCount = 0;
+
+            Calendar calendar = Calendar.getInstance();
+            int currentMonth = calendar.get(Calendar.MONTH);
+            int currentYear = calendar.get(Calendar.YEAR);
+
+            for (int i = 0; i < arr.length(); i++) {
+                Booking booking = Booking.fromJson(arr.getJSONObject(i));
+                if (booking != null) {
+                    completedBookings.add(booking);
+                    totalEarnings += booking.price;
+                    completedCount++;
+
+                    // Check if booking is from current month
+                    if (!booking.completedAt.isEmpty()) {
+                        try {
+                            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+                            Calendar bookingCal = Calendar.getInstance();
+                            bookingCal.setTime(sdf.parse(booking.completedAt.substring(0, 10)));
+
+                            if (bookingCal.get(Calendar.MONTH) == currentMonth &&
+                                bookingCal.get(Calendar.YEAR) == currentYear) {
+                                monthEarnings += booking.price;
+                            }
+                        } catch (Exception e) {
+                            Log.e(TAG, "Date parse error: " + e.getMessage());
+                        }
+                    }
+                }
+            }
+
+            // Update summary cards
+            tvTotalEarnings.setText("₹" + String.format(Locale.getDefault(), "%.0f", totalEarnings));
+            tvMonthEarnings.setText("₹" + String.format(Locale.getDefault(), "%.0f", monthEarnings));
+            tvCompletedJobs.setText(String.valueOf(completedCount));
+
+            // Update RecyclerView
+            adapter.setTransactions(completedBookings);
+
+            if (completedBookings.isEmpty()) {
+                emptyState.setVisibility(View.VISIBLE);
+                recyclerView.setVisibility(View.GONE);
+            } else {
+                emptyState.setVisibility(View.GONE);
+                recyclerView.setVisibility(View.VISIBLE);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Parse error: " + e.getMessage());
+            Toast.makeText(this, "Error parsing earnings data", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void showLoading(boolean show) {
+        if (swipeRefresh.isRefreshing()) {
+            swipeRefresh.setRefreshing(show);
+        } else {
+            progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+    }
+}
+
