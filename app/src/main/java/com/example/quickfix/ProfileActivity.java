@@ -251,8 +251,10 @@ public class ProfileActivity extends AppCompatActivity {
     private void setupClickListeners() {
         if (btnBack != null) btnBack.setOnClickListener(v -> finish());
 
-        menuMyProfile.setOnClickListener(v ->
-                Toast.makeText(this, "Edit Profile — coming soon!", Toast.LENGTH_SHORT).show());
+        menuMyProfile.setOnClickListener(v -> {
+            startActivity(new Intent(this, ProfileDetailsActivity.class));
+            overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+        });
 
         menuSettings.setOnClickListener(v -> {
             startActivity(new Intent(this, SettingsActivity.class));
@@ -261,10 +263,15 @@ public class ProfileActivity extends AppCompatActivity {
 
         menuListBusiness.setOnClickListener(v -> handleListBusinessClick());
 
-        menuMyBookings.setOnClickListener(v ->
-                Toast.makeText(this, "My Bookings — coming soon!", Toast.LENGTH_SHORT).show());
+        menuMyBookings.setOnClickListener(v -> {
+            startActivity(new Intent(this, UserBookingsActivity.class));
+            overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+        });
 
-        menuNotifications.setOnClickListener(v -> switchNotifications.toggle());
+        menuNotifications.setOnClickListener(v -> {
+            startActivity(new Intent(this, NotificationsActivity.class));
+            overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+        });
         switchNotifications.setOnCheckedChangeListener((btn, checked) -> {
             prefs.edit().putBoolean(KEY_NOTIF, checked).apply();
             Toast.makeText(this, checked ? "Notifications enabled" : "Notifications disabled",

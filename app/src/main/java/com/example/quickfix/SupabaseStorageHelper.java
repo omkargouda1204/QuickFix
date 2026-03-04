@@ -52,6 +52,7 @@ public class SupabaseStorageHelper {
     // ── Bucket names ───────────────────────────────────────────────────────
     public static final String BUCKET_BUSINESS_IMAGES = "provider-business-images";
     public static final String BUCKET_ID_PROOFS       = "provider-id-proofs";
+    public static final String BUCKET_PROFILE_IMAGES  = "profile-images";
 
     /**
      * Upload a file from a Uri to a Supabase Storage bucket.

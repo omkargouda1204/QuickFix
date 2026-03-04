@@ -61,6 +61,9 @@ dependencies {
     // Google Sign-In
     implementation 'com.google.android.gms:play-services-auth:20.7.0'
 
+    // FusedLocationProviderClient (GPS live location)
+    implementation 'com.google.android.gms:play-services-location:21.3.0'
+
 
     // HTTP client for backend API calls
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'

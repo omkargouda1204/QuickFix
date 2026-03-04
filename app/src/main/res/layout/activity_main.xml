@@ -11,84 +11,189 @@
         android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/toolbar_bg"
+        android:background="#FFFFFF"
         app:elevation="4dp">
 
-        <androidx.appcompat.widget.Toolbar
-            android:id="@+id/toolbar"
+        <!-- Gradient header -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="64dp"
-            android:background="@color/toolbar_bg"
-            android:paddingStart="16dp"
-            android:paddingEnd="8dp">
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_profile_header_gradient"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="44dp"
+            android:paddingBottom="20dp">
 
-            <!-- Left Side: App Name + Subtitle -->
+            <!-- Row 1: Location selector + notification -->
             <LinearLayout
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:layout_gravity="center_vertical">
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="10dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/app_name"
-                    android:textColor="@color/primary"
-                    android:textSize="22sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.05" />
+                <!-- Location chip -->
+                <LinearLayout
+                    android:id="@+id/locationSelector"
+                    android:layout_width="0dp"
+                    android:layout_height="38dp"
+                    android:layout_weight="1"
+                    android:background="#22FFFFFF"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp">
 
-                <TextView
-                    android:id="@+id/toolbarLocation"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="📍 Your Location"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:src="@drawable/ic_location"
+                        app:tint="#FFFFFF"
+                        android:contentDescription="Location" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginStart="6dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Delivering to"
+                            android:textColor="#CCFFFFFF"
+                            android:textSize="10sp" />
+
+                        <TextView
+                            android:id="@+id/tvSelectedLocation"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Select Location"
+                            android:textColor="#FFFFFF"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            android:maxLines="1"
+                            android:ellipsize="end" />
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:src="@drawable/ic_arrow_right"
+                        app:tint="#FFFFFF"
+                        android:rotation="90"
+                        android:contentDescription="Change location" />
+                </LinearLayout>
+
+                <!-- Notification icon (no profile avatar) -->
+                <ImageView
+                    android:id="@+id/notificationIcon"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="12dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_notification"
+                    app:tint="#FFFFFF"
+                    android:contentDescription="Notifications" />
+            </LinearLayout>
+
+            <!-- Row 2: Greeting -->
+            <TextView
+                android:id="@+id/welcomeMessage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Hello, User! 👋"
+                android:textColor="#FFFFFF"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="2dp" />
+
+            <TextView
+                android:id="@+id/userEmail"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/find_services"
+                android:textColor="#CCE3F2FD"
+                android:textSize="13sp"
+                android:layout_marginBottom="14dp" />
+
+            <!-- Search bar with EditText -->
+            <LinearLayout
+                android:id="@+id/searchBar"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:background="#FFFFFFFF"
+                android:clickable="false"
+                android:focusable="false"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="14dp"
+                android:paddingEnd="8dp">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_search"
+                    app:tint="@color/text_secondary"
+                    android:contentDescription="Search" />
+
+                <EditText
+                    android:id="@+id/etSearch"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:background="@android:color/transparent"
+                    android:hint="@string/search_hint"
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_secondary"
+                    android:textSize="14sp"
+                    android:imeOptions="actionSearch"
+                    android:inputType="text"
+                    android:singleLine="true"
+                    android:maxLines="1" />
+
+                <ImageView
+                    android:id="@+id/btnClearSearch"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:src="@drawable/ic_close"
+                    app:tint="@color/text_secondary"
+                    android:padding="8dp"
+                    android:visibility="gone"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:contentDescription="Clear search" />
 
             </LinearLayout>
 
-            <!-- Profile Avatar -->
-            <FrameLayout
-                android:id="@+id/profileAvatar"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_gravity="center_vertical"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="8dp"
-                android:background="@drawable/bg_category_blue"
-                android:clickable="true"
-                android:focusable="true">
+        </LinearLayout>
 
-                <TextView
-                    android:id="@+id/profileInitial"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:text="U"
-                    android:textColor="@color/white"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
+        <!-- Search suggestions dropdown (shown while typing) -->
+        <LinearLayout
+            android:id="@+id/searchSuggestionsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FFFFFF"
+            android:elevation="8dp"
+            android:orientation="vertical"
+            android:visibility="gone">
 
-            </FrameLayout>
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvSearchSuggestions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false" />
 
-            <!-- Notification Icon (Positioned at far right) -->
-            <ImageView
-                android:id="@+id/notificationIcon"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_gravity="center_vertical|end"
-                android:layout_marginStart="8dp"
-                android:layout_marginEnd="4dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"
-                android:padding="8dp"
-                android:src="@drawable/ic_notification"
-                android:contentDescription="Notifications" />
-
-        </androidx.appcompat.widget.Toolbar>
+        </LinearLayout>
 
     </com.google.android.material.appbar.AppBarLayout>
 
@@ -105,69 +210,6 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
-
-            <!-- ── HEADER GREETING + SEARCH ──────────────────────────── -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="@color/toolbar_bg"
-                android:orientation="vertical"
-                android:paddingStart="20dp"
-                android:paddingEnd="20dp"
-                android:paddingTop="16dp"
-                android:paddingBottom="20dp">
-
-                <TextView
-                    android:id="@+id/welcomeMessage"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Hello, User! 👋"
-                    android:textColor="@color/text_primary"
-                    android:textSize="22sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/userEmail"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:layout_marginBottom="16dp"
-                    android:text="@string/find_services"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="14sp" />
-
-                <!-- Search Bar -->
-                <LinearLayout
-                    android:id="@+id/searchBar"
-                    android:layout_width="match_parent"
-                    android:layout_height="52dp"
-                    android:background="@drawable/bg_search"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingStart="16dp"
-                    android:paddingEnd="16dp">
-
-                    <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
-                        android:src="@drawable/ic_search"
-                        app:tint="@color/text_secondary"
-                        android:contentDescription="Search" />
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:layout_weight="1"
-                        android:text="@string/search_hint"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="15sp" />
-
-                </LinearLayout>
-
-            </LinearLayout>
 
             <!-- ── PROMO BANNER ───────────────────────────────────────── -->
             <LinearLayout
@@ -267,11 +309,11 @@
                         android:paddingTop="14dp"
                         android:paddingBottom="14dp">
 
-                        <!-- Icon -->
                         <FrameLayout
                             android:layout_width="44dp"
                             android:layout_height="44dp"
                             android:background="@drawable/bg_icon_circle_white">
+
                             <ImageView
                                 android:layout_width="26dp"
                                 android:layout_height="26dp"
@@ -281,7 +323,6 @@
                                 android:contentDescription="Business" />
                         </FrameLayout>
 
-                        <!-- Text -->
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
@@ -307,9 +348,9 @@
 
                         </LinearLayout>
 
-                        <!-- Start Button -->
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnListBusinessStart"
+                            style="@style/Widget.Material3.Button"
                             android:layout_width="wrap_content"
                             android:layout_height="36dp"
                             android:paddingStart="16dp"
@@ -319,8 +360,7 @@
                             android:textSize="13sp"
                             android:textStyle="bold"
                             app:backgroundTint="@color/white"
-                            app:cornerRadius="18dp"
-                            style="@style/Widget.Material3.Button" />
+                            app:cornerRadius="18dp" />
 
                     </LinearLayout>
 
@@ -937,7 +977,8 @@
                                     android:layout_marginTop="4dp"
                                     android:text="@string/featured_card2_desc"
                                     android:textColor="#CCFFFFFF"
-                                    android:textSize="12sp" />
+                                    android:textSize="12sp"
+                                    android:textStyle="bold" />
 
                                 <TextView
                                     android:layout_width="wrap_content"
@@ -998,7 +1039,8 @@
                                     android:layout_marginTop="4dp"
                                     android:text="@string/featured_card3_desc"
                                     android:textColor="#CCFFFFFF"
-                                    android:textSize="12sp" />
+                                    android:textSize="12sp"
+                                    android:textStyle="bold" />
 
                                 <TextView
                                     android:layout_width="wrap_content"
@@ -1019,9 +1061,7 @@
 
             </LinearLayout>
 
-
             <!-- ── PROVIDER DASHBOARD BANNER ───────────────────────────── -->
-            <!-- Shown only when role = provider -->
             <LinearLayout
                 android:id="@+id/providerDashboardSection"
                 android:layout_width="match_parent"
@@ -1084,7 +1124,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="3dp"
-                                android:text="Manage bookings, services &amp; business analytics"
+                                android:text="Manage bookings, services &amp; analytics"
                                 android:textColor="#DDEEFF"
                                 android:textSize="12sp" />
 
@@ -1109,7 +1149,6 @@
 
             </LinearLayout>
 
-            <!-- Bottom spacing -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="16dp" />
@@ -1129,7 +1168,6 @@
         android:orientation="horizontal"
         android:weightSum="4">
 
-        <!-- Home Tab -->
         <LinearLayout
             android:id="@+id/navHome"
             android:layout_width="0dp"
@@ -1160,7 +1198,6 @@
 
         </LinearLayout>
 
-        <!-- Bookings Tab -->
         <LinearLayout
             android:id="@+id/navBookings"
             android:layout_width="0dp"
@@ -1190,7 +1227,6 @@
 
         </LinearLayout>
 
-        <!-- Messages Tab -->
         <LinearLayout
             android:id="@+id/navMessages"
             android:layout_width="0dp"
@@ -1220,7 +1256,6 @@
 
         </LinearLayout>
 
-        <!-- Profile Tab -->
         <LinearLayout
             android:id="@+id/navProfile"
             android:layout_width="0dp"
