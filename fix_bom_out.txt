@@ -1,3 +1,0 @@
-item_provider_application_card.xml: NO_BOM, first3=[60, 63, 120]
-activity_admin_provider_approval.xml: NO_BOM, first3=[60, 63, 120]
-DONE
