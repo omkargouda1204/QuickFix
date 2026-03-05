@@ -131,6 +131,20 @@
             android:exported="false"
             android:parentActivityName=".AdminDashboardActivity" />
 
+        <!-- Admin Settings Activity -->
+        <activity
+            android:name=".AdminSettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".AdminDashboardActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Reports & Analytics Activity -->
+        <activity
+            android:name=".ReportsAnalyticsActivity"
+            android:exported="false"
+            android:parentActivityName=".AdminDashboardActivity"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- Profile Activity -->
         <activity
             android:name=".ProfileActivity"

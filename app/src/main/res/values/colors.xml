@@ -46,4 +46,7 @@
     <!-- Status / Error colors -->
     <color name="error_red">#D32F2F</color>
     <color name="success_green">#388E3C</color>
+    <!-- Chip background colors -->
+    <color name="chip_active_bg">#C8E6C9</color>
+    <color name="chip_disabled_bg">#FFCDD2</color>
 </resources>

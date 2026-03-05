@@ -192,8 +192,10 @@ public class AdminDashboardActivity extends AppCompatActivity {
         if (btnContentManagement != null)
             btnContentManagement.setOnClickListener(v -> goTo(ContentManagementActivity.class));
         if (btnViewReports != null)
-            btnViewReports.setOnClickListener(v ->
-                    Toast.makeText(this, "Reports & Analytics — coming soon", Toast.LENGTH_SHORT).show());
+            btnViewReports.setOnClickListener(v -> {
+                Intent intent = new Intent(this, ReportsAnalyticsActivity.class);
+                startActivity(intent);
+            });
     }
 
     // ── Bottom Navigation ─────────────────────────────────────────────────
@@ -245,7 +247,8 @@ public class AdminDashboardActivity extends AppCompatActivity {
         LinearLayout bsSettings = sheetView.findViewById(R.id.bsSettingsOption);
         if (bsSettings != null) bsSettings.setOnClickListener(v -> {
             sheet.dismiss();
-            Toast.makeText(this, "Settings — coming soon", Toast.LENGTH_SHORT).show();
+            Intent intent = new Intent(this, AdminSettingsActivity.class);
+            startActivity(intent);
         });
 
         // View User Interface
