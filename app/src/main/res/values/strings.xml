@@ -228,4 +228,32 @@
     <string name="profile_lang_kannada">🇮🇳  ಕನ್ನಡ (Kannada)</string>
     <string name="profile_lang_hindi">🇮🇳  हिन्दी (Hindi)</string>
     <string name="profile_lang_current_default">English</string>
+
+    <!-- Profile Details screen -->
+    <string name="cd_back">Back</string>
+    <string name="cd_edit_profile">Edit Profile</string>
+    <string name="cd_profile_photo">Profile Photo</string>
+    <string name="cd_change_photo">Change photo</string>
+    <string name="cd_name">Name</string>
+    <string name="cd_email">Email</string>
+    <string name="cd_phone">Phone</string>
+    <string name="cd_city">City</string>
+    <string name="cd_address">Address</string>
+    <string name="pd_dash">—</string>
+    <string name="pd_section_personal">Personal Information</string>
+    <string name="pd_section_edit">Edit Personal Information</string>
+    <string name="pd_label_full_name">Full Name</string>
+    <string name="pd_label_email_address">Email Address</string>
+    <string name="pd_label_phone_number">Phone Number</string>
+    <string name="pd_label_city">City</string>
+    <string name="pd_label_address">Address</string>
+    <string name="pd_hint_full_name">Full Name</string>
+    <string name="pd_hint_email_readonly">Email (read-only)</string>
+    <string name="pd_hint_phone">Phone Number</string>
+    <string name="pd_hint_city">City</string>
+    <string name="pd_hint_address">Address (optional)</string>
+    <string name="pd_btn_edit_profile">Edit Profile</string>
+    <string name="pd_btn_cancel">Cancel</string>
+    <string name="pd_btn_save">Save Changes</string>
+    <string name="pd_loading">Please wait\u2026</string>
 </resources>
