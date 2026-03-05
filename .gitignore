@@ -1,19 +1,32 @@
-# Android Studio / IntelliJ
+# Android Studio / IntelliJ IDE files
 .idea/
 *.iml
-.gradle
-/local.properties
 /.idea/caches
 /.idea/libraries
 /.idea/modules.xml
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+
+# Gradle
+.gradle/
+/build/
+app/build/
+**/build/
+
+# Local config — never commit
+/local.properties
 local.properties
-# Supabase credentials — never commit
+
+# macOS
+.DS_Store
+
+# Captures
+/captures
+
+# Native build
+.externalNativeBuild/
+.cxx/
+
+# Supabase credentials — NEVER commit
 supabase.properties

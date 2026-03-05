@@ -112,11 +112,6 @@
             android:exported="false"
             android:parentActivityName=".AdminDashboardActivity" />
 
-        <!-- Provider Approval Activity (legacy) -->
-        <activity
-            android:name=".ProviderApprovalActivity"
-            android:exported="false"
-            android:parentActivityName=".AdminDashboardActivity" />
 
         <!-- User Management Activity -->
         <activity
