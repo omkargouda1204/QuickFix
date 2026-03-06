@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
+        android:name=".QuickFixApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -77,6 +78,13 @@
             android:parentActivityName=".MainActivity"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Application Status — shows pending/approved/rejected state -->
+        <activity
+            android:name=".ApplicationStatusActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- Provider Dashboard (shown when role = provider) -->
         <activity
             android:name=".ProviderDashboardActivity"
@@ -138,12 +146,24 @@
             android:parentActivityName=".AdminDashboardActivity"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Admin Bookings Activity -->
+        <activity
+            android:name=".AdminBookingsActivity"
+            android:exported="false"
+            android:parentActivityName=".AdminDashboardActivity" />
+
         <!-- Reports & Analytics Activity -->
         <activity
             android:name=".ReportsAnalyticsActivity"
             android:exported="false"
             android:parentActivityName=".AdminDashboardActivity"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- Maintenance Screen — shown to users/providers when maintenance mode is ON -->
+        <activity
+            android:name=".MaintenanceActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
 
         <!-- Profile Activity -->
         <activity
@@ -185,6 +205,13 @@
             android:name=".FullScreenImageActivity"
             android:exported="false"
             android:parentActivityName=".AdminProviderApprovalActivity" />
+
+        <!-- Provider Application Detail Activity (Admin) -->
+        <activity
+            android:name=".ProviderApplicationDetailActivity"
+            android:exported="false"
+            android:parentActivityName=".AdminProviderApprovalActivity"
+            android:windowSoftInputMode="adjustResize" />
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- PROVIDER DASHBOARD ACTIVITIES                                  -->

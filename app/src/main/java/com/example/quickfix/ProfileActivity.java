@@ -280,11 +280,17 @@ public class ProfileActivity extends AppCompatActivity {
 
         menuLanguage.setOnClickListener(v -> showLanguageBottomSheet());
 
-        menuDarkMode.setOnClickListener(v -> switchDarkMode.toggle());
+        menuDarkMode.setOnClickListener(v -> {
+            // Dark mode disabled — always light
+            Toast.makeText(this, "Dark mode is not available in this version", Toast.LENGTH_SHORT).show();
+        });
+        switchDarkMode.setChecked(false);
+        switchDarkMode.setEnabled(false);
         switchDarkMode.setOnCheckedChangeListener((btn, checked) -> {
-            prefs.edit().putBoolean(KEY_DARK_MODE, checked).apply();
-            AppCompatDelegate.setDefaultNightMode(
-                    checked ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO);
+            // Always force light mode
+            switchDarkMode.setChecked(false);
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+            prefs.edit().putBoolean(KEY_DARK_MODE, false).apply();
         });
 
         menuHelpSupport.setOnClickListener(v ->
@@ -384,15 +390,15 @@ public class ProfileActivity extends AppCompatActivity {
 
     // ── Dark Mode ─────────────────────────────────────────────────────────
     private void applyDarkModeFromPrefs() {
-        boolean dark = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getBoolean(KEY_DARK_MODE, false);
-        AppCompatDelegate.setDefaultNightMode(
-                dark ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO);
+        // Always force light mode — dark mode is disabled
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
     }
 
     private void setupTogglesFromPrefs() {
         switchNotifications.setChecked(prefs.getBoolean(KEY_NOTIF, true));
-        switchDarkMode.setChecked(prefs.getBoolean(KEY_DARK_MODE, false));
+        // Dark mode always off
+        switchDarkMode.setChecked(false);
+        switchDarkMode.setEnabled(false);
         String lang = prefs.getString(KEY_LANGUAGE, "English");
         tvCurrentLanguage.setText(lang);
     }

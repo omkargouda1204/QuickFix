@@ -10,7 +10,6 @@ import android.widget.AutoCompleteTextView;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -24,36 +23,34 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
 /**
- * ProviderApplicationActivity — User-facing "Become a Service Provider" form.
+ * ProviderApplicationActivity — "Become a Service Provider" form.
  *
- * Key behaviours:
- *  • Terms ScrollView must be scrolled to bottom before checkbox enables.
- *  • Checkbox must be checked AND all fields filled before submit enables.
- *  • Shows loading spinner on submit, prevents double-click.
- *  • Checks for duplicate submission (pending/approved) before inserting.
- *  • Shows success overlay with redirect to MainActivity on close.
+ * Validators:
+ *  • Business Name  : letters/spaces only (no digits, no special chars)
+ *  • Phone          : exactly 10 digits
+ *  • Experience     : numbers only, 1–99
+ *  • Email          : pre-filled from account, read-only
+ *  • Terms          : must scroll to bottom first, then tick checkbox
  */
 public class ProviderApplicationActivity extends AppCompatActivity {
 
     // ── Views ─────────────────────────────────────────────────────────────
-    private TextInputLayout layoutBusinessName, layoutOwnerName, layoutPhone,
-            layoutEmail, layoutCategory, layoutCity, layoutExperience, layoutDescription;
+    private TextInputLayout  layoutBusinessName, layoutOwnerName, layoutPhone,
+                             layoutEmail, layoutCategory, layoutCity,
+                             layoutExperience, layoutDescription;
     private TextInputEditText etBusinessName, etOwnerName, etPhone,
-            etEmail, etCity, etExperience, etDescription;
+                              etEmail, etCity, etExperience, etDescription;
     private AutoCompleteTextView spinnerCategory;
-    private ScrollView termsScrollView;
-    private TextView tvScrollHint;
+    private ScrollView       termsScrollView;
+    private View             tvScrollHint;   // now a LinearLayout in XML
     private MaterialCheckBox checkboxTerms;
-    private MaterialButton btnSubmit, btnSuccessHome;
-    private FrameLayout successOverlay;
-    private LinearLayout layoutStatusBadge;
+    private MaterialButton   btnSubmit, btnSuccessHome;
+    private FrameLayout      successOverlay;
+    private LinearLayout     layoutStatusBadge;
 
     // ── State ─────────────────────────────────────────────────────────────
     private boolean termsScrolledToBottom = false;
-    private boolean isSubmitting = false;
-
-    // ── Firebase ──────────────────────────────────────────────────────────
-    private FirebaseAuth mAuth;
+    private boolean isSubmitting          = false;
 
     private static final String[] CATEGORIES = {
             "Plumbing", "Electrical", "Cleaning", "Repair & Maintenance",
@@ -67,9 +64,7 @@ public class ProviderApplicationActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_provider_application);
 
-        mAuth = FirebaseAuth.getInstance();
-
-        FirebaseUser user = mAuth.getCurrentUser();
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) {
             startActivity(new Intent(this, LoginActivity.class));
             finish();
@@ -84,8 +79,6 @@ public class ProviderApplicationActivity extends AppCompatActivity {
         setupFieldWatchers();
         setupSubmitButton(user);
         setupSuccessButton();
-
-        // Check if user already has a pending/approved application
         checkExistingApplication(user.getUid());
     }
 
@@ -97,35 +90,35 @@ public class ProviderApplicationActivity extends AppCompatActivity {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             getSupportActionBar().setTitle("");
         }
-        toolbar.setNavigationOnClickListener(v -> onBackPressed());
+        toolbar.setNavigationOnClickListener(v -> finish());
     }
 
     // ── Bind views ────────────────────────────────────────────────────────
     private void bindViews() {
-        layoutBusinessName  = findViewById(R.id.layoutBusinessName);
-        layoutOwnerName     = findViewById(R.id.layoutOwnerName);
-        layoutPhone         = findViewById(R.id.layoutPhone);
-        layoutEmail         = findViewById(R.id.layoutEmail);
-        layoutCategory      = findViewById(R.id.layoutCategory);
-        layoutCity          = findViewById(R.id.layoutCity);
-        layoutExperience    = findViewById(R.id.layoutExperience);
-        layoutDescription   = findViewById(R.id.layoutDescription);
+        layoutBusinessName = findViewById(R.id.layoutBusinessName);
+        layoutOwnerName    = findViewById(R.id.layoutOwnerName);
+        layoutPhone        = findViewById(R.id.layoutPhone);
+        layoutEmail        = findViewById(R.id.layoutEmail);
+        layoutCategory     = findViewById(R.id.layoutCategory);
+        layoutCity         = findViewById(R.id.layoutCity);
+        layoutExperience   = findViewById(R.id.layoutExperience);
+        layoutDescription  = findViewById(R.id.layoutDescription);
 
-        etBusinessName  = findViewById(R.id.etBusinessName);
-        etOwnerName     = findViewById(R.id.etOwnerName);
-        etPhone         = findViewById(R.id.etPhone);
-        etEmail         = findViewById(R.id.etEmail);
-        spinnerCategory = findViewById(R.id.spinnerCategory);
-        etCity          = findViewById(R.id.etCity);
-        etExperience    = findViewById(R.id.etExperience);
-        etDescription   = findViewById(R.id.etDescription);
+        etBusinessName = findViewById(R.id.etBusinessName);
+        etOwnerName    = findViewById(R.id.etOwnerName);
+        etPhone        = findViewById(R.id.etPhone);
+        etEmail        = findViewById(R.id.etEmail);
+        spinnerCategory= findViewById(R.id.spinnerCategory);
+        etCity         = findViewById(R.id.etCity);
+        etExperience   = findViewById(R.id.etExperience);
+        etDescription  = findViewById(R.id.etDescription);
 
-        termsScrollView  = findViewById(R.id.termsScrollView);
-        tvScrollHint     = findViewById(R.id.tvScrollHint);
-        checkboxTerms    = findViewById(R.id.checkboxTerms);
-        btnSubmit        = findViewById(R.id.btnSubmit);
-        successOverlay   = findViewById(R.id.successOverlay);
-        btnSuccessHome   = findViewById(R.id.btnSuccessHome);
+        termsScrollView   = findViewById(R.id.termsScrollView);
+        tvScrollHint      = findViewById(R.id.tvScrollHint);
+        checkboxTerms     = findViewById(R.id.checkboxTerms);
+        btnSubmit         = findViewById(R.id.btnSubmit);
+        successOverlay    = findViewById(R.id.successOverlay);
+        btnSuccessHome    = findViewById(R.id.btnSuccessHome);
         layoutStatusBadge = findViewById(R.id.layoutStatusBadge);
     }
 
@@ -138,9 +131,18 @@ public class ProviderApplicationActivity extends AppCompatActivity {
                 updateSubmitButtonState());
     }
 
-    // ── Pre-fill email & name from Firebase ───────────────────────────────
+    // ── Pre-fill from Firebase ────────────────────────────────────────────
     private void prefillFromFirebase(FirebaseUser user) {
-        if (user.getEmail() != null) etEmail.setText(user.getEmail());
+        // Email — read-only, from account
+        if (user.getEmail() != null) {
+            etEmail.setText(user.getEmail());
+        }
+        etEmail.setFocusable(false);
+        etEmail.setFocusableInTouchMode(false);
+        etEmail.setClickable(false);
+        etEmail.setCursorVisible(false);
+
+        // Owner name pre-fill if available
         if (user.getDisplayName() != null && !user.getDisplayName().isEmpty()) {
             etOwnerName.setText(user.getDisplayName());
         }
@@ -150,56 +152,55 @@ public class ProviderApplicationActivity extends AppCompatActivity {
     private void setupTermsScrollDetection() {
         termsScrollView.getViewTreeObserver().addOnScrollChangedListener(() -> {
             if (termsScrolledToBottom) return;
-
             View child = termsScrollView.getChildAt(0);
             if (child == null) return;
-
             int diff = child.getHeight()
                     - (termsScrollView.getHeight() + termsScrollView.getScrollY());
-
             if (diff <= 8) {
-                // User has scrolled to (or near) the bottom
                 termsScrolledToBottom = true;
                 checkboxTerms.setEnabled(true);
-                tvScrollHint.setVisibility(View.GONE);
-                tvScrollHint.setText("✅  Thank you for reading the terms.");
-                tvScrollHint.setVisibility(View.VISIBLE);
-                tvScrollHint.setBackground(null);
-                TextView hint = tvScrollHint;
-                hint.setBackgroundResource(0);
-                hint.setBackgroundColor(0xFFE8F5E9);
-                hint.setTextColor(0xFF1B5E20);
+                if (tvScrollHint != null) {
+                    // Change banner to "all read" success style
+                    tvScrollHint.setBackgroundColor(0xFFE8F5E9);
+                }
+                updateSubmitButtonState();
             }
         });
     }
 
-    // ── Text watchers for all fields ──────────────────────────────────────
+    // ── Text watchers ─────────────────────────────────────────────────────
     private void setupFieldWatchers() {
         TextWatcher watcher = new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
+            @Override public void onTextChanged(CharSequence s, int st, int b, int c) {}
             @Override public void afterTextChanged(Editable s) { updateSubmitButtonState(); }
         };
-
         etBusinessName.addTextChangedListener(watcher);
         etOwnerName.addTextChangedListener(watcher);
         etPhone.addTextChangedListener(watcher);
-        etEmail.addTextChangedListener(watcher);
         etCity.addTextChangedListener(watcher);
         etExperience.addTextChangedListener(watcher);
         etDescription.addTextChangedListener(watcher);
-
         checkboxTerms.setOnCheckedChangeListener((btn, checked) -> updateSubmitButtonState());
     }
 
+    // ── Real-time submit button enablement ────────────────────────────────
     private void updateSubmitButtonState() {
-        boolean allFilled = isNotEmpty(etBusinessName)
+        String phone = str(etPhone);
+        String exp   = str(etExperience);
+        String biz   = str(etBusinessName);
+
+        boolean phoneOk = phone.matches("\\d{10}");
+        boolean expOk   = exp.matches("\\d{1,2}") && !exp.equals("0");
+        boolean bizOk   = biz.matches("[a-zA-Z\\s.&'-]+") && !biz.isEmpty();
+
+        boolean allFilled = bizOk
                 && isNotEmpty(etOwnerName)
-                && isNotEmpty(etPhone)
+                && phoneOk
                 && isNotEmpty(etEmail)
                 && isNotEmpty(spinnerCategory)
                 && isNotEmpty(etCity)
-                && isNotEmpty(etExperience)
+                && expOk
                 && isNotEmpty(etDescription);
 
         boolean ready = allFilled && checkboxTerms.isChecked();
@@ -207,50 +208,38 @@ public class ProviderApplicationActivity extends AppCompatActivity {
         btnSubmit.setAlpha(ready ? 1f : 0.5f);
     }
 
-    private boolean isNotEmpty(TextView tv) {
-        return tv.getText() != null && !tv.getText().toString().trim().isEmpty();
-    }
-
     // ── Submit ────────────────────────────────────────────────────────────
     private void setupSubmitButton(FirebaseUser user) {
         btnSubmit.setOnClickListener(v -> {
             if (isSubmitting) return;
-            if (!validateFields()) return;
+            if (!validateAllFields()) return;
 
             isSubmitting = true;
             btnSubmit.setEnabled(false);
             btnSubmit.setText("Submitting…");
 
-            String uid          = user.getUid();
-            String name         = etOwnerName.getText().toString().trim();
-            String email        = etEmail.getText().toString().trim();
-            String phone        = etPhone.getText().toString().trim();
-            String businessName = etBusinessName.getText().toString().trim();
-            String category     = spinnerCategory.getText().toString().trim();
-            String description  = etDescription.getText().toString().trim();
-            String city         = etCity.getText().toString().trim();
-            String experience   = etExperience.getText().toString().trim();
-
             ProviderApplicationRepository.submitApplication(
-                    uid, name, email, phone,
-                    businessName, category, description,
-                    "",   // address (not collected separately in this form)
-                    city, experience,
-                    null, // businessImageUrl
-                    null, // idProofUrl
+                    user.getUid(),
+                    str(etOwnerName),
+                    str(etEmail),
+                    str(etPhone),
+                    str(etBusinessName),
+                    str(spinnerCategory),
+                    str(etDescription),
+                    "",
+                    str(etCity),
+                    str(etExperience),
+                    null,
+                    null,
                     new ProviderApplicationRepository.Callback() {
-                        @Override
-                        public void onSuccess() {
+                        @Override public void onSuccess() {
                             isSubmitting = false;
                             showSuccessOverlay();
                         }
-
-                        @Override
-                        public void onError(String message) {
+                        @Override public void onError(String message) {
                             isSubmitting = false;
                             btnSubmit.setEnabled(true);
                             btnSubmit.setText("Submit Application");
-
                             if ("DUPLICATE".equals(message)) {
                                 showError("You already have a pending or approved application.");
                                 showStatusBadge();
@@ -264,68 +253,89 @@ public class ProviderApplicationActivity extends AppCompatActivity {
         });
     }
 
-    // ── Field Validation ──────────────────────────────────────────────────
-    private boolean validateFields() {
+    // ── Full validation (on submit tap) ───────────────────────────────────
+    private boolean validateAllFields() {
         boolean valid = true;
 
-        if (isNotEmpty(etBusinessName)) {
+        // Business Name — letters/spaces/basic punctuation only
+        String biz = str(etBusinessName);
+        if (biz.isEmpty()) {
+            layoutBusinessName.setError("Business name is required.");
+            valid = false;
+        } else if (!biz.matches("[a-zA-Z\\s.&'-]+")) {
+            layoutBusinessName.setError("Business name must contain letters only.");
+            valid = false;
+        } else {
             layoutBusinessName.setError(null);
-        } else {
-            layoutBusinessName.setError(getString(R.string.error_business_name_required));
-            valid = false;
         }
 
-        if (isNotEmpty(etOwnerName)) {
+        // Owner Name
+        if (str(etOwnerName).isEmpty()) {
+            layoutOwnerName.setError("Owner name is required.");
+            valid = false;
+        } else {
             layoutOwnerName.setError(null);
-        } else {
-            layoutOwnerName.setError(getString(R.string.error_owner_name_required));
-            valid = false;
         }
 
-        if (isNotEmpty(etPhone)) {
+        // Phone — exactly 10 digits
+        String phone = str(etPhone);
+        if (phone.isEmpty()) {
+            layoutPhone.setError("Phone number is required.");
+            valid = false;
+        } else if (!phone.matches("\\d{10}")) {
+            layoutPhone.setError("Enter a valid 10-digit mobile number.");
+            valid = false;
+        } else {
             layoutPhone.setError(null);
-        } else {
-            layoutPhone.setError(getString(R.string.error_phone_required));
-            valid = false;
         }
 
-        if (isNotEmpty(etEmail)) {
+        // Email (read-only, should always be filled)
+        if (str(etEmail).isEmpty()) {
+            layoutEmail.setError("Email is required.");
+            valid = false;
+        } else {
             layoutEmail.setError(null);
-        } else {
-            layoutEmail.setError(getString(R.string.error_email_required));
-            valid = false;
         }
 
-        if (isNotEmpty(spinnerCategory)) {
+        // Category
+        if (str(spinnerCategory).isEmpty()) {
+            layoutCategory.setError("Please select a service category.");
+            valid = false;
+        } else {
             layoutCategory.setError(null);
-        } else {
-            layoutCategory.setError(getString(R.string.error_category_required));
-            valid = false;
         }
 
-        if (isNotEmpty(etCity)) {
+        // City
+        if (str(etCity).isEmpty()) {
+            layoutCity.setError("City is required.");
+            valid = false;
+        } else {
             layoutCity.setError(null);
-        } else {
-            layoutCity.setError(getString(R.string.error_city_required));
-            valid = false;
         }
 
-        if (isNotEmpty(etExperience)) {
+        // Years of Experience — numbers only, 1–99
+        String exp = str(etExperience);
+        if (exp.isEmpty()) {
+            layoutExperience.setError("Years of experience is required.");
+            valid = false;
+        } else if (!exp.matches("\\d{1,2}") || exp.equals("0")) {
+            layoutExperience.setError("Enter a valid number (1–99).");
+            valid = false;
+        } else {
             layoutExperience.setError(null);
-        } else {
-            layoutExperience.setError(getString(R.string.error_experience_required));
-            valid = false;
         }
 
-        if (isNotEmpty(etDescription)) {
+        // Description
+        if (str(etDescription).isEmpty()) {
+            layoutDescription.setError("Please describe your services.");
+            valid = false;
+        } else {
             layoutDescription.setError(null);
-        } else {
-            layoutDescription.setError(getString(R.string.error_description_required));
-            valid = false;
         }
 
+        // Terms
         if (!checkboxTerms.isChecked()) {
-            showError(getString(R.string.error_terms_not_accepted));
+            showError("Please read and accept the Terms & Conditions.");
             valid = false;
         }
 
@@ -336,36 +346,25 @@ public class ProviderApplicationActivity extends AppCompatActivity {
     private void checkExistingApplication(String uid) {
         ProviderApplicationRepository.checkApplicationStatus(uid,
                 new ProviderApplicationRepository.StatusCallback() {
-                    @Override
-                    public void onFound(String status) {
+                    @Override public void onFound(String status) {
                         if ("approved".equals(status)) {
-                            // Already a provider — redirect to provider dashboard
                             Toast.makeText(ProviderApplicationActivity.this,
                                     "Your application is already approved!", Toast.LENGTH_LONG).show();
                             startActivity(new Intent(ProviderApplicationActivity.this,
                                     ProviderDashboardActivity.class));
                             finish();
                         } else if ("pending".equals(status)) {
-                            // Show pending status badge & disable form
                             showStatusBadge();
                             disableFormForResubmission();
                         }
-                        // rejected → allow resubmission (form stays enabled)
                     }
-
-                    @Override
-                    public void onNotFound() { /* No previous application — form ready */ }
-
-                    @Override
-                    public void onError(String message) {
-                        // Non-fatal — let user proceed
-                    }
+                    @Override public void onNotFound() { /* form ready */ }
+                    @Override public void onError(String message) { /* non-fatal */ }
                 });
     }
 
     private void showStatusBadge() {
-        if (layoutStatusBadge != null)
-            layoutStatusBadge.setVisibility(View.VISIBLE);
+        if (layoutStatusBadge != null) layoutStatusBadge.setVisibility(View.VISIBLE);
     }
 
     private void disableFormForResubmission() {
@@ -378,7 +377,7 @@ public class ProviderApplicationActivity extends AppCompatActivity {
     private void showSuccessOverlay() {
         successOverlay.setVisibility(View.VISIBLE);
         successOverlay.setAlpha(0f);
-        successOverlay.animate().alpha(1f).setDuration(300).start();
+        successOverlay.animate().alpha(1f).setDuration(350).start();
     }
 
     private void setupSuccessButton() {
@@ -388,6 +387,15 @@ public class ProviderApplicationActivity extends AppCompatActivity {
             startActivity(intent);
             finish();
         });
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+    private String str(android.widget.TextView tv) {
+        return (tv != null && tv.getText() != null) ? tv.getText().toString().trim() : "";
+    }
+
+    private boolean isNotEmpty(android.widget.TextView tv) {
+        return !str(tv).isEmpty();
     }
 
     private void showError(String msg) {

@@ -312,7 +312,7 @@ public class LoginActivity extends AppCompatActivity {
                 toast("Google Sign-In failed: no account returned.");
                 return;
             }
-            updateOverlay("Verifying with Firebase…");
+            updateOverlay("Verifying…");
             firebaseWithGoogle(acct);
         } catch (ApiException e) {
             resetLoadingState();

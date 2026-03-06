@@ -148,10 +148,11 @@ public class ProvidersListActivity extends AppCompatActivity
 
         new Thread(() -> {
             try {
-                // Build URL — query provider_applications (approved)
+                // ── Query provider_profiles (approved/active providers only) ──
                 StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
-                        .append("/rest/v1/provider_applications")
-                        .append("?status=eq.approved");
+                        .append("/rest/v1/provider_profiles")
+                        .append("?is_approved=eq.true")
+                        .append("&is_active=eq.true");
 
                 // Filter by category
                 if (!category.isEmpty()) {
@@ -168,9 +169,9 @@ public class ProvidersListActivity extends AppCompatActivity
                 }
 
                 url.append("&select=id,firebase_uid,business_name,owner_name,category,")
-                   .append("city,address,phone,email,description,experience_yrs,")
-                   .append("business_image_url,is_verified,status")
-                   .append("&order=submitted_at.desc")
+                   .append("city,address,phone,email,description,experience,")
+                   .append("business_image_url,id_proof_url,is_approved,is_active")
+                   .append("&order=approved_at.desc")
                    .append("&limit=50");
 
                 Request req = new Request.Builder()
@@ -223,10 +224,12 @@ public class ProvidersListActivity extends AppCompatActivity
             p.phone            = o.optString("phone", "");
             p.email            = o.optString("email", "");
             p.description      = o.optString("description", "");
-            p.experienceYrs    = o.optString("experience_yrs", "");
+            // 'experience' column in provider_profiles (copied from provider_applications)
+            p.experienceYrs    = o.optString("experience", "");
             p.businessImageUrl = o.optString("business_image_url", "");
-            p.isVerified       = o.optBoolean("is_verified", false);
-            p.status           = o.optString("status", "approved");
+            p.idProofUrl       = o.optString("id_proof_url", "");
+            p.isVerified       = o.optBoolean("is_approved", false);
+            p.status           = o.optBoolean("is_active", false) ? "active" : "inactive";
             // rating not yet in table — default 0
             p.rating           = (float) o.optDouble("rating", 0.0);
             return p;

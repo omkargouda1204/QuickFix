@@ -43,6 +43,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -559,44 +560,92 @@ public class MainActivity extends AppCompatActivity {
     private void setupListBusinessCard(FirebaseUser user) {
         if (listBusinessSection == null || btnListBusinessStart == null) return;
         listBusinessSection.setVisibility(View.GONE);
-        String uid = user.getUid();
+        String uid   = user.getUid();
+        String email = user.getEmail() != null ? user.getEmail() : "";
+
+        // 1. Check if user is admin — hide card for admins
         RoleManager.checkAdminRole(uid, new RoleManager.RoleCheckCallback() {
             @Override public void onAdminVerified(String adminRoleId, String roleName) {
                 listBusinessSection.setVisibility(View.GONE);
             }
-            @Override public void onNotAdmin() { checkIfProvider(uid); }
-            @Override public void onError(String message) { showListBusinessCard(); }
+            @Override public void onNotAdmin() {
+                // 2. Check if email already has an approved provider profile
+                checkProviderProfile(uid, email);
+            }
+            @Override public void onError(String message) {
+                // On role check error — still show for normal users
+                checkProviderProfile(uid, email);
+            }
         });
     }
 
-    private void checkIfProvider(String uid) {
-        String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_applications"
-                + "?firebase_uid=eq." + uid + "&status=eq.approved&select=id&limit=1";
-        Request req = new Request.Builder().url(url)
-                .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Accept",        "application/json")
-                .build();
-        HTTP.newCall(req).enqueue(new okhttp3.Callback() {
-            @Override public void onFailure(@NonNull okhttp3.Call call, @NonNull java.io.IOException e) {
-                runOnUiThread(() -> showListBusinessCard());
-            }
-            @Override public void onResponse(@NonNull okhttp3.Call call, @NonNull Response response) throws java.io.IOException {
-                int code = response.code();
-                String body = response.body() != null ? response.body().string() : "[]";
-                response.close();
-                runOnUiThread(() -> {
-                    try {
-                        if (code == 200 && new JSONArray(body).length() > 0)
-                            listBusinessSection.setVisibility(View.GONE);
-                        else showListBusinessCard();
-                    } catch (Exception e) { showListBusinessCard(); }
+    /**
+     * Checks if the user already has an approved provider profile (email uniqueness).
+     * If yes → hide card.
+     * If no → check application status for the Start button routing.
+     */
+    private void checkProviderProfile(String uid, String email) {
+        ProviderApplicationRepository.checkProviderByEmail(email,
+                new ProviderApplicationRepository.ProviderExistsCallback() {
+                    @Override public void onExists() {
+                        // Already an approved provider — hide the card
+                        runOnUiThread(() -> {
+                            if (listBusinessSection != null)
+                                listBusinessSection.setVisibility(View.GONE);
+                        });
+                    }
+                    @Override public void onNotExists() {
+                        // Check for any existing application (pending/rejected)
+                        checkExistingApplication(uid);
+                    }
+                    @Override public void onError(String msg) {
+                        checkExistingApplication(uid);
+                    }
                 });
-            }
-        });
     }
 
-    private void showListBusinessCard() {
+    /**
+     * Checks existing application status.
+     * - No application → show card, Start → open ProviderOnboardingActivity
+     * - Pending or Rejected → show card, Start → open ApplicationStatusActivity
+     * - Approved → hide card (already a provider)
+     */
+    private void checkExistingApplication(String uid) {
+        ProviderApplicationRepository.checkApplicationStatus(uid,
+                new ProviderApplicationRepository.StatusCallback() {
+                    @Override public void onFound(String status) {
+                        runOnUiThread(() -> {
+                            switch (status.toLowerCase(Locale.US)) {
+                                case "approved":
+                                    // Already provider — hide card
+                                    if (listBusinessSection != null)
+                                        listBusinessSection.setVisibility(View.GONE);
+                                    break;
+                                case "pending":
+                                case "rejected":
+                                    // Show card — Start routes to status page
+                                    showListBusinessCard(true);
+                                    break;
+                                default:
+                                    showListBusinessCard(false);
+                                    break;
+                            }
+                        });
+                    }
+                    @Override public void onNotFound() {
+                        runOnUiThread(() -> showListBusinessCard(false));
+                    }
+                    @Override public void onError(String message) {
+                        runOnUiThread(() -> showListBusinessCard(false));
+                    }
+                });
+    }
+
+    /**
+     * @param hasExistingApplication true = route Start → ApplicationStatusActivity
+     *                               false = route Start → ProviderOnboardingActivity
+     */
+    private void showListBusinessCard(boolean hasExistingApplication) {
         if (listBusinessSection == null) return;
         listBusinessSection.setVisibility(View.VISIBLE);
         listBusinessSection.setAlpha(0f);
@@ -605,11 +654,16 @@ public class MainActivity extends AppCompatActivity {
             Animation pulse = AnimationUtils.loadAnimation(this, R.anim.pulse);
             btnListBusinessStart.startAnimation(pulse);
             btnListBusinessStart.setOnClickListener(v -> {
-                startActivity(new Intent(this, ProviderOnboardingActivity.class));
+                if (hasExistingApplication) {
+                    startActivity(new Intent(this, ApplicationStatusActivity.class));
+                } else {
+                    startActivity(new Intent(this, ProviderOnboardingActivity.class));
+                }
                 overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
             });
             if (listBusinessSection.getChildCount() > 0) {
-                listBusinessSection.getChildAt(0).setOnClickListener(v -> btnListBusinessStart.performClick());
+                listBusinessSection.getChildAt(0).setOnClickListener(
+                        v -> btnListBusinessStart.performClick());
             }
         }
     }

@@ -167,8 +167,9 @@ public class ContentManagementActivity extends AppCompatActivity {
         showShimmer(true);
         emptyStateLayout.setVisibility(View.GONE);
 
+        // Use select=* to avoid HTTP 400 (42703) if icon_url/description don't exist
         String url = SUPABASE_URL + "/rest/v1/service_categories"
-                + "?select=id,name,description,icon_url,created_at"
+                + "?select=*"
                 + "&order=name.asc";
 
         Request req = supabaseBuilder(url).get().build();
@@ -205,12 +206,13 @@ public class ContentManagementActivity extends AppCompatActivity {
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
                 AdminCategory cat = new AdminCategory();
-                cat.id          = o.optString("id", "");
-                cat.name        = o.optString("name", "");
+                cat.id          = o.optString("id",          "");
+                cat.name        = o.optString("name",        "");
+                // These columns may or may not exist — optString returns "" safely
                 cat.description = o.optString("description", "");
-                cat.iconUrl     = o.optString("icon_url", "");
-                cat.createdAt   = o.optString("created_at", "");
-                cat.providerCount = 0; // could be loaded separately
+                cat.iconUrl     = o.optString("icon_url",    "");
+                cat.createdAt   = o.optString("created_at",  "");
+                cat.providerCount = 0;
                 allCategories.add(cat);
             }
             String query = etSearch != null && etSearch.getText() != null
@@ -218,7 +220,7 @@ public class ContentManagementActivity extends AppCompatActivity {
             filterList(query);
         } catch (Exception e) {
             Log.e(TAG, "parseCategories: " + e.getMessage());
-            showError("Parse error");
+            showError("Parse error: " + e.getMessage());
         }
     }
 
@@ -268,10 +270,11 @@ public class ContentManagementActivity extends AppCompatActivity {
     private void insertCategory(String name, String desc, String icon) {
         try {
             JSONObject body = new JSONObject();
-            body.put("id",          UUID.randomUUID().toString());
-            body.put("name",        name);
-            body.put("description", desc);
-            body.put("icon_url",    icon);
+            body.put("id",   UUID.randomUUID().toString());
+            body.put("name", name);  // ✅ name column always exists
+            // Only include optional columns if non-empty (avoids 42703 if column missing)
+            if (desc != null && !desc.isEmpty())  body.put("description", desc);
+            if (icon != null && !icon.isEmpty())  body.put("icon_url",    icon);
 
             String url = SUPABASE_URL + "/rest/v1/service_categories";
             RequestBody rb = RequestBody.create(body.toString(), JSON);
@@ -305,9 +308,9 @@ public class ContentManagementActivity extends AppCompatActivity {
     private void updateCategory(String id, String name, String desc, String icon) {
         try {
             JSONObject body = new JSONObject();
-            body.put("name",        name);
-            body.put("description", desc);
-            body.put("icon_url",    icon);
+            body.put("name", name);  // ✅ always exists
+            if (desc != null && !desc.isEmpty())  body.put("description", desc);
+            if (icon != null && !icon.isEmpty())  body.put("icon_url",    icon);
 
             String url = SUPABASE_URL + "/rest/v1/service_categories?id=eq." + id;
             RequestBody rb = RequestBody.create(body.toString(), JSON);

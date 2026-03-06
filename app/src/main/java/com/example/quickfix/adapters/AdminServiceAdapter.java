@@ -1,4 +1,3 @@
-
 package com.example.quickfix.adapters;
 
 import android.content.Context;
@@ -14,7 +13,6 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.bumptech.glide.Glide;
 import com.example.quickfix.AdminService;
 import com.example.quickfix.R;
 import com.google.android.material.chip.Chip;
@@ -23,6 +21,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * AdminServiceAdapter — displays services from the `services` table.
+ * Uses actual DB columns: title, category, price, duration_mins, is_active.
+ */
 public class AdminServiceAdapter extends RecyclerView.Adapter<AdminServiceAdapter.VH> {
 
     public interface Listener {
@@ -41,8 +43,7 @@ public class AdminServiceAdapter extends RecyclerView.Adapter<AdminServiceAdapte
         this.listener = listener;
     }
 
-    @NonNull
-    @Override
+    @NonNull @Override
     public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View v = LayoutInflater.from(ctx)
                 .inflate(R.layout.item_admin_service_card, parent, false);
@@ -53,34 +54,45 @@ public class AdminServiceAdapter extends RecyclerView.Adapter<AdminServiceAdapte
     public void onBindViewHolder(@NonNull VH h, int pos) {
         AdminService svc = items.get(pos);
 
-        h.tvName.setText(svc.name != null ? svc.name : "");
-        h.tvCategory.setText(svc.categoryName != null ? svc.categoryName : "Uncategorized");
-        h.tvPrice.setText(String.format(Locale.getDefault(), "₹%.0f", svc.basePrice));
+        // ── title (DB column) ────────────────────────────────────────────
+        h.tvName.setText(svc.title != null ? svc.title : "");
+
+        // ── category (plain string, no FK) ───────────────────────────────
+        h.tvCategory.setText(svc.category != null && !svc.category.isEmpty()
+                ? svc.category : "Uncategorized");
+
+        // ── price (DB column) ────────────────────────────────────────────
+        String priceLabel = String.format(Locale.getDefault(), "₹%.0f", svc.price);
+        if (svc.priceUnit != null && !svc.priceUnit.isEmpty())
+            priceLabel += " / " + svc.priceUnit;
+        h.tvPrice.setText(priceLabel);
+
+        // ── description ──────────────────────────────────────────────────
         h.tvDescription.setText(svc.description != null && !svc.description.isEmpty()
                 ? svc.description : "No description");
 
-        // Status chip — use ColorStateList to avoid R.color lookup at bind time
+        // ── duration (if available) ───────────────────────────────────────
+        if (h.tvDuration != null) {
+            h.tvDuration.setVisibility(svc.durationMins > 0 ? View.VISIBLE : View.GONE);
+            if (svc.durationMins > 0)
+                h.tvDuration.setText(svc.durationMins + " mins");
+        }
+
+        // ── status chip ──────────────────────────────────────────────────
         if (svc.isActive) {
             h.chipStatus.setText("Active");
-            h.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(Color.parseColor("#C8E6C9")));
+            h.chipStatus.setChipBackgroundColor(
+                    ColorStateList.valueOf(Color.parseColor("#C8E6C9")));
             h.chipStatus.setTextColor(Color.parseColor("#1B5E20"));
         } else {
             h.chipStatus.setText("Disabled");
-            h.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(Color.parseColor("#FFCDD2")));
+            h.chipStatus.setChipBackgroundColor(
+                    ColorStateList.valueOf(Color.parseColor("#FFCDD2")));
             h.chipStatus.setTextColor(Color.parseColor("#B71C1C"));
         }
 
-        // Icon
-        if (svc.iconUrl != null && !svc.iconUrl.isEmpty()) {
-            Glide.with(ctx)
-                    .load(svc.iconUrl)
-                    .placeholder(R.drawable.ic_services)
-                    .error(R.drawable.ic_services)
-                    .centerCrop()
-                    .into(h.ivIcon);
-        } else {
-            h.ivIcon.setImageResource(R.drawable.ic_services);
-        }
+        // ── default icon (no icon_url column in DB) ───────────────────────
+        if (h.ivIcon != null) h.ivIcon.setImageResource(R.drawable.ic_services);
 
         h.btnEdit.setOnClickListener(v -> { if (listener != null) listener.onEdit(svc); });
         h.btnDelete.setOnClickListener(v -> { if (listener != null) listener.onDelete(svc); });
@@ -89,8 +101,7 @@ public class AdminServiceAdapter extends RecyclerView.Adapter<AdminServiceAdapte
         });
     }
 
-    @Override
-    public int getItemCount() { return items.size(); }
+    @Override public int getItemCount() { return items.size(); }
 
     public void setItems(List<AdminService> newItems) {
         items.clear();
@@ -100,7 +111,7 @@ public class AdminServiceAdapter extends RecyclerView.Adapter<AdminServiceAdapte
 
     static class VH extends RecyclerView.ViewHolder {
         ImageView   ivIcon;
-        TextView    tvName, tvCategory, tvPrice, tvDescription;
+        TextView    tvName, tvCategory, tvPrice, tvDescription, tvDuration;
         Chip        chipStatus;
         ImageButton btnEdit, btnDelete;
 
@@ -111,10 +122,10 @@ public class AdminServiceAdapter extends RecyclerView.Adapter<AdminServiceAdapte
             tvCategory    = v.findViewById(R.id.tvCategory);
             tvPrice       = v.findViewById(R.id.tvPrice);
             tvDescription = v.findViewById(R.id.tvDescription);
+            tvDuration    = v.findViewById(R.id.tvDuration);   // optional view
             chipStatus    = v.findViewById(R.id.chipStatus);
             btnEdit       = v.findViewById(R.id.btnEdit);
             btnDelete     = v.findViewById(R.id.btnDelete);
         }
     }
 }
-

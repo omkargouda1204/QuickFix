@@ -138,48 +138,45 @@ public class SupabaseClient {
         new Thread(() -> {
             try {
                 JSONObject body = new JSONObject();
-                body.put("firebase_uid", firebaseUid);
-                body.put("name",        name  != null ? name.trim()  : "");
-                body.put("email",       email != null ? email.trim() : "");
-                body.put("phone",       phone != null ? phone.trim() : "");
-                body.put("is_user", isUser);
-                body.put("is_service_provider", isServiceProvider);
-                body.put("is_admin", isAdmin);
-                body.put("is_verified", true);
+                body.put("firebase_uid",         firebaseUid);
+                body.put("name",                 name  != null ? name.trim()  : "");
+                body.put("email",                email != null ? email.trim() : "");
+                body.put("phone",                phone != null ? phone.trim() : "");
+                body.put("is_user",              isUser);
+                body.put("is_service_provider",  isServiceProvider);
+                body.put("is_admin",             isAdmin);
 
-                // ── Step 1: Try INSERT with ignoreDuplicates ──────────
-                // If row already exists, Supabase returns 200/204 with no body (ignores it).
-                // This means the existing role is NEVER overwritten.
+                // ── INSERT — ignore if already exists (preserve existing role) ──
                 Request insertReq = new Request.Builder()
                         .url(SUPABASE_URL + "/rest/v1/users")
                         .post(RequestBody.create(body.toString(), JSON_TYPE))
                         .addHeader("apikey",        ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
                         .addHeader("Content-Type",  "application/json")
-                        // ignoreDuplicates: if firebase_uid already exists, skip silently
-                        .addHeader("Prefer", "resolution=ignore-duplicates,return=minimal")
+                        .addHeader("Prefer",        "resolution=ignore-duplicates,return=minimal")
                         .build();
 
                 try (Response r = HTTP.newCall(insertReq).execute()) {
                     int code = r.code();
                     String rawBody = r.body() != null ? r.body().string() : "";
-                    Log.d(TAG, "upsertUser INSERT HTTP " + code + " | " + rawBody);
+                    Log.d(TAG, "upsertUser INSERT HTTP " + code + " | body=" + rawBody);
 
                     if (code == 200 || code == 201 || code == 204) {
-                        // Either inserted (new user) or silently ignored (existing user)
-                        // Now PATCH name/phone to keep them fresh — but NEVER touch role
+                        Log.d(TAG, "upsertUser INSERT OK for uid=" + firebaseUid);
                         patchUserProfileSync(firebaseUid, name, phone);
-                        Log.d(TAG, "upsertUser OK for " + email);
                         MAIN.post(callback::onSuccess);
                     } else {
-                        Log.w(TAG, "upsertUser INSERT HTTP " + code + " — " + rawBody);
-                        // Still try patch as fallback
+                        // Log full details so the developer can diagnose RLS / schema issues
+                        Log.e(TAG, "upsertUser INSERT failed HTTP " + code
+                                + " | url=" + SUPABASE_URL
+                                + " | body=" + rawBody);
+                        // Non-fatal: patch in case row already exists
                         patchUserProfileSync(firebaseUid, name, phone);
                         MAIN.post(callback::onSuccess);
                     }
                 }
             } catch (Exception e) {
-                Log.e(TAG, "upsertUser exception: " + e.getMessage());
+                Log.e(TAG, "upsertUser exception: " + e.getMessage(), e);
                 MAIN.post(callback::onSuccess); // never block auth flow
             }
         }).start();

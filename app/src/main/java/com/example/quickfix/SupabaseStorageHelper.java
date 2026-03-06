@@ -76,14 +76,20 @@ public class SupabaseStorageHelper {
                 String fileName = prefix + "_" + UUID.randomUUID().toString().substring(0, 8) + ext;
                 String storagePath = prefix + "/" + fileName;
 
-                // Read file bytes
+                // Read file bytes (compatible with API 24+)
                 byte[] fileBytes;
                 try (InputStream is = context.getContentResolver().openInputStream(fileUri)) {
                     if (is == null) {
                         MAIN.post(() -> callback.onError("Cannot read file"));
                         return;
                     }
-                    fileBytes = is.readAllBytes();
+                    java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                    byte[] chunk = new byte[8192];
+                    int nRead;
+                    while ((nRead = is.read(chunk, 0, chunk.length)) != -1) {
+                        buffer.write(chunk, 0, nRead);
+                    }
+                    fileBytes = buffer.toByteArray();
                 }
 
                 // Upload to Supabase Storage
@@ -103,7 +109,7 @@ public class SupabaseStorageHelper {
                     String body = response.body() != null ? response.body().string() : "";
                     Log.d(TAG, "uploadFile HTTP " + code + " | " + body);
 
-                    if (code == 200 || code == 200) {
+                    if (code == 200 || code == 201) {
                         // Build public URL
                         String publicUrl = SUPABASE_URL + "/storage/v1/object/public/"
                                 + bucket + "/" + storagePath;
@@ -117,6 +123,82 @@ public class SupabaseStorageHelper {
             } catch (Exception e) {
                 Log.e(TAG, "uploadFile exception: " + e.getMessage());
                 MAIN.post(() -> callback.onError("Upload error: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  SIGNED URL  — for private bucket files (ID proofs, admin only)
+    // ─────────────────────────────────────────────────────────────────────
+
+    public interface SignedUrlCallback {
+        void onSuccess(String signedUrl);
+        void onError(String message);
+    }
+
+    /**
+     * Generates a short-lived signed URL to access a private Supabase Storage object.
+     * Only call from admin dashboard screens.
+     *
+     * @param bucket       e.g. "QuickFix"
+     * @param storagePath  path stored in DB, e.g. "uid/uid_abc123.jpg"
+     *                     If the full URL is stored, we extract the path automatically.
+     * @param expiresIn    seconds the signed URL is valid (e.g. 300 = 5 minutes)
+     * @param callback     receives the signed URL on success
+     */
+    public static void getSignedUrl(String bucket, String storagePath,
+                                    int expiresIn, SignedUrlCallback callback) {
+        new Thread(() -> {
+            try {
+                // If storagePath is a full URL, extract just the path after /object/bucket/
+                String path = storagePath;
+                String marker = "/object/" + bucket + "/";
+                int idx = storagePath.indexOf(marker);
+                if (idx >= 0) {
+                    path = storagePath.substring(idx + marker.length());
+                } else {
+                    // Also try /object/public/bucket/
+                    String pubMarker = "/object/public/" + bucket + "/";
+                    int pidx = storagePath.indexOf(pubMarker);
+                    if (pidx >= 0) path = storagePath.substring(pidx + pubMarker.length());
+                }
+
+                String url = SUPABASE_URL + "/storage/v1/object/sign/" + bucket + "/" + path;
+
+                org.json.JSONObject body = new org.json.JSONObject();
+                body.put("expiresIn", expiresIn);
+
+                Request request = new Request.Builder()
+                        .url(url)
+                        .post(RequestBody.create(body.toString(),
+                                MediaType.parse("application/json")))
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type",  "application/json")
+                        .build();
+
+                try (Response response = HTTP.newCall(request).execute()) {
+                    int code = response.code();
+                    String respBody = response.body() != null ? response.body().string() : "";
+                    Log.d(TAG, "getSignedUrl HTTP " + code + " | " + respBody);
+
+                    if (code == 200) {
+                        org.json.JSONObject json = new org.json.JSONObject(respBody);
+                        String signedUrl = json.optString("signedURL", "");
+                        if (signedUrl.isEmpty()) signedUrl = json.optString("signedUrl", "");
+                        if (!signedUrl.startsWith("http")) {
+                            // PostgREST returns relative path — prepend base URL
+                            signedUrl = SUPABASE_URL + "/storage/v1" + signedUrl;
+                        }
+                        String finalUrl = signedUrl;
+                        MAIN.post(() -> callback.onSuccess(finalUrl));
+                    } else {
+                        MAIN.post(() -> callback.onError("HTTP " + code + ": " + respBody));
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "getSignedUrl exception: " + e.getMessage());
+                MAIN.post(() -> callback.onError("Error: " + e.getMessage()));
             }
         }).start();
     }

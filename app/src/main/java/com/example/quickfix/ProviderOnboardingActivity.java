@@ -154,6 +154,45 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         setupSubmitButton();
         prefillEmail();
         animateScreenIn();
+        // Check if user already has an active provider profile or pending application
+        checkAlreadyProvider();
+    }
+
+    /** Redirect to status page if user already has a pending/approved application */
+    private void checkAlreadyProvider() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) return;
+        String email = user.getEmail() != null ? user.getEmail() : "";
+        String uid   = user.getUid();
+
+        // First check provider_profiles (approved)
+        ProviderApplicationRepository.checkProviderByEmail(email,
+                new ProviderApplicationRepository.ProviderExistsCallback() {
+                    @Override public void onExists() {
+                        // Already approved provider
+                        startActivity(new Intent(ProviderOnboardingActivity.this,
+                                ApplicationStatusActivity.class));
+                        finish();
+                    }
+                    @Override public void onNotExists() {
+                        // Check for pending/rejected application
+                        ProviderApplicationRepository.checkApplicationStatus(uid,
+                                new ProviderApplicationRepository.StatusCallback() {
+                                    @Override public void onFound(String status) {
+                                        String s = status.toLowerCase(java.util.Locale.US);
+                                        if ("approved".equals(s) || "pending".equals(s)) {
+                                            startActivity(new Intent(ProviderOnboardingActivity.this,
+                                                    ApplicationStatusActivity.class));
+                                            finish();
+                                        }
+                                        // If rejected and 24h passed (or no restriction) — let them apply
+                                    }
+                                    @Override public void onNotFound() { /* show form */ }
+                                    @Override public void onError(String msg) { /* show form */ }
+                                });
+                    }
+                    @Override public void onError(String msg) { /* show form */ }
+                });
     }
 
     private void setupToolbar() {
@@ -591,17 +630,23 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         try {
             JSONObject payload = new JSONObject();
 
-            // Required columns
-            payload.put("firebase_uid",   firebaseUid);          // firebase_uid
-            payload.put("user_name",      userName);              // user_name
-            payload.put("user_email",     userEmail);             // user_email
-            payload.put("business_name",  businessName);          // business_name
-            payload.put("category",       category);              // category
-            payload.put("terms_accepted", true);                  // terms_accepted
+            // firebase_uid — always required
+            payload.put("firebase_uid",   firebaseUid);
 
-            // Optional but included columns
+            // Store under both naming conventions so the approval flow
+            // can read them regardless of which column exists in DB
+            payload.put("owner_name",     userName);             // owner_name (new standard)
+            payload.put("user_name",      userName);             // user_name (legacy)
+            payload.put("email",          userEmail);            // email (new standard)
+            payload.put("user_email",     userEmail);            // user_email (legacy)
+
+            payload.put("business_name",  businessName);
+            payload.put("category",       category);
+            payload.put("terms_accepted", true);
+
             payload.put("phone",          phone);
-            payload.put("experience_yrs", experienceYrs);         // experience_yrs
+            payload.put("experience",     String.valueOf(experienceYrs)); // string column
+            payload.put("experience_yrs", experienceYrs);        // int column (if exists)
             payload.put("address",        address);
             payload.put("city",           city);
             payload.put("description",    description);

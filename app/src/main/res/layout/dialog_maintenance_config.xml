@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Maintenance Message"
+        android:textColor="#374151"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="6dp" />
+
+    <EditText
+        android:id="@+id/etMaintenanceMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Enter maintenance message for users…"
+        android:minLines="3"
+        android:maxLines="5"
+        android:inputType="textMultiLine"
+        android:textColor="#1E293B"
+        android:textColorHint="#94A3B8"
+        android:textSize="14sp"
+        android:padding="12dp"
+        android:background="@drawable/bg_edit_text"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Expected Restart Time (optional)"
+        android:textColor="#374151"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="6dp" />
+
+    <EditText
+        android:id="@+id/etRestartTime"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="e.g. Today at 6:00 PM"
+        android:inputType="text"
+        android:textColor="#1E293B"
+        android:textColorHint="#94A3B8"
+        android:textSize="14sp"
+        android:padding="12dp"
+        android:background="@drawable/bg_edit_text" />
+
+</LinearLayout>
+

@@ -81,11 +81,14 @@ public class SettingsActivity extends AppCompatActivity {
                     prefs.edit().putBoolean(KEY_BOOKING_REM, checked).apply());
         }
         if (switchDarkMode != null) {
+            // Dark mode is disabled — app always uses light theme for consistency
+            switchDarkMode.setChecked(false);
+            switchDarkMode.setEnabled(false);
             switchDarkMode.setOnCheckedChangeListener((v, checked) -> {
-                prefs.edit().putBoolean(KEY_DARK_MODE, checked).apply();
-                AppCompatDelegate.setDefaultNightMode(
-                        checked ? AppCompatDelegate.MODE_NIGHT_YES
-                                : AppCompatDelegate.MODE_NIGHT_NO);
+                // Force back to off — light mode always
+                switchDarkMode.setChecked(false);
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+                prefs.edit().putBoolean(KEY_DARK_MODE, false).apply();
             });
         }
 

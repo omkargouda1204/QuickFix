@@ -90,10 +90,18 @@ public class SplashActivity extends AppCompatActivity {
         });
         splashTagline.startAnimation(animTag);
 
-        // Auto-navigate to LoginActivity after 3 seconds
+        // Auto-navigate after 3 seconds — check maintenance mode first
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            Intent intent = new Intent(SplashActivity.this, LoginActivity.class);
-            startActivity(intent);
+            // Admin users bypass maintenance screen
+            boolean fromAdmin = getIntent().getBooleanExtra("from_admin", false);
+            if (!fromAdmin && AppSettings.isMaintenanceMode(SplashActivity.this)) {
+                // Show maintenance page to normal users/providers
+                Intent intent = new Intent(SplashActivity.this, MaintenanceActivity.class);
+                startActivity(intent);
+            } else {
+                Intent intent = new Intent(SplashActivity.this, LoginActivity.class);
+                startActivity(intent);
+            }
             finish();
             overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         }, SPLASH_DURATION);

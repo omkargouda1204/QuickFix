@@ -22,11 +22,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
-import com.example.quickfix.AdminCategory;
-import com.example.quickfix.AdminService;
-import com.example.quickfix.BuildConfig;
-import com.example.quickfix.R;
-import com.example.quickfix.SupabaseClient;
 import com.example.quickfix.adapters.AdminServiceAdapter;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.switchmaterial.SwitchMaterial;
@@ -53,9 +48,14 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 /**
- * ServiceManagementActivity — Modern Admin: Manage services.
- * Full CRUD: Add / Edit / Delete / Toggle-Status via Supabase REST API.
- * Search + Category filter.
+ * ServiceManagementActivity — Admin CRUD for the `services` table.
+ *
+ * Actual DB columns (Supabase):
+ *   id, provider_uid, title, description, category, price,
+ *   price_unit, duration_mins, is_active, created_at
+ *
+ * Columns that do NOT exist (never query them):
+ *   name, icon, icon_url, category_id, base_price
  */
 public class ServiceManagementActivity extends AppCompatActivity {
 
@@ -63,6 +63,10 @@ public class ServiceManagementActivity extends AppCompatActivity {
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY     = BuildConfig.SUPABASE_ANON_KEY;
     private static final MediaType JSON      = MediaType.get("application/json; charset=utf-8");
+
+    // ── Exact columns that exist in the services table ────────────────────
+    private static final String SELECT_COLS =
+            "id,title,description,category,price,price_unit,duration_mins,is_active,created_at";
 
     private final OkHttpClient http = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -84,7 +88,6 @@ public class ServiceManagementActivity extends AppCompatActivity {
     private AdminServiceAdapter           adapter;
     private final List<AdminService>      allServices      = new ArrayList<>();
     private final List<AdminService>      filteredServices = new ArrayList<>();
-    private final List<AdminCategory>     categories       = new ArrayList<>();
     private final List<String>            categoryNames    = new ArrayList<>();
     private String                        selectedFilterCategory = "All";
 
@@ -105,10 +108,10 @@ public class ServiceManagementActivity extends AppCompatActivity {
         setupSearch();
         setupSwipeRefresh();
         setupFab();
-        loadCategories(); // loads categories first, then services
+        loadServices();
     }
 
-    // ─────────────────────────────────────────────────────────────────────
+    // ── Bind views ────────────────────────────────────────────────────────
     private void bindViews() {
         rvServices       = findViewById(R.id.rvServices);
         swipeRefresh     = findViewById(R.id.swipeRefresh);
@@ -138,8 +141,7 @@ public class ServiceManagementActivity extends AppCompatActivity {
 
         rvServices.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
-                if (dy > 8) fabAdd.shrink();
-                else if (dy < -8) fabAdd.extend();
+                if (dy > 8) fabAdd.shrink(); else if (dy < -8) fabAdd.extend();
             }
         });
     }
@@ -162,70 +164,15 @@ public class ServiceManagementActivity extends AppCompatActivity {
         fabAdd.setOnClickListener(v -> showServiceDialog(null));
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // LOAD CATEGORIES (for filter dropdown + dialog)
-    // ─────────────────────────────────────────────────────────────────────
-    private void loadCategories() {
-        String url = SUPABASE_URL + "/rest/v1/service_categories"
-                + "?select=id,name&order=name.asc";
-        Request req = supabaseBuilder(url).get().build();
-        http.newCall(req).enqueue(new Callback() {
-            @Override public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                main.post(() -> loadServices()); // proceed even if categories fail
-            }
-            @Override public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                int code = response.code();
-                String body = response.body() != null ? response.body().string() : "[]";
-                response.close();
-                main.post(() -> {
-                    if (code == 200) parseCategories(body);
-                    loadServices();
-                });
-            }
-        });
-    }
-
-    private void parseCategories(String json) {
-        try {
-            JSONArray arr = new JSONArray(json);
-            categories.clear();
-            categoryNames.clear();
-            categoryNames.add("All");
-            for (int i = 0; i < arr.length(); i++) {
-                JSONObject o = arr.getJSONObject(i);
-                AdminCategory cat = new AdminCategory();
-                cat.id   = o.optString("id",   "");
-                cat.name = o.optString("name",  "");
-                categories.add(cat);
-                categoryNames.add(cat.name);
-            }
-            // Set up category filter dropdown
-            if (acCategoryFilter != null) {
-                ArrayAdapter<String> filterAdapter = new ArrayAdapter<>(
-                        this, android.R.layout.simple_dropdown_item_1line, categoryNames);
-                acCategoryFilter.setAdapter(filterAdapter);
-                acCategoryFilter.setText("All", false);
-                acCategoryFilter.setOnItemClickListener((parent, v, pos, id) -> {
-                    selectedFilterCategory = categoryNames.get(pos);
-                    applyFilters();
-                });
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "parseCategories: " + e.getMessage());
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────
-    // LOAD SERVICES
-    // ─────────────────────────────────────────────────────────────────────
+    // ── LOAD SERVICES ─────────────────────────────────────────────────────
     private void loadServices() {
         showShimmer(true);
-        emptyStateLayout.setVisibility(View.GONE);
+        if (emptyStateLayout != null) emptyStateLayout.setVisibility(View.GONE);
 
+        // Only select columns that actually exist in the services table
         String url = SUPABASE_URL + "/rest/v1/services"
-                + "?select=id,name,category_id,description,base_price,icon_url,is_active,created_at"
-                + ",service_categories(name)"
-                + "&order=name.asc";
+                + "?select=" + SELECT_COLS
+                + "&order=title.asc";
 
         Request req = supabaseBuilder(url).get().build();
         http.newCall(req).enqueue(new Callback() {
@@ -234,17 +181,24 @@ public class ServiceManagementActivity extends AppCompatActivity {
                     showShimmer(false);
                     swipeRefresh.setRefreshing(false);
                     showError("Network error: " + e.getMessage());
+                    ensureDefaultServicesExist();
                 });
             }
             @Override public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                int code = response.code();
+                int    code = response.code();
                 String body = response.body() != null ? response.body().string() : "[]";
                 response.close();
+                Log.d(TAG, "loadServices HTTP " + code + " | " + body.substring(0, Math.min(300, body.length())));
                 main.post(() -> {
                     showShimmer(false);
                     swipeRefresh.setRefreshing(false);
-                    if (code == 200) parseServices(body);
-                    else showError("Failed to load services (HTTP " + code + ")");
+                    if (code == 200) {
+                        parseServices(body);
+                        if (allServices.isEmpty()) ensureDefaultServicesExist();
+                    } else {
+                        showError("Failed to load services (HTTP " + code + "): " + body);
+                        ensureDefaultServicesExist();
+                    }
                 });
             }
         });
@@ -254,33 +208,50 @@ public class ServiceManagementActivity extends AppCompatActivity {
         try {
             JSONArray arr = new JSONArray(json);
             allServices.clear();
+            categoryNames.clear();
+            categoryNames.add("All");
+
             for (int i = 0; i < arr.length(); i++) {
-                JSONObject o = arr.getJSONObject(i);
-                AdminService svc = new AdminService();
-                svc.id           = o.optString("id",          "");
-                svc.name         = o.optString("name",        "");
-                svc.categoryId   = o.optString("category_id", "");
-                svc.description  = o.optString("description", "");
-                svc.basePrice    = o.optDouble("base_price",  0);
-                svc.iconUrl      = o.optString("icon_url",    "");
-                svc.isActive     = o.optBoolean("is_active",  true);
-                svc.createdAt    = o.optString("created_at",  "");
-                // Embedded join result
-                JSONObject catObj = o.optJSONObject("service_categories");
-                svc.categoryName = catObj != null
-                        ? catObj.optString("name", "Uncategorized") : "Uncategorized";
-                allServices.add(svc);
+                JSONObject o   = arr.getJSONObject(i);
+                AdminService s = new AdminService();
+                s.id           = o.optString("id",           "");
+                s.title        = o.optString("title",        "");
+                s.category     = o.optString("category",     "");
+                s.description  = o.optString("description",  "");
+                s.price        = o.optDouble("price",        0);
+                s.priceUnit    = o.optString("price_unit",   "");
+                s.durationMins = o.optInt("duration_mins",   0);
+                s.isActive     = o.optBoolean("is_active",   true);
+                s.createdAt    = o.optString("created_at",   "");
+                allServices.add(s);
+
+                // Build dynamic category filter list from data
+                if (s.category != null && !s.category.isEmpty()
+                        && !categoryNames.contains(s.category)) {
+                    categoryNames.add(s.category);
+                }
             }
+            setupCategoryFilterDropdown();
             applyFilters();
         } catch (Exception e) {
             Log.e(TAG, "parseServices: " + e.getMessage());
-            showError("Parse error");
+            showError("Parse error: " + e.getMessage());
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // FILTER
-    // ─────────────────────────────────────────────────────────────────────
+    private void setupCategoryFilterDropdown() {
+        if (acCategoryFilter == null) return;
+        ArrayAdapter<String> filterAdapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_dropdown_item_1line, categoryNames);
+        acCategoryFilter.setAdapter(filterAdapter);
+        acCategoryFilter.setText("All", false);
+        acCategoryFilter.setOnItemClickListener((parent, v, pos, id) -> {
+            selectedFilterCategory = categoryNames.get(pos);
+            applyFilters();
+        });
+    }
+
+    // ── FILTER ────────────────────────────────────────────────────────────
     private void applyFilters() {
         String query = etSearch != null && etSearch.getText() != null
                 ? etSearch.getText().toString().trim().toLowerCase() : "";
@@ -289,160 +260,178 @@ public class ServiceManagementActivity extends AppCompatActivity {
         filteredServices.clear();
         for (AdminService svc : allServices) {
             boolean matchSearch = query.isEmpty()
-                    || (svc.name != null && svc.name.toLowerCase().contains(query))
+                    || (svc.title       != null && svc.title.toLowerCase().contains(query))
                     || (svc.description != null && svc.description.toLowerCase().contains(query))
-                    || (svc.categoryName != null && svc.categoryName.toLowerCase().contains(query));
+                    || (svc.category    != null && svc.category.toLowerCase().contains(query));
             boolean matchCat = catFilter.equals("All")
-                    || (svc.categoryName != null && svc.categoryName.equals(catFilter));
+                    || (svc.category != null && svc.category.equals(catFilter));
             if (matchSearch && matchCat) filteredServices.add(svc);
         }
         adapter.notifyDataSetChanged();
         updateCountLabel();
-        emptyStateLayout.setVisibility(filteredServices.isEmpty() ? View.VISIBLE : View.GONE);
+        if (emptyStateLayout != null)
+            emptyStateLayout.setVisibility(filteredServices.isEmpty() ? View.VISIBLE : View.GONE);
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // ADD / EDIT SERVICE DIALOG
-    // ─────────────────────────────────────────────────────────────────────
+    // ── ADD / EDIT DIALOG ─────────────────────────────────────────────────
     private void showServiceDialog(AdminService existing) {
         boolean isEdit = existing != null;
-        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_edit_service, null);
+        View dialogView = LayoutInflater.from(this)
+                .inflate(R.layout.dialog_add_edit_service, null);
 
-        TextInputLayout    tilName  = dialogView.findViewById(R.id.tilServiceName);
-        TextInputEditText  etName   = dialogView.findViewById(R.id.etServiceName);
-        TextInputEditText  etPrice  = dialogView.findViewById(R.id.etPrice);
-        TextInputEditText  etDesc   = dialogView.findViewById(R.id.etServiceDescription);
-        TextInputEditText  etIcon   = dialogView.findViewById(R.id.etIconUrl);
-        AutoCompleteTextView acCat  = dialogView.findViewById(R.id.acCategory);
-        SwitchMaterial     swActive = dialogView.findViewById(R.id.switchActive);
+        TextInputLayout   tilTitle    = dialogView.findViewById(R.id.tilServiceName);
+        TextInputEditText etTitle     = dialogView.findViewById(R.id.etServiceName);
+        TextInputEditText etPrice     = dialogView.findViewById(R.id.etPrice);
+        TextInputEditText etDesc      = dialogView.findViewById(R.id.etServiceDescription);
+        TextInputEditText etDuration  = dialogView.findViewById(R.id.etIconUrl); // reuse field for duration
+        AutoCompleteTextView acCat    = dialogView.findViewById(R.id.acCategory);
+        SwitchMaterial     swActive   = dialogView.findViewById(R.id.switchActive);
 
-        // Populate category dropdown inside dialog
-        ArrayAdapter<String> catAdapter = new ArrayAdapter<>(
-                this, android.R.layout.simple_dropdown_item_1line, categoryNames);
-        if (acCat != null) acCat.setAdapter(catAdapter);
+        // Relabel the "icon" field to "Duration (mins)" since icon_url doesn't exist
+        TextInputLayout tilIcon = dialogView.findViewById(R.id.tilIconUrl);
+        if (tilIcon != null) tilIcon.setHint("Duration (mins)");
 
-        if (isEdit) {
-            if (etName   != null) etName.setText(existing.name);
-            if (etPrice  != null) etPrice.setText(String.valueOf((int) existing.basePrice));
-            if (etDesc   != null) etDesc.setText(existing.description);
-            if (etIcon   != null) etIcon.setText(existing.iconUrl);
-            if (acCat    != null) acCat.setText(existing.categoryName, false);
-            if (swActive != null) swActive.setChecked(existing.isActive);
+        // Populate category dropdown from existing data
+        List<String> catOptions = new ArrayList<>(categoryNames);
+        if (!catOptions.contains("All")) catOptions.remove("All");
+        // Add standard categories if list is empty
+        if (catOptions.isEmpty() || (catOptions.size() == 1 && catOptions.get(0).equals("All"))) {
+            catOptions.clear();
+            catOptions.add("Plumbing"); catOptions.add("Electrical"); catOptions.add("Cleaning");
+            catOptions.add("Repair"); catOptions.add("AC Service"); catOptions.add("Painting");
+            catOptions.add("Carpentry");
+        } else {
+            catOptions.remove("All");
         }
 
-        new AlertDialog.Builder(this, com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog_Centered)
+        if (acCat != null) acCat.setAdapter(new ArrayAdapter<>(
+                this, android.R.layout.simple_dropdown_item_1line, catOptions));
+
+        if (isEdit) {
+            if (etTitle    != null) etTitle.setText(existing.title);
+            if (etPrice    != null) etPrice.setText(String.valueOf((int) existing.price));
+            if (etDesc     != null) etDesc.setText(existing.description);
+            if (etDuration != null) etDuration.setText(existing.durationMins > 0
+                    ? String.valueOf(existing.durationMins) : "");
+            if (acCat      != null) acCat.setText(existing.category, false);
+            if (swActive   != null) swActive.setChecked(existing.isActive);
+        } else {
+            if (swActive != null) swActive.setChecked(true);
+        }
+
+        new AlertDialog.Builder(this,
+                com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog_Centered)
                 .setTitle(isEdit ? "✏️ Edit Service" : "➕ Add Service")
                 .setView(dialogView)
                 .setPositiveButton(isEdit ? "Update" : "Add", (d, w) -> {
-                    String name  = etName  != null && etName.getText()  != null ? etName.getText().toString().trim()  : "";
-                    String price = etPrice != null && etPrice.getText() != null ? etPrice.getText().toString().trim() : "0";
-                    String desc  = etDesc  != null && etDesc.getText()  != null ? etDesc.getText().toString().trim()  : "";
-                    String icon  = etIcon  != null && etIcon.getText()  != null ? etIcon.getText().toString().trim()  : "";
-                    String catName = acCat != null && acCat.getText()   != null ? acCat.getText().toString().trim()   : "";
-                    boolean active = swActive != null && swActive.isChecked();
+                    String title    = t(etTitle);
+                    String priceStr = t(etPrice);
+                    String desc     = t(etDesc);
+                    String durStr   = t(etDuration);
+                    String cat      = t(acCat);
+                    boolean active  = swActive != null && swActive.isChecked();
 
-                    if (name.isEmpty()) { if (tilName != null) tilName.setError("Name required"); return; }
-
-                    // Resolve category id
-                    String catId = "";
-                    for (AdminCategory c : categories) {
-                        if (c.name != null && c.name.equals(catName)) { catId = c.id; break; }
+                    if (title.isEmpty()) {
+                        if (tilTitle != null) tilTitle.setError("Title required");
+                        return;
                     }
+                    double price;
+                    try { price = Double.parseDouble(priceStr); } catch (Exception e) { price = 0; }
+                    int dur;
+                    try { dur = Integer.parseInt(durStr); } catch (Exception e) { dur = 0; }
 
-                    double basePrice;
-                    try { basePrice = Double.parseDouble(price); } catch (Exception e) { basePrice = 0; }
-
-                    if (isEdit) updateService(existing.id, name, catId, desc, basePrice, icon, active);
-                    else        insertService(name, catId, desc, basePrice, icon, active);
+                    if (isEdit) updateService(existing.id, title, cat, desc, price, dur, active);
+                    else        insertService(title, cat, desc, price, dur, active);
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // INSERT SERVICE
-    // ─────────────────────────────────────────────────────────────────────
-    private void insertService(String name, String catId,
-                               String desc, double price, String icon, boolean active) {
+    // ── INSERT SERVICE ────────────────────────────────────────────────────
+    private void insertService(String title, String category,
+                               String desc, double price, int durationMins, boolean active) {
         try {
             JSONObject body = new JSONObject();
-            body.put("id",          UUID.randomUUID().toString());
-            body.put("name",        name);
-            body.put("category_id", catId);
-            body.put("description", desc);
-            body.put("base_price",  price);
-            body.put("icon_url",    icon);
-            body.put("is_active",   active);
+            body.put("id",            UUID.randomUUID().toString());
+            body.put("title",         title);          // ✅ correct column
+            body.put("category",      category);       // ✅ correct column
+            body.put("description",   desc);
+            body.put("price",         price);          // ✅ correct column
+            body.put("price_unit",    "fixed");        // ✅ correct column
+            body.put("duration_mins", durationMins);   // ✅ correct column
+            body.put("is_active",     active);
 
-            String url = SUPABASE_URL + "/rest/v1/services";
-            RequestBody rb = RequestBody.create(body.toString(), JSON);
-            Request req = supabaseBuilder(url).addHeader("Prefer", "return=minimal").post(rb).build();
+            Request req = supabaseBuilder(SUPABASE_URL + "/rest/v1/services")
+                    .addHeader("Prefer", "return=minimal")
+                    .post(RequestBody.create(body.toString(), JSON)).build();
 
             http.newCall(req).enqueue(new Callback() {
                 @Override public void onFailure(@NonNull Call call, @NonNull IOException e) {
                     main.post(() -> showError("Network error: " + e.getMessage()));
                 }
                 @Override public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    int code = response.code(); response.close();
+                    int code = response.code();
+                    String rb = response.body() != null ? response.body().string() : "";
+                    response.close();
+                    Log.d(TAG, "insertService HTTP " + code + " | " + rb);
                     main.post(() -> {
                         if (code == 201 || code == 200 || code == 204) {
                             toast("✅ Service added");
-                            logAdminAction("service_added", name);
+                            SupabaseClient.logAdminAction(adminUid, "service_added", "services", title, null);
                             loadServices();
-                        } else showError("Failed to add service (HTTP " + code + ")");
+                        } else showError("Failed to add service (HTTP " + code + "): " + rb);
                     });
                 }
             });
         } catch (Exception e) { showError(e.getMessage()); }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // UPDATE SERVICE
-    // ─────────────────────────────────────────────────────────────────────
-    private void updateService(String id, String name, String catId,
-                               String desc, double price, String icon, boolean active) {
+    // ── UPDATE SERVICE ────────────────────────────────────────────────────
+    private void updateService(String id, String title, String category,
+                               String desc, double price, int durationMins, boolean active) {
         try {
             JSONObject body = new JSONObject();
-            body.put("name",        name);
-            body.put("category_id", catId);
-            body.put("description", desc);
-            body.put("base_price",  price);
-            body.put("icon_url",    icon);
-            body.put("is_active",   active);
+            body.put("title",         title);
+            body.put("category",      category);
+            body.put("description",   desc);
+            body.put("price",         price);
+            body.put("duration_mins", durationMins);
+            body.put("is_active",     active);
 
-            String url = SUPABASE_URL + "/rest/v1/services?id=eq." + id;
-            RequestBody rb = RequestBody.create(body.toString(), JSON);
-            Request req = supabaseBuilder(url).addHeader("Prefer", "return=minimal").patch(rb).build();
+            Request req = supabaseBuilder(SUPABASE_URL + "/rest/v1/services?id=eq." + id)
+                    .addHeader("Prefer", "return=minimal")
+                    .patch(RequestBody.create(body.toString(), JSON)).build();
 
             http.newCall(req).enqueue(new Callback() {
                 @Override public void onFailure(@NonNull Call call, @NonNull IOException e) {
                     main.post(() -> showError("Network error: " + e.getMessage()));
                 }
                 @Override public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    int code = response.code(); response.close();
+                    int code = response.code();
+                    String rb = response.body() != null ? response.body().string() : "";
+                    response.close();
+                    Log.d(TAG, "updateService HTTP " + code + " | " + rb);
                     main.post(() -> {
                         if (code == 200 || code == 204) {
                             toast("✅ Service updated");
-                            logAdminAction("service_updated", name);
+                            SupabaseClient.logAdminAction(adminUid, "service_updated", "services", title, null);
                             loadServices();
-                        } else showError("Failed to update service (HTTP " + code + ")");
+                        } else showError("Failed to update service (HTTP " + code + "): " + rb);
                     });
                 }
             });
         } catch (Exception e) { showError(e.getMessage()); }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // TOGGLE STATUS
-    // ─────────────────────────────────────────────────────────────────────
+    // ── TOGGLE STATUS ─────────────────────────────────────────────────────
     private void toggleServiceStatus(AdminService svc, boolean newStatus) {
         try {
             JSONObject body = new JSONObject();
-            body.put("is_active", newStatus);
+            body.put("is_active", newStatus);  // ✅ this column exists
 
-            String url = SUPABASE_URL + "/rest/v1/services?id=eq." + svc.id;
-            RequestBody rb = RequestBody.create(body.toString(), JSON);
-            Request req = supabaseBuilder(url).addHeader("Prefer", "return=minimal").patch(rb).build();
+            Request req = supabaseBuilder(SUPABASE_URL + "/rest/v1/services?id=eq." + svc.id)
+                    .addHeader("Prefer", "return=minimal")
+                    .patch(RequestBody.create(body.toString(), JSON)).build();
 
             http.newCall(req).enqueue(new Callback() {
                 @Override public void onFailure(@NonNull Call call, @NonNull IOException e) {
@@ -454,7 +443,7 @@ public class ServiceManagementActivity extends AppCompatActivity {
                         if (code == 200 || code == 204) {
                             svc.isActive = newStatus;
                             adapter.notifyDataSetChanged();
-                            toast(newStatus ? "✅ Service activated" : "⛔ Service disabled");
+                            toast(newStatus ? "✅ Activated" : "⛔ Disabled");
                         } else showError("Failed to update status (HTTP " + code + ")");
                     });
                 }
@@ -462,22 +451,20 @@ public class ServiceManagementActivity extends AppCompatActivity {
         } catch (Exception e) { showError(e.getMessage()); }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // DELETE SERVICE
-    // ─────────────────────────────────────────────────────────────────────
+    // ── DELETE SERVICE ────────────────────────────────────────────────────
     private void confirmDeleteService(AdminService svc) {
-        new AlertDialog.Builder(this, com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog_Centered)
+        new AlertDialog.Builder(this,
+                com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog_Centered)
                 .setTitle("🗑 Delete Service")
-                .setMessage("Delete \"" + svc.name + "\"? This cannot be undone.")
+                .setMessage("Delete \"" + svc.title + "\"? This cannot be undone.")
                 .setPositiveButton("Delete", (d, w) -> deleteService(svc))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
     private void deleteService(AdminService svc) {
-        String url = SUPABASE_URL + "/rest/v1/services?id=eq." + svc.id;
-        Request req = supabaseBuilder(url).delete().build();
-
+        Request req = supabaseBuilder(SUPABASE_URL + "/rest/v1/services?id=eq." + svc.id)
+                .delete().build();
         http.newCall(req).enqueue(new Callback() {
             @Override public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 main.post(() -> showError("Network error: " + e.getMessage()));
@@ -486,21 +473,71 @@ public class ServiceManagementActivity extends AppCompatActivity {
                 int code = response.code(); response.close();
                 main.post(() -> {
                     if (code == 200 || code == 204) {
-                        toast("🗑 Service deleted");
-                        logAdminAction("service_deleted", svc.name);
+                        toast("🗑 Deleted");
+                        SupabaseClient.logAdminAction(adminUid, "service_deleted", "services", svc.title, null);
                         loadServices();
-                    } else showError("Failed to delete service (HTTP " + code + ")");
+                    } else showError("Failed to delete (HTTP " + code + ")");
                 });
             }
         });
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // HELPERS
-    // ─────────────────────────────────────────────────────────────────────
+    // ── AUTO-SEED DEFAULT SERVICES ────────────────────────────────────────
+    private static final String[][] DEFAULT_SERVICES = {
+        {"Plumbing",    "Plumbing",    "Pipes, taps, leaks, drainage repairs",           "499",  "60"},
+        {"Electrical",  "Electrical",  "Wiring, switches, circuit breakers",             "399",  "45"},
+        {"Cleaning",    "Cleaning",    "Deep cleaning, housekeeping, sanitization",      "299",  "120"},
+        {"Repair",      "Repair",      "Appliance and furniture repairs",                "349",  "60"},
+        {"AC Service",  "AC Service",  "AC installation, servicing, gas refilling",     "699",  "90"},
+        {"Painting",    "Painting",    "Interior and exterior painting services",        "599",  "180"},
+        {"Carpentry",   "Carpentry",   "Furniture, doors, windows, woodwork",           "449",  "90"},
+    };
+
+    private void ensureDefaultServicesExist() {
+        new Thread(() -> {
+            try {
+                // Check if table already has data
+                String checkUrl = SUPABASE_URL + "/rest/v1/services?select=id&limit=1";
+                try (Response cr = http.newCall(supabaseBuilder(checkUrl).get().build()).execute()) {
+                    int code = cr.code();
+                    String body = cr.body() != null ? cr.body().string() : "[]";
+                    if (code == 200 && new JSONArray(body).length() > 0) return; // already seeded
+                    if (code == 400) {
+                        Log.w(TAG, "ensureDefault: table error HTTP 400 – " + body); return;
+                    }
+                }
+                // Seed
+                for (String[] row : DEFAULT_SERVICES) {
+                    try {
+                        JSONObject b = new JSONObject();
+                        b.put("id",            UUID.randomUUID().toString());
+                        b.put("title",         row[0]);   // ✅ title
+                        b.put("category",      row[1]);   // ✅ category
+                        b.put("description",   row[2]);
+                        b.put("price",         Double.parseDouble(row[3])); // ✅ price
+                        b.put("price_unit",    "fixed");  // ✅ price_unit
+                        b.put("duration_mins", Integer.parseInt(row[4]));   // ✅ duration_mins
+                        b.put("is_active",     true);
+                        Request req = supabaseBuilder(SUPABASE_URL + "/rest/v1/services")
+                                .addHeader("Prefer", "resolution=ignore-duplicates,return=minimal")
+                                .post(RequestBody.create(b.toString(), JSON)).build();
+                        try (Response r = http.newCall(req).execute()) {
+                            Log.d(TAG, "Seeded '" + row[0] + "' HTTP " + r.code());
+                        }
+                    } catch (Exception ex) {
+                        Log.e(TAG, "Seed error " + row[0] + ": " + ex.getMessage());
+                    }
+                }
+                main.post(this::loadServices);
+            } catch (Exception e) {
+                Log.e(TAG, "ensureDefaultServicesExist: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    // ── HELPERS ───────────────────────────────────────────────────────────
     private Request.Builder supabaseBuilder(String url) {
-        return new Request.Builder()
-                .url(url)
+        return new Request.Builder().url(url)
                 .addHeader("apikey",        ANON_KEY)
                 .addHeader("Authorization", "Bearer " + ANON_KEY)
                 .addHeader("Content-Type",  "application/json")
@@ -508,11 +545,12 @@ public class ServiceManagementActivity extends AppCompatActivity {
     }
 
     private void showShimmer(boolean show) {
-        shimmerLayout.setVisibility(show ? View.VISIBLE : View.GONE);
-        rvServices.setVisibility(show ? View.GONE : View.VISIBLE);
+        if (shimmerLayout != null) shimmerLayout.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (rvServices    != null) rvServices.setVisibility(show ? View.GONE : View.VISIBLE);
     }
 
     private void updateCountLabel() {
+        if (tvServiceCount == null) return;
         int n = filteredServices.size();
         tvServiceCount.setText(n + " service" + (n == 1 ? "" : "s"));
     }
@@ -526,7 +564,8 @@ public class ServiceManagementActivity extends AppCompatActivity {
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
     }
 
-    private void logAdminAction(String action, String target) {
-        SupabaseClient.logAdminAction(adminUid, action, "services", target, null);
+    /** Safe text extractor for any TextView */
+    private String t(android.widget.TextView tv) {
+        return tv != null && tv.getText() != null ? tv.getText().toString().trim() : "";
     }
 }

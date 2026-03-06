@@ -126,7 +126,7 @@ public class ProviderApplicationRepository {
 
                 JSONObject body = new JSONObject();
                 body.put("firebase_uid",        firebaseUid);
-                body.put("name",                name.trim());
+                body.put("owner_name",          name.trim());   // DB column: owner_name
                 body.put("email",               email.trim());
                 body.put("phone",               phone.trim());
                 body.put("business_name",       businessName.trim());
@@ -178,8 +178,10 @@ public class ProviderApplicationRepository {
     public static void fetchApplications(String statusFilter, ApplicationListCallback callback) {
         new Thread(() -> {
             try {
+                // Use select=* to avoid HTTP 400 from missing/renamed columns
                 String url = SUPABASE_URL + "/rest/v1/provider_applications"
-                        + "?select=*&order=submitted_at.desc";
+                        + "?select=*"
+                        + "&order=submitted_at.desc";
                 if (statusFilter != null && !statusFilter.isEmpty()
                         && !statusFilter.equalsIgnoreCase("all")) {
                     url += "&status=eq." + statusFilter;
@@ -218,8 +220,8 @@ public class ProviderApplicationRepository {
 
     // ═══════════════════════════════════════════════════════════════════════
     //  APPROVE APPLICATION  (3-step chain)
-    //   1. PATCH provider_applications → status = approved
-    //   2. INSERT provider_profiles row
+    //   1. INSERT provider_profiles row (upsert on firebase_uid)
+    //   2. PATCH provider_applications → status = approved
     //   3. PATCH users → is_service_provider = true
     // ═══════════════════════════════════════════════════════════════════════
     public static void approveApplication(ProviderApplication app,
@@ -230,13 +232,111 @@ public class ProviderApplicationRepository {
                 String timestamp = new SimpleDateFormat(
                         "yyyy-MM-dd'T'HH:mm:ss", Locale.US).format(new Date());
 
-                // ── Step 1: Update provider_applications ──────────────────
-                JSONObject patch = new JSONObject();
-                patch.put("status",          "approved");
-                patch.put("reviewed_by_uid", adminUid);
-                patch.put("reviewed_at",     timestamp);
+                // ── Step 1: Insert/upsert provider_profiles ───────────────
+                // Only include columns that definitely exist in provider_profiles.
+                // Handle both naming conventions (user_name / owner_name).
+                JSONObject profile = new JSONObject();
+
+                // firebase_uid is the unique key for upsert
+                putSafe(profile, "firebase_uid",   app.firebaseUid);
+
+                // Support both naming conventions
+                String ownerName = app.name != null && !app.name.isEmpty() ? app.name : "";
+                putSafe(profile, "owner_name",     ownerName);
+                putSafe(profile, "user_name",      ownerName);   // legacy column alias
+
+                String email = app.email != null && !app.email.isEmpty() ? app.email : "";
+                putSafe(profile, "email",          email);
+                putSafe(profile, "user_email",     email);       // legacy column alias
+
+                putSafe(profile, "business_name",  app.businessName);
+                putSafe(profile, "category",       app.category);
+                putSafe(profile, "phone",          app.phone);
+                putSafe(profile, "city",           app.city);
+
+                String address = app.address != null ? app.address : "";
+                putSafe(profile, "address",        address);
+
+                // experience may be stored as integer (experience_yrs) or string
+                String exp = app.experience != null ? app.experience.trim() : "0";
+                putSafe(profile, "experience",     exp);
+                try { profile.put("experience_yrs", Integer.parseInt(exp)); }
+                catch (Exception ignored) { profile.put("experience_yrs", 0); }
+
+                putSafe(profile, "description",    app.description != null ? app.description : "");
+                profile.put("status",              "active");
+                profile.put("is_active",           true);
+                profile.put("is_approved",         true);
+                profile.put("approved_at",         timestamp);
+                profile.put("created_at",          timestamp);
+
+                if (app.businessImageUrl != null && !app.businessImageUrl.isEmpty())
+                    profile.put("business_image_url", app.businessImageUrl);
+                if (app.idProofUrl != null && !app.idProofUrl.isEmpty())
+                    profile.put("id_proof_url", app.idProofUrl);
+                if (app.id != null && !app.id.isEmpty())
+                    profile.put("application_id",  app.id);
+
+                Log.d(TAG, "approveApplication step1 profile payload: " + profile);
 
                 Request step1 = new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/provider_profiles")
+                        .post(RequestBody.create(profile.toString(), JSON_TYPE))
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type",  "application/json")
+                        .addHeader("Prefer",        "resolution=merge-duplicates,return=representation")
+                        .build();
+
+                try (Response r1 = HTTP.newCall(step1).execute()) {
+                    int c1 = r1.code();
+                    String body1 = r1.body() != null ? r1.body().string() : "";
+                    Log.d(TAG, "approveApplication step1 HTTP " + c1 + " | " + body1);
+
+                    if (c1 != 200 && c1 != 201 && c1 != 204) {
+                        // Attempt minimal insert with only guaranteed-safe columns
+                        JSONObject minProfile = new JSONObject();
+                        putSafe(minProfile, "firebase_uid",  app.firebaseUid);
+                        putSafe(minProfile, "business_name", app.businessName);
+                        putSafe(minProfile, "email",         email);
+                        putSafe(minProfile, "category",      app.category);
+                        putSafe(minProfile, "city",          app.city);
+                        minProfile.put("status",             "active");
+                        minProfile.put("is_active",          true);
+                        minProfile.put("approved_at",        timestamp);
+
+                        Log.d(TAG, "approveApplication step1 retry minimal: " + minProfile);
+
+                        Request step1b = new Request.Builder()
+                                .url(SUPABASE_URL + "/rest/v1/provider_profiles")
+                                .post(RequestBody.create(minProfile.toString(), JSON_TYPE))
+                                .addHeader("apikey",        ANON_KEY)
+                                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                                .addHeader("Content-Type",  "application/json")
+                                .addHeader("Prefer",        "resolution=merge-duplicates,return=minimal")
+                                .build();
+
+                        try (Response r1b = HTTP.newCall(step1b).execute()) {
+                            int c1b = r1b.code();
+                            String body1b = r1b.body() != null ? r1b.body().string() : "";
+                            Log.d(TAG, "approveApplication step1 retry HTTP " + c1b + " | " + body1b);
+                            if (c1b != 200 && c1b != 201 && c1b != 204) {
+                                final String errMsg = "Could not create provider profile HTTP " + c1b + " " + body1b;
+                                MAIN.post(() -> callback.onError(errMsg));
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // ── Step 2: Update provider_applications status ───────────
+                JSONObject patch = new JSONObject();
+                patch.put("status",          "approved");
+                patch.put("reviewed_at",     timestamp);
+                if (adminUid != null && !adminUid.isEmpty())
+                    patch.put("reviewed_by_uid", adminUid);
+
+                Request step2 = new Request.Builder()
                         .url(SUPABASE_URL + "/rest/v1/provider_applications?id=eq." + app.id)
                         .patch(RequestBody.create(patch.toString(), JSON_TYPE))
                         .addHeader("apikey",        ANON_KEY)
@@ -245,86 +345,54 @@ public class ProviderApplicationRepository {
                         .addHeader("Prefer",        "return=minimal")
                         .build();
 
-                try (Response r1 = HTTP.newCall(step1).execute()) {
-                    int c1 = r1.code();
-                    Log.d(TAG, "approveApplication step1 HTTP " + c1);
-                    if (c1 != 200 && c1 != 204) {
-                        String err = r1.body() != null ? r1.body().string() : "";
-                        MAIN.post(() -> callback.onError("Step1 failed HTTP " + c1 + ": " + err));
+                try (Response r2 = HTTP.newCall(step2).execute()) {
+                    int c2 = r2.code();
+                    String body2 = r2.body() != null ? r2.body().string() : "";
+                    Log.d(TAG, "approveApplication step2 HTTP " + c2 + " | " + body2);
+                    if (c2 != 200 && c2 != 204) {
+                        MAIN.post(() -> callback.onError("Status update failed HTTP " + c2 + ": " + body2));
                         return;
                     }
                 }
 
-                // ── Step 2: Insert provider_profiles ─────────────────────
-                JSONObject profile = new JSONObject();
-                profile.put("firebase_uid",       app.firebaseUid);
-                profile.put("application_id",     app.id);
-                profile.put("business_name",      app.businessName);
-                profile.put("owner_name",         app.name);
-                profile.put("phone",              app.phone);
-                profile.put("email",              app.email);
-                profile.put("category",           app.category);
-                profile.put("city",               app.city);
-                profile.put("address",            app.address != null ? app.address : "");
-                profile.put("experience",         app.experience);
-                profile.put("description",        app.description);
-                profile.put("is_active",          true);
-                profile.put("is_approved",        true);
-                profile.put("approved_at",        timestamp);
-                if (app.businessImageUrl != null && !app.businessImageUrl.isEmpty())
-                    profile.put("business_image_url", app.businessImageUrl);
-                if (app.idProofUrl != null && !app.idProofUrl.isEmpty())
-                    profile.put("id_proof_url", app.idProofUrl);
-
-                Request step2 = new Request.Builder()
-                        .url(SUPABASE_URL + "/rest/v1/provider_profiles")
-                        .post(RequestBody.create(profile.toString(), JSON_TYPE))
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "resolution=merge-duplicates,return=minimal")
-                        .build();
-
-                try (Response r2 = HTTP.newCall(step2).execute()) {
-                    int c2 = r2.code();
-                    Log.d(TAG, "approveApplication step2 HTTP " + c2);
-                    if (c2 != 200 && c2 != 201 && c2 != 204) {
-                        String err = r2.body() != null ? r2.body().string() : "";
-                        Log.w(TAG, "provider_profiles insert warning (continuing): " + err);
-                    }
-                }
-
                 // ── Step 3: Update users role ─────────────────────────────
-                JSONObject userPatch = new JSONObject();
-                userPatch.put("is_service_provider", true);
-                userPatch.put("is_user",             true);
+                if (app.firebaseUid != null && !app.firebaseUid.isEmpty()) {
+                    JSONObject userPatch = new JSONObject();
+                    userPatch.put("is_service_provider", true);
+                    userPatch.put("is_user",             true);
 
-                Request step3 = new Request.Builder()
-                        .url(SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + app.firebaseUid)
-                        .patch(RequestBody.create(userPatch.toString(), JSON_TYPE))
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "return=minimal")
-                        .build();
+                    Request step3 = new Request.Builder()
+                            .url(SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + app.firebaseUid)
+                            .patch(RequestBody.create(userPatch.toString(), JSON_TYPE))
+                            .addHeader("apikey",        ANON_KEY)
+                            .addHeader("Authorization", "Bearer " + ANON_KEY)
+                            .addHeader("Content-Type",  "application/json")
+                            .addHeader("Prefer",        "return=minimal")
+                            .build();
 
-                try (Response r3 = HTTP.newCall(step3).execute()) {
-                    int c3 = r3.code();
-                    Log.d(TAG, "approveApplication step3 HTTP " + c3);
-                    if (c3 == 200 || c3 == 204) {
-                        MAIN.post(callback::onSuccess);
-                    } else {
-                        String err = r3.body() != null ? r3.body().string() : "";
-                        MAIN.post(() -> callback.onError("Step3 failed HTTP " + c3 + ": " + err));
+                    try (Response r3 = HTTP.newCall(step3).execute()) {
+                        Log.d(TAG, "approveApplication step3 HTTP " + r3.code());
+                        // Non-fatal — approval succeeded even if user role patch fails
                     }
                 }
+
+                MAIN.post(callback::onSuccess);
 
             } catch (IOException e) {
-                MAIN.post(() -> callback.onError("NETWORK_ERROR"));
+                MAIN.post(() -> callback.onError("NETWORK_ERROR: " + e.getMessage()));
             } catch (Exception e) {
                 MAIN.post(() -> callback.onError(e.getMessage()));
             }
         }).start();
+    }
+
+    /** Safely puts a non-null, non-empty string into a JSONObject */
+    private static void putSafe(JSONObject obj, String key, String value) {
+        try {
+            if (value != null && !value.isEmpty()) {
+                obj.put(key, value);
+            }
+        } catch (Exception ignored) {}
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -342,8 +410,11 @@ public class ProviderApplicationRepository {
                 JSONObject body = new JSONObject();
                 body.put("status",           "rejected");
                 body.put("rejection_reason", rejectionReason);
-                body.put("reviewed_by_uid",  adminUid);
                 body.put("reviewed_at",      timestamp);
+                // Store rejected_at for 24-hour reapply countdown
+                body.put("rejected_at",      timestamp);
+                if (adminUid != null && !adminUid.isEmpty())
+                    body.put("reviewed_by_uid",  adminUid);
 
                 Request req = new Request.Builder()
                         .url(SUPABASE_URL + "/rest/v1/provider_applications?id=eq." + applicationId)
@@ -476,8 +547,9 @@ public class ProviderApplicationRepository {
     public static void fetchPendingApplications(ApplicationListCallback cb) {
         new Thread(() -> {
             try {
+                // Use select=* and put filter params correctly
                 String url = SUPABASE_URL + "/rest/v1/provider_applications"
-                        + "?select=*&status=eq.pending&order=created_at.desc";
+                        + "?select=*&status=eq.pending&order=submitted_at.desc";
                 try (Response r = HTTP.newCall(new Request.Builder().url(url)
                         .get()
                         .addHeader("apikey",        ANON_KEY)
@@ -497,6 +569,82 @@ public class ProviderApplicationRepository {
                 }
             } catch (Exception e) {
                 MAIN.post(() -> cb.onError("Error: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  CHECK IF EMAIL ALREADY EXISTS IN provider_profiles (one-provider rule)
+    // ═══════════════════════════════════════════════════════════════════════
+    public interface ProviderExistsCallback {
+        void onExists();        // email already has an approved provider profile
+        void onNotExists();     // email is free to apply
+        void onError(String msg);
+    }
+
+    public static void checkProviderByEmail(String email, ProviderExistsCallback callback) {
+        new Thread(() -> {
+            try {
+                String enc = java.net.URLEncoder.encode(email, "UTF-8");
+                // Check both email columns for compatibility
+                String url = SUPABASE_URL + "/rest/v1/provider_profiles"
+                        + "?or=(email.eq." + enc + ",user_email.eq." + enc + ")"
+                        + "&select=id&limit=1";
+                Request req = new Request.Builder().url(url).get()
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept",        "application/json")
+                        .build();
+                try (Response r = HTTP.newCall(req).execute()) {
+                    String b = r.body() != null ? r.body().string() : "[]";
+                    if (r.code() == 200) {
+                        JSONArray arr = new JSONArray(b);
+                        if (arr.length() > 0) MAIN.post(callback::onExists);
+                        else                  MAIN.post(callback::onNotExists);
+                    } else {
+                        MAIN.post(callback::onNotExists); // non-fatal: allow form to open
+                    }
+                }
+            } catch (Exception e) {
+                MAIN.post(callback::onNotExists); // non-fatal
+            }
+        }).start();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  FETCH FULL LATEST APPLICATION (for status page — all fields + dates)
+    // ═══════════════════════════════════════════════════════════════════════
+    public static void fetchApplicationFull(String firebaseUid, ApplicationCallback callback) {
+        new Thread(() -> {
+            try {
+                String url = SUPABASE_URL + "/rest/v1/provider_applications"
+                        + "?firebase_uid=eq." + firebaseUid
+                        + "&select=*&order=submitted_at.desc&limit=1";
+                Request req = new Request.Builder().url(url).get()
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept",        "application/json")
+                        .build();
+                try (Response r = HTTP.newCall(req).execute()) {
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    int code = r.code();
+                    Log.d(TAG, "fetchApplicationFull HTTP " + code);
+                    if (code == 200) {
+                        JSONArray arr = new JSONArray(body);
+                        if (arr.length() > 0) {
+                            ProviderApplication app = ProviderApplication.fromJson(arr.getJSONObject(0));
+                            MAIN.post(() -> callback.onFound(app));
+                        } else {
+                            MAIN.post(callback::onNotFound);
+                        }
+                    } else {
+                        MAIN.post(() -> callback.onError("HTTP " + code));
+                    }
+                }
+            } catch (IOException e) {
+                MAIN.post(() -> callback.onError("NETWORK_ERROR"));
+            } catch (Exception e) {
+                MAIN.post(() -> callback.onError(e.getMessage()));
             }
         }).start();
     }

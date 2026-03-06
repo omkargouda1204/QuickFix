@@ -209,7 +209,7 @@ public class AdminDashboardActivity extends AppCompatActivity {
                 // Already here
                 return true;
             } else if (id == R.id.nav_bookings) {
-                Toast.makeText(this, "Bookings — coming soon", Toast.LENGTH_SHORT).show();
+                goTo(AdminBookingsActivity.class);
                 return true;
             } else if (id == R.id.nav_providers) {
                 goTo(BusinessApprovalActivity.class);
@@ -228,7 +228,7 @@ public class AdminDashboardActivity extends AppCompatActivity {
     // ── Profile Bottom Sheet ──────────────────────────────────────────────
 
     private void showProfileBottomSheet() {
-        BottomSheetDialog sheet = new BottomSheetDialog(this);
+        BottomSheetDialog sheet = new BottomSheetDialog(this, R.style.Theme_QuickFix_BottomSheet);
 
         View sheetView = LayoutInflater.from(this)
                 .inflate(R.layout.bottom_sheet_admin_profile, null);
@@ -326,8 +326,8 @@ public class AdminDashboardActivity extends AppCompatActivity {
         loadStatCount("/rest/v1/users?select=id&is_service_provider=eq.true",
                 statTotalProviders);
 
-        // Load pending approvals count
-        loadStatCount("/rest/v1/pending_approvals?select=id&status=eq.pending",
+        // Load pending approvals count — from provider_applications
+        loadStatCount("/rest/v1/provider_applications?select=id&status=eq.pending",
                 statPendingApprovals);
 
         // Active bookings — set placeholder (bookings table depends on schema)
