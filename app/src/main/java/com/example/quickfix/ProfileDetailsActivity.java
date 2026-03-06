@@ -15,6 +15,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
@@ -40,13 +41,13 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 /**
- * ProfileDetailsActivity — View & Edit user profile.
- *
- * • View mode : clean card with icon rows (name, email, phone, city, address)
- * • Edit mode : outlined input fields with save / cancel
- * • Profile image : optional, uploaded to Supabase Storage "profile-images" bucket
- * • Data source : Supabase public.users table (keyed by firebase_uid)
- * • HTTP 400 prevention: optional empty fields are omitted from PATCH body
+ * ProfileDetailsActivity — View &amp; Edit user profile.
+ * <p>
+ * View mode  : clean card with icon rows (name, email, phone, city, address)<br>
+ * Edit mode  : outlined input fields with save / cancel<br>
+ * Image      : optional, uploaded to Supabase Storage "profile-images" bucket<br>
+ * Data source: Supabase public.users table (keyed by firebase_uid)<br>
+ * HTTP 400 prevention: optional empty fields sent as JSON null, never empty strings.
  */
 public class ProfileDetailsActivity extends AppCompatActivity {
 
@@ -118,6 +119,19 @@ public class ProfileDetailsActivity extends AppCompatActivity {
         setupClickListeners();
         setEditMode(false);   // start in view mode
         loadProfile();
+
+        // Back press: cancel edit mode instead of closing activity
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (isEditMode) {
+                    setEditMode(false);
+                } else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                }
+            }
+        });
     }
 
     // ── Bind all views ────────────────────────────────────────────────────
@@ -460,15 +474,6 @@ public class ProfileDetailsActivity extends AppCompatActivity {
         imagePickerLauncher.launch(intent);
     }
 
-    /** Back press while in edit mode → cancel edit; otherwise finish normally. */
-    @Override
-    public void onBackPressed() {
-        if (isEditMode) {
-            setEditMode(false);
-        } else {
-            super.onBackPressed();
-        }
-    }
 
     // ── Helpers ───────────────────────────────────────────────────────────
     private void showLoading(boolean show) {
