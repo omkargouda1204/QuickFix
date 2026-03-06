@@ -44,6 +44,19 @@
                     android:focusable="true"
                     android:contentDescription="@string/cd_back" />
 
+                <!-- Centered screen title -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_centerHorizontal="true"
+                    android:layout_alignTop="@id/btnBack"
+                    android:layout_alignBottom="@id/btnBack"
+                    android:gravity="center_vertical"
+                    android:text="@string/profile_title"
+                    android:textColor="@color/white"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+
                 <ImageView
                     android:id="@+id/btnEditSave"
                     android:layout_width="40dp"
@@ -69,8 +82,8 @@
                     <!-- Avatar -->
                     <FrameLayout
                         android:id="@+id/avatarFrame"
-                        android:layout_width="100dp"
-                        android:layout_height="100dp"
+                        android:layout_width="104dp"
+                        android:layout_height="104dp"
                         android:background="@drawable/bg_profile_avatar"
                         android:clickable="true"
                         android:focusable="true"
@@ -136,6 +149,17 @@
                         android:text="@string/pd_dash"
                         android:textColor="#CCE3F2FD"
                         android:textSize="13sp" />
+
+                    <!-- Shown only in edit mode: tap avatar hint -->
+                    <TextView
+                        android:id="@+id/tvChangePhotoHint"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Tap avatar to change photo"
+                        android:textColor="#AAFFFFFF"
+                        android:textSize="11sp"
+                        android:visibility="gone" />
 
                 </LinearLayout>
             </RelativeLayout>

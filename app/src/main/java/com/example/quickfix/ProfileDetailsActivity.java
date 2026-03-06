@@ -41,10 +41,12 @@ import okhttp3.Response;
 
 /**
  * ProfileDetailsActivity — View & Edit user profile.
- * • View mode: clean card with icon rows (name, email, phone, city, address)
- * • Edit mode: outlined input fields with save/cancel
- * • Profile image: optional, uploaded to Supabase Storage "profile-images" bucket
- * • All data synced to Supabase users table via PATCH
+ *
+ * • View mode : clean card with icon rows (name, email, phone, city, address)
+ * • Edit mode : outlined input fields with save / cancel
+ * • Profile image : optional, uploaded to Supabase Storage "profile-images" bucket
+ * • Data source : Supabase public.users table (keyed by firebase_uid)
+ * • HTTP 400 prevention: optional empty fields are omitted from PATCH body
  */
 public class ProfileDetailsActivity extends AppCompatActivity {
 
@@ -53,7 +55,7 @@ public class ProfileDetailsActivity extends AppCompatActivity {
 
     // ── Header views ──────────────────────────────────────────────────────
     private ImageView  ivAvatar, btnBack, btnEditSave;
-    private TextView   tvAvatarInitial, tvName, tvEmail;
+    private TextView   tvAvatarInitial, tvName, tvEmail, tvChangePhotoHint;
     private FrameLayout cameraOverlay, loadingOverlay;
     private FrameLayout avatarFrame;
 
@@ -69,13 +71,18 @@ public class ProfileDetailsActivity extends AppCompatActivity {
     private MaterialButton    btnSaveProfile, btnCancelEdit;
 
     // ── State ─────────────────────────────────────────────────────────────
-    private boolean isEditMode      = false;
+    private boolean isEditMode       = false;
+    private boolean isSaving         = false;
     private Uri     selectedImageUri = null;
     private String  currentImageUrl  = null;
     private String  firebaseUid;
 
-    // cached profile data (to pre-fill edit fields without re-fetch)
-    private String cachedName = "", cachedPhone = "", cachedCity = "", cachedAddress = "", cachedEmail = "";
+    // Cached profile data (pre-fill edit fields without re-fetch)
+    private String cachedName    = "";
+    private String cachedPhone   = "";
+    private String cachedCity    = "";
+    private String cachedAddress = "";
+    private String cachedEmail   = "";
 
     private final OkHttpClient HTTP = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -125,6 +132,7 @@ public class ProfileDetailsActivity extends AppCompatActivity {
         cameraOverlay   = findViewById(R.id.cameraOverlay);
         avatarFrame     = findViewById(R.id.avatarFrame);
         loadingOverlay  = findViewById(R.id.loadingOverlay);
+        tvChangePhotoHint = findViewById(R.id.tvChangePhotoHint);
 
         // View mode
         cardViewMode      = findViewById(R.id.cardViewMode);
@@ -166,28 +174,35 @@ public class ProfileDetailsActivity extends AppCompatActivity {
         });
 
         // Edit button inside view card
-        btnEditProfile.setOnClickListener(v -> enterEditMode());
+        if (btnEditProfile != null)
+            btnEditProfile.setOnClickListener(v -> enterEditMode());
 
         // Cancel edit
-        btnCancelEdit.setOnClickListener(v -> setEditMode(false));
+        if (btnCancelEdit != null)
+            btnCancelEdit.setOnClickListener(v -> setEditMode(false));
 
         // Save button inside edit card
-        btnSaveProfile.setOnClickListener(v -> saveProfile());
+        if (btnSaveProfile != null)
+            btnSaveProfile.setOnClickListener(v -> saveProfile());
 
         // Avatar click in edit mode → pick image
-        avatarFrame.setOnClickListener(v -> {
-            if (isEditMode) pickImage();
-        });
+        if (avatarFrame != null)
+            avatarFrame.setOnClickListener(v -> { if (isEditMode) pickImage(); });
     }
 
     // ── Switch between view / edit mode ──────────────────────────────────
     private void enterEditMode() {
         // Pre-fill edit fields from cached data
-        if (etName    != null) etName.setText(cachedName);
-        if (etEmail   != null) { etEmail.setText(cachedEmail); etEmail.setEnabled(false); }
-        if (etPhone   != null) etPhone.setText(cachedPhone);
-        if (etCity    != null) etCity.setText(cachedCity);
-        if (etAddress != null) etAddress.setText(cachedAddress);
+        safeSet(etName,    cachedName);
+        safeSet(etPhone,   cachedPhone);
+        safeSet(etCity,    cachedCity);
+        safeSet(etAddress, cachedAddress);
+        if (etEmail != null) {
+            etEmail.setText(cachedEmail);
+            etEmail.setEnabled(false);
+            etEmail.setFocusable(false);
+        }
+        clearFieldErrors();
         setEditMode(true);
     }
 
@@ -195,23 +210,29 @@ public class ProfileDetailsActivity extends AppCompatActivity {
         isEditMode = edit;
 
         // Header icon: edit ✏ in view mode, check ✔ in edit mode
-        btnEditSave.setImageResource(edit ? R.drawable.ic_check : R.drawable.ic_edit);
+        if (btnEditSave != null)
+            btnEditSave.setImageResource(edit ? R.drawable.ic_check : R.drawable.ic_edit);
 
-        // Camera badge on avatar
-        if (cameraOverlay != null) cameraOverlay.setVisibility(edit ? View.VISIBLE : View.GONE);
+        // Camera badge + hint on avatar
+        if (cameraOverlay    != null) cameraOverlay.setVisibility(edit ? View.VISIBLE : View.GONE);
+        if (tvChangePhotoHint != null) tvChangePhotoHint.setVisibility(edit ? View.VISIBLE : View.GONE);
 
         // Cards & button
         if (edit) {
-            cardViewMode.setVisibility(View.GONE);
-            btnEditProfile.setVisibility(View.GONE);
-            cardEditMode.setVisibility(View.VISIBLE);
-            cardEditMode.startAnimation(AnimationUtils.loadAnimation(this, android.R.anim.fade_in));
+            if (cardViewMode   != null) cardViewMode.setVisibility(View.GONE);
+            if (btnEditProfile != null) btnEditProfile.setVisibility(View.GONE);
+            if (cardEditMode   != null) {
+                cardEditMode.setVisibility(View.VISIBLE);
+                cardEditMode.startAnimation(AnimationUtils.loadAnimation(this, android.R.anim.fade_in));
+            }
         } else {
-            cardEditMode.setVisibility(View.GONE);
-            cardViewMode.setVisibility(View.VISIBLE);
-            btnEditProfile.setVisibility(View.VISIBLE);
-            cardViewMode.startAnimation(AnimationUtils.loadAnimation(this, android.R.anim.fade_in));
-            selectedImageUri = null;  // discard uncommitted image
+            if (cardEditMode   != null) cardEditMode.setVisibility(View.GONE);
+            if (cardViewMode   != null) {
+                cardViewMode.setVisibility(View.VISIBLE);
+                cardViewMode.startAnimation(AnimationUtils.loadAnimation(this, android.R.anim.fade_in));
+            }
+            if (btnEditProfile != null) btnEditProfile.setVisibility(View.VISIBLE);
+            selectedImageUri = null;   // discard uncommitted image pick
         }
     }
 
@@ -223,27 +244,38 @@ public class ProfileDetailsActivity extends AppCompatActivity {
                 String url = BuildConfig.SUPABASE_URL
                         + "/rest/v1/users?firebase_uid=eq." + firebaseUid
                         + "&select=name,email,phone,city,address,profile_image_url&limit=1";
+
                 Request req = new Request.Builder().url(url)
                         .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Accept",        "application/json")
                         .build();
+
                 try (Response r = HTTP.newCall(req).execute()) {
                     String body = r.body() != null ? r.body().string() : "[]";
-                    Log.d(TAG, "loadProfile HTTP " + r.code());
+                    Log.d(TAG, "loadProfile HTTP " + r.code() + " | " + body);
+
                     if (r.code() == 200) {
                         JSONArray arr = new JSONArray(body);
                         if (arr.length() > 0) {
                             JSONObject o = arr.getJSONObject(0);
-                            String name    = o.optString("name", "");
-                            String email   = o.optString("email", "");
-                            String phone   = o.optString("phone", "");
-                            String city    = o.optString("city", "");
-                            String address = o.optString("address", "");
+                            String name    = nullSafe(o, "name");
+                            String email   = nullSafe(o, "email");
+                            String phone   = nullSafe(o, "phone");
+                            String city    = nullSafe(o, "city");
+                            String address = nullSafe(o, "address");
                             String imgUrl  = o.isNull("profile_image_url") ? null
                                              : o.optString("profile_image_url", "");
                             currentImageUrl = TextUtils.isEmpty(imgUrl) ? null : imgUrl;
                             MAIN.post(() -> applyProfile(name, email, phone, city, address, currentImageUrl));
+                        } else {
+                            // Row exists in Firebase but not yet in Supabase users table
+                            FirebaseUser fbUser = FirebaseAuth.getInstance().getCurrentUser();
+                            String fbEmail = fbUser != null && fbUser.getEmail() != null
+                                             ? fbUser.getEmail() : "";
+                            String fbName  = fbUser != null && fbUser.getDisplayName() != null
+                                             ? fbUser.getDisplayName() : "";
+                            MAIN.post(() -> applyProfile(fbName, fbEmail, "", "", "", null));
                         }
                     } else {
                         MAIN.post(() -> showSnack("Failed to load profile (HTTP " + r.code() + ")"));
@@ -251,7 +283,7 @@ public class ProfileDetailsActivity extends AppCompatActivity {
                 }
             } catch (Exception e) {
                 Log.e(TAG, "loadProfile: " + e.getMessage());
-                MAIN.post(() -> showSnack("Network error: " + e.getMessage()));
+                MAIN.post(() -> showSnack("Network error. Please check your connection."));
             } finally {
                 MAIN.post(() -> showLoading(false));
             }
@@ -262,26 +294,26 @@ public class ProfileDetailsActivity extends AppCompatActivity {
     private void applyProfile(String name, String email, String phone,
                                String city, String address, String imgUrl) {
         // Cache
-        cachedName    = name;
-        cachedEmail   = email;
-        cachedPhone   = phone;
-        cachedCity    = city;
-        cachedAddress = address;
+        cachedName    = name    != null ? name    : "";
+        cachedEmail   = email   != null ? email   : "";
+        cachedPhone   = phone   != null ? phone   : "";
+        cachedCity    = city    != null ? city    : "";
+        cachedAddress = address != null ? address : "";
 
         // Header
-        String displayName = TextUtils.isEmpty(name) ? splitEmail(email) : name;
+        String displayName = TextUtils.isEmpty(cachedName) ? splitEmail(cachedEmail) : cachedName;
         tvName.setText(TextUtils.isEmpty(displayName) ? "User" : displayName);
-        tvEmail.setText(TextUtils.isEmpty(email) ? "" : email);
+        tvEmail.setText(TextUtils.isEmpty(cachedEmail) ? "" : cachedEmail);
 
         // Avatar
-        applyAvatar(name, imgUrl);
+        applyAvatar(cachedName, imgUrl);
 
         // View-mode card rows
-        setText(tvDisplayName,    name,    "—");
-        setText(tvDisplayEmail,   email,   "—");
-        setText(tvDisplayPhone,   phone,   "Not set");
-        setText(tvDisplayCity,    city,    "Not set");
-        setText(tvDisplayAddress, address, "Not set");
+        setTextOrFallback(tvDisplayName,    cachedName,    "—");
+        setTextOrFallback(tvDisplayEmail,   cachedEmail,   "—");
+        setTextOrFallback(tvDisplayPhone,   cachedPhone,   "Not set");
+        setTextOrFallback(tvDisplayCity,    cachedCity,    "Not set");
+        setTextOrFallback(tvDisplayAddress, cachedAddress, "Not set");
     }
 
     private void applyAvatar(String name, String imgUrl) {
@@ -297,7 +329,7 @@ public class ProfileDetailsActivity extends AppCompatActivity {
         } else {
             ivAvatar.setVisibility(View.GONE);
             tvAvatarInitial.setVisibility(View.VISIBLE);
-            String initial = !TextUtils.isEmpty(name) ? String.valueOf(name.charAt(0)).toUpperCase()
+            String initial = !TextUtils.isEmpty(name)        ? String.valueOf(name.charAt(0)).toUpperCase()
                              : !TextUtils.isEmpty(cachedEmail) ? String.valueOf(cachedEmail.charAt(0)).toUpperCase()
                              : "U";
             tvAvatarInitial.setText(initial);
@@ -306,25 +338,33 @@ public class ProfileDetailsActivity extends AppCompatActivity {
 
     // ── Save profile ──────────────────────────────────────────────────────
     private void saveProfile() {
+        if (isSaving) return;   // prevent double submit
+
         String name    = text(etName);
         String phone   = text(etPhone);
         String city    = text(etCity);
         String address = text(etAddress);
 
-        // Clear any previous errors
-        if (tilName    != null) tilName.setError(null);
-        if (tilPhone   != null) tilPhone.setError(null);
-        if (tilCity    != null) tilCity.setError(null);
-        if (tilAddress != null) tilAddress.setError(null);
-        if (tilEmail   != null) tilEmail.setError(null);
+        clearFieldErrors();
 
-        // Validate required fields
+        // Validate
         if (TextUtils.isEmpty(name)) {
-            if (tilName != null) tilName.setError("Name is required");
-            etName.requestFocus();
+            setFieldError(tilName, "Full name is required");
+            if (etName != null) etName.requestFocus();
+            return;
+        }
+        if (name.length() < 2) {
+            setFieldError(tilName, "Name must be at least 2 characters");
+            if (etName != null) etName.requestFocus();
+            return;
+        }
+        if (!TextUtils.isEmpty(phone) && !isValidPhone(phone)) {
+            setFieldError(tilPhone, "Enter a valid phone number (10–15 digits)");
+            if (etPhone != null) etPhone.requestFocus();
             return;
         }
 
+        isSaving = true;
         showLoading(true);
 
         if (selectedImageUri != null) {
@@ -335,6 +375,7 @@ public class ProfileDetailsActivity extends AppCompatActivity {
                             doSave(name, phone, city, address, url);
                         }
                         @Override public void onError(String msg) {
+                            isSaving = false;
                             showLoading(false);
                             showSnack("Image upload failed: " + msg);
                         }
@@ -344,22 +385,34 @@ public class ProfileDetailsActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * PATCH the users row in Supabase.
+     * Optional fields (phone, city, address) are only included in the JSON body
+     * when non-empty to avoid HTTP 400 schema-validation errors on strict columns.
+     */
     private void doSave(String name, String phone, String city,
                          String address, String imageUrl) {
         new Thread(() -> {
             try {
                 JSONObject body = new JSONObject();
-                body.put("name",    name);
-                body.put("phone",   phone);
-                body.put("city",    city);
-                body.put("address", address);
-                if (imageUrl != null) body.put("profile_image_url", imageUrl);
+                body.put("name", name);
+
+                // Optional fields: send only if user entered something,
+                // otherwise send JSON null so the DB column is cleared/kept as-is.
+                body.put("phone",   TextUtils.isEmpty(phone)   ? JSONObject.NULL : phone);
+                body.put("city",    TextUtils.isEmpty(city)    ? JSONObject.NULL : city);
+                body.put("address", TextUtils.isEmpty(address) ? JSONObject.NULL : address);
+
+                if (imageUrl != null && !imageUrl.isEmpty()) {
+                    body.put("profile_image_url", imageUrl);
+                }
 
                 String url = BuildConfig.SUPABASE_URL
                         + "/rest/v1/users?firebase_uid=eq." + firebaseUid;
+
                 Request req = new Request.Builder().url(url)
                         .patch(RequestBody.create(body.toString(),
-                                MediaType.get("application/json")))
+                                MediaType.get("application/json; charset=utf-8")))
                         .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Content-Type",  "application/json")
@@ -367,26 +420,34 @@ public class ProfileDetailsActivity extends AppCompatActivity {
                         .build();
 
                 try (Response r = HTTP.newCall(req).execute()) {
-                    int code = r.code();
-                    Log.d(TAG, "doSave HTTP " + code);
+                    int    code     = r.code();
+                    String respBody = r.body() != null ? r.body().string() : "";
+                    Log.d(TAG, "doSave HTTP " + code + " | " + respBody);
+
                     MAIN.post(() -> {
+                        isSaving = false;
                         showLoading(false);
                         if (code == 200 || code == 204) {
-                            // Refresh display without re-fetching
                             applyProfile(name, cachedEmail, phone, city, address, imageUrl);
                             setEditMode(false);
                             selectedImageUri = null;
-                            showSnack("Profile updated successfully! ✓");
+                            showSnack("Profile updated successfully ✓");
+                        } else if (code == 400) {
+                            showSnack("Validation error. Check your input and retry.");
+                            Log.w(TAG, "HTTP 400 body: " + respBody);
+                        } else if (code == 401 || code == 403) {
+                            showSnack("Permission denied. Please re-login.");
                         } else {
                             showSnack("Save failed (HTTP " + code + "). Please retry.");
                         }
                     });
                 }
             } catch (Exception e) {
-                Log.e(TAG, "doSave: " + e.getMessage());
+                Log.e(TAG, "doSave exception: " + e.getMessage());
                 MAIN.post(() -> {
+                    isSaving = false;
                     showLoading(false);
-                    showSnack("Error: " + e.getMessage());
+                    showSnack("Network error: " + e.getMessage());
                 });
             }
         }).start();
@@ -397,6 +458,16 @@ public class ProfileDetailsActivity extends AppCompatActivity {
         Intent intent = new Intent(Intent.ACTION_PICK);
         intent.setType("image/*");
         imagePickerLauncher.launch(intent);
+    }
+
+    /** Back press while in edit mode → cancel edit; otherwise finish normally. */
+    @Override
+    public void onBackPressed() {
+        if (isEditMode) {
+            setEditMode(false);
+        } else {
+            super.onBackPressed();
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
@@ -411,22 +482,52 @@ public class ProfileDetailsActivity extends AppCompatActivity {
         else Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
     }
 
-    /** Set text or fallback if blank. */
-    private void setText(TextView tv, String value, String fallback) {
+    /** Set TextView text, or a fallback string if value is blank. */
+    private void setTextOrFallback(TextView tv, String value, String fallback) {
         if (tv == null) return;
         tv.setText(TextUtils.isEmpty(value) ? fallback : value);
     }
 
-    /** Safely extract trimmed text from an EditText. */
+    private void setFieldError(TextInputLayout til, String msg) {
+        if (til != null) til.setError(msg);
+    }
+
+    private void clearFieldErrors() {
+        for (TextInputLayout til : new TextInputLayout[]{ tilName, tilEmail, tilPhone, tilCity, tilAddress }) {
+            if (til != null) til.setError(null);
+        }
+    }
+
+    private void safeSet(TextInputEditText et, String value) {
+        if (et != null) et.setText(value != null ? value : "");
+    }
+
+    /** Safely extract trimmed text from an EditText; never returns null. */
     private String text(TextInputEditText et) {
         if (et == null || et.getText() == null) return "";
         return et.getText().toString().trim();
     }
 
-    /** Derive a display name from email (part before @). */
+    /** Derive a display name from the email part before '@'. */
     private String splitEmail(String email) {
         if (TextUtils.isEmpty(email)) return "";
         int at = email.indexOf('@');
         return at > 0 ? email.substring(0, at) : email;
+    }
+
+    /** Read a JSON string field, returning "" instead of "null". */
+    private String nullSafe(JSONObject o, String key) {
+        if (o == null || o.isNull(key)) return "";
+        return o.optString(key, "").trim();
+    }
+
+    /**
+     * Basic phone validation: digits, spaces, dashes, plus sign.
+     * Digit count must be between 7 and 15.
+     */
+    private boolean isValidPhone(String phone) {
+        if (TextUtils.isEmpty(phone)) return true; // optional field
+        String digitsOnly = phone.replaceAll("[^0-9]", "");
+        return digitsOnly.length() >= 7 && digitsOnly.length() <= 15;
     }
 }
