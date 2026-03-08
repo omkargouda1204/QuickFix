@@ -3,7 +3,6 @@ package com.example.quickfix;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-import androidx.appcompat.app.AppCompatDelegate;
 
 /**
  * AppSettings — Centralised SharedPreferences manager.
@@ -107,11 +106,8 @@ public class AppSettings {
     // ── Apply dark / light mode system-wide ──────────────────────────────
 
     public static void applyDarkMode(Context ctx) {
-        if (isDarkMode(ctx)) {
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
-        } else {
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
-        }
+        // Delegate to ThemeManager (shared across admin, provider, and user)
+        ThemeManager.applyFromPrefs(ctx);
     }
 }
 

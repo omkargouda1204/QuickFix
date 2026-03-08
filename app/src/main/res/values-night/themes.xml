@@ -1,20 +1,34 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Force LIGHT theme even in system dark mode — UI never turns black -->
-    <style name="Base.Theme.QuickFix" parent="Theme.Material3.Light.NoActionBar">
+    <!-- Dark theme — active when AppCompatDelegate.MODE_NIGHT_YES is set -->
+    <style name="Base.Theme.QuickFix" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryDark">@color/primary_dark</item>
         <item name="colorAccent">@color/accent_green</item>
-        <item name="android:windowBackground">@color/white</item>
+        <item name="android:windowBackground">@color/screen_background</item>
         <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
-        <item name="colorSurface">@color/white</item>
+        <item name="colorSurface">@color/card_bg</item>
         <item name="colorOnSurface">@color/text_primary</item>
-        <item name="android:colorBackground">@color/white</item>
+        <item name="android:colorBackground">@color/screen_background</item>
         <item name="colorOnBackground">@color/text_primary</item>
+        <item name="bottomSheetDialogTheme">@style/Theme.QuickFix.BottomSheet</item>
     </style>
 
     <style name="Theme.QuickFix" parent="Base.Theme.QuickFix" />
 
-    <!-- Splash Screen Theme -->
+    <!-- Dark Bottom Sheet -->
+    <style name="Theme.QuickFix.BottomSheet" parent="ThemeOverlay.Material3.BottomSheetDialog">
+        <item name="colorSurface">@color/card_bg</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="android:colorBackground">@color/card_bg</item>
+    </style>
+
+    <!-- Admin dialogs — dark -->
+    <style name="Theme.QuickFix.AdminDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="colorSurface">@color/card_bg</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+    </style>
+
+    <!-- Splash — always the same gradient regardless of dark mode -->
     <style name="Theme.QuickFix.Splash" parent="Theme.Material3.Light.NoActionBar">
         <item name="android:windowBackground">@color/splash_blue</item>
         <item name="android:statusBarColor">@color/splash_blue_dark</item>

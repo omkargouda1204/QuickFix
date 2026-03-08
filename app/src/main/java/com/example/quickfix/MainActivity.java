@@ -32,6 +32,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.quickfix.adapters.SearchSuggestionsAdapter;
+import com.example.quickfix.adapters.HomeBannerAdapter;
+import com.example.quickfix.adapters.HomeOfferAdapter;
 import com.google.android.material.button.MaterialButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -95,6 +97,15 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout   listBusinessSection;
     private MaterialButton btnListBusinessStart;
 
+    // ── Banners & Offers (home screen) ────────────────────────────────────
+    private LinearLayout       bannersSection, offersSection;
+    private RecyclerView       rvBannersCarousel, rvOffersStrip;
+    private LinearLayout       bannerDotsLayout;
+    private HomeBannerAdapter  homeBannerAdapter;
+    private HomeOfferAdapter   homeOfferAdapter;
+    private final List<Banner> homeBanners = new java.util.ArrayList<>();
+    private final List<Offer>  homeOffers  = new java.util.ArrayList<>();
+
     // ── Bottom Nav ────────────────────────────────────────────────────────
     private LinearLayout navHome, navBookings, navMessages, navProfile;
     private ImageView    navHomeIcon, navBookingsIcon, navMessagesIcon, navProfileIcon;
@@ -129,6 +140,11 @@ public class MainActivity extends AppCompatActivity {
         setupFeaturedCardListeners();
         setupBottomNav();
         setupListBusinessCard(currentUser);
+
+        loadBannersAndOffers();
+
+        // Sync dark mode setting from Supabase (admin may have changed it)
+        ThemeManager.fetchAndSync(this);
 
         if (providerDashboardSection != null)
             providerDashboardSection.setVisibility(View.GONE);
@@ -189,6 +205,17 @@ public class MainActivity extends AppCompatActivity {
         // List business
         listBusinessSection  = findViewById(R.id.listBusinessSection);
         btnListBusinessStart = findViewById(R.id.btnListBusinessStart);
+
+        // Banners & Offers
+        bannersSection    = findViewById(R.id.bannersSection);
+        offersSection     = findViewById(R.id.offersSection);
+        rvBannersCarousel = findViewById(R.id.rvBannersCarousel);
+        rvOffersStrip     = findViewById(R.id.rvOffersStrip);
+        bannerDotsLayout  = findViewById(R.id.bannerDotsLayout);
+
+        View tvSeeAllOffers = findViewById(R.id.tvSeeAllOffers);
+        if (tvSeeAllOffers != null) tvSeeAllOffers.setOnClickListener(v ->
+                Toast.makeText(this, "All offers shown below", Toast.LENGTH_SHORT).show());
 
         // Bottom nav
         navHome     = findViewById(R.id.navHome);
@@ -665,6 +692,165 @@ public class MainActivity extends AppCompatActivity {
                 listBusinessSection.getChildAt(0).setOnClickListener(
                         v -> btnListBusinessStart.performClick());
             }
+        }
+    }
+
+    // ── Load Banners & Offers from Supabase ───────────────────────────────
+    private void loadBannersAndOffers() {
+        String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
+                Locale.getDefault()).format(new java.util.Date());
+
+        // --- Banners: active and not expired ---
+        new Thread(() -> {
+            try {
+                String url = BuildConfig.SUPABASE_URL
+                        + "/rest/v1/banners?select=*&is_active=eq.true&order=priority.asc";
+                Request req = new Request.Builder()
+                        .url(url)
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .build();
+                try (Response resp = HTTP.newCall(req).execute()) {
+                    String body = resp.body() != null ? resp.body().string() : "[]";
+                    if (resp.isSuccessful()) {
+                        org.json.JSONArray arr = new org.json.JSONArray(body);
+                        List<Banner> list = new ArrayList<>();
+                        for (int i = 0; i < arr.length(); i++) {
+                            org.json.JSONObject o = arr.getJSONObject(i);
+                            Banner b = new Banner();
+                            b.id           = o.optString("id");
+                            b.title        = o.optString("title");
+                            b.imageUrl     = o.optString("image_url");
+                            b.redirectType = o.optString("redirect_type");
+                            b.redirectId   = o.optString("redirect_id");
+                            b.expiryDate   = o.optString("expiry_date");
+                            b.isActive     = o.optBoolean("is_active", true);
+                            b.priority     = o.optInt("priority", 1);
+                            if (b.expiryDate.isEmpty() || b.expiryDate.compareTo(today) >= 0) {
+                                list.add(b);
+                            }
+                        }
+                        MAIN.post(() -> showBannersOnHome(list));
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "loadBanners: " + e.getMessage());
+            }
+        }).start();
+
+        // --- Offers: active and not expired ---
+        new Thread(() -> {
+            try {
+                String url = BuildConfig.SUPABASE_URL
+                        + "/rest/v1/offers?select=*&is_active=eq.true&order=created_at.desc";
+                Request req = new Request.Builder()
+                        .url(url)
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .build();
+                try (Response resp = HTTP.newCall(req).execute()) {
+                    String body = resp.body() != null ? resp.body().string() : "[]";
+                    if (resp.isSuccessful()) {
+                        org.json.JSONArray arr = new org.json.JSONArray(body);
+                        List<Offer> list = new ArrayList<>();
+                        for (int i = 0; i < arr.length(); i++) {
+                            org.json.JSONObject o = arr.getJSONObject(i);
+                            Offer offer = new Offer();
+                            offer.id               = o.optString("id");
+                            offer.title            = o.optString("title");
+                            offer.offerCode        = o.optString("offer_code");
+                            offer.discountType     = o.optString("discount_type", "percentage");
+                            offer.discountValue    = o.optDouble("discount_value", 0);
+                            offer.minBookingAmount = o.optDouble("min_booking_amount", 0);
+                            offer.expiryDate       = o.optString("expiry_date");
+                            offer.isActive         = o.optBoolean("is_active", true);
+                            if (offer.expiryDate.isEmpty() || offer.expiryDate.compareTo(today) >= 0) {
+                                list.add(offer);
+                            }
+                        }
+                        MAIN.post(() -> showOffersOnHome(list));
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "loadOffers: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    private void showBannersOnHome(List<Banner> list) {
+        if (bannersSection == null || rvBannersCarousel == null) return;
+        if (list.isEmpty()) {
+            bannersSection.setVisibility(View.GONE);
+            return;
+        }
+        bannersSection.setVisibility(View.VISIBLE);
+        homeBanners.clear();
+        homeBanners.addAll(list);
+
+        if (homeBannerAdapter == null) {
+            homeBannerAdapter = new HomeBannerAdapter(this, homeBanners, banner -> {
+                // Handle banner click by redirect type
+                if ("category".equals(banner.redirectType) && banner.redirectId != null) {
+                    openProvidersList(banner.redirectId);
+                } else if ("service".equals(banner.redirectType) && banner.redirectId != null) {
+                    openProvidersList(banner.redirectId);
+                }
+                // "external" — could open browser, skipped for safety
+            });
+            LinearLayoutManager lm = new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false);
+            rvBannersCarousel.setLayoutManager(lm);
+            rvBannersCarousel.setAdapter(homeBannerAdapter);
+            // Add pager-snap behavior for smooth carousel
+            rvBannersCarousel.addItemDecoration(new androidx.recyclerview.widget.RecyclerView.ItemDecoration() {});
+            androidx.recyclerview.widget.PagerSnapHelper snap = new androidx.recyclerview.widget.PagerSnapHelper();
+            snap.attachToRecyclerView(rvBannersCarousel);
+        } else {
+            homeBannerAdapter.setItems(homeBanners);
+        }
+
+        // Build dot indicators
+        buildBannerDots(list.size());
+    }
+
+    private void buildBannerDots(int count) {
+        if (bannerDotsLayout == null) return;
+        bannerDotsLayout.removeAllViews();
+        if (count <= 1) return;
+        for (int i = 0; i < count; i++) {
+            android.widget.ImageView dot = new android.widget.ImageView(this);
+            int sz = (int) (8 * getResources().getDisplayMetrics().density);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(sz, sz);
+            lp.setMargins(4, 0, 4, 0);
+            dot.setLayoutParams(lp);
+            dot.setImageResource(i == 0 ? R.drawable.bg_green_dot : R.drawable.bg_shimmer_block);
+            bannerDotsLayout.addView(dot);
+        }
+    }
+
+    private void showOffersOnHome(List<Offer> list) {
+        if (offersSection == null || rvOffersStrip == null) return;
+        if (list.isEmpty()) {
+            offersSection.setVisibility(View.GONE);
+            return;
+        }
+        offersSection.setVisibility(View.VISIBLE);
+        homeOffers.clear();
+        homeOffers.addAll(list);
+
+        if (homeOfferAdapter == null) {
+            homeOfferAdapter = new HomeOfferAdapter(this, homeOffers, offer ->
+                Toast.makeText(this,
+                        "Use code: " + offer.offerCode + " for "
+                        + (offer.discountType.equals("percentage")
+                                ? (int) offer.discountValue + "% OFF"
+                                : "₹" + (int) offer.discountValue + " OFF"),
+                        Toast.LENGTH_LONG).show()
+            );
+            LinearLayoutManager lm = new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false);
+            rvOffersStrip.setLayoutManager(lm);
+            rvOffersStrip.setAdapter(homeOfferAdapter);
+        } else {
+            homeOfferAdapter.setItems(homeOffers);
         }
     }
 

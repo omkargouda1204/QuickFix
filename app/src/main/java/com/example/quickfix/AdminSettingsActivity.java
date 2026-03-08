@@ -94,7 +94,8 @@ public class AdminSettingsActivity extends AppCompatActivity {
         setSilently(switchPush,        AppSettings.isPushEnabled(this));
         setSilently(switchEmail,       AppSettings.isEmailNotifEnabled(this));
         setSilently(switchAdminAlerts, AppSettings.isAdminAlertsEnabled(this));
-        setSilently(switchDarkMode,    AppSettings.isDarkMode(this));
+        // Use ThemeManager as single source of truth for dark mode
+        setSilently(switchDarkMode,    ThemeManager.isDarkMode(this));
         setSilently(switchAutoApprove, AppSettings.isAutoApprove(this));
         setSilently(switchEmailDigest, AppSettings.isEmailDigestEnabled(this));
         setSilently(switchMaintenance, AppSettings.isMaintenanceMode(this));
@@ -150,12 +151,11 @@ public class AdminSettingsActivity extends AppCompatActivity {
         // ── Dark Mode — applies IMMEDIATELY across entire app ─────────────
         if (switchDarkMode != null)
             switchDarkMode.setOnCheckedChangeListener((v, on) -> {
+                // ThemeManager: saves locally + applies immediately + syncs to Supabase
+                ThemeManager.toggle(this, on);
+                // Also keep AppSettings key in sync for backwards compatibility
                 AppSettings.set(this, AppSettings.KEY_DARK_MODE, on);
-                // Apply immediately — no restart needed
-                AppCompatDelegate.setDefaultNightMode(
-                        on ? AppCompatDelegate.MODE_NIGHT_YES
-                           : AppCompatDelegate.MODE_NIGHT_NO);
-                toast(on ? "Dark mode enabled" : "Light mode enabled");
+                toast(on ? "🌙 Dark mode enabled" : "☀️ Light mode enabled");
             });
 
         // ── Auto-approve Providers ────────────────────────────────────────

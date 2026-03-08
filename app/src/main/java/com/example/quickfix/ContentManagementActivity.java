@@ -1,6 +1,7 @@
 package com.example.quickfix;
 
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -108,6 +109,16 @@ public class ContentManagementActivity extends AppCompatActivity {
         ImageButton btnRefresh = findViewById(R.id.btnRefresh);
         if (btnBack    != null) btnBack.setOnClickListener(v -> finish());
         if (btnRefresh != null) btnRefresh.setOnClickListener(v -> loadCategories());
+
+        // Banner & Offer management quick-access cards
+        View cardBanner = findViewById(R.id.cardBannerMgmt);
+        View cardOffer  = findViewById(R.id.cardOfferMgmt);
+        if (cardBanner != null)
+            cardBanner.setOnClickListener(v ->
+                    startActivity(new Intent(this, BannerManagementActivity.class)));
+        if (cardOffer != null)
+            cardOffer.setOnClickListener(v ->
+                    startActivity(new Intent(this, OfferManagementActivity.class)));
     }
 
     private void setupRecyclerView() {

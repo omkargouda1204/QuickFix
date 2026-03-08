@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#F0F4FF">
+    android:background="@color/screen_background">
 
     <!-- Header -->
     <LinearLayout
@@ -42,7 +42,7 @@
                 android:layout_height="44dp"
                 android:layout_weight="1"
                 android:layout_marginStart="8dp"
-                android:background="#FFFFFFFF"
+                android:background="@color/card_bg"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:paddingStart="12dp"
@@ -126,7 +126,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:scrollbars="none"
-        android:background="#FFFFFF"
+        android:background="@color/card_bg"
         android:elevation="2dp">
 
         <com.google.android.material.chip.ChipGroup
@@ -225,4 +225,5 @@
     </FrameLayout>
 
 </LinearLayout>
+
 

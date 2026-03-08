@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/home_bg">
+    android:background="@color/screen_background">
 
     <!-- ── Gradient Header ── -->
     <LinearLayout
@@ -102,7 +102,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="text"
-                    android:textColor="#000000"
+                    android:textColor="@color/text_primary"
                     android:textColorHint="@color/text_secondary"
                     android:imeOptions="actionSearch"
                     android:singleLine="true" />
@@ -133,7 +133,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="none"
-                android:textColor="#000000"
+                android:textColor="@color/text_primary"
                 android:textColorHint="@color/text_secondary" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -232,3 +232,5 @@
         app:iconTint="@color/white" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
+
+

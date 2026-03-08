@@ -86,3 +86,5 @@
             android:background="@drawable/bg_shimmer_block" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
+
+

@@ -18,7 +18,6 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.app.AppCompatDelegate;
 
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.switchmaterial.SwitchMaterial;
@@ -174,7 +173,7 @@ public class ProfileActivity extends AppCompatActivity {
             }
             // Fallback by email
             if (!email.isEmpty()) {
-                String enc = java.net.URLEncoder.encode(email, "UTF-8");
+                String enc = java.net.URLEncoder.encode(email, java.nio.charset.StandardCharsets.UTF_8.name());
                 String urlE = BuildConfig.SUPABASE_URL
                         + "/rest/v1/users?email=eq." + enc
                         + "&select=name,email,is_user,is_service_provider,is_admin&limit=1";
@@ -281,17 +280,20 @@ public class ProfileActivity extends AppCompatActivity {
         menuLanguage.setOnClickListener(v -> showLanguageBottomSheet());
 
         menuDarkMode.setOnClickListener(v -> {
-            // Dark mode disabled — always light
-            Toast.makeText(this, "Dark mode is not available in this version", Toast.LENGTH_SHORT).show();
+            if (switchDarkMode != null) switchDarkMode.toggle();
         });
-        switchDarkMode.setChecked(false);
-        switchDarkMode.setEnabled(false);
-        switchDarkMode.setOnCheckedChangeListener((btn, checked) -> {
-            // Always force light mode
-            switchDarkMode.setChecked(false);
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
-            prefs.edit().putBoolean(KEY_DARK_MODE, false).apply();
-        });
+        // Load current dark mode state from ThemeManager (shared across all roles)
+        if (switchDarkMode != null) {
+            switchDarkMode.setChecked(ThemeManager.isDarkMode(this));
+            switchDarkMode.setEnabled(true);
+            switchDarkMode.setOnCheckedChangeListener((btn, checked) -> {
+                ThemeManager.toggle(this, checked);
+                // Sync with AppSettings key for backwards compat
+                prefs.edit().putBoolean(KEY_DARK_MODE, checked).apply();
+                Toast.makeText(this, checked ? "🌙 Dark mode enabled" : "☀️ Light mode enabled",
+                        Toast.LENGTH_SHORT).show();
+            });
+        }
 
         menuHelpSupport.setOnClickListener(v ->
                 Toast.makeText(this, "Help & Support — coming soon!", Toast.LENGTH_SHORT).show());
@@ -390,15 +392,16 @@ public class ProfileActivity extends AppCompatActivity {
 
     // ── Dark Mode ─────────────────────────────────────────────────────────
     private void applyDarkModeFromPrefs() {
-        // Always force light mode — dark mode is disabled
-        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+        // Use ThemeManager — shared preference for all roles
+        ThemeManager.applyFromPrefs(this);
     }
 
     private void setupTogglesFromPrefs() {
         switchNotifications.setChecked(prefs.getBoolean(KEY_NOTIF, true));
-        // Dark mode always off
-        switchDarkMode.setChecked(false);
-        switchDarkMode.setEnabled(false);
+        // Load dark mode from ThemeManager
+        if (switchDarkMode != null) {
+            switchDarkMode.setChecked(ThemeManager.isDarkMode(this));
+        }
         String lang = prefs.getString(KEY_LANGUAGE, "English");
         tvCurrentLanguage.setText(lang);
     }

@@ -16,7 +16,6 @@ import com.github.mikephil.charting.charts.PieChart;
 import com.github.mikephil.charting.data.PieData;
 import com.github.mikephil.charting.data.PieDataSet;
 import com.github.mikephil.charting.data.PieEntry;
-import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.card.MaterialCardView;
 
@@ -30,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -51,9 +51,6 @@ import okhttp3.Response;
 public class ReportsAnalyticsActivity extends AppCompatActivity {
 
     private static final String TAG = "ReportsAnalytics";
-
-    // Views - Header
-    private MaterialToolbar toolbar;
 
     // Views - Time Period Toggle
     private MaterialButtonToggleGroup toggleTimePeriod;
@@ -85,7 +82,9 @@ public class ReportsAnalyticsActivity extends AppCompatActivity {
     private int completedBookings, cancelledBookings, pendingBookings;
 
     private OkHttpClient httpClient;
-    private String currentTimePeriod = "month"; // Default: month
+    private String currentTimePeriod = "month";
+    // Counter to track parallel loads — scroll shown when all 5 complete
+    private final AtomicInteger loadCounter = new AtomicInteger(0);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -101,14 +100,11 @@ public class ReportsAnalyticsActivity extends AppCompatActivity {
     }
 
     private void setupToolbar() {
-        toolbar = findViewById(R.id.toolbarReportsAnalytics);
-        if (toolbar != null) {
-            setSupportActionBar(toolbar);
-            if (getSupportActionBar() != null) {
-                getSupportActionBar().setDisplayHomeAsUpEnabled(false);
-            }
-            toolbar.setNavigationOnClickListener(v -> finish());
-        }
+        View btnBack = findViewById(R.id.btnAnalyticsBack);
+        if (btnBack != null) btnBack.setOnClickListener(v -> finish());
+
+        View btnRefresh = findViewById(R.id.btnAnalyticsRefresh);
+        if (btnRefresh != null) btnRefresh.setOnClickListener(v -> loadAnalyticsData());
     }
 
     private void bindViews() {
@@ -177,13 +173,51 @@ public class ReportsAnalyticsActivity extends AppCompatActivity {
     }
 
     private void loadAnalyticsData() {
-        showLoading(true);
-
-        // Load all analytics data in parallel
+        loadCounter.set(5); // 5 parallel loads
+        if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
+        if (scrollContent != null) scrollContent.setVisibility(View.GONE);
         loadUserStatistics();
         loadBookingStatistics();
         loadRevenueMetrics();
         loadServiceMetrics();
+        loadPendingApprovals();
+    }
+
+    private void loadPendingApprovals() {
+        String url = BuildConfig.SUPABASE_URL
+                + "/rest/v1/provider_applications?select=id&status=eq.pending";
+        Request req = new Request.Builder().url(url)
+                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .addHeader("Prefer", "count=exact")
+                .get().build();
+        httpClient.newCall(req).enqueue(new Callback() {
+            @Override public void onFailure(Call call, IOException e) {
+                Log.w(TAG, "loadPendingApprovals: " + e.getMessage());
+                runOnUiThread(() -> showLoading(false));
+            }
+            @Override public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    String range = response.header("Content-Range", "0-0/0");
+                    response.close();
+                    int count = 0;
+                    if (range != null && range.contains("/")) {
+                        try { count = Integer.parseInt(range.split("/")[1].trim()); }
+                        catch (NumberFormatException ignored) {}
+                    }
+                    final int pending = count;
+                    runOnUiThread(() -> {
+                        if (tvPendingApprovals != null)
+                            tvPendingApprovals.setText(formatNumber(pending));
+                        showLoading(false);
+                    });
+                } catch (Exception e) {
+                    Log.w(TAG, "loadPendingApprovals parse: " + e.getMessage());
+                    runOnUiThread(() -> showLoading(false));
+                }
+            }
+        });
     }
 
     private void loadUserStatistics() {
@@ -298,6 +332,7 @@ public class ReportsAnalyticsActivity extends AppCompatActivity {
             @Override
             public void onFailure(Call call, IOException e) {
                 Log.w(TAG, "Failed to load booking statistics: " + e.getMessage());
+                runOnUiThread(() -> showLoading(false));
             }
 
             @Override
@@ -305,28 +340,25 @@ public class ReportsAnalyticsActivity extends AppCompatActivity {
                 try {
                     if (!response.isSuccessful()) {
                         response.close();
+                        runOnUiThread(() -> showLoading(false));
                         return;
                     }
-
                     if (response.body() == null) {
                         response.close();
+                        runOnUiThread(() -> showLoading(false));
                         return;
                     }
-
                     String body = response.body().string();
                     response.close();
                     JSONArray arr = new JSONArray(body);
-
                     int totalBookings = arr.length();
                     int completedBookings = 0;
                     int cancelledBookings = 0;
-                    int pendingBookings = 0;
-                    double totalRevenue = 0.0;
-
+                    int pendingBookings   = 0;
+                    double totalRevenue   = 0.0;
                     for (int i = 0; i < arr.length(); i++) {
                         JSONObject booking = arr.getJSONObject(i);
                         String status = booking.optString("status", "");
-
                         if ("completed".equals(status)) {
                             completedBookings++;
                             totalRevenue += booking.optDouble("booking_value", 0.0);
@@ -336,16 +368,15 @@ public class ReportsAnalyticsActivity extends AppCompatActivity {
                             pendingBookings++;
                         }
                     }
-
-                    final int fTotal = totalBookings;
-                    final int fCompleted = completedBookings;
-                    final int fCancelled = cancelledBookings;
-                    final int fPending = pendingBookings;
-                    final double fRevenue = totalRevenue;
-
+                    final int    fTotal     = totalBookings;
+                    final int    fCompleted = completedBookings;
+                    final int    fCancelled = cancelledBookings;
+                    final int    fPending   = pendingBookings;
+                    final double fRevenue   = totalRevenue;
                     runOnUiThread(() -> updateBookingStatistics(fTotal, fCompleted, fCancelled, fPending, fRevenue));
                 } catch (JSONException e) {
                     Log.w(TAG, "JSON parsing error: " + e.getMessage());
+                    runOnUiThread(() -> showLoading(false));
                 }
             }
         });
@@ -354,41 +385,26 @@ public class ReportsAnalyticsActivity extends AppCompatActivity {
     private void loadRevenueMetrics() {
         String path = "/rest/v1/bookings?select=booking_value,status&limit=10000";
         String url = BuildConfig.SUPABASE_URL + path;
-
         Request request = new Request.Builder()
-                .url(url)
-                .get()
+                .url(url).get()
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Accept", "application/json")
                 .build();
-
         httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
+            @Override public void onFailure(Call call, IOException e) {
                 Log.w(TAG, "Failed to load revenue metrics: " + e.getMessage());
+                runOnUiThread(() -> showLoading(false));
             }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            @Override public void onResponse(Call call, Response response) throws IOException {
                 try {
-                    if (!response.isSuccessful()) {
-                        response.close();
-                        return;
-                    }
-
-                    if (response.body() == null) {
-                        response.close();
-                        return;
-                    }
-
+                    if (!response.isSuccessful()) { response.close(); runOnUiThread(() -> showLoading(false)); return; }
+                    if (response.body() == null)  { response.close(); runOnUiThread(() -> showLoading(false)); return; }
                     String body = response.body().string();
                     response.close();
                     JSONArray arr = new JSONArray(body);
-
                     double totalRevenue = 0.0;
-                    int completedCount = 0;
-
+                    int completedCount  = 0;
                     for (int i = 0; i < arr.length(); i++) {
                         JSONObject booking = arr.getJSONObject(i);
                         if ("completed".equals(booking.optString("status", ""))) {
@@ -396,72 +412,43 @@ public class ReportsAnalyticsActivity extends AppCompatActivity {
                             completedCount++;
                         }
                     }
-
-                    final double fRevenue = totalRevenue;
+                    final double fRevenue  = totalRevenue;
                     final double fAvgValue = completedCount > 0 ? totalRevenue / completedCount : 0.0;
-
                     runOnUiThread(() -> updateRevenueMetrics(fRevenue, fAvgValue));
                 } catch (JSONException e) {
                     Log.w(TAG, "JSON parsing error: " + e.getMessage());
+                    runOnUiThread(() -> showLoading(false));
                 }
             }
         });
     }
 
     private void loadServiceMetrics() {
-        String path = "/rest/v1/services?select=id,category_id,rating&limit=10000";
+        String path = "/rest/v1/services?select=id,category,is_active&limit=10000";
         String url = BuildConfig.SUPABASE_URL + path;
-
         Request request = new Request.Builder()
-                .url(url)
-                .get()
+                .url(url).get()
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Accept", "application/json")
                 .build();
-
         httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
+            @Override public void onFailure(Call call, IOException e) {
                 Log.w(TAG, "Failed to load service metrics: " + e.getMessage());
+                runOnUiThread(() -> showLoading(false));
             }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            @Override public void onResponse(Call call, Response response) throws IOException {
                 try {
-                    if (!response.isSuccessful()) {
-                        response.close();
-                        return;
-                    }
-
-                    if (response.body() == null) {
-                        response.close();
-                        return;
-                    }
-
+                    if (!response.isSuccessful()) { response.close(); runOnUiThread(() -> showLoading(false)); return; }
+                    if (response.body() == null)  { response.close(); runOnUiThread(() -> showLoading(false)); return; }
                     String body = response.body().string();
                     response.close();
                     JSONArray arr = new JSONArray(body);
-
                     int totalServices = arr.length();
-                    double totalRating = 0.0;
-                    int ratingCount = 0;
-
-                    for (int i = 0; i < arr.length(); i++) {
-                        JSONObject service = arr.getJSONObject(i);
-                        double rating = service.optDouble("rating", 0.0);
-                        if (rating > 0) {
-                            totalRating += rating;
-                            ratingCount++;
-                        }
-                    }
-
-                    final int fTotal = totalServices;
-                    final double fAvgRating = ratingCount > 0 ? totalRating / ratingCount : 0.0;
-
-                    runOnUiThread(() -> updateServiceMetrics(fTotal, fAvgRating));
+                    runOnUiThread(() -> updateServiceMetrics(totalServices, 0.0));
                 } catch (JSONException e) {
                     Log.w(TAG, "JSON parsing error: " + e.getMessage());
+                    runOnUiThread(() -> showLoading(false));
                 }
             }
         });
@@ -532,7 +519,11 @@ public class ReportsAnalyticsActivity extends AppCompatActivity {
     private void updateServiceMetrics(int totalServices, double avgRating) {
         if (tvActiveServices != null) tvActiveServices.setText(formatNumber(totalServices));
         if (tvAverageRating != null) {
-            tvAverageRating.setText(String.format("%.1f★", avgRating));
+            if (avgRating > 0) {
+                tvAverageRating.setText(String.format(Locale.US, "%.1f★", avgRating));
+            } else {
+                tvAverageRating.setText("N/A");
+            }
         }
 
         // Calculate rating distribution (assuming normal distribution)
@@ -546,11 +537,16 @@ public class ReportsAnalyticsActivity extends AppCompatActivity {
     }
 
     private void showLoading(boolean show) {
-        if (progressBar != null) {
-            progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
-        }
-        if (scrollContent != null) {
-            scrollContent.setVisibility(show ? View.GONE : View.VISIBLE);
+        if (show) {
+            if (progressBar  != null) progressBar.setVisibility(View.VISIBLE);
+            if (scrollContent != null) scrollContent.setVisibility(View.GONE);
+        } else {
+            // Decrement counter; only hide spinner when all loads done
+            int remaining = loadCounter.decrementAndGet();
+            if (remaining <= 0) {
+                if (progressBar  != null) progressBar.setVisibility(View.GONE);
+                if (scrollContent != null) scrollContent.setVisibility(View.VISIBLE);
+            }
         }
     }
 

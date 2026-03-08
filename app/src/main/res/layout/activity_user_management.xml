@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/home_bg">
+    android:background="@color/screen_background">
 
     <!-- ═══ GRADIENT HEADER ═══ -->
     <LinearLayout
@@ -66,7 +66,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            app:boxBackgroundColor="#FFFFFF"
+            app:boxBackgroundColor="@color/card_bg"
             app:boxCornerRadiusTopStart="12dp"
             app:boxCornerRadiusTopEnd="12dp"
             app:boxCornerRadiusBottomStart="12dp"
@@ -80,7 +80,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:hint="Search name, email or phone…"
-                android:textColor="#000000"
+                android:textColor="@color/text_primary"
                 android:textColorHint="#9E9E9E"
                 android:textSize="13sp"
                 android:imeOptions="actionSearch"
@@ -339,3 +339,5 @@
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
+
+

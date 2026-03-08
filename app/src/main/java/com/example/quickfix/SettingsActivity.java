@@ -9,7 +9,6 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.app.AppCompatDelegate;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.switchmaterial.SwitchMaterial;
@@ -64,7 +63,8 @@ public class SettingsActivity extends AppCompatActivity {
         if (switchPush       != null) switchPush.setChecked(prefs.getBoolean(KEY_PUSH_NOTIF, true));
         if (switchEmail      != null) switchEmail.setChecked(prefs.getBoolean(KEY_EMAIL_NOTIF, true));
         if (switchBookingRem != null) switchBookingRem.setChecked(prefs.getBoolean(KEY_BOOKING_REM, true));
-        if (switchDarkMode   != null) switchDarkMode.setChecked(prefs.getBoolean(KEY_DARK_MODE, false));
+        // Load dark mode from ThemeManager (shared across all roles)
+        if (switchDarkMode   != null) switchDarkMode.setChecked(ThemeManager.isDarkMode(this));
     }
 
     private void setupListeners() {
@@ -81,14 +81,10 @@ public class SettingsActivity extends AppCompatActivity {
                     prefs.edit().putBoolean(KEY_BOOKING_REM, checked).apply());
         }
         if (switchDarkMode != null) {
-            // Dark mode is disabled — app always uses light theme for consistency
-            switchDarkMode.setChecked(false);
-            switchDarkMode.setEnabled(false);
+            switchDarkMode.setEnabled(true);
             switchDarkMode.setOnCheckedChangeListener((v, checked) -> {
-                // Force back to off — light mode always
-                switchDarkMode.setChecked(false);
-                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
-                prefs.edit().putBoolean(KEY_DARK_MODE, false).apply();
+                ThemeManager.toggle(this, checked);
+                prefs.edit().putBoolean(KEY_DARK_MODE, checked).apply();
             });
         }
 

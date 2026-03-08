@@ -139,6 +139,18 @@
             android:exported="false"
             android:parentActivityName=".AdminDashboardActivity" />
 
+        <!-- Banner Management Activity -->
+        <activity
+            android:name=".BannerManagementActivity"
+            android:exported="false"
+            android:parentActivityName=".ContentManagementActivity" />
+
+        <!-- Offer Management Activity -->
+        <activity
+            android:name=".OfferManagementActivity"
+            android:exported="false"
+            android:parentActivityName=".ContentManagementActivity" />
+
         <!-- Admin Settings Activity -->
         <activity
             android:name=".AdminSettingsActivity"

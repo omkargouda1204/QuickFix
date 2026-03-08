@@ -3,7 +3,7 @@
     <style name="Widget.QuickFix.TextInputLayout" parent="Widget.Material3.TextInputLayout.OutlinedBox">
         <item name="boxBackgroundColor">@color/input_background</item>
         <item name="boxStrokeColor">@color/input_stroke</item>
-        <item name="boxStrokeErrorColor">@color/splash_blue_dark</item>
+        <item name="boxStrokeErrorColor">@color/error_red</item>
         <item name="hintTextColor">@color/input_hint</item>
         <item name="startIconTint">@color/input_icon</item>
         <item name="endIconTint">@color/input_icon</item>

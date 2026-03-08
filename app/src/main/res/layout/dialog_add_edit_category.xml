@@ -30,7 +30,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="textCapWords"
-                android:textColor="#000000"
+                android:textColor="@color/text_primary"
                 android:textColorHint="@color/text_secondary" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -56,7 +56,7 @@
                 android:inputType="textMultiLine"
                 android:minLines="2"
                 android:gravity="top|start"
-                android:textColor="#000000"
+                android:textColor="@color/text_primary"
                 android:textColorHint="@color/text_secondary" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -80,10 +80,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="textUri"
-                android:textColor="#000000"
+                android:textColor="@color/text_primary"
                 android:textColorHint="@color/text_secondary" />
         </com.google.android.material.textfield.TextInputLayout>
 
     </LinearLayout>
 </ScrollView>
+
 

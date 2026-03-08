@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/home_bg">
+    android:background="@color/screen_background">
 
     <!-- Toolbar -->
     <com.google.android.material.appbar.MaterialToolbar
@@ -47,7 +47,7 @@
                 android:layout_height="wrap_content"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/white"
+                app:cardBackgroundColor="@color/card_bg"
                 android:layout_marginBottom="16dp">
 
                 <LinearLayout
@@ -145,7 +145,7 @@
                 android:layout_height="wrap_content"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/white"
+                app:cardBackgroundColor="@color/card_bg"
                 android:layout_marginBottom="16dp">
 
                 <LinearLayout
@@ -189,7 +189,7 @@
                 android:layout_height="wrap_content"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/white"
+                app:cardBackgroundColor="@color/card_bg"
                 android:layout_marginBottom="24dp">
 
                 <LinearLayout
@@ -259,4 +259,6 @@
     </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>
+
+
 

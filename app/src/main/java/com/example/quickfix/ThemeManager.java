@@ -1,0 +1,184 @@
+package com.example.quickfix;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
+
+import androidx.appcompat.app.AppCompatDelegate;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+/**
+ * ThemeManager — single source of truth for dark/light mode across the app.
+ *
+ * Flow:
+ *  1. On app start  → load saved preference → apply via AppCompatDelegate
+ *  2. Admin toggles → save locally → apply immediately → sync to Supabase
+ *  3. User opens app → load from SharedPreferences (fast, no network)
+ *  4. Optionally: fetch from Supabase to sync admin-set preference to all users
+ *
+ * The preference is stored in SharedPreferences under key "dark_mode_enabled"
+ * in prefs file "quickfix_theme_prefs" so ALL roles share the same key.
+ */
+public class ThemeManager {
+
+    private static final String TAG        = "ThemeManager";
+    private static final String PREFS_NAME = "quickfix_theme_prefs";
+    private static final String KEY        = "dark_mode_enabled";
+
+    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+
+    private static final OkHttpClient HTTP = new OkHttpClient.Builder()
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.SECONDS)
+            .build();
+
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+
+    // ── Persist ───────────────────────────────────────────────────────────
+
+    /** Save dark mode preference locally */
+    public static void save(Context ctx, boolean darkMode) {
+        prefs(ctx).edit().putBoolean(KEY, darkMode).apply();
+    }
+
+    /** Read saved preference (default: light mode) */
+    public static boolean isDarkMode(Context ctx) {
+        return prefs(ctx).getBoolean(KEY, false);
+    }
+
+    // ── Apply ─────────────────────────────────────────────────────────────
+
+    /**
+     * Apply the saved theme. Must be called before setContentView().
+     * In Application.onCreate() this sets the mode for the entire session.
+     */
+    public static void applyFromPrefs(Context ctx) {
+        apply(isDarkMode(ctx));
+    }
+
+    /** Apply a specific mode immediately (no restart needed with AppCompatDelegate). */
+    public static void apply(boolean darkMode) {
+        AppCompatDelegate.setDefaultNightMode(
+                darkMode
+                        ? AppCompatDelegate.MODE_NIGHT_YES
+                        : AppCompatDelegate.MODE_NIGHT_NO);
+    }
+
+    // ── Toggle ────────────────────────────────────────────────────────────
+
+    /**
+     * Toggle dark mode: save + apply immediately + push to Supabase.
+     * This is the single method called from any settings screen.
+     */
+    public static void toggle(Context ctx, boolean darkMode) {
+        save(ctx, darkMode);
+        apply(darkMode);
+        pushToSupabase(darkMode);
+    }
+
+    // ── Supabase sync ─────────────────────────────────────────────────────
+
+    /**
+     * Push dark mode setting to the app_settings table in Supabase.
+     * Table: app_settings(key TEXT PK, value TEXT, updated_at TIMESTAMPTZ)
+     * Row: key = 'dark_mode', value = 'true' or 'false'
+     *
+     * Creates or updates the row using UPSERT.
+     * If table doesn't exist yet, the error is silently logged.
+     */
+    public static void pushToSupabase(boolean darkMode) {
+        new Thread(() -> {
+            try {
+                String url   = BuildConfig.SUPABASE_URL + "/rest/v1/app_settings";
+                String anonKey = BuildConfig.SUPABASE_ANON_KEY;
+
+                JSONObject body = new JSONObject();
+                body.put("key",   "dark_mode");
+                body.put("value", String.valueOf(darkMode));
+
+                Request req = new Request.Builder()
+                        .url(url)
+                        .post(RequestBody.create(body.toString(), JSON))
+                        .addHeader("apikey",        anonKey)
+                        .addHeader("Authorization", "Bearer " + anonKey)
+                        .addHeader("Content-Type",  "application/json")
+                        .addHeader("Prefer",        "resolution=merge-duplicates,return=minimal")
+                        .build();
+
+                try (Response r = HTTP.newCall(req).execute()) {
+                    int code = r.code();
+                    if (code == 200 || code == 201 || code == 204) {
+                        Log.d(TAG, "Dark mode synced to Supabase: " + darkMode);
+                    } else {
+                        String rb = r.body() != null ? r.body().string() : "";
+                        Log.w(TAG, "pushToSupabase HTTP " + code + " | " + rb);
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "pushToSupabase error: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    /**
+     * Fetch dark mode preference from Supabase and apply if different from local.
+     * Call this from MainActivity/SplashActivity after login to sync admin changes.
+     */
+    public static void fetchAndSync(Context ctx) {
+        new Thread(() -> {
+            try {
+                String url = BuildConfig.SUPABASE_URL
+                        + "/rest/v1/app_settings?key=eq.dark_mode&select=value&limit=1";
+                String anonKey = BuildConfig.SUPABASE_ANON_KEY;
+
+                Request req = new Request.Builder()
+                        .url(url)
+                        .get()
+                        .addHeader("apikey",        anonKey)
+                        .addHeader("Authorization", "Bearer " + anonKey)
+                        .addHeader("Accept",        "application/json")
+                        .build();
+
+                try (Response r = HTTP.newCall(req).execute()) {
+                    if (r.code() == 200 && r.body() != null) {
+                        String json = r.body().string();
+                        JSONArray arr = new JSONArray(json);
+                        if (arr.length() > 0) {
+                            String val    = arr.getJSONObject(0).optString("value", "false");
+                            boolean remote = Boolean.parseBoolean(val);
+                            boolean local  = isDarkMode(ctx);
+                            if (remote != local) {
+                                Log.d(TAG, "Syncing dark mode from Supabase: " + remote);
+                                save(ctx, remote);
+                                MAIN.post(() -> apply(remote));
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "fetchAndSync error: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    private static SharedPreferences prefs(Context ctx) {
+        return ctx.getApplicationContext()
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+    }
+}
+
