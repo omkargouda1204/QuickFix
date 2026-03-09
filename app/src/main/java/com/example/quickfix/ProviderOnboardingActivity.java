@@ -1,5 +1,7 @@
 package com.example.quickfix;
 
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.animation.ObjectAnimator;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -149,6 +151,7 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
         initViews();
         setupCategoryDropdown();
         setupUploadZones();
+        setupPhoneValidation();
         setupTermsScroll();
         setupTermsCheckbox();
         setupSubmitButton();
@@ -266,6 +269,29 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
                 this, android.R.layout.simple_dropdown_item_1line, CATEGORIES));
     }
 
+    /** Real-time phone validation — clears error as user types, shows on loss of focus */
+    private void setupPhoneValidation() {
+        etPhone.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(Editable s) {
+                String phone = s != null ? s.toString().trim() : "";
+                if (phone.length() == 10 && phone.matches("\\d{10}")) {
+                    tilPhone.setError(null);
+                    tilPhone.setHelperText("✓ Valid phone number");
+                } else if (phone.length() > 0 && phone.length() < 10) {
+                    tilPhone.setHelperText("Enter " + (10 - phone.length()) + " more digit(s)");
+                    tilPhone.setError(null);
+                } else if (phone.length() == 10 && !phone.matches("\\d{10}")) {
+                    tilPhone.setError("Only digits allowed");
+                } else {
+                    tilPhone.setHelperText("Enter 10 digit mobile number");
+                    tilPhone.setError(null);
+                }
+            }
+        });
+    }
+
     private void setupUploadZones() {
         idUploadZone.setOnClickListener(v -> launchIdProofPicker());
         tvChangeId.setOnClickListener(v -> launchIdProofPicker());
@@ -370,6 +396,12 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
             if (user.getDisplayName() != null && !user.getDisplayName().isEmpty())
                 etOwnerName.setText(user.getDisplayName());
         }
+        // Email must be read-only — always pre-filled from account
+        etEmail.setFocusable(false);
+        etEmail.setFocusableInTouchMode(false);
+        etEmail.setClickable(false);
+        etEmail.setCursorVisible(false);
+        if (tilEmail != null) tilEmail.setFocusable(false);
     }
 
     // ── Validation ────────────────────────────────────────────────────────
@@ -397,9 +429,9 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
             valid = false;
         } else tilOwnerName.setError(null);
 
-        if (TextUtils.isEmpty(phone) || !phone.matches("\\d{7,15}")) {
+        if (TextUtils.isEmpty(phone) || !phone.matches("\\d{10}")) {
             tilPhone.setError(TextUtils.isEmpty(phone)
-                    ? "Phone number is required" : "Enter a valid phone (7–15 digits)");
+                    ? "Phone number is required" : "Enter a valid 10 digit mobile number");
             valid = false;
         } else tilPhone.setError(null);
 
@@ -600,29 +632,73 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
             Toast.makeText(this, "Session error — please log in again.", Toast.LENGTH_LONG).show();
             return;
         }
-        if (TextUtils.isEmpty(userName)) {
-            showLoading(false);
-            tilOwnerName.setError("Owner name is required");
-            return;
-        }
-        if (TextUtils.isEmpty(userEmail)) {
-            showLoading(false);
-            tilEmail.setError("Email is required");
-            return;
-        }
+        // Validate all required fields top-to-bottom matching form layout
         if (TextUtils.isEmpty(businessName)) {
             showLoading(false);
             tilBusinessName.setError("Business name is required");
+            tilBusinessName.requestFocus();
+            return;
+        } else { tilBusinessName.setError(null); }
+
+        if (TextUtils.isEmpty(userName)) {
+            showLoading(false);
+            tilOwnerName.setError("Owner full name is required");
+            tilOwnerName.requestFocus();
+            return;
+        } else { tilOwnerName.setError(null); }
+
+        if (TextUtils.isEmpty(phone) || !phone.matches("\\d{10}")) {
+            showLoading(false);
+            tilPhone.setError(TextUtils.isEmpty(phone)
+                    ? "Phone number is required"
+                    : "Enter a valid 10 digit mobile number");
+            tilPhone.requestFocus();
+            return;
+        } else { tilPhone.setError(null); }
+
+        if (TextUtils.isEmpty(userEmail)) {
+            showLoading(false);
+            Toast.makeText(this, "Email not found. Please log in again.", Toast.LENGTH_LONG).show();
             return;
         }
+
         if (TextUtils.isEmpty(category)) {
             showLoading(false);
             tilServiceCategory.setError("Please select a service category");
             return;
+        } else { tilServiceCategory.setError(null); }
+
+        if (experienceYrs <= 0) {
+            showLoading(false);
+            tilExperience.setError("Enter years of experience (1–99)");
+            tilExperience.requestFocus();
+            return;
+        } else { tilExperience.setError(null); }
+
+        if (TextUtils.isEmpty(city)) {
+            showLoading(false);
+            tilCity.setError("City is required");
+            tilCity.requestFocus();
+            return;
+        } else { tilCity.setError(null); }
+
+        if (TextUtils.isEmpty(address)) {
+            showLoading(false);
+            tilAddress.setError("Business address is required");
+            tilAddress.requestFocus();
+            return;
+        } else { tilAddress.setError(null); }
+
+        if (TextUtils.isEmpty(idProofUrl)) {
+            showLoading(false);
+            if (tvIdError != null) tvIdError.setVisibility(View.VISIBLE);
+            Toast.makeText(this, "ID proof upload is required. Please upload your ID.", Toast.LENGTH_LONG).show();
+            return;
         }
+
         if (!checkboxTerms.isChecked()) {
             showLoading(false);
-            Toast.makeText(this, "You must accept the Terms & Conditions.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "You must read and accept the Terms & Conditions.", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -633,20 +709,17 @@ public class ProviderOnboardingActivity extends AppCompatActivity {
             // firebase_uid — always required
             payload.put("firebase_uid",   firebaseUid);
 
-            // Store under both naming conventions so the approval flow
-            // can read them regardless of which column exists in DB
-            payload.put("owner_name",     userName);             // owner_name (new standard)
-            payload.put("user_name",      userName);             // user_name (legacy)
-            payload.put("email",          userEmail);            // email (new standard)
-            payload.put("user_email",     userEmail);            // user_email (legacy)
+            // Exact DB column names: user_name, user_email
+            payload.put("user_name",      userName);
+            payload.put("user_email",     userEmail);
 
             payload.put("business_name",  businessName);
             payload.put("category",       category);
             payload.put("terms_accepted", true);
 
-            payload.put("phone",          phone);
-            payload.put("experience",     String.valueOf(experienceYrs)); // string column
-            payload.put("experience_yrs", experienceYrs);        // int column (if exists)
+            // Exact column names from provider_applications table
+            payload.put("user_phone",     phone);
+            payload.put("experience_yrs", experienceYrs);        // integer column
             payload.put("address",        address);
             payload.put("city",           city);
             payload.put("description",    description);

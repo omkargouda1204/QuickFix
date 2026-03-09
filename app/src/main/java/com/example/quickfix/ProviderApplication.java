@@ -5,9 +5,11 @@ import org.json.JSONObject;
 /**
  * ProviderApplication — POJO that mirrors the provider_applications table.
  *
- * DB columns: id, firebase_uid, owner_name, email, phone, business_name,
- *             category, description, address, city, experience,
- *             business_image_url, id_proof_url, status,
+
+
+ * Actual DB columns: id, firebase_uid, user_name, user_email, user_phone,
+ *             business_name, category, description, address, city, experience_yrs,
+ *             business_image_url, id_proof_url, status, terms_accepted,
  *             submitted_at, reviewed_at, reviewed_by_uid, rejection_reason
  */
 public class ProviderApplication {
@@ -52,7 +54,8 @@ public class ProviderApplication {
         if (email.isEmpty()) email = s(o, "user_email");          // fallback old column
         app.email = email;
 
-        app.phone        = s(o, "phone");
+        app.phone        = s(o, "user_phone");
+        if (app.phone.isEmpty()) app.phone = s(o, "phone"); // legacy fallback
         app.businessName = s(o, "business_name");
         app.category     = s(o, "category");
         app.description  = s(o, "description");

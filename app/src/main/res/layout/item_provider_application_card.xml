@@ -9,223 +9,275 @@
     android:layout_marginEnd="14dp"
     android:layout_marginBottom="12dp"
     android:layout_marginTop="4dp"
-    app:cardCornerRadius="16dp"
-    app:cardElevation="3dp"
+    app:cardCornerRadius="18dp"
+    app:cardElevation="4dp"
     app:cardBackgroundColor="@color/card_bg"
-    app:strokeColor="#E8EAF0"
+    app:strokeColor="#E0E4EF"
     app:strokeWidth="1dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:orientation="vertical">
 
-        <!-- Row 1: Business name + Status badge -->
+        <!-- ── Coloured top accent strip ── -->
+        <View
+            android:id="@+id/cardAccentStrip"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:background="@color/primary" />
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:orientation="vertical"
+            android:padding="16dp">
 
+            <!-- Row 1: Business name + Status badge -->
             <LinearLayout
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:layout_marginEnd="8dp">
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="6dp">
+
+                <FrameLayout
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_category_blue"
+                    android:layout_marginEnd="12dp">
+                    <ImageView
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_business"
+                        app:tint="@color/white" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginEnd="8dp">
+
+                    <TextView
+                        android:id="@+id/tvBusinessName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="#0D0D0D"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="Business Name" />
+
+                    <TextView
+                        android:id="@+id/tvOwnerName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:textColor="#555555"
+                        android:textSize="13sp"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="Owner: -" />
+                </LinearLayout>
 
                 <TextView
-                    android:id="@+id/tvBusinessName"
-                    android:layout_width="match_parent"
+                    android:id="@+id/tvStatus"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="#0D0D0D"
-                    android:textSize="16sp"
+                    android:textSize="11sp"
                     android:textStyle="bold"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:text="Business Name" />
-
-                <TextView
-                    android:id="@+id/tvOwnerName"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
-                    android:textColor="#555555"
-                    android:textSize="13sp"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:text="Owner: -" />
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="5dp"
+                    android:text="Pending"
+                    android:background="@drawable/bg_status_pending"
+                    android:textColor="#E65100"
+                    android:maxLines="1" />
             </LinearLayout>
 
-            <TextView
-                android:id="@+id/tvStatus"
-                android:layout_width="wrap_content"
+            <!-- Divider -->
+            <View android:layout_width="match_parent" android:layout_height="1dp"
+                android:background="#F0F2F5"
+                android:layout_marginTop="8dp" android:layout_marginBottom="10dp" />
+
+            <!-- Details grid: 2 columns -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:layout_marginBottom="6dp">
+
+                <!-- Email -->
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="horizontal"
+                    android:gravity="center_vertical" android:paddingEnd="8dp">
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp"
+                        android:src="@drawable/ic_email" app:tint="#1E88E5"
+                        android:layout_marginEnd="5dp" />
+                    <TextView
+                        android:id="@+id/tvEmail"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#333333" android:textSize="12sp"
+                        android:maxLines="1" android:ellipsize="end"
+                        android:text="-" />
+                </LinearLayout>
+
+                <!-- Phone -->
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp"
+                        android:src="@drawable/ic_messages" app:tint="#43A047"
+                        android:layout_marginEnd="5dp" />
+                    <TextView
+                        android:id="@+id/tvPhone"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#333333" android:textSize="12sp"
+                        android:maxLines="1" android:ellipsize="end"
+                        android:text="-" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:layout_marginBottom="6dp">
+
+                <!-- Category -->
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="horizontal"
+                    android:gravity="center_vertical" android:paddingEnd="8dp">
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp"
+                        android:src="@drawable/ic_services" app:tint="#1E88E5"
+                        android:layout_marginEnd="5dp" />
+                    <TextView
+                        android:id="@+id/tvCategory"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#1E88E5" android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:maxLines="1" android:ellipsize="end"
+                        android:text="Category" />
+                </LinearLayout>
+
+                <!-- Experience -->
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp"
+                        android:src="@drawable/ic_approval" app:tint="#FF8F00"
+                        android:layout_marginEnd="5dp" />
+                    <TextView
+                        android:id="@+id/tvExperience"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#666666" android:textSize="12sp"
+                        android:maxLines="1"
+                        android:text="0 yrs exp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:layout_marginBottom="4dp">
+
+                <!-- City -->
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="horizontal"
+                    android:gravity="center_vertical" android:paddingEnd="8dp">
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp"
+                        android:src="@drawable/ic_location" app:tint="#555555"
+                        android:layout_marginEnd="5dp" />
+                    <TextView
+                        android:id="@+id/tvCity"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#555555" android:textSize="12sp"
+                        android:maxLines="1" android:ellipsize="end"
+                        android:text="City" />
+                </LinearLayout>
+
+                <!-- Date -->
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp"
+                        android:src="@drawable/ic_calendar" app:tint="#777777"
+                        android:layout_marginEnd="5dp" />
+                    <TextView
+                        android:id="@+id/tvDate"
+                        android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#999999" android:textSize="11sp"
+                        android:maxLines="1"
+                        android:text="Applied: -" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View android:layout_width="match_parent" android:layout_height="1dp"
+                android:background="#F0F2F5"
+                android:layout_marginTop="8dp" android:layout_marginBottom="10dp" />
+
+            <!-- Action buttons -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:paddingHorizontal="10dp"
-                android:paddingVertical="5dp"
-                android:text="Pending"
-                android:background="@drawable/bg_status_pending"
-                android:textColor="#E65100"
-                android:maxLines="1" />
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnDetails"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:text="Details"
+                    android:textColor="@color/primary"
+                    android:textSize="12sp"
+                    app:cornerRadius="10dp"
+                    app:strokeColor="@color/primary"
+                    app:strokeWidth="1dp"
+                    app:icon="@drawable/ic_info"
+                    app:iconSize="14dp"
+                    app:iconPadding="4dp"
+                    app:iconGravity="textStart" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnReject"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:text="Reject"
+                    android:textColor="#D32F2F"
+                    android:textSize="12sp"
+                    app:cornerRadius="10dp"
+                    app:strokeColor="#D32F2F"
+                    app:strokeWidth="1dp"
+                    app:icon="@drawable/ic_close"
+                    app:iconSize="14dp"
+                    app:iconPadding="4dp"
+                    app:iconGravity="textStart" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnApprove"
+                    style="@style/Widget.MaterialComponents.Button"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:text="Approve"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    app:backgroundTint="#388E3C"
+                    app:cornerRadius="10dp"
+                    app:icon="@drawable/ic_approval"
+                    app:iconSize="14dp"
+                    app:iconPadding="4dp"
+                    app:iconGravity="textStart" />
+            </LinearLayout>
+
         </LinearLayout>
-
-        <!-- Divider -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginTop="12dp"
-            android:layout_marginBottom="10dp"
-            android:background="#F0F2F5" />
-
-        <!-- Row 2: Category (plain text, no blue shape) -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="6dp">
-
-            <ImageView
-                android:layout_width="14dp"
-                android:layout_height="14dp"
-                android:src="@drawable/ic_services"
-                app:tint="#1E88E5"
-                android:layout_marginEnd="6dp" />
-
-            <TextView
-                android:id="@+id/tvCategory"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:textColor="#1E88E5"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:maxLines="1"
-                android:ellipsize="end"
-                android:text="Category" />
-        </LinearLayout>
-
-        <!-- Row 3: City -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="6dp">
-
-            <ImageView
-                android:layout_width="14dp"
-                android:layout_height="14dp"
-                android:src="@drawable/ic_location"
-                app:tint="#555555"
-                android:layout_marginEnd="6dp" />
-
-            <TextView
-                android:id="@+id/tvCity"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#555555"
-                android:textSize="13sp"
-                android:maxLines="1"
-                android:ellipsize="end"
-                android:text="City" />
-        </LinearLayout>
-
-        <!-- Row 4: Experience + Date -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginBottom="2dp">
-
-            <ImageView
-                android:layout_width="14dp"
-                android:layout_height="14dp"
-                android:src="@drawable/ic_calendar"
-                app:tint="#777777"
-                android:layout_marginEnd="6dp" />
-
-            <TextView
-                android:id="@+id/tvExperience"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:textColor="#666666"
-                android:textSize="12sp"
-                android:text="0 yrs exp" />
-
-            <TextView
-                android:id="@+id/tvDate"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#999999"
-                android:textSize="11sp"
-                android:text="Applied: -" />
-        </LinearLayout>
-
-        <!-- Divider -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginTop="12dp"
-            android:layout_marginBottom="10dp"
-            android:background="#F0F2F5" />
-
-        <!-- Action buttons: Details | Reject | Approve -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnDetails"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_height="38dp"
-                android:layout_weight="1"
-                android:layout_marginEnd="6dp"
-                android:text="Details"
-                android:textColor="@color/primary"
-                android:textSize="12sp"
-                app:cornerRadius="8dp"
-                app:strokeColor="@color/primary"
-                app:strokeWidth="1dp"
-                app:icon="@drawable/ic_info"
-                app:iconSize="14dp"
-                app:iconPadding="4dp"
-                app:iconGravity="textStart" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnReject"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_height="38dp"
-                android:layout_weight="1"
-                android:layout_marginEnd="6dp"
-                android:text="Reject"
-                android:textColor="#D32F2F"
-                android:textSize="12sp"
-                app:cornerRadius="8dp"
-                app:strokeColor="#D32F2F"
-                app:strokeWidth="1dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnApprove"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="0dp"
-                android:layout_height="38dp"
-                android:layout_weight="1"
-                android:text="Approve"
-                android:textColor="@color/white"
-                android:textSize="12sp"
-                app:backgroundTint="#388E3C"
-                app:cornerRadius="8dp" />
-        </LinearLayout>
-
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
-
 

@@ -80,7 +80,8 @@ public class ProviderApplicationAdapter
 
         final MaterialCardView card;
         final TextView         tvBusinessName, tvOwnerName, tvCategory,
-                               tvCity, tvExperience, tvDate, tvStatus;
+                               tvCity, tvExperience, tvDate, tvStatus,
+                               tvEmail, tvPhone;
         final MaterialButton   btnApprove, btnReject, btnDetails;
 
         ViewHolder(@NonNull View v) {
@@ -93,6 +94,8 @@ public class ProviderApplicationAdapter
             tvExperience   = v.findViewById(R.id.tvExperience);
             tvDate         = v.findViewById(R.id.tvDate);
             tvStatus       = v.findViewById(R.id.tvStatus);
+            tvEmail        = v.findViewById(R.id.tvEmail);
+            tvPhone        = v.findViewById(R.id.tvPhone);
             btnApprove     = v.findViewById(R.id.btnApprove);
             btnReject      = v.findViewById(R.id.btnReject);
             btnDetails     = v.findViewById(R.id.btnDetails);
@@ -101,6 +104,8 @@ public class ProviderApplicationAdapter
         void bindData(@NonNull ProviderApplication app, OnActionListener listener) {
             set(tvBusinessName, app.businessName, "-");
             set(tvOwnerName,    "Owner: " + str(app.name));
+            set(tvEmail,        str(app.email).isEmpty() ? "-" : str(app.email));
+            set(tvPhone,        str(app.phone).isEmpty() ? "-" : str(app.phone));
             set(tvCategory,     str(app.category));
             set(tvCity,         str(app.city));
             set(tvExperience,   expText(app.experience));

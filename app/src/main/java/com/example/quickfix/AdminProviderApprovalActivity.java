@@ -230,7 +230,7 @@ public class AdminProviderApprovalActivity extends AppCompatActivity
     private boolean matchesSearch(@NonNull ProviderApplication app, @NonNull String q) {
         return containsIC(app.businessName, q) || containsIC(app.name, q)
                 || containsIC(app.city, q)     || containsIC(app.category, q)
-                || containsIC(app.email, q);
+                || containsIC(app.email, q)    || containsIC(app.phone, q);
     }
 
     @Override

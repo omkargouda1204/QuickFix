@@ -126,15 +126,19 @@ public class ProviderApplicationRepository {
 
                 JSONObject body = new JSONObject();
                 body.put("firebase_uid",        firebaseUid);
-                body.put("owner_name",          name.trim());   // DB column: owner_name
-                body.put("email",               email.trim());
-                body.put("phone",               phone.trim());
+                body.put("user_name",           name != null ? name.trim() : "");      // DB column: user_name
+                body.put("user_email",          email != null ? email.trim() : "");    // DB column: user_email
+                body.put("user_phone",          phone != null ? phone.trim() : "");    // DB column: user_phone
                 body.put("business_name",       businessName.trim());
                 body.put("category",            category.trim());
-                body.put("description",         description.trim());
+                body.put("description",         description != null ? description.trim() : "");
                 body.put("address",             address != null ? address.trim() : "");
-                body.put("city",                city.trim());
-                body.put("experience",          experience.trim());
+                body.put("city",                city != null ? city.trim() : "");
+                // experience_yrs is integer in DB
+                int expYrs = 0;
+                try { expYrs = Integer.parseInt(experience != null ? experience.trim() : "0"); } catch (Exception ignored) {}
+                body.put("experience_yrs",      expYrs);
+                body.put("terms_accepted",      true);
                 body.put("status",              "pending");
                 body.put("submitted_at",        timestamp);
                 if (businessImageUrl != null && !businessImageUrl.isEmpty())
@@ -233,49 +237,50 @@ public class ProviderApplicationRepository {
                         "yyyy-MM-dd'T'HH:mm:ss", Locale.US).format(new Date());
 
                 // ── Step 1: Insert/upsert provider_profiles ───────────────
-                // Only include columns that definitely exist in provider_profiles.
-                // Handle both naming conventions (user_name / owner_name).
+                // Map all fields from provider_applications → provider_profiles
                 JSONObject profile = new JSONObject();
 
-                // firebase_uid is the unique key for upsert
+                // provider_uid = firebase_uid (primary identifier in provider_profiles)
+                putSafe(profile, "provider_uid",   app.firebaseUid);
+                // Also keep firebase_uid for cross-reference compatibility
                 putSafe(profile, "firebase_uid",   app.firebaseUid);
 
-                // Support both naming conventions
+                // Names — provider_profiles uses owner_name
                 String ownerName = app.name != null && !app.name.isEmpty() ? app.name : "";
                 putSafe(profile, "owner_name",     ownerName);
-                putSafe(profile, "user_name",      ownerName);   // legacy column alias
 
+                // Email — provider_profiles uses email
                 String email = app.email != null && !app.email.isEmpty() ? app.email : "";
                 putSafe(profile, "email",          email);
-                putSafe(profile, "user_email",     email);       // legacy column alias
 
+                // Core business fields
                 putSafe(profile, "business_name",  app.businessName);
                 putSafe(profile, "category",       app.category);
                 putSafe(profile, "phone",          app.phone);
                 putSafe(profile, "city",           app.city);
-
-                String address = app.address != null ? app.address : "";
-                putSafe(profile, "address",        address);
-
-                // experience may be stored as integer (experience_yrs) or string
-                String exp = app.experience != null ? app.experience.trim() : "0";
-                putSafe(profile, "experience",     exp);
-                try { profile.put("experience_yrs", Integer.parseInt(exp)); }
-                catch (Exception ignored) { profile.put("experience_yrs", 0); }
-
+                putSafe(profile, "address",        app.address != null ? app.address : "");
                 putSafe(profile, "description",    app.description != null ? app.description : "");
+
+                // Experience — store as string in provider_profiles
+                String exp = app.experience != null ? app.experience.trim() : "0";
+                putSafe(profile, "experience",     exp.isEmpty() ? "0" : exp);
+
+                // Status & metadata
                 profile.put("status",              "active");
                 profile.put("is_active",           true);
                 profile.put("is_approved",         true);
                 profile.put("approved_at",         timestamp);
                 profile.put("created_at",          timestamp);
 
+                // Optional media
                 if (app.businessImageUrl != null && !app.businessImageUrl.isEmpty())
                     profile.put("business_image_url", app.businessImageUrl);
                 if (app.idProofUrl != null && !app.idProofUrl.isEmpty())
-                    profile.put("id_proof_url", app.idProofUrl);
+                    profile.put("id_proof_url",    app.idProofUrl);
+                // Reference back to the application
                 if (app.id != null && !app.id.isEmpty())
                     profile.put("application_id",  app.id);
+
 
                 Log.d(TAG, "approveApplication step1 profile payload: " + profile);
 
@@ -285,7 +290,7 @@ public class ProviderApplicationRepository {
                         .addHeader("apikey",        ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
                         .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "resolution=merge-duplicates,return=representation")
+                        .addHeader("Prefer",        "return=minimal")
                         .build();
 
                 try (Response r1 = HTTP.newCall(step1).execute()) {
@@ -298,11 +303,11 @@ public class ProviderApplicationRepository {
                         JSONObject minProfile = new JSONObject();
                         putSafe(minProfile, "firebase_uid",  app.firebaseUid);
                         putSafe(minProfile, "business_name", app.businessName);
+                        putSafe(minProfile, "owner_name",    ownerName);
                         putSafe(minProfile, "email",         email);
                         putSafe(minProfile, "category",      app.category);
                         putSafe(minProfile, "city",          app.city);
                         minProfile.put("status",             "active");
-                        minProfile.put("is_active",          true);
                         minProfile.put("approved_at",        timestamp);
 
                         Log.d(TAG, "approveApplication step1 retry minimal: " + minProfile);
@@ -313,7 +318,7 @@ public class ProviderApplicationRepository {
                                 .addHeader("apikey",        ANON_KEY)
                                 .addHeader("Authorization", "Bearer " + ANON_KEY)
                                 .addHeader("Content-Type",  "application/json")
-                                .addHeader("Prefer",        "resolution=merge-duplicates,return=minimal")
+                                .addHeader("Prefer",        "return=minimal")
                                 .build();
 
                         try (Response r1b = HTTP.newCall(step1b).execute()) {

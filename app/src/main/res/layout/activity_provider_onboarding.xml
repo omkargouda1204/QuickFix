@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     android:background="@color/screen_background">
 
-    <!-- ══ APP BAR ══ -->
+    <!-- ══ GRADIENT APP BAR ══ -->
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
@@ -17,7 +17,7 @@
         <androidx.appcompat.widget.Toolbar
             android:id="@+id/onboardingToolbar"
             android:layout_width="match_parent"
-            android:layout_height="64dp"
+            android:layout_height="72dp"
             android:paddingStart="4dp"
             android:paddingEnd="12dp"
             app:navigationIcon="@drawable/ic_back"
@@ -32,18 +32,18 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/onboarding_screen_title"
+                    android:text="Become a Service Provider"
                     android:textColor="@color/white"
-                    android:textSize="19sp"
+                    android:textSize="20sp"
                     android:textStyle="bold"
                     android:letterSpacing="0.01" />
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/onboarding_screen_subtitle"
+                    android:text="List your business and get customers near you"
                     android:textColor="#BBDEFB"
                     android:textSize="12sp"
-                    android:layout_marginTop="1dp" />
+                    android:layout_marginTop="2dp" />
             </LinearLayout>
 
         </androidx.appcompat.widget.Toolbar>
@@ -65,13 +65,12 @@
             android:orientation="vertical"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
-            android:paddingTop="8dp">
+            android:paddingTop="12dp">
 
-            <!-- ── HERO CARD ── -->
+            <!-- ── HERO BENEFITS CARD ── -->
             <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
                 android:layout_marginBottom="4dp"
                 app:cardCornerRadius="20dp"
                 app:cardElevation="8dp"
@@ -83,21 +82,23 @@
                     android:orientation="vertical"
                     android:paddingStart="20dp"
                     android:paddingEnd="20dp"
-                    android:paddingTop="22dp"
-                    android:paddingBottom="22dp">
+                    android:paddingTop="20dp"
+                    android:paddingBottom="20dp">
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
                         android:gravity="center_vertical"
-                        android:layout_marginBottom="16dp">
+                        android:layout_marginBottom="14dp">
                         <FrameLayout
-                            android:layout_width="54dp"
-                            android:layout_height="54dp"
-                            android:background="#33FFFFFF">
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:background="#33FFFFFF"
+                            android:layout_marginEnd="14dp">
                             <ImageView
-                                android:layout_width="30dp"
-                                android:layout_height="30dp"
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
                                 android:layout_gravity="center"
                                 android:src="@drawable/ic_business"
                                 app:tint="@color/white"
@@ -107,45 +108,45 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:paddingStart="14dp">
+                            android:orientation="vertical">
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="@string/onboarding_title"
+                                android:text="Grow with QuickFix"
                                 android:textColor="@color/white"
-                                android:textSize="17sp"
-                                android:textStyle="bold"
-                                android:lineSpacingMultiplier="1.2" />
+                                android:textSize="18sp"
+                                android:textStyle="bold" />
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Free · Fast · Easy"
+                                android:text="Free · Fast · Trusted"
                                 android:textColor="#BBDEFB"
                                 android:textSize="12sp"
-                                android:layout_marginTop="3dp" />
+                                android:layout_marginTop="2dp" />
                         </LinearLayout>
                     </LinearLayout>
+
                     <View android:layout_width="match_parent" android:layout_height="1dp"
-                        android:background="#33FFFFFF" android:layout_marginBottom="14dp" />
+                        android:background="#33FFFFFF" android:layout_marginBottom="12dp" />
+
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:layout_marginBottom="10dp">
+                        android:orientation="horizontal" android:layout_marginBottom="8dp">
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="horizontal"
-                            android:gravity="center_vertical" android:paddingEnd="4dp">
+                            android:gravity="center_vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="✅" android:textSize="11sp" />
+                                android:text="✅" android:textSize="12sp" />
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                 android:text="  Get customers near you"
-                                android:textColor="@color/white" android:textSize="12sp" />
+                                android:textColor="@color/white" android:textSize="12sp" android:paddingEnd="4dp" />
                         </LinearLayout>
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="horizontal"
                             android:gravity="center_vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="✅" android:textSize="11sp" />
+                                android:text="✅" android:textSize="12sp" />
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="  Manage bookings"
+                                android:text="  Manage bookings easily"
                                 android:textColor="@color/white" android:textSize="12sp" />
                         </LinearLayout>
                     </LinearLayout>
@@ -153,18 +154,18 @@
                         android:orientation="horizontal">
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="horizontal"
-                            android:gravity="center_vertical" android:paddingEnd="4dp">
+                            android:gravity="center_vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="✅" android:textSize="11sp" />
+                                android:text="✅" android:textSize="12sp" />
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                 android:text="  Increase visibility"
-                                android:textColor="@color/white" android:textSize="12sp" />
+                                android:textColor="@color/white" android:textSize="12sp" android:paddingEnd="4dp" />
                         </LinearLayout>
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="horizontal"
                             android:gravity="center_vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="✅" android:textSize="11sp" />
+                                android:text="✅" android:textSize="12sp" />
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                 android:text="  No upfront cost"
                                 android:textColor="@color/white" android:textSize="12sp" />
@@ -181,41 +182,42 @@
                 android:gravity="center"
                 android:layout_marginTop="20dp"
                 android:layout_marginBottom="4dp">
+
                 <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:orientation="vertical" android:gravity="center">
-                    <FrameLayout android:layout_width="32dp" android:layout_height="32dp"
+                    <FrameLayout android:layout_width="34dp" android:layout_height="34dp"
                         android:background="@drawable/bg_step_circle_active">
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:layout_gravity="center" android:text="1"
-                            android:textColor="@color/white" android:textSize="13sp" android:textStyle="bold"/>
+                            android:textColor="@color/white" android:textSize="14sp" android:textStyle="bold"/>
                     </FrameLayout>
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="Details" android:textColor="@color/primary"
                         android:textSize="10sp" android:textStyle="bold" android:layout_marginTop="4dp"/>
                 </LinearLayout>
-                <View android:layout_width="40dp" android:layout_height="2dp"
-                    android:background="@color/primary" android:layout_marginBottom="12dp"/>
+                <View android:layout_width="50dp" android:layout_height="2dp"
+                    android:background="@color/primary" android:layout_marginBottom="14dp"/>
                 <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:orientation="vertical" android:gravity="center">
-                    <FrameLayout android:layout_width="32dp" android:layout_height="32dp"
+                    <FrameLayout android:layout_width="34dp" android:layout_height="34dp"
                         android:background="@drawable/bg_step_circle_active">
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:layout_gravity="center" android:text="2"
-                            android:textColor="@color/white" android:textSize="13sp" android:textStyle="bold"/>
+                            android:textColor="@color/white" android:textSize="14sp" android:textStyle="bold"/>
                     </FrameLayout>
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="Uploads" android:textColor="@color/primary"
                         android:textSize="10sp" android:textStyle="bold" android:layout_marginTop="4dp"/>
                 </LinearLayout>
-                <View android:layout_width="40dp" android:layout_height="2dp"
-                    android:background="@color/divider" android:layout_marginBottom="12dp"/>
+                <View android:layout_width="50dp" android:layout_height="2dp"
+                    android:background="@color/divider" android:layout_marginBottom="14dp"/>
                 <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:orientation="vertical" android:gravity="center">
-                    <FrameLayout android:layout_width="32dp" android:layout_height="32dp"
+                    <FrameLayout android:layout_width="34dp" android:layout_height="34dp"
                         android:background="@drawable/bg_step_circle_inactive">
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:layout_gravity="center" android:text="3"
-                            android:textColor="@color/text_secondary" android:textSize="13sp" android:textStyle="bold"/>
+                            android:textColor="@color/text_secondary" android:textSize="14sp" android:textStyle="bold"/>
                     </FrameLayout>
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:text="Terms" android:textColor="@color/text_secondary"
@@ -231,7 +233,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 app:cardCornerRadius="20dp"
-                app:cardElevation="5dp"
+                app:cardElevation="6dp"
                 app:cardBackgroundColor="@color/card_bg">
 
                 <LinearLayout
@@ -244,249 +246,201 @@
                     android:paddingBottom="20dp">
 
                     <!-- Card header -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:layout_marginBottom="18dp">
-                        <FrameLayout
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical"
+                        android:layout_marginBottom="20dp">
+                        <FrameLayout android:layout_width="44dp" android:layout_height="44dp"
                             android:background="@drawable/bg_category_blue">
-                            <ImageView
-                                android:layout_width="22dp"
-                                android:layout_height="22dp"
-                                android:layout_gravity="center"
-                                android:src="@drawable/ic_business"
-                                app:tint="@color/white"
-                                android:contentDescription="Details" />
+                            <ImageView android:layout_width="24dp" android:layout_height="24dp"
+                                android:layout_gravity="center" android:src="@drawable/ic_business"
+                                app:tint="@color/white" android:contentDescription="Details" />
                         </FrameLayout>
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:paddingStart="12dp">
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/onboarding_section_details"
-                                android:textColor="@color/text_primary"
-                                android:textSize="17sp"
-                                android:textStyle="bold" />
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical" android:paddingStart="12dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="Business Details"
+                                android:textColor="@color/text_primary" android:textSize="18sp" android:textStyle="bold" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                 android:text="Fill in your business information"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="12sp"
-                                android:layout_marginTop="2dp" />
+                                android:textColor="@color/text_secondary" android:textSize="12sp" android:layout_marginTop="2dp" />
                         </LinearLayout>
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:background="@drawable/bg_category_blue"
-                            android:paddingStart="8dp"
-                            android:paddingEnd="8dp"
-                            android:paddingTop="4dp"
-                            android:paddingBottom="4dp"
-                            android:text="Step 1"
-                            android:textColor="@color/white"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
+                            android:paddingStart="10dp" android:paddingEnd="10dp"
+                            android:paddingTop="5dp" android:paddingBottom="5dp"
+                            android:text="Step 1" android:textColor="@color/white"
+                            android:textSize="11sp" android:textStyle="bold" />
                     </LinearLayout>
 
-                    <!-- Business Name -->
+                    <!-- ── Business Name ── -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilBusinessName"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="14dp"
-                        android:hint="@string/onboarding_hint_business_name"
+                        android:hint="Business Name *"
                         app:startIconDrawable="@drawable/ic_business"
                         app:startIconTint="@color/primary"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
+                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
+                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp">
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etBusinessName"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textCapWords"
-                            android:textColor="@color/text_primary"
+                            android:textColor="#000000"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
-                    <!-- Owner Name -->
+                    <!-- ── Owner Name ── -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilOwnerName"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="14dp"
-                        android:hint="@string/onboarding_hint_owner_name"
+                        android:hint="Owner Full Name *"
                         app:startIconDrawable="@drawable/ic_person"
                         app:startIconTint="@color/primary"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
+                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
+                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp">
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etOwnerName"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textPersonName|textCapWords"
-                            android:textColor="@color/text_primary"
+                            android:textColor="#000000"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
-                    <!-- Phone + Email row -->
-                    <LinearLayout
+                    <!-- ── Phone Number (FULL WIDTH — not in row) ── -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilPhone"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginBottom="14dp">
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:id="@+id/tilPhone"
-                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                            android:layout_width="0dp"
+                        android:layout_marginBottom="14dp"
+                        android:hint="Phone Number * (10 digits)"
+                        app:startIconDrawable="@drawable/ic_messages"
+                        app:startIconTint="@color/primary"
+                        app:helperText="Enter 10 digit mobile number"
+                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
+                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etPhone"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:layout_marginEnd="8dp"
-                            android:hint="@string/onboarding_hint_phone"
-                            app:startIconDrawable="@drawable/ic_messages"
-                            app:startIconTint="@color/primary"
-                            app:boxCornerRadiusTopStart="12dp"
-                            app:boxCornerRadiusTopEnd="12dp"
-                            app:boxCornerRadiusBottomStart="12dp"
-                            app:boxCornerRadiusBottomEnd="12dp">
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etPhone"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:inputType="phone"
-                                android:textColor="@color/text_primary"
-                                android:textSize="15sp" />
-                        </com.google.android.material.textfield.TextInputLayout>
+                            android:inputType="phone"
+                            android:maxLength="10"
+                            android:textColor="#000000"
+                            android:textSize="15sp" />
+                    </com.google.android.material.textfield.TextInputLayout>
 
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:id="@+id/tilEmail"
-                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                            android:layout_width="0dp"
+                    <!-- ── Email (FULL WIDTH — read-only, pre-filled from account) ── -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilEmail"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp"
+                        android:hint="Email Address (Account Email)"
+                        app:startIconDrawable="@drawable/ic_email"
+                        app:startIconTint="@color/primary"
+                        app:helperText="🔒 Read-only — taken from your account"
+                        app:helperTextTextColor="@color/text_secondary"
+                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
+                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etEmail"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:hint="@string/onboarding_hint_email"
-                            app:startIconDrawable="@drawable/ic_email"
-                            app:startIconTint="@color/primary"
-                            app:boxCornerRadiusTopStart="12dp"
-                            app:boxCornerRadiusTopEnd="12dp"
-                            app:boxCornerRadiusBottomStart="12dp"
-                            app:boxCornerRadiusBottomEnd="12dp">
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etEmail"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:inputType="textEmailAddress"
-                                android:textColor="@color/text_primary"
-                                android:textSize="15sp" />
-                        </com.google.android.material.textfield.TextInputLayout>
-                    </LinearLayout>
+                            android:inputType="none"
+                            android:focusable="false"
+                            android:focusableInTouchMode="false"
+                            android:clickable="false"
+                            android:cursorVisible="false"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="15sp" />
+                    </com.google.android.material.textfield.TextInputLayout>
 
-                    <!-- Service Category Dropdown -->
+                    <!-- ── Service Category Dropdown ── -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilServiceCategory"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="14dp"
-                        android:hint="@string/onboarding_service_category"
+                        android:hint="Service Category *"
                         app:startIconDrawable="@drawable/ic_services"
                         app:startIconTint="@color/primary"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
+                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
+                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp">
                         <AutoCompleteTextView
                             android:id="@+id/actvServiceCategory"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="none"
                             android:focusable="false"
-                            android:textColor="@color/text_primary"
+                            android:textColor="#000000"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
-                    <!-- Experience + City row -->
-                    <LinearLayout
+                    <!-- ── Years of Experience (FULL WIDTH) ── -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilExperience"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginBottom="14dp">
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:id="@+id/tilExperience"
-                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                            android:layout_width="0dp"
+                        android:layout_marginBottom="14dp"
+                        android:hint="Years of Experience *"
+                        app:startIconDrawable="@drawable/ic_approval"
+                        app:startIconTint="@color/primary"
+                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
+                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etExperience"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:layout_marginEnd="8dp"
-                            android:hint="@string/onboarding_hint_experience"
-                            app:startIconDrawable="@drawable/ic_approval"
-                            app:startIconTint="@color/primary"
-                            app:boxCornerRadiusTopStart="12dp"
-                            app:boxCornerRadiusTopEnd="12dp"
-                            app:boxCornerRadiusBottomStart="12dp"
-                            app:boxCornerRadiusBottomEnd="12dp">
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etExperience"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:inputType="number"
-                                android:textColor="@color/text_primary"
-                                android:textSize="15sp" />
-                        </com.google.android.material.textfield.TextInputLayout>
+                            android:inputType="number"
+                            android:maxLength="2"
+                            android:textColor="#000000"
+                            android:textSize="15sp" />
+                    </com.google.android.material.textfield.TextInputLayout>
 
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:id="@+id/tilCity"
-                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                            android:layout_width="0dp"
+                    <!-- ── City (FULL WIDTH) ── -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilCity"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp"
+                        android:hint="City *"
+                        app:startIconDrawable="@drawable/ic_city"
+                        app:startIconTint="@color/primary"
+                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
+                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etCity"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:hint="@string/onboarding_hint_city"
-                            app:startIconDrawable="@drawable/ic_city"
-                            app:startIconTint="@color/primary"
-                            app:boxCornerRadiusTopStart="12dp"
-                            app:boxCornerRadiusTopEnd="12dp"
-                            app:boxCornerRadiusBottomStart="12dp"
-                            app:boxCornerRadiusBottomEnd="12dp">
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etCity"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:inputType="textCapWords"
-                                android:textColor="@color/text_primary"
-                                android:textSize="15sp" />
-                        </com.google.android.material.textfield.TextInputLayout>
-                    </LinearLayout>
+                            android:inputType="textCapWords"
+                            android:textColor="#000000"
+                            android:textSize="15sp" />
+                    </com.google.android.material.textfield.TextInputLayout>
 
-                    <!-- Address -->
+                    <!-- ── Business Address ── -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilAddress"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="14dp"
-                        android:hint="@string/onboarding_hint_address"
+                        android:hint="Business Address *"
                         app:startIconDrawable="@drawable/ic_home"
                         app:startIconTint="@color/primary"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
+                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
+                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp">
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etAddress"
                             android:layout_width="match_parent"
@@ -494,22 +448,21 @@
                             android:inputType="textMultiLine|textCapSentences"
                             android:minLines="2"
                             android:maxLines="4"
-                            android:textColor="@color/text_primary"
+                            android:textColor="#000000"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
-                    <!-- Description (optional) -->
+                    <!-- ── Description (Optional) ── -->
                     <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilDescription"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="@string/onboarding_hint_description"
+                        android:hint="Description of Services (Optional)"
                         app:startIconDrawable="@drawable/ic_content"
                         app:startIconTint="@color/primary"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
+                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
+                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp">
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etDescription"
                             android:layout_width="match_parent"
@@ -517,7 +470,7 @@
                             android:inputType="textMultiLine|textCapSentences"
                             android:minLines="3"
                             android:maxLines="6"
-                            android:textColor="@color/text_primary"
+                            android:textColor="#000000"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
@@ -525,14 +478,14 @@
             </androidx.cardview.widget.CardView>
 
             <!-- ══════════════════════════════════════════════════ -->
-            <!-- STEP 2 — DOCUMENTS & IMAGES CARD                   -->
+            <!-- STEP 2 — DOCUMENTS & IMAGES CARD                  -->
             <!-- ══════════════════════════════════════════════════ -->
             <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 app:cardCornerRadius="20dp"
-                app:cardElevation="5dp"
+                app:cardElevation="6dp"
                 app:cardBackgroundColor="@color/card_bg">
 
                 <LinearLayout
@@ -545,70 +498,48 @@
                     android:paddingBottom="20dp">
 
                     <!-- Card header -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:layout_marginBottom="18dp">
-                        <FrameLayout
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical"
+                        android:layout_marginBottom="20dp">
+                        <FrameLayout android:layout_width="44dp" android:layout_height="44dp"
                             android:background="@drawable/bg_category_teal">
-                            <ImageView
-                                android:layout_width="22dp"
-                                android:layout_height="22dp"
-                                android:layout_gravity="center"
-                                android:src="@drawable/ic_approval"
-                                app:tint="@color/white"
-                                android:contentDescription="Upload" />
+                            <ImageView android:layout_width="24dp" android:layout_height="24dp"
+                                android:layout_gravity="center" android:src="@drawable/ic_approval"
+                                app:tint="@color/white" android:contentDescription="Upload" />
                         </FrameLayout>
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:paddingStart="12dp">
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical" android:paddingStart="12dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                 android:text="Documents &amp; Images"
-                                android:textColor="@color/text_primary"
-                                android:textSize="17sp"
-                                android:textStyle="bold" />
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
+                                android:textColor="@color/text_primary" android:textSize="18sp" android:textStyle="bold" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                 android:text="Upload your proof and business photo"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="12sp"
-                                android:layout_marginTop="2dp" />
+                                android:textColor="@color/text_secondary" android:textSize="12sp" android:layout_marginTop="2dp" />
                         </LinearLayout>
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:background="@drawable/bg_category_teal"
-                            android:paddingStart="8dp"
-                            android:paddingEnd="8dp"
-                            android:paddingTop="4dp"
-                            android:paddingBottom="4dp"
-                            android:text="Step 2"
-                            android:textColor="@color/white"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
+                            android:paddingStart="10dp" android:paddingEnd="10dp"
+                            android:paddingTop="5dp" android:paddingBottom="5dp"
+                            android:text="Step 2" android:textColor="@color/white"
+                            android:textSize="11sp" android:textStyle="bold" />
                     </LinearLayout>
 
                     <!-- ── ID Proof upload (REQUIRED) ── -->
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="ID / Proof Document *"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp"
-                        android:textStyle="bold"
-                        android:layout_marginBottom="8dp" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical"
+                        android:layout_marginBottom="8dp">
+                        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="ID / Proof Document"
+                            android:textColor="@color/text_primary" android:textSize="14sp" android:textStyle="bold" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="REQUIRED"
+                            android:textColor="#D32F2F" android:textSize="11sp" android:textStyle="bold"
+                            android:background="@drawable/bg_status_rejected"
+                            android:paddingStart="6dp" android:paddingEnd="6dp"
+                            android:paddingTop="3dp" android:paddingBottom="3dp" />
+                    </LinearLayout>
 
-                    <!-- Upload zone (visible when no file selected) -->
                     <LinearLayout
                         android:id="@+id/idUploadZone"
                         android:layout_width="match_parent"
@@ -616,34 +547,27 @@
                         android:orientation="vertical"
                         android:gravity="center"
                         android:background="@drawable/bg_upload_zone"
-                        android:padding="20dp"
+                        android:padding="22dp"
                         android:layout_marginBottom="4dp"
                         android:clickable="true"
                         android:focusable="true">
                         <ImageView
-                            android:layout_width="36dp"
-                            android:layout_height="36dp"
+                            android:layout_width="40dp" android:layout_height="40dp"
                             android:src="@drawable/ic_approval"
                             app:tint="@color/primary"
                             android:contentDescription="Upload ID"
                             android:layout_marginBottom="8dp" />
                         <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/onboarding_upload_id"
-                            android:textColor="@color/primary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Tap to Upload ID / Proof"
+                            android:textColor="@color/primary" android:textSize="14sp" android:textStyle="bold" />
                         <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Image or PDF · Tap to choose"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Image or PDF accepted"
+                            android:textColor="@color/text_secondary" android:textSize="11sp"
                             android:layout_marginTop="4dp" />
                     </LinearLayout>
 
-                    <!-- Success zone (visible after file selected) -->
                     <LinearLayout
                         android:id="@+id/idUploadSuccess"
                         android:layout_width="match_parent"
@@ -654,37 +578,22 @@
                         android:padding="14dp"
                         android:layout_marginBottom="4dp"
                         android:visibility="gone">
-                        <ImageView
-                            android:layout_width="28dp"
-                            android:layout_height="28dp"
-                            android:src="@drawable/ic_approval"
-                            app:tint="@color/accent_green"
-                            android:contentDescription="File selected"
-                            android:layout_marginEnd="10dp" />
-                        <TextView
-                            android:id="@+id/tvUploadedFileName"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="File selected"
-                            android:textColor="@color/text_primary"
-                            android:textSize="13sp"
-                            android:maxLines="1"
-                            android:ellipsize="middle" />
-                        <TextView
-                            android:id="@+id/tvChangeId"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Change"
-                            android:textColor="@color/primary"
-                            android:textSize="12sp"
-                            android:textStyle="bold"
+                        <ImageView android:layout_width="28dp" android:layout_height="28dp"
+                            android:src="@drawable/ic_approval" app:tint="@color/accent_green"
+                            android:contentDescription="File selected" android:layout_marginEnd="10dp" />
+                        <TextView android:id="@+id/tvUploadedFileName"
+                            android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:text="File selected"
+                            android:textColor="@color/text_primary" android:textSize="13sp"
+                            android:maxLines="1" android:ellipsize="middle" />
+                        <TextView android:id="@+id/tvChangeId"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Change" android:textColor="@color/primary"
+                            android:textSize="12sp" android:textStyle="bold"
                             android:paddingStart="8dp"
-                            android:clickable="true"
-                            android:focusable="true" />
+                            android:clickable="true" android:focusable="true" />
                     </LinearLayout>
 
-                    <!-- Error message for ID proof -->
                     <TextView
                         android:id="@+id/tvIdError"
                         android:layout_width="match_parent"
@@ -696,24 +605,26 @@
                         android:layout_marginBottom="16dp"
                         android:visibility="gone" />
 
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
+                    <View android:layout_width="match_parent" android:layout_height="1dp"
                         android:background="@color/divider"
-                        android:layout_marginTop="8dp"
-                        android:layout_marginBottom="16dp" />
+                        android:layout_marginTop="8dp" android:layout_marginBottom="16dp" />
 
                     <!-- ── Business Image upload (OPTIONAL) ── -->
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Business Image (Optional)"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp"
-                        android:textStyle="bold"
-                        android:layout_marginBottom="8dp" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical"
+                        android:layout_marginBottom="8dp">
+                        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Business Image"
+                            android:textColor="@color/text_primary" android:textSize="14sp" android:textStyle="bold" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="OPTIONAL"
+                            android:textColor="#2E7D32" android:textSize="11sp" android:textStyle="bold"
+                            android:background="@drawable/bg_status_approved"
+                            android:paddingStart="6dp" android:paddingEnd="6dp"
+                            android:paddingTop="3dp" android:paddingBottom="3dp" />
+                    </LinearLayout>
 
-                    <!-- Upload zone for business image -->
                     <LinearLayout
                         android:id="@+id/businessImgUploadZone"
                         android:layout_width="match_parent"
@@ -721,33 +632,22 @@
                         android:orientation="vertical"
                         android:gravity="center"
                         android:background="@drawable/bg_upload_zone_image"
-                        android:padding="20dp"
+                        android:padding="22dp"
                         android:clickable="true"
                         android:focusable="true">
-                        <ImageView
-                            android:layout_width="36dp"
-                            android:layout_height="36dp"
-                            android:src="@drawable/ic_services"
-                            app:tint="@color/primary"
+                        <ImageView android:layout_width="40dp" android:layout_height="40dp"
+                            android:src="@drawable/ic_services" app:tint="@color/primary"
                             android:contentDescription="Upload business image"
                             android:layout_marginBottom="8dp" />
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/onboarding_upload_business_img"
-                            android:textColor="@color/primary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Add Business Photo"
+                            android:textColor="@color/primary" android:textSize="14sp" android:textStyle="bold" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="JPEG / PNG · Shown to customers"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp"
+                            android:textColor="@color/text_secondary" android:textSize="11sp"
                             android:layout_marginTop="4dp" />
                     </LinearLayout>
 
-                    <!-- Business image success zone -->
                     <LinearLayout
                         android:id="@+id/businessImgSuccess"
                         android:layout_width="match_parent"
@@ -757,35 +657,23 @@
                         android:background="@drawable/bg_upload_success"
                         android:padding="14dp"
                         android:visibility="gone">
-                        <ImageView
-                            android:id="@+id/ivBusinessImgPreview"
-                            android:layout_width="52dp"
-                            android:layout_height="52dp"
+                        <ImageView android:id="@+id/ivBusinessImgPreview"
+                            android:layout_width="56dp" android:layout_height="56dp"
                             android:scaleType="centerCrop"
                             android:background="@drawable/bg_step_circle_inactive"
                             android:contentDescription="Business image preview"
                             android:layout_marginEnd="12dp" />
-                        <TextView
-                            android:id="@+id/tvBusinessImgName"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Image selected"
-                            android:textColor="@color/text_primary"
-                            android:textSize="13sp"
-                            android:maxLines="1"
-                            android:ellipsize="middle" />
-                        <TextView
-                            android:id="@+id/tvChangeBusinessImg"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Change"
-                            android:textColor="@color/primary"
-                            android:textSize="12sp"
-                            android:textStyle="bold"
+                        <TextView android:id="@+id/tvBusinessImgName"
+                            android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:text="Image selected"
+                            android:textColor="@color/text_primary" android:textSize="13sp"
+                            android:maxLines="1" android:ellipsize="middle" />
+                        <TextView android:id="@+id/tvChangeBusinessImg"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Change" android:textColor="@color/primary"
+                            android:textSize="12sp" android:textStyle="bold"
                             android:paddingStart="8dp"
-                            android:clickable="true"
-                            android:focusable="true" />
+                            android:clickable="true" android:focusable="true" />
                     </LinearLayout>
 
                 </LinearLayout>
@@ -799,8 +687,9 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 app:cardCornerRadius="20dp"
-                app:cardElevation="5dp"
+                app:cardElevation="6dp"
                 app:cardBackgroundColor="@color/card_bg">
+
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -813,26 +702,26 @@
                     <!-- Card header -->
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical"
-                        android:layout_marginBottom="14dp">
-                        <FrameLayout android:layout_width="40dp" android:layout_height="40dp"
+                        android:layout_marginBottom="16dp">
+                        <FrameLayout android:layout_width="44dp" android:layout_height="44dp"
                             android:background="@drawable/bg_category_purple">
-                            <ImageView android:layout_width="22dp" android:layout_height="22dp"
+                            <ImageView android:layout_width="24dp" android:layout_height="24dp"
                                 android:layout_gravity="center" android:src="@drawable/ic_settings"
                                 app:tint="@color/white" android:contentDescription="Terms" />
                         </FrameLayout>
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical" android:paddingStart="12dp">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="@string/onboarding_terms_title"
-                                android:textColor="@color/text_primary" android:textSize="17sp" android:textStyle="bold" />
+                                android:text="Terms &amp; Conditions"
+                                android:textColor="@color/text_primary" android:textSize="18sp" android:textStyle="bold" />
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="Please read carefully before agreeing"
+                                android:text="Scroll to bottom to unlock checkbox"
                                 android:textColor="@color/text_secondary" android:textSize="12sp" android:layout_marginTop="2dp" />
                         </LinearLayout>
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:background="@drawable/bg_category_purple"
-                            android:paddingStart="8dp" android:paddingEnd="8dp"
-                            android:paddingTop="4dp" android:paddingBottom="4dp"
+                            android:paddingStart="10dp" android:paddingEnd="10dp"
+                            android:paddingTop="5dp" android:paddingBottom="5dp"
                             android:text="Step 3" android:textColor="@color/white"
                             android:textSize="11sp" android:textStyle="bold" />
                     </LinearLayout>
@@ -846,35 +735,24 @@
                         android:background="@drawable/bg_terms_box"
                         android:padding="12dp"
                         android:layout_marginBottom="10dp">
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="📖"
-                            android:textSize="16sp" />
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="📖" android:textSize="16sp" />
+                        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="Scroll to bottom to unlock the checkbox"
-                            android:textColor="#E65100"
-                            android:textSize="12sp"
-                            android:textStyle="bold"
+                            android:text="Scroll down to the bottom to unlock the checkbox"
+                            android:textColor="#E65100" android:textSize="12sp" android:textStyle="bold"
                             android:paddingStart="8dp" />
-                        <TextView
-                            android:id="@+id/tvReadStatus"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
+                        <TextView android:id="@+id/tvReadStatus"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:text="⬇ Not read"
-                            android:textColor="#E65100"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
+                            android:textColor="#E65100" android:textSize="11sp" android:textStyle="bold" />
                     </LinearLayout>
 
-                    <!-- Scrollable terms — NestedScrollView so it scrolls independently -->
+                    <!-- Scrollable terms -->
                     <androidx.core.widget.NestedScrollView
                         android:id="@+id/termsScrollContainer"
                         android:layout_width="match_parent"
-                        android:layout_height="240dp"
+                        android:layout_height="260dp"
                         android:background="@drawable/bg_terms_scroll"
                         android:scrollbars="vertical"
                         android:fadeScrollbars="false"
@@ -885,7 +763,7 @@
                             android:id="@+id/termsTextView"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:padding="14dp"
+                            android:padding="16dp"
                             android:text="@string/onboarding_terms_body"
                             android:textColor="@color/text_primary"
                             android:textSize="13sp"
@@ -907,45 +785,31 @@
                             android:layout_height="wrap_content"
                             android:enabled="false"
                             app:buttonTint="@color/primary" />
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:paddingStart="10dp">
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/onboarding_terms_agree"
-                                android:textColor="@color/text_primary"
-                                android:textSize="14sp"
-                                android:textStyle="bold" />
-                            <TextView
-                                android:id="@+id/tvTermsNote"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical" android:paddingStart="10dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="I agree to the Terms &amp; Conditions"
+                                android:textColor="@color/text_primary" android:textSize="14sp" android:textStyle="bold" />
+                            <TextView android:id="@+id/tvTermsNote"
+                                android:layout_width="wrap_content" android:layout_height="wrap_content"
                                 android:text="🔒 Scroll to the bottom to unlock"
-                                android:textColor="#E65100"
-                                android:textSize="11sp"
-                                android:layout_marginTop="2dp" />
+                                android:textColor="#E65100" android:textSize="11sp" android:layout_marginTop="2dp" />
                         </LinearLayout>
                     </LinearLayout>
 
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
-            <!-- ══════════════════════════════════════════════════ -->
-            <!-- SUBMIT BUTTON                                       -->
-            <!-- ══════════════════════════════════════════════════ -->
+            <!-- ══ SUBMIT BUTTON ══ -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSubmitApplication"
                 android:layout_width="match_parent"
                 android:layout_height="58dp"
                 android:layout_marginTop="24dp"
                 android:layout_marginBottom="4dp"
-                android:text="@string/onboarding_submit"
+                android:text="Submit Application"
                 android:textColor="@color/white"
-                android:textSize="16sp"
+                android:textSize="17sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.04"
                 android:enabled="false"
@@ -969,7 +833,6 @@
                 android:layout_marginTop="6dp" />
 
         </LinearLayout>
-
     </androidx.core.widget.NestedScrollView>
 
     <!-- ══ SUCCESS OVERLAY ══ -->
@@ -995,12 +858,12 @@
         </FrameLayout>
 
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="@string/onboarding_success_title"
+            android:text="Application Submitted!"
             android:textColor="@color/text_primary" android:textSize="26sp" android:textStyle="bold"
-            android:gravity="center" android:layout_marginBottom="14dp" />
+            android:gravity="center" android:layout_marginBottom="12dp" />
 
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="@string/onboarding_success_msg"
+            android:text="Application submitted successfully.\nWaiting for admin approval."
             android:textColor="@color/text_secondary" android:textSize="15sp"
             android:gravity="center" android:lineSpacingMultiplier="1.5"
             android:layout_marginBottom="16dp" />
@@ -1013,7 +876,7 @@
                 android:textColor="@color/primary_dark" android:textSize="14sp" android:textStyle="bold"
                 android:gravity="center" android:layout_marginBottom="6dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="We typically review within 24–48 hours"
+                android:text="Our team will review your request within 24–48 hours"
                 android:textColor="@color/text_secondary" android:textSize="12sp" android:gravity="center" />
         </LinearLayout>
 
@@ -1021,7 +884,7 @@
             android:id="@+id/btnBackHome"
             android:layout_width="match_parent"
             android:layout_height="58dp"
-            android:text="@string/onboarding_back_home"
+            android:text="Back to Home"
             android:textSize="16sp" android:textStyle="bold" android:textColor="@color/white"
             android:background="@drawable/bg_submit_button"
             app:backgroundTint="@null"
@@ -1039,16 +902,16 @@
         android:clickable="true"
         android:focusable="true">
         <LinearLayout
-            android:layout_width="180dp"
-            android:layout_height="180dp"
+            android:layout_width="200dp"
+            android:layout_height="200dp"
             android:layout_gravity="center"
             android:background="@color/card_bg"
             android:gravity="center"
             android:orientation="vertical"
             android:padding="28dp">
             <ProgressBar android:id="@+id/progressBar"
-                android:layout_width="52dp" android:layout_height="52dp"
-                android:indeterminateTint="@color/primary" android:layout_marginBottom="14dp" />
+                android:layout_width="56dp" android:layout_height="56dp"
+                android:indeterminateTint="@color/primary" android:layout_marginBottom="16dp" />
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:text="Submitting…" android:textColor="@color/text_primary"
                 android:textSize="15sp" android:textStyle="bold" />
@@ -1059,6 +922,4 @@
     </FrameLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
-
-
 
