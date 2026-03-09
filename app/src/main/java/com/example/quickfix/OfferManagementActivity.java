@@ -153,15 +153,16 @@ public class OfferManagementActivity extends AppCompatActivity {
             }
             @Override public void onResponse(Call call, Response resp) throws IOException {
                 String body = resp.body() != null ? resp.body().string() : "[]";
+                Log.d(TAG, "loadOffers HTTP " + resp.code() + " body=" + body);
                 main.post(() -> {
                     setLoading(false);
                     swipeRefresh.setRefreshing(false);
                     if (resp.isSuccessful()) {
                         parseOffers(body);
                     } else {
-                        Log.e(TAG, "loadOffers error " + resp.code() + ": " + body);
+                        Log.e(TAG, "loadOffers FAILED " + resp.code() + ": " + body);
                         Toast.makeText(OfferManagementActivity.this,
-                                "Failed to load offers: " + resp.code(), Toast.LENGTH_SHORT).show();
+                                "Failed to load offers: HTTP " + resp.code(), Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -172,39 +173,34 @@ public class OfferManagementActivity extends AppCompatActivity {
         offers.clear();
         try {
             JSONArray arr = new JSONArray(json);
+            Log.d(TAG, "parseOffers: received " + arr.length() + " rows");
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
                 Offer offer = new Offer();
                 offer.id          = o.optString("id");
                 offer.title       = o.optString("title");
                 offer.description = o.optString("description");
-                // Support both column names: coupon_code (DB spec) OR offer_code (legacy)
-                String coupon = o.optString("coupon_code");
-                offer.offerCode   = !coupon.isEmpty() ? coupon : o.optString("offer_code");
-                // Support both: discount_percent (DB spec) OR discount_value (legacy)
-                double dv = o.optDouble("discount_percent", -1);
-                if (dv < 0) dv = o.optDouble("discount_value", 0);
-                offer.discountValue    = dv;
+                // DB column: offer_code (not coupon_code)
+                offer.offerCode        = o.optString("offer_code");
+                // DB column: discount_value numeric (not discount_percent)
+                offer.discountValue    = o.optDouble("discount_value", 0);
                 offer.discountType     = o.optString("discount_type", "percentage");
                 offer.minBookingAmount = o.optDouble("min_booking_amount", 0);
                 offer.expiryDate       = o.optString("expiry_date");
                 offer.createdAt        = o.optString("created_at");
-                // Dual-schema: status (string) OR is_active (boolean)
-                if (!o.isNull("status") && !o.optString("status").isEmpty()) {
-                    offer.status   = o.optString("status");
-                    offer.isActive = "active".equalsIgnoreCase(offer.status);
-                } else {
-                    offer.isActive = o.optBoolean("is_active", true);
-                    offer.status   = offer.isActive ? "active" : "inactive";
-                }
+                // DB column: is_active boolean (no status column)
+                offer.isActive = o.optBoolean("is_active", true);
+                offer.status   = offer.isActive ? "active" : "inactive"; // local-only convenience
                 offers.add(offer);
             }
         } catch (Exception e) {
-            Log.e(TAG, "parseOffers: " + e.getMessage());
+            Log.e(TAG, "parseOffers exception: " + e.getMessage());
         }
+        Log.d(TAG, "parseOffers: parsed " + offers.size() + " offers");
         adapter.setItems(offers);
         updateStats();
         emptyStateLayout.setVisibility(offers.isEmpty() ? View.VISIBLE : View.GONE);
+        rvOffers.setVisibility(offers.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     private void updateStats() {
@@ -315,18 +311,15 @@ public class OfferManagementActivity extends AppCompatActivity {
                            String notifTitle, AlertDialog dialog) {
         try {
             JSONObject body = new JSONObject();
-            body.put("title",               title);
-            body.put("description",         desc);
-            // Write both column names so it works regardless of DB schema
-            body.put("offer_code",          code);
-            body.put("coupon_code",         code);
-            body.put("discount_type",       discountType);
-            body.put("discount_value",      discountValue);
-            body.put("discount_percent",    discountValue);
-            body.put("min_booking_amount",  minAmount);
-            body.put("expiry_date",         expiryDate.isEmpty() ? JSONObject.NULL : expiryDate);
-            body.put("is_active",           isActive);
-            body.put("status",              isActive ? "active" : "inactive");
+            body.put("title",              title);
+            body.put("description",        desc);
+            body.put("offer_code",         code);          // exact DB column name
+            body.put("discount_type",      discountType);
+            body.put("discount_value",     discountValue); // exact DB column name (numeric)
+            body.put("min_booking_amount", minAmount);
+            body.put("expiry_date",        expiryDate.isEmpty() ? JSONObject.NULL : expiryDate);
+            body.put("is_active",          isActive);
+            // NO status, coupon_code, or discount_percent columns in DB
 
             RequestBody rb = RequestBody.create(body.toString(), JSON);
             Request.Builder rb2 = new Request.Builder()
@@ -447,7 +440,7 @@ public class OfferManagementActivity extends AppCompatActivity {
         try {
             JSONObject body = new JSONObject();
             body.put("is_active", newState);
-            body.put("status",    newState ? "active" : "inactive"); // dual-schema support
+            // NO status column in DB — only is_active (boolean)
             RequestBody rb = RequestBody.create(body.toString(), JSON);
             Request req = new Request.Builder()
                     .url(SUPABASE_URL + "/rest/v1/offers?id=eq." + offer.id)

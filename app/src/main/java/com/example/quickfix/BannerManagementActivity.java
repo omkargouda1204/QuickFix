@@ -189,15 +189,16 @@ public class BannerManagementActivity extends AppCompatActivity {
 
             @Override public void onResponse(Call call, Response resp) throws IOException {
                 String body = resp.body() != null ? resp.body().string() : "[]";
+                Log.d(TAG, "loadBanners HTTP " + resp.code() + " body=" + body);
                 main.post(() -> {
                     setLoading(false);
                     swipeRefresh.setRefreshing(false);
                     if (resp.isSuccessful()) {
                         parseBanners(body);
                     } else {
-                        Log.e(TAG, "loadBanners error " + resp.code() + ": " + body);
+                        Log.e(TAG, "loadBanners FAILED " + resp.code() + ": " + body);
                         Toast.makeText(BannerManagementActivity.this,
-                                "Failed to load banners: " + resp.code(), Toast.LENGTH_SHORT).show();
+                                "Failed to load banners: HTTP " + resp.code(), Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -208,6 +209,7 @@ public class BannerManagementActivity extends AppCompatActivity {
         banners.clear();
         try {
             JSONArray arr = new JSONArray(json);
+            Log.d(TAG, "parseBanners: received " + arr.length() + " rows");
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
                 Banner b = new Banner();
@@ -220,24 +222,19 @@ public class BannerManagementActivity extends AppCompatActivity {
                 b.expiryDate   = o.optString("expiry_date");
                 b.priority     = o.optInt("priority", 1);
                 b.createdAt    = o.optString("created_at");
-                // Support both DB conventions:
-                //   is_active (boolean)  — newer schema
-                //   status    (string)   — "active" | "inactive"
-                if (!o.isNull("status") && !o.optString("status").isEmpty()) {
-                    b.status   = o.optString("status");
-                    b.isActive = "active".equalsIgnoreCase(b.status);
-                } else {
-                    b.isActive = o.optBoolean("is_active", true);
-                    b.status   = b.isActive ? "active" : "inactive";
-                }
+                // DB schema: is_active boolean (no status column)
+                b.isActive = o.optBoolean("is_active", true);
+                b.status   = b.isActive ? "active" : "inactive"; // local-only convenience
                 banners.add(b);
             }
         } catch (Exception e) {
-            Log.e(TAG, "parseBanners: " + e.getMessage());
+            Log.e(TAG, "parseBanners exception: " + e.getMessage());
         }
+        Log.d(TAG, "parseBanners: parsed " + banners.size() + " banners");
         adapter.setItems(banners);
         updateStats();
         emptyStateLayout.setVisibility(banners.isEmpty() ? View.VISIBLE : View.GONE);
+        rvBanners.setVisibility(banners.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     private void updateStats() {
@@ -382,7 +379,7 @@ public class BannerManagementActivity extends AppCompatActivity {
             body.put("redirect_id",   redirectId);
             body.put("expiry_date",   expiryDate.isEmpty() ? JSONObject.NULL : expiryDate);
             body.put("is_active",     isActive);
-            body.put("status",        isActive ? "active" : "inactive"); // support both schemas
+            // NO 'status' column — DB schema only has is_active (boolean)
             body.put("priority",      priority);
 
             RequestBody rb = RequestBody.create(body.toString(), JSON);
@@ -435,7 +432,7 @@ public class BannerManagementActivity extends AppCompatActivity {
         try {
             JSONObject body = new JSONObject();
             body.put("is_active", newState);
-            body.put("status",    newState ? "active" : "inactive"); // dual-schema support
+            // NO 'status' column in DB — only is_active (boolean)
             RequestBody rb = RequestBody.create(body.toString(), JSON);
             Request req = new Request.Builder()
                     .url(SUPABASE_URL + "/rest/v1/banners?id=eq." + banner.id)
