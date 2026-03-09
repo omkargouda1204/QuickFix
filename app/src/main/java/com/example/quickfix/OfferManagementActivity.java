@@ -133,36 +133,42 @@ public class OfferManagementActivity extends AppCompatActivity {
     // ── Load Offers ────────────────────────────────────────────────────────
     private void loadOffers() {
         setLoading(true);
-        String url = SUPABASE_URL + "/rest/v1/offers?select=*&order=created_at.desc";
+        // Fetch ALL rows — admin sees everything, no filters applied
+        String url = SUPABASE_URL + "/rest/v1/offers?select=*";
+
+        Log.d(TAG, "loadOffers URL: " + url);
 
         Request req = new Request.Builder()
                 .url(url)
-                .addHeader("apikey", ANON_KEY)
+                .addHeader("apikey",        ANON_KEY)
                 .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Accept",        "application/json")
+                .addHeader("Content-Type",  "application/json")
                 .get()
                 .build();
 
         http.newCall(req).enqueue(new Callback() {
             @Override public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "loadOffers onFailure: " + e.getMessage());
                 main.post(() -> {
                     setLoading(false);
                     swipeRefresh.setRefreshing(false);
-                    Toast.makeText(OfferManagementActivity.this,
-                            "Network error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    showError("Network error: " + e.getMessage());
                 });
             }
             @Override public void onResponse(Call call, Response resp) throws IOException {
+                int    code = resp.code();
                 String body = resp.body() != null ? resp.body().string() : "[]";
-                Log.d(TAG, "loadOffers HTTP " + resp.code() + " body=" + body);
+                Log.d(TAG, "loadOffers HTTP " + code);
+                Log.d(TAG, "loadOffers BODY: " + body);
                 main.post(() -> {
                     setLoading(false);
                     swipeRefresh.setRefreshing(false);
-                    if (resp.isSuccessful()) {
+                    if (code == 200) {
                         parseOffers(body);
                     } else {
-                        Log.e(TAG, "loadOffers FAILED " + resp.code() + ": " + body);
-                        Toast.makeText(OfferManagementActivity.this,
-                                "Failed to load offers: HTTP " + resp.code(), Toast.LENGTH_SHORT).show();
+                        Log.e(TAG, "loadOffers FAILED HTTP " + code + ": " + body);
+                        showError("Load failed: HTTP " + code + "\n" + body);
                     }
                 });
             }
@@ -177,30 +183,35 @@ public class OfferManagementActivity extends AppCompatActivity {
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
                 Offer offer = new Offer();
-                offer.id          = o.optString("id");
-                offer.title       = o.optString("title");
-                offer.description = o.optString("description");
-                // DB column: offer_code (not coupon_code)
-                offer.offerCode        = o.optString("offer_code");
-                // DB column: discount_value numeric (not discount_percent)
-                offer.discountValue    = o.optDouble("discount_value", 0);
+                offer.id               = o.optString("id");
+                offer.title            = o.optString("title");
+                offer.description      = o.optString("description");
+                offer.offerCode        = o.optString("offer_code");        // exact DB column
                 offer.discountType     = o.optString("discount_type", "percentage");
+                offer.discountValue    = o.optDouble("discount_value", 0); // exact DB column
                 offer.minBookingAmount = o.optDouble("min_booking_amount", 0);
                 offer.expiryDate       = o.optString("expiry_date");
                 offer.createdAt        = o.optString("created_at");
-                // DB column: is_active boolean (no status column)
-                offer.isActive = o.optBoolean("is_active", true);
-                offer.status   = offer.isActive ? "active" : "inactive"; // local-only convenience
+                offer.isActive         = o.optBoolean("is_active", true);  // exact DB column
+                offer.status           = offer.isActive ? "active" : "inactive";
                 offers.add(offer);
+                Log.d(TAG, "  offer[" + i + "]: id=" + offer.id
+                        + " title=" + offer.title + " code=" + offer.offerCode
+                        + " isActive=" + offer.isActive);
             }
         } catch (Exception e) {
-            Log.e(TAG, "parseOffers exception: " + e.getMessage());
+            Log.e(TAG, "parseOffers exception: " + e.getMessage(), e);
         }
         Log.d(TAG, "parseOffers: parsed " + offers.size() + " offers");
         adapter.setItems(offers);
         updateStats();
-        emptyStateLayout.setVisibility(offers.isEmpty() ? View.VISIBLE : View.GONE);
-        rvOffers.setVisibility(offers.isEmpty() ? View.GONE : View.VISIBLE);
+        if (offers.isEmpty()) {
+            emptyStateLayout.setVisibility(View.VISIBLE);
+            rvOffers.setVisibility(View.GONE);
+        } else {
+            emptyStateLayout.setVisibility(View.GONE);
+            rvOffers.setVisibility(View.VISIBLE);
+        }
     }
 
     private void updateStats() {
@@ -210,12 +221,20 @@ public class OfferManagementActivity extends AppCompatActivity {
         String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
                 java.util.Locale.getDefault()).format(new java.util.Date());
         for (Offer o : offers) {
-            if (o.isEffectivelyActive()) active++;
-            if (o.expiryDate != null && !o.expiryDate.isEmpty() && o.expiryDate.compareTo(today) < 0) expired++;
+            if (o.isActive) active++;
+            if (o.expiryDate != null && !o.expiryDate.isEmpty()
+                    && o.expiryDate.compareTo(today) < 0) expired++;
         }
         if (tvTotalOffers  != null) tvTotalOffers.setText(String.valueOf(total));
         if (tvActiveOffers != null) tvActiveOffers.setText(String.valueOf(active));
         if (tvExpiredOffers!= null) tvExpiredOffers.setText(String.valueOf(expired));
+        Log.d(TAG, "updateStats: total=" + total + " active=" + active + " expired=" + expired);
+    }
+
+    private void showError(String msg) {
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+        if (emptyStateLayout != null) emptyStateLayout.setVisibility(View.VISIBLE);
+        if (rvOffers         != null) rvOffers.setVisibility(View.GONE);
     }
 
     // ── Add / Edit Dialog ─────────────────────────────────────────────────
@@ -534,4 +553,3 @@ public class OfferManagementActivity extends AppCompatActivity {
         if (til != null) til.setError(msg);
     }
 }
-

@@ -167,38 +167,43 @@ public class BannerManagementActivity extends AppCompatActivity {
     // ── Load banners from Supabase ─────────────────────────────────────────
     private void loadBanners() {
         setLoading(true);
-        // Use select=* — handles both is_active (boolean) and status (string) columns
-        String url = SUPABASE_URL + "/rest/v1/banners?select=*&order=priority.asc,created_at.desc";
+        // Fetch ALL rows with no filters — admin needs to see everything
+        String url = SUPABASE_URL + "/rest/v1/banners?select=*";
+
+        Log.d(TAG, "loadBanners URL: " + url);
 
         Request req = new Request.Builder()
                 .url(url)
-                .addHeader("apikey", ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("apikey",         ANON_KEY)
+                .addHeader("Authorization",  "Bearer " + ANON_KEY)
+                .addHeader("Accept",         "application/json")
+                .addHeader("Content-Type",   "application/json")
                 .get()
                 .build();
 
         http.newCall(req).enqueue(new Callback() {
             @Override public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "loadBanners onFailure: " + e.getMessage());
                 main.post(() -> {
                     setLoading(false);
                     swipeRefresh.setRefreshing(false);
-                    Toast.makeText(BannerManagementActivity.this,
-                            "Network error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    showError("Network error: " + e.getMessage());
                 });
             }
 
             @Override public void onResponse(Call call, Response resp) throws IOException {
+                int    code = resp.code();
                 String body = resp.body() != null ? resp.body().string() : "[]";
-                Log.d(TAG, "loadBanners HTTP " + resp.code() + " body=" + body);
+                Log.d(TAG, "loadBanners HTTP " + code);
+                Log.d(TAG, "loadBanners BODY: " + body);
                 main.post(() -> {
                     setLoading(false);
                     swipeRefresh.setRefreshing(false);
-                    if (resp.isSuccessful()) {
+                    if (code == 200) {
                         parseBanners(body);
                     } else {
-                        Log.e(TAG, "loadBanners FAILED " + resp.code() + ": " + body);
-                        Toast.makeText(BannerManagementActivity.this,
-                                "Failed to load banners: HTTP " + resp.code(), Toast.LENGTH_SHORT).show();
+                        Log.e(TAG, "loadBanners FAILED HTTP " + code + ": " + body);
+                        showError("Load failed: HTTP " + code + "\n" + body);
                     }
                 });
             }
@@ -222,19 +227,32 @@ public class BannerManagementActivity extends AppCompatActivity {
                 b.expiryDate   = o.optString("expiry_date");
                 b.priority     = o.optInt("priority", 1);
                 b.createdAt    = o.optString("created_at");
-                // DB schema: is_active boolean (no status column)
+                // DB schema: is_active boolean — no status column
                 b.isActive = o.optBoolean("is_active", true);
-                b.status   = b.isActive ? "active" : "inactive"; // local-only convenience
+                b.status   = b.isActive ? "active" : "inactive";
                 banners.add(b);
+                Log.d(TAG, "  banner[" + i + "]: id=" + b.id + " title=" + b.title
+                        + " isActive=" + b.isActive);
             }
         } catch (Exception e) {
-            Log.e(TAG, "parseBanners exception: " + e.getMessage());
+            Log.e(TAG, "parseBanners exception: " + e.getMessage(), e);
         }
         Log.d(TAG, "parseBanners: parsed " + banners.size() + " banners");
         adapter.setItems(banners);
         updateStats();
-        emptyStateLayout.setVisibility(banners.isEmpty() ? View.VISIBLE : View.GONE);
-        rvBanners.setVisibility(banners.isEmpty() ? View.GONE : View.VISIBLE);
+        if (banners.isEmpty()) {
+            emptyStateLayout.setVisibility(View.VISIBLE);
+            rvBanners.setVisibility(View.GONE);
+        } else {
+            emptyStateLayout.setVisibility(View.GONE);
+            rvBanners.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void showError(String msg) {
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+        if (emptyStateLayout != null) emptyStateLayout.setVisibility(View.VISIBLE);
+        if (rvBanners        != null) rvBanners.setVisibility(View.GONE);
     }
 
     private void updateStats() {
@@ -244,12 +262,14 @@ public class BannerManagementActivity extends AppCompatActivity {
         String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
                 java.util.Locale.getDefault()).format(new java.util.Date());
         for (Banner b : banners) {
-            if (b.isEffectivelyActive()) active++;
-            if (b.expiryDate != null && !b.expiryDate.isEmpty() && b.expiryDate.compareTo(today) < 0) expired++;
+            if (b.isActive) active++;
+            if (b.expiryDate != null && !b.expiryDate.isEmpty()
+                    && b.expiryDate.compareTo(today) < 0) expired++;
         }
         if (tvTotalBanners  != null) tvTotalBanners.setText(String.valueOf(total));
         if (tvActiveBanners != null) tvActiveBanners.setText(String.valueOf(active));
         if (tvExpiredBanners!= null) tvExpiredBanners.setText(String.valueOf(expired));
+        Log.d(TAG, "updateStats: total=" + total + " active=" + active + " expired=" + expired);
     }
 
     // ── Add / Edit Dialog ─────────────────────────────────────────────────
@@ -494,7 +514,10 @@ public class BannerManagementActivity extends AppCompatActivity {
                         banners.remove(banner);
                         adapter.notifyDataSetChanged();
                         updateStats();
-                        emptyStateLayout.setVisibility(banners.isEmpty() ? View.VISIBLE : View.GONE);
+                        if (banners.isEmpty()) {
+                            emptyStateLayout.setVisibility(View.VISIBLE);
+                            rvBanners.setVisibility(View.GONE);
+                        }
                         Toast.makeText(BannerManagementActivity.this,
                                 "Banner deleted", Toast.LENGTH_SHORT).show();
                     }
