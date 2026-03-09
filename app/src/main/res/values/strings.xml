@@ -227,6 +227,9 @@
     <string name="profile_lang_english">🇬🇧  English</string>
     <string name="profile_lang_kannada">🇮🇳  ಕನ್ನಡ (Kannada)</string>
     <string name="profile_lang_hindi">🇮🇳  हिन्दी (Hindi)</string>
+    <string name="profile_lang_tamil">🇮🇳  தமிழ் (Tamil)</string>
+    <string name="profile_lang_telugu">🇮🇳  తెలుగు (Telugu)</string>
+    <string name="profile_lang_malayalam">🇮🇳  മലയാളം (Malayalam)</string>
     <string name="profile_lang_current_default">English</string>
 
     <!-- Profile Details screen -->

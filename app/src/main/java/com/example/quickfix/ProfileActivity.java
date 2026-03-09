@@ -355,19 +355,28 @@ public class ProfileActivity extends AppCompatActivity {
         dialog.setContentView(view);
 
         String current = prefs.getString(KEY_LANGUAGE, "English");
-        view.<ImageView>findViewById(R.id.checkEnglish).setVisibility("English".equals(current) ? View.VISIBLE : View.GONE);
-        view.<ImageView>findViewById(R.id.checkKannada).setVisibility("Kannada".equals(current) ? View.VISIBLE : View.GONE);
-        view.<ImageView>findViewById(R.id.checkHindi)  .setVisibility("Hindi".equals(current)   ? View.VISIBLE : View.GONE);
 
-        view.findViewById(R.id.optionEnglish).setOnClickListener(v -> { applyLanguage("English", "en"); dialog.dismiss(); });
-        view.findViewById(R.id.optionKannada).setOnClickListener(v -> { applyLanguage("Kannada", "kn"); dialog.dismiss(); });
-        view.findViewById(R.id.optionHindi)  .setOnClickListener(v -> { applyLanguage("Hindi",   "hi"); dialog.dismiss(); });
+        // Hide all checks, then show only the current one
+        int[] checkIds = {R.id.checkEnglish, R.id.checkKannada, R.id.checkHindi,
+                R.id.checkTamil, R.id.checkTelugu, R.id.checkMalayalam};
+        String[] names = {"English", "Kannada", "Hindi", "Tamil", "Telugu", "Malayalam"};
+        for (int i = 0; i < checkIds.length; i++) {
+            View chk = view.findViewById(checkIds[i]);
+            if (chk != null) chk.setVisibility(names[i].equals(current) ? View.VISIBLE : View.GONE);
+        }
+
+        view.findViewById(R.id.optionEnglish) .setOnClickListener(v -> { applyLanguage("English",   "en"); dialog.dismiss(); });
+        view.findViewById(R.id.optionKannada) .setOnClickListener(v -> { applyLanguage("Kannada",   "kn"); dialog.dismiss(); });
+        view.findViewById(R.id.optionHindi)   .setOnClickListener(v -> { applyLanguage("Hindi",     "hi"); dialog.dismiss(); });
+        view.findViewById(R.id.optionTamil)   .setOnClickListener(v -> { applyLanguage("Tamil",     "ta"); dialog.dismiss(); });
+        view.findViewById(R.id.optionTelugu)  .setOnClickListener(v -> { applyLanguage("Telugu",    "te"); dialog.dismiss(); });
+        view.findViewById(R.id.optionMalayalam).setOnClickListener(v -> { applyLanguage("Malayalam", "ml"); dialog.dismiss(); });
         dialog.show();
     }
 
     private void applyLanguage(String displayName, String localeCode) {
         prefs.edit().putString(KEY_LANGUAGE, displayName).apply();
-        tvCurrentLanguage.setText(displayName);
+        if (tvCurrentLanguage != null) tvCurrentLanguage.setText(displayName);
         Locale locale = new Locale(localeCode);
         Locale.setDefault(locale);
         Configuration config = new Configuration(getResources().getConfiguration());
@@ -380,14 +389,25 @@ public class ProfileActivity extends AppCompatActivity {
     private void applyLanguageFromPrefs() {
         String saved = prefs.getString(KEY_LANGUAGE, "English");
         if (tvCurrentLanguage != null) tvCurrentLanguage.setText(saved);
-        String code = "en";
-        if ("Kannada".equals(saved)) code = "kn";
-        else if ("Hindi".equals(saved)) code = "hi";
+        String code = localeCodeForLanguage(saved);
         Locale locale = new Locale(code);
         Locale.setDefault(locale);
         Configuration config = new Configuration(getResources().getConfiguration());
         config.setLocale(locale);
         getResources().updateConfiguration(config, getResources().getDisplayMetrics());
+    }
+
+    /** Map language display name → BCP-47 locale code */
+    private static String localeCodeForLanguage(String name) {
+        if (name == null) return "en";
+        switch (name) {
+            case "Kannada":   return "kn";
+            case "Hindi":     return "hi";
+            case "Tamil":     return "ta";
+            case "Telugu":    return "te";
+            case "Malayalam": return "ml";
+            default:          return "en";
+        }
     }
 
     // ── Dark Mode ─────────────────────────────────────────────────────────

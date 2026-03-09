@@ -134,5 +134,107 @@
             android:contentDescription="@string/nav_home" />
     </LinearLayout>
 
+    <View android:layout_width="match_parent" android:layout_height="1dp"
+        android:layout_marginStart="20dp" android:background="@color/divider" />
+
+    <!-- Tamil -->
+    <LinearLayout
+        android:id="@+id/optionTamil"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/profile_lang_tamil"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp" />
+
+        <ImageView
+            android:id="@+id/checkTamil"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_check"
+            app:tint="@color/primary"
+            android:visibility="gone"
+            android:contentDescription="@string/nav_home" />
+    </LinearLayout>
+
+    <View android:layout_width="match_parent" android:layout_height="1dp"
+        android:layout_marginStart="20dp" android:background="@color/divider" />
+
+    <!-- Telugu -->
+    <LinearLayout
+        android:id="@+id/optionTelugu"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/profile_lang_telugu"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp" />
+
+        <ImageView
+            android:id="@+id/checkTelugu"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_check"
+            app:tint="@color/primary"
+            android:visibility="gone"
+            android:contentDescription="@string/nav_home" />
+    </LinearLayout>
+
+    <View android:layout_width="match_parent" android:layout_height="1dp"
+        android:layout_marginStart="20dp" android:background="@color/divider" />
+
+    <!-- Malayalam -->
+    <LinearLayout
+        android:id="@+id/optionMalayalam"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/profile_lang_malayalam"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp" />
+
+        <ImageView
+            android:id="@+id/checkMalayalam"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_check"
+            app:tint="@color/primary"
+            android:visibility="gone"
+            android:contentDescription="@string/nav_home" />
+    </LinearLayout>
+
 </LinearLayout>
 
