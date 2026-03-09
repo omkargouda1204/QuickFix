@@ -56,7 +56,7 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
         h.tvExpiry.setText("Expires: " + (o.expiryDate != null ? o.expiryDate : "No expiry"));
         h.tvMinAmount.setText("Min: ₹" + (int) o.minBookingAmount);
 
-        if (o.isActive) {
+        if (o.isEffectivelyActive()) {
             h.chipStatus.setText("Active");
             h.chipStatus.setChipBackgroundColorResource(R.color.chip_active_bg);
         } else {
@@ -67,7 +67,7 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
         h.btnEdit.setOnClickListener(v   -> { if (listener != null) listener.onEdit(o); });
         h.btnDelete.setOnClickListener(v -> { if (listener != null) listener.onDelete(o); });
         h.chipStatus.setOnClickListener(v -> {
-            if (listener != null) listener.onToggleActive(o, !o.isActive);
+            if (listener != null) listener.onToggleActive(o, !o.isEffectivelyActive());
         });
     }
 

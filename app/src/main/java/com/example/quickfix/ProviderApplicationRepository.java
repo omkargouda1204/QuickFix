@@ -223,10 +223,15 @@ public class ProviderApplicationRepository {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  APPROVE APPLICATION  (3-step chain)
-    //   1. INSERT provider_profiles row (upsert on firebase_uid)
-    //   2. PATCH provider_applications → status = approved
-    //   3. PATCH users → is_service_provider = true
+    //  APPROVE APPLICATION
+    //   Strategy: use provider_applications.id as provider_profiles.id
+    //   This avoids the user_id NOT NULL constraint entirely.
+    //
+    //   Steps:
+    //     1. Fetch full application row from DB (fill any gaps in `app`)
+    //     2. INSERT provider_profiles using id = app.id (no user_id needed)
+    //     3. PATCH provider_applications → status = 'approved'
+    //     4. PATCH users → is_service_provider = true (non-fatal)
     // ═══════════════════════════════════════════════════════════════════════
     public static void approveApplication(ProviderApplication app,
                                           String adminUid,
@@ -236,55 +241,106 @@ public class ProviderApplicationRepository {
                 String timestamp = new SimpleDateFormat(
                         "yyyy-MM-dd'T'HH:mm:ss", Locale.US).format(new Date());
 
-                // ── Step 1: Insert/upsert provider_profiles ───────────────
-                // Map all fields from provider_applications → provider_profiles
+                // ── Step 1: Re-fetch full application row from DB ─────────
+                // Ensures all fields (business_name, owner_name, email, etc.) are populated
+                // even if the `app` object was built from a partial intent.
+                if (app.id != null && !app.id.isEmpty()) {
+                    String fetchUrl = SUPABASE_URL
+                            + "/rest/v1/provider_applications"
+                            + "?id=eq." + app.id
+                            + "&select=*&limit=1";
+                    Request fetchReq = new Request.Builder()
+                            .url(fetchUrl).get()
+                            .addHeader("apikey",        ANON_KEY)
+                            .addHeader("Authorization", "Bearer " + ANON_KEY)
+                            .addHeader("Accept",        "application/json")
+                            .build();
+                    try (Response fetchResp = HTTP.newCall(fetchReq).execute()) {
+                        String fetchBody = fetchResp.body() != null
+                                ? fetchResp.body().string() : "[]";
+                        Log.d(TAG, "approveApplication prefetch HTTP "
+                                + fetchResp.code() + " | " + fetchBody);
+                        if (fetchResp.code() == 200) {
+                            JSONArray arr = new JSONArray(fetchBody);
+                            if (arr.length() > 0) {
+                                // Merge DB values into app object (fill any gaps)
+                                ProviderApplication dbApp =
+                                        ProviderApplication.fromJson(arr.getJSONObject(0));
+                                if (app.firebaseUid == null || app.firebaseUid.isEmpty())
+                                    app.firebaseUid = dbApp.firebaseUid;
+                                if (app.name == null || app.name.isEmpty())
+                                    app.name = dbApp.name;
+                                if (app.email == null || app.email.isEmpty())
+                                    app.email = dbApp.email;
+                                if (app.phone == null || app.phone.isEmpty())
+                                    app.phone = dbApp.phone;
+                                if (app.businessName == null || app.businessName.isEmpty())
+                                    app.businessName = dbApp.businessName;
+                                if (app.category == null || app.category.isEmpty())
+                                    app.category = dbApp.category;
+                                if (app.city == null || app.city.isEmpty())
+                                    app.city = dbApp.city;
+                                if (app.address == null || app.address.isEmpty())
+                                    app.address = dbApp.address;
+                                if (app.description == null || app.description.isEmpty())
+                                    app.description = dbApp.description;
+                                if (app.experience == null || app.experience.isEmpty())
+                                    app.experience = dbApp.experience;
+                                if (app.businessImageUrl == null || app.businessImageUrl.isEmpty())
+                                    app.businessImageUrl = dbApp.businessImageUrl;
+                                if (app.idProofUrl == null || app.idProofUrl.isEmpty())
+                                    app.idProofUrl = dbApp.idProofUrl;
+                            }
+                        }
+                    }
+                }
+
+                // ── Step 2: INSERT provider_profiles ─────────────────────
+                // Use app.id as the provider_profiles.id — avoids user_id NOT NULL entirely.
                 JSONObject profile = new JSONObject();
+                profile.put("id", app.id);          // provider_profiles.id = application id
 
-                // provider_uid = firebase_uid (primary identifier in provider_profiles)
-                putSafe(profile, "provider_uid",   app.firebaseUid);
-                // Also keep firebase_uid for cross-reference compatibility
-                putSafe(profile, "firebase_uid",   app.firebaseUid);
+                // firebase_uid for cross-reference (nullable in profiles)
+                putSafe(profile, "firebase_uid",  app.firebaseUid);
+                putSafe(profile, "provider_uid",  app.firebaseUid); // legacy alias
 
-                // Names — provider_profiles uses owner_name
-                String ownerName = app.name != null && !app.name.isEmpty() ? app.name : "";
-                putSafe(profile, "owner_name",     ownerName);
+                // Owner / contact info
+                String ownerName = (app.name != null && !app.name.isEmpty()) ? app.name : "";
+                String email     = (app.email != null && !app.email.isEmpty()) ? app.email : "";
+                putSafe(profile, "owner_name",    ownerName);
+                putSafe(profile, "email",         email);
+                putSafe(profile, "phone",         app.phone);
 
-                // Email — provider_profiles uses email
-                String email = app.email != null && !app.email.isEmpty() ? app.email : "";
-                putSafe(profile, "email",          email);
+                // Business info
+                putSafe(profile, "business_name", app.businessName);
+                putSafe(profile, "category",      app.category);
+                putSafe(profile, "city",          app.city);
+                putSafe(profile, "address",       app.address   != null ? app.address   : "");
+                putSafe(profile, "description",   app.description != null ? app.description : "");
 
-                // Core business fields
-                putSafe(profile, "business_name",  app.businessName);
-                putSafe(profile, "category",       app.category);
-                putSafe(profile, "phone",          app.phone);
-                putSafe(profile, "city",           app.city);
-                putSafe(profile, "address",        app.address != null ? app.address : "");
-                putSafe(profile, "description",    app.description != null ? app.description : "");
+                // Experience
+                String exp = (app.experience != null) ? app.experience.trim() : "0";
+                putSafe(profile, "experience",    exp.isEmpty() ? "0" : exp);
 
-                // Experience — store as string in provider_profiles
-                String exp = app.experience != null ? app.experience.trim() : "0";
-                putSafe(profile, "experience",     exp.isEmpty() ? "0" : exp);
+                // Status & timestamps
+                profile.put("status",       "active");
+                profile.put("is_active",    true);
+                profile.put("is_approved",  true);
+                profile.put("approved_at",  timestamp);
+                profile.put("created_at",   timestamp);
 
-                // Status & metadata
-                profile.put("status",              "active");
-                profile.put("is_active",           true);
-                profile.put("is_approved",         true);
-                profile.put("approved_at",         timestamp);
-                profile.put("created_at",          timestamp);
-
-                // Optional media
+                // Media (optional)
                 if (app.businessImageUrl != null && !app.businessImageUrl.isEmpty())
                     profile.put("business_image_url", app.businessImageUrl);
                 if (app.idProofUrl != null && !app.idProofUrl.isEmpty())
-                    profile.put("id_proof_url",    app.idProofUrl);
-                // Reference back to the application
-                if (app.id != null && !app.id.isEmpty())
-                    profile.put("application_id",  app.id);
+                    profile.put("id_proof_url", app.idProofUrl);
 
+                // Back-reference
+                profile.put("application_id", app.id);
 
-                Log.d(TAG, "approveApplication step1 profile payload: " + profile);
+                Log.d(TAG, "approveApplication step2 INSERT payload: " + profile);
 
-                Request step1 = new Request.Builder()
+                Request insertReq = new Request.Builder()
                         .url(SUPABASE_URL + "/rest/v1/provider_profiles")
                         .post(RequestBody.create(profile.toString(), JSON_TYPE))
                         .addHeader("apikey",        ANON_KEY)
@@ -293,26 +349,26 @@ public class ProviderApplicationRepository {
                         .addHeader("Prefer",        "return=minimal")
                         .build();
 
-                try (Response r1 = HTTP.newCall(step1).execute()) {
+                try (Response r1 = HTTP.newCall(insertReq).execute()) {
                     int c1 = r1.code();
-                    String body1 = r1.body() != null ? r1.body().string() : "";
-                    Log.d(TAG, "approveApplication step1 HTTP " + c1 + " | " + body1);
+                    String b1 = r1.body() != null ? r1.body().string() : "";
+                    Log.d(TAG, "approveApplication INSERT HTTP " + c1 + " | " + b1);
 
                     if (c1 != 200 && c1 != 201 && c1 != 204) {
-                        // Attempt minimal insert with only guaranteed-safe columns
+                        // ── Fallback: minimal safe insert (only guaranteed columns) ─
                         JSONObject minProfile = new JSONObject();
+                        minProfile.put("id",            app.id);
                         putSafe(minProfile, "firebase_uid",  app.firebaseUid);
                         putSafe(minProfile, "business_name", app.businessName);
                         putSafe(minProfile, "owner_name",    ownerName);
                         putSafe(minProfile, "email",         email);
                         putSafe(minProfile, "category",      app.category);
                         putSafe(minProfile, "city",          app.city);
-                        minProfile.put("status",             "active");
-                        minProfile.put("approved_at",        timestamp);
+                        minProfile.put("status",      "active");
+                        minProfile.put("approved_at", timestamp);
+                        Log.d(TAG, "approveApplication fallback INSERT: " + minProfile);
 
-                        Log.d(TAG, "approveApplication step1 retry minimal: " + minProfile);
-
-                        Request step1b = new Request.Builder()
+                        Request fallbackReq = new Request.Builder()
                                 .url(SUPABASE_URL + "/rest/v1/provider_profiles")
                                 .post(RequestBody.create(minProfile.toString(), JSON_TYPE))
                                 .addHeader("apikey",        ANON_KEY)
@@ -321,71 +377,76 @@ public class ProviderApplicationRepository {
                                 .addHeader("Prefer",        "return=minimal")
                                 .build();
 
-                        try (Response r1b = HTTP.newCall(step1b).execute()) {
+                        try (Response r1b = HTTP.newCall(fallbackReq).execute()) {
                             int c1b = r1b.code();
-                            String body1b = r1b.body() != null ? r1b.body().string() : "";
-                            Log.d(TAG, "approveApplication step1 retry HTTP " + c1b + " | " + body1b);
+                            String b1b = r1b.body() != null ? r1b.body().string() : "";
+                            Log.d(TAG, "approveApplication fallback HTTP " + c1b + " | " + b1b);
                             if (c1b != 200 && c1b != 201 && c1b != 204) {
-                                final String errMsg = "Could not create provider profile HTTP " + c1b + " " + body1b;
-                                MAIN.post(() -> callback.onError(errMsg));
+                                final String err = "Could not create provider profile HTTP "
+                                        + c1b + ": " + b1b;
+                                MAIN.post(() -> callback.onError(err));
                                 return;
                             }
                         }
                     }
                 }
 
-                // ── Step 2: Update provider_applications status ───────────
-                JSONObject patch = new JSONObject();
-                patch.put("status",          "approved");
-                patch.put("reviewed_at",     timestamp);
+                // ── Step 3: Update provider_applications → approved ───────
+                JSONObject statusPatch = new JSONObject();
+                statusPatch.put("status",       "approved");
+                statusPatch.put("approved_at",  timestamp);
+                statusPatch.put("reviewed_at",  timestamp);
                 if (adminUid != null && !adminUid.isEmpty())
-                    patch.put("reviewed_by_uid", adminUid);
+                    statusPatch.put("reviewed_by_uid", adminUid);
 
-                Request step2 = new Request.Builder()
+                Request step3Req = new Request.Builder()
                         .url(SUPABASE_URL + "/rest/v1/provider_applications?id=eq." + app.id)
-                        .patch(RequestBody.create(patch.toString(), JSON_TYPE))
+                        .patch(RequestBody.create(statusPatch.toString(), JSON_TYPE))
                         .addHeader("apikey",        ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
                         .addHeader("Content-Type",  "application/json")
                         .addHeader("Prefer",        "return=minimal")
                         .build();
 
-                try (Response r2 = HTTP.newCall(step2).execute()) {
+                try (Response r2 = HTTP.newCall(step3Req).execute()) {
                     int c2 = r2.code();
-                    String body2 = r2.body() != null ? r2.body().string() : "";
-                    Log.d(TAG, "approveApplication step2 HTTP " + c2 + " | " + body2);
+                    String b2 = r2.body() != null ? r2.body().string() : "";
+                    Log.d(TAG, "approveApplication status PATCH HTTP " + c2 + " | " + b2);
                     if (c2 != 200 && c2 != 204) {
-                        MAIN.post(() -> callback.onError("Status update failed HTTP " + c2 + ": " + body2));
+                        MAIN.post(() -> callback.onError(
+                                "Profile created but status update failed HTTP " + c2 + ": " + b2));
                         return;
                     }
                 }
 
-                // ── Step 3: Update users role ─────────────────────────────
+                // ── Step 4: Update users table (non-fatal) ────────────────
                 if (app.firebaseUid != null && !app.firebaseUid.isEmpty()) {
-                    JSONObject userPatch = new JSONObject();
-                    userPatch.put("is_service_provider", true);
-                    userPatch.put("is_user",             true);
-
-                    Request step3 = new Request.Builder()
-                            .url(SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + app.firebaseUid)
-                            .patch(RequestBody.create(userPatch.toString(), JSON_TYPE))
-                            .addHeader("apikey",        ANON_KEY)
-                            .addHeader("Authorization", "Bearer " + ANON_KEY)
-                            .addHeader("Content-Type",  "application/json")
-                            .addHeader("Prefer",        "return=minimal")
-                            .build();
-
-                    try (Response r3 = HTTP.newCall(step3).execute()) {
-                        Log.d(TAG, "approveApplication step3 HTTP " + r3.code());
-                        // Non-fatal — approval succeeded even if user role patch fails
-                    }
+                    try {
+                        JSONObject userPatch = new JSONObject();
+                        userPatch.put("is_service_provider", true);
+                        userPatch.put("is_user",             true);
+                        Request userReq = new Request.Builder()
+                                .url(SUPABASE_URL + "/rest/v1/users?firebase_uid=eq."
+                                        + app.firebaseUid)
+                                .patch(RequestBody.create(userPatch.toString(), JSON_TYPE))
+                                .addHeader("apikey",        ANON_KEY)
+                                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                                .addHeader("Content-Type",  "application/json")
+                                .addHeader("Prefer",        "return=minimal")
+                                .build();
+                        try (Response r3 = HTTP.newCall(userReq).execute()) {
+                            Log.d(TAG, "approveApplication user PATCH HTTP " + r3.code());
+                        }
+                    } catch (Exception ignored) { /* non-fatal */ }
                 }
 
                 MAIN.post(callback::onSuccess);
 
             } catch (IOException e) {
-                MAIN.post(() -> callback.onError("NETWORK_ERROR: " + e.getMessage()));
+                Log.e(TAG, "approveApplication IOException: " + e.getMessage());
+                MAIN.post(() -> callback.onError("Network error: " + e.getMessage()));
             } catch (Exception e) {
+                Log.e(TAG, "approveApplication Exception: " + e.getMessage());
                 MAIN.post(() -> callback.onError(e.getMessage()));
             }
         }).start();

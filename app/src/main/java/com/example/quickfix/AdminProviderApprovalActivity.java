@@ -331,6 +331,7 @@ public class AdminProviderApprovalActivity extends AppCompatActivity
         Intent intent = new Intent(this, ProviderApplicationDetailActivity.class);
         intent.putExtra(ProviderApplicationDetailActivity.EXTRA_APP_ID,           safe(app.id));
         intent.putExtra(ProviderApplicationDetailActivity.EXTRA_FIREBASE_UID,     safe(app.firebaseUid));
+        intent.putExtra(ProviderApplicationDetailActivity.EXTRA_USER_ID,          safe(app.userId));
         intent.putExtra(ProviderApplicationDetailActivity.EXTRA_BUSINESS_NAME,    safe(app.businessName));
         intent.putExtra(ProviderApplicationDetailActivity.EXTRA_OWNER_NAME,       safe(app.name));
         intent.putExtra(ProviderApplicationDetailActivity.EXTRA_EMAIL,            safe(app.email));

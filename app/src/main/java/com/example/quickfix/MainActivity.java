@@ -697,18 +697,21 @@ public class MainActivity extends AppCompatActivity {
 
     // ── Load Banners & Offers from Supabase ───────────────────────────────
     private void loadBannersAndOffers() {
-        String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
+        final String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
                 Locale.getDefault()).format(new java.util.Date());
 
-        // --- Banners: active and not expired ---
+        // --- Banners: fetch ALL active banners, filter expired client-side ---
+        // Use select=* — works for both is_active (boolean) and status (string) schemas
         new Thread(() -> {
             try {
+                // Try status=eq.active first (string schema); if DB uses is_active, select=* still returns all
                 String url = BuildConfig.SUPABASE_URL
-                        + "/rest/v1/banners?select=*&is_active=eq.true&order=priority.asc";
+                        + "/rest/v1/banners?select=*&order=priority.asc,created_at.desc";
                 Request req = new Request.Builder()
                         .url(url)
-                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Accept",        "application/json")
                         .build();
                 try (Response resp = HTTP.newCall(req).execute()) {
                     String body = resp.body() != null ? resp.body().string() : "[]";
@@ -724,13 +727,26 @@ public class MainActivity extends AppCompatActivity {
                             b.redirectType = o.optString("redirect_type");
                             b.redirectId   = o.optString("redirect_id");
                             b.expiryDate   = o.optString("expiry_date");
-                            b.isActive     = o.optBoolean("is_active", true);
                             b.priority     = o.optInt("priority", 1);
-                            if (b.expiryDate.isEmpty() || b.expiryDate.compareTo(today) >= 0) {
+                            // Dual-schema: support both status (string) and is_active (boolean)
+                            String statusVal = o.optString("status", "");
+                            if (!statusVal.isEmpty()) {
+                                b.status   = statusVal;
+                                b.isActive = "active".equalsIgnoreCase(statusVal);
+                            } else {
+                                b.isActive = o.optBoolean("is_active", true);
+                                b.status   = b.isActive ? "active" : "inactive";
+                            }
+                            // Only include active, non-expired banners
+                            boolean notExpired = b.expiryDate.isEmpty()
+                                    || b.expiryDate.compareTo(today) >= 0;
+                            if (b.isEffectivelyActive() && notExpired) {
                                 list.add(b);
                             }
                         }
                         MAIN.post(() -> showBannersOnHome(list));
+                    } else {
+                        Log.e(TAG, "loadBanners HTTP " + resp.code() + ": " + body);
                     }
                 }
             } catch (Exception e) {
@@ -738,15 +754,16 @@ public class MainActivity extends AppCompatActivity {
             }
         }).start();
 
-        // --- Offers: active and not expired ---
+        // --- Offers: fetch ALL, filter active & non-expired client-side ---
         new Thread(() -> {
             try {
                 String url = BuildConfig.SUPABASE_URL
-                        + "/rest/v1/offers?select=*&is_active=eq.true&order=created_at.desc";
+                        + "/rest/v1/offers?select=*&order=created_at.desc";
                 Request req = new Request.Builder()
                         .url(url)
-                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Accept",        "application/json")
                         .build();
                 try (Response resp = HTTP.newCall(req).execute()) {
                     String body = resp.body() != null ? resp.body().string() : "[]";
@@ -756,19 +773,39 @@ public class MainActivity extends AppCompatActivity {
                         for (int i = 0; i < arr.length(); i++) {
                             org.json.JSONObject o = arr.getJSONObject(i);
                             Offer offer = new Offer();
-                            offer.id               = o.optString("id");
-                            offer.title            = o.optString("title");
-                            offer.offerCode        = o.optString("offer_code");
+                            offer.id          = o.optString("id");
+                            offer.title       = o.optString("title");
+                            offer.description = o.optString("description");
+                            // Support both column names: coupon_code (DB spec) and offer_code (legacy)
+                            offer.offerCode   = !o.optString("coupon_code").isEmpty()
+                                    ? o.optString("coupon_code")
+                                    : o.optString("offer_code");
+                            // Support both: discount_percent (DB spec) and discount_value (legacy)
+                            double discountVal = o.optDouble("discount_percent", -1);
+                            if (discountVal < 0) discountVal = o.optDouble("discount_value", 0);
+                            offer.discountValue    = discountVal;
                             offer.discountType     = o.optString("discount_type", "percentage");
-                            offer.discountValue    = o.optDouble("discount_value", 0);
                             offer.minBookingAmount = o.optDouble("min_booking_amount", 0);
                             offer.expiryDate       = o.optString("expiry_date");
-                            offer.isActive         = o.optBoolean("is_active", true);
-                            if (offer.expiryDate.isEmpty() || offer.expiryDate.compareTo(today) >= 0) {
+                            // Dual-schema: support both status (string) and is_active (boolean)
+                            String statusVal = o.optString("status", "");
+                            if (!statusVal.isEmpty()) {
+                                offer.status   = statusVal;
+                                offer.isActive = "active".equalsIgnoreCase(statusVal);
+                            } else {
+                                offer.isActive = o.optBoolean("is_active", true);
+                                offer.status   = offer.isActive ? "active" : "inactive";
+                            }
+                            // Only include active, non-expired offers
+                            boolean notExpired = offer.expiryDate.isEmpty()
+                                    || offer.expiryDate.compareTo(today) >= 0;
+                            if (offer.isEffectivelyActive() && notExpired) {
                                 list.add(offer);
                             }
                         }
                         MAIN.post(() -> showOffersOnHome(list));
+                    } else {
+                        Log.e(TAG, "loadOffers HTTP " + resp.code() + ": " + body);
                     }
                 }
             } catch (Exception e) {

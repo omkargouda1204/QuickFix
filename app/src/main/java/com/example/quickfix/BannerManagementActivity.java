@@ -167,6 +167,7 @@ public class BannerManagementActivity extends AppCompatActivity {
     // ── Load banners from Supabase ─────────────────────────────────────────
     private void loadBanners() {
         setLoading(true);
+        // Use select=* — handles both is_active (boolean) and status (string) columns
         String url = SUPABASE_URL + "/rest/v1/banners?select=*&order=priority.asc,created_at.desc";
 
         Request req = new Request.Builder()
@@ -217,9 +218,18 @@ public class BannerManagementActivity extends AppCompatActivity {
                 b.redirectId   = o.optString("redirect_id");
                 b.startDate    = o.optString("start_date");
                 b.expiryDate   = o.optString("expiry_date");
-                b.isActive     = o.optBoolean("is_active", true);
                 b.priority     = o.optInt("priority", 1);
                 b.createdAt    = o.optString("created_at");
+                // Support both DB conventions:
+                //   is_active (boolean)  — newer schema
+                //   status    (string)   — "active" | "inactive"
+                if (!o.isNull("status") && !o.optString("status").isEmpty()) {
+                    b.status   = o.optString("status");
+                    b.isActive = "active".equalsIgnoreCase(b.status);
+                } else {
+                    b.isActive = o.optBoolean("is_active", true);
+                    b.status   = b.isActive ? "active" : "inactive";
+                }
                 banners.add(b);
             }
         } catch (Exception e) {
@@ -237,7 +247,7 @@ public class BannerManagementActivity extends AppCompatActivity {
         String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
                 java.util.Locale.getDefault()).format(new java.util.Date());
         for (Banner b : banners) {
-            if (b.isActive) active++;
+            if (b.isEffectivelyActive()) active++;
             if (b.expiryDate != null && !b.expiryDate.isEmpty() && b.expiryDate.compareTo(today) < 0) expired++;
         }
         if (tvTotalBanners  != null) tvTotalBanners.setText(String.valueOf(total));
@@ -372,6 +382,7 @@ public class BannerManagementActivity extends AppCompatActivity {
             body.put("redirect_id",   redirectId);
             body.put("expiry_date",   expiryDate.isEmpty() ? JSONObject.NULL : expiryDate);
             body.put("is_active",     isActive);
+            body.put("status",        isActive ? "active" : "inactive"); // support both schemas
             body.put("priority",      priority);
 
             RequestBody rb = RequestBody.create(body.toString(), JSON);
@@ -424,6 +435,7 @@ public class BannerManagementActivity extends AppCompatActivity {
         try {
             JSONObject body = new JSONObject();
             body.put("is_active", newState);
+            body.put("status",    newState ? "active" : "inactive"); // dual-schema support
             RequestBody rb = RequestBody.create(body.toString(), JSON);
             Request req = new Request.Builder()
                     .url(SUPABASE_URL + "/rest/v1/banners?id=eq." + banner.id)
@@ -442,6 +454,7 @@ public class BannerManagementActivity extends AppCompatActivity {
                     main.post(() -> {
                         if (resp.isSuccessful()) {
                             banner.isActive = newState;
+                            banner.status   = newState ? "active" : "inactive";
                             adapter.notifyDataSetChanged();
                             updateStats();
                             Toast.makeText(BannerManagementActivity.this,

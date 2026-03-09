@@ -16,6 +16,8 @@ public class ProviderApplication {
 
     public String id;
     public String firebaseUid;
+    /** Maps DB column: user_id — Supabase users.id (UUID) for the applicant */
+    public String userId;
     /** Maps DB column: owner_name */
     public String name;
     public String email;
@@ -41,6 +43,7 @@ public class ProviderApplication {
         ProviderApplication app = new ProviderApplication();
         app.id               = s(o, "id");
         app.firebaseUid      = s(o, "firebase_uid");
+        app.userId           = s(o, "user_id");   // Supabase users.id UUID
 
         // Support both column naming conventions:
         //   Old (ProviderOnboardingActivity): user_name, user_email, experience_yrs

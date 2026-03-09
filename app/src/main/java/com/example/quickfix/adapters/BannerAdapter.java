@@ -53,7 +53,7 @@ public class BannerAdapter extends RecyclerView.Adapter<BannerAdapter.VH> {
         h.tvExpiry.setText("Expires: " + (b.expiryDate != null ? b.expiryDate : "No expiry"));
 
         // Status chip
-        if (b.isActive) {
+        if (b.isEffectivelyActive()) {
             h.chipStatus.setText("Active");
             h.chipStatus.setChipBackgroundColorResource(R.color.chip_active_bg);
         } else {
@@ -61,22 +61,10 @@ public class BannerAdapter extends RecyclerView.Adapter<BannerAdapter.VH> {
             h.chipStatus.setChipBackgroundColorResource(R.color.chip_disabled_bg);
         }
 
-        // Banner image
-        if (b.imageUrl != null && !b.imageUrl.isEmpty()) {
-            Glide.with(ctx)
-                    .load(b.imageUrl)
-                    .placeholder(R.drawable.ic_content)
-                    .error(R.drawable.ic_content)
-                    .centerCrop()
-                    .into(h.ivBanner);
-        } else {
-            h.ivBanner.setImageResource(R.drawable.ic_content);
-        }
+        // ...existing code...
 
-        h.btnEdit.setOnClickListener(v   -> { if (listener != null) listener.onEdit(b); });
-        h.btnDelete.setOnClickListener(v -> { if (listener != null) listener.onDelete(b); });
         h.chipStatus.setOnClickListener(v -> {
-            if (listener != null) listener.onToggleActive(b, !b.isActive);
+            if (listener != null) listener.onToggleActive(b, !b.isEffectivelyActive());
         });
     }
 

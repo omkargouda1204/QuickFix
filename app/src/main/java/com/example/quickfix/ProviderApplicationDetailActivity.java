@@ -36,6 +36,7 @@ public class ProviderApplicationDetailActivity extends AppCompatActivity {
 
     public static final String EXTRA_APP_ID           = "app_id";
     public static final String EXTRA_FIREBASE_UID     = "firebase_uid";
+    public static final String EXTRA_USER_ID          = "user_id";
     public static final String EXTRA_BUSINESS_NAME    = "business_name";
     public static final String EXTRA_OWNER_NAME       = "owner_name";
     public static final String EXTRA_EMAIL            = "email";
@@ -99,7 +100,6 @@ public class ProviderApplicationDetailActivity extends AppCompatActivity {
     private void bindViews() {
         tvHeaderStatus       = findViewById(R.id.tvHeaderStatus);
         tvHeaderBusinessName = findViewById(R.id.tvHeaderBusinessName);
-
         tvBusinessName       = findViewById(R.id.tvBusinessName);
         tvOwnerName          = findViewById(R.id.tvOwnerName);
         tvEmail              = findViewById(R.id.tvEmail);
@@ -127,6 +127,7 @@ public class ProviderApplicationDetailActivity extends AppCompatActivity {
         app = new ProviderApplication();
         app.id              = safe(i.getStringExtra(EXTRA_APP_ID));
         app.firebaseUid     = safe(i.getStringExtra(EXTRA_FIREBASE_UID));
+        app.userId          = safe(i.getStringExtra(EXTRA_USER_ID));
         app.businessName    = safe(i.getStringExtra(EXTRA_BUSINESS_NAME));
         app.name            = safe(i.getStringExtra(EXTRA_OWNER_NAME));
         app.email           = safe(i.getStringExtra(EXTRA_EMAIL));
@@ -377,5 +378,4 @@ public class ProviderApplicationDetailActivity extends AppCompatActivity {
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
     }
 }
-
 

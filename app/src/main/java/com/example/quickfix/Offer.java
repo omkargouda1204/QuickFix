@@ -13,8 +13,15 @@ public class Offer {
     public double  minBookingAmount;
     public String  expiryDate;      // ISO date string
     public boolean isActive;
+    public String  status;          // DB column: "active" | "inactive" (string)
     public boolean sendNotification; // whether to push FCM on create
     public String  createdAt;
+
+    /** Returns true if either is_active=true OR status='active'. */
+    public boolean isEffectivelyActive() {
+        if (status != null && !status.isEmpty()) return "active".equalsIgnoreCase(status);
+        return isActive;
+    }
 
     public Offer() {}
 

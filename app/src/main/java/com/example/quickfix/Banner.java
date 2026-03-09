@@ -12,8 +12,15 @@ public class Banner {
     public String  startDate;      // ISO date string
     public String  expiryDate;     // ISO date string
     public boolean isActive;
+    public String  status;         // DB column: "active" | "inactive" (string)
     public int     priority;       // lower = higher priority
     public String  createdAt;
+
+    /** Returns true if either is_active=true OR status='active'. */
+    public boolean isEffectivelyActive() {
+        if (status != null && !status.isEmpty()) return "active".equalsIgnoreCase(status);
+        return isActive;
+    }
 
     public Banner() {}
 

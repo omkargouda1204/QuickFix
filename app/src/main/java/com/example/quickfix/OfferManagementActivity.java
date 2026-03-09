@@ -175,16 +175,28 @@ public class OfferManagementActivity extends AppCompatActivity {
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
                 Offer offer = new Offer();
-                offer.id               = o.optString("id");
-                offer.title            = o.optString("title");
-                offer.description      = o.optString("description");
-                offer.offerCode        = o.optString("offer_code");
+                offer.id          = o.optString("id");
+                offer.title       = o.optString("title");
+                offer.description = o.optString("description");
+                // Support both column names: coupon_code (DB spec) OR offer_code (legacy)
+                String coupon = o.optString("coupon_code");
+                offer.offerCode   = !coupon.isEmpty() ? coupon : o.optString("offer_code");
+                // Support both: discount_percent (DB spec) OR discount_value (legacy)
+                double dv = o.optDouble("discount_percent", -1);
+                if (dv < 0) dv = o.optDouble("discount_value", 0);
+                offer.discountValue    = dv;
                 offer.discountType     = o.optString("discount_type", "percentage");
-                offer.discountValue    = o.optDouble("discount_value", 0);
                 offer.minBookingAmount = o.optDouble("min_booking_amount", 0);
                 offer.expiryDate       = o.optString("expiry_date");
-                offer.isActive         = o.optBoolean("is_active", true);
                 offer.createdAt        = o.optString("created_at");
+                // Dual-schema: status (string) OR is_active (boolean)
+                if (!o.isNull("status") && !o.optString("status").isEmpty()) {
+                    offer.status   = o.optString("status");
+                    offer.isActive = "active".equalsIgnoreCase(offer.status);
+                } else {
+                    offer.isActive = o.optBoolean("is_active", true);
+                    offer.status   = offer.isActive ? "active" : "inactive";
+                }
                 offers.add(offer);
             }
         } catch (Exception e) {
@@ -202,7 +214,7 @@ public class OfferManagementActivity extends AppCompatActivity {
         String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
                 java.util.Locale.getDefault()).format(new java.util.Date());
         for (Offer o : offers) {
-            if (o.isActive) active++;
+            if (o.isEffectivelyActive()) active++;
             if (o.expiryDate != null && !o.expiryDate.isEmpty() && o.expiryDate.compareTo(today) < 0) expired++;
         }
         if (tvTotalOffers  != null) tvTotalOffers.setText(String.valueOf(total));
@@ -305,12 +317,16 @@ public class OfferManagementActivity extends AppCompatActivity {
             JSONObject body = new JSONObject();
             body.put("title",               title);
             body.put("description",         desc);
+            // Write both column names so it works regardless of DB schema
             body.put("offer_code",          code);
+            body.put("coupon_code",         code);
             body.put("discount_type",       discountType);
             body.put("discount_value",      discountValue);
+            body.put("discount_percent",    discountValue);
             body.put("min_booking_amount",  minAmount);
             body.put("expiry_date",         expiryDate.isEmpty() ? JSONObject.NULL : expiryDate);
             body.put("is_active",           isActive);
+            body.put("status",              isActive ? "active" : "inactive");
 
             RequestBody rb = RequestBody.create(body.toString(), JSON);
             Request.Builder rb2 = new Request.Builder()
@@ -431,6 +447,7 @@ public class OfferManagementActivity extends AppCompatActivity {
         try {
             JSONObject body = new JSONObject();
             body.put("is_active", newState);
+            body.put("status",    newState ? "active" : "inactive"); // dual-schema support
             RequestBody rb = RequestBody.create(body.toString(), JSON);
             Request req = new Request.Builder()
                     .url(SUPABASE_URL + "/rest/v1/offers?id=eq." + offer.id)
@@ -449,6 +466,7 @@ public class OfferManagementActivity extends AppCompatActivity {
                     main.post(() -> {
                         if (resp.isSuccessful()) {
                             offer.isActive = newState;
+                            offer.status   = newState ? "active" : "inactive";
                             adapter.notifyDataSetChanged();
                             updateStats();
                         }
