@@ -78,6 +78,9 @@ public class MyServicesActivity extends AppCompatActivity implements ProviderSer
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
+    private static final String SERVICES_SELECT_COLS =
+            "id,provider_uid,title,description,category,price,is_active,created_at";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -134,12 +137,11 @@ public class MyServicesActivity extends AppCompatActivity implements ProviderSer
             return;
         }
 
-        // Query services for this provider using their firebase UID
-        // Note: Column is firebase_uid in database (matching users table pattern)
-        String url = SUPABASE_URL + "/rest/v1/provider_services" +
-                "?firebase_uid=eq." + providerId +
-                "&order=created_at.desc" +
-                "&select=*";
+        // Current schema uses `services` table and provider_uid.
+        String url = SUPABASE_URL + "/rest/v1/services"
+                + "?provider_uid=eq." + providerId
+                + "&order=created_at.desc"
+                + "&select=" + SERVICES_SELECT_COLS;
 
         Log.d(TAG, "loadServices URL: " + url);
 
@@ -322,16 +324,16 @@ public class MyServicesActivity extends AppCompatActivity implements ProviderSer
     private void addService(String name, String category, double price, String description) {
         try {
             JSONObject body = new JSONObject();
-            // Use firebase_uid to match database schema
-            body.put("firebase_uid", providerId);
-            body.put("provider_name", providerName);
-            body.put("service_name", name);
+            body.put("provider_uid", providerId);
+            body.put("title", name);
             body.put("category", category);
             body.put("price", price);
             body.put("description", description);
-            body.put("is_available", true);
+            body.put("price_unit", "fixed");
+            body.put("duration_mins", 60);
+            body.put("is_active", true);
 
-            String url = SUPABASE_URL + "/rest/v1/provider_services";
+            String url = SUPABASE_URL + "/rest/v1/services";
 
             Request request = new Request.Builder()
                     .url(url)
@@ -379,12 +381,12 @@ public class MyServicesActivity extends AppCompatActivity implements ProviderSer
     private void updateService(String serviceId, String name, String category, double price, String description) {
         try {
             JSONObject body = new JSONObject();
-            body.put("service_name", name);
+            body.put("title", name);
             body.put("category", category);
             body.put("price", price);
             body.put("description", description);
 
-            String url = SUPABASE_URL + "/rest/v1/provider_services?id=eq." + serviceId;
+            String url = SUPABASE_URL + "/rest/v1/services?id=eq." + serviceId;
 
             Request request = new Request.Builder()
                     .url(url)
@@ -430,7 +432,7 @@ public class MyServicesActivity extends AppCompatActivity implements ProviderSer
     }
 
     private void deleteService(String serviceId) {
-        String url = SUPABASE_URL + "/rest/v1/provider_services?id=eq." + serviceId;
+        String url = SUPABASE_URL + "/rest/v1/services?id=eq." + serviceId;
 
         Request request = new Request.Builder()
                 .url(url)
@@ -472,9 +474,9 @@ public class MyServicesActivity extends AppCompatActivity implements ProviderSer
     private void updateServiceAvailability(String serviceId, boolean isAvailable) {
         try {
             JSONObject body = new JSONObject();
-            body.put("is_available", isAvailable);
+            body.put("is_active", isAvailable);
 
-            String url = SUPABASE_URL + "/rest/v1/provider_services?id=eq." + serviceId;
+            String url = SUPABASE_URL + "/rest/v1/services?id=eq." + serviceId;
 
             Request request = new Request.Builder()
                     .url(url)
@@ -492,7 +494,7 @@ public class MyServicesActivity extends AppCompatActivity implements ProviderSer
                             Toast.makeText(MyServicesActivity.this,
                                     "Update failed",
                                     Toast.LENGTH_SHORT).show());
-                    loadServices(); // Reload to reset switch
+                    loadServices();
                 }
 
                 @Override
@@ -505,7 +507,7 @@ public class MyServicesActivity extends AppCompatActivity implements ProviderSer
                             Toast.makeText(MyServicesActivity.this,
                                     "Update failed: HTTP " + code,
                                     Toast.LENGTH_SHORT).show();
-                            loadServices(); // Reload to reset switch
+                            loadServices();
                         });
                     }
                 }

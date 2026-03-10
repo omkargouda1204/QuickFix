@@ -146,14 +146,120 @@ public class MyBookingsActivity extends AppCompatActivity implements BookingsAda
             return;
         }
 
-        // Query bookings for this provider using their firebase UID
-        // Note: Column is firebase_uid in database (matching users table pattern)
+        // First, get provider name from users table to match bookings
+        getProviderNameAndLoadBookings();
+    }
+
+    private void getProviderNameAndLoadBookings() {
+        // Get provider's name from users table
+        String userUrl = SUPABASE_URL + "/rest/v1/users" +
+                "?firebase_uid=eq." + providerId +
+                "&select=name";
+
+        Request userRequest = new Request.Builder()
+                .url(userUrl)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .build();
+
+        httpClient.newCall(userRequest).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "Failed to get provider name: " + e.getMessage());
+                // Fallback: try to load bookings with firebase_uid (enhanced schema)
+                loadBookingsWithFirebaseUid();
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                String body = response.body() != null ? response.body().string() : "[]";
+                int code = response.code();
+                response.close();
+
+                if (code == 200) {
+                    try {
+                        JSONArray users = new JSONArray(body);
+                        if (users.length() > 0) {
+                            String providerName = users.getJSONObject(0).optString("name", "");
+                            if (!providerName.isEmpty()) {
+                                mainHandler.post(() -> loadBookingsWithProviderName(providerName));
+                                return;
+                            }
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error parsing provider name: " + e.getMessage());
+                    }
+                }
+                // Fallback: try with firebase_uid
+                mainHandler.post(() -> loadBookingsWithFirebaseUid());
+            }
+        });
+    }
+
+    private void loadBookingsWithProviderName(String providerName) {
+        // Query bookings using provider_name (works with current schema)
+        String url = SUPABASE_URL + "/rest/v1/bookings" +
+                "?provider_name=eq." + providerName +
+                "&order=created_at.desc" +
+                "&select=id,customer_name,customer_phone,provider_name,service_name,category," +
+                "booking_date,booking_time,address,city,price,status,created_at,description";
+
+        Log.d(TAG, "loadBookingsWithProviderName URL: " + url);
+
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                mainHandler.post(() -> {
+                    showLoading(false);
+                    Toast.makeText(MyBookingsActivity.this,
+                            "Failed to load bookings: " + e.getMessage(),
+                            Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                String body = response.body() != null ? response.body().string() : "[]";
+                int code = response.code();
+                response.close();
+
+                Log.d(TAG, "loadBookings response: HTTP " + code + " | Body: " + body);
+
+                mainHandler.post(() -> {
+                    showLoading(false);
+                    if (code == 200) {
+                        parseBookings(body);
+                    } else {
+                        // If provider_name query fails, try with firebase_uid
+                        if (code == 404) {
+                            loadBookingsWithFirebaseUid();
+                        } else {
+                            Toast.makeText(MyBookingsActivity.this,
+                                    "Error: HTTP " + code + " | " + body,
+                                    Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    private void loadBookingsWithFirebaseUid() {
+        // Query bookings using firebase_uid (enhanced schema with all columns)
         String url = SUPABASE_URL + "/rest/v1/bookings" +
                 "?firebase_uid=eq." + providerId +
                 "&order=created_at.desc" +
                 "&select=*";
 
-        Log.d(TAG, "loadBookings URL: " + url);
+        Log.d(TAG, "loadBookingsWithFirebaseUid URL: " + url);
 
         Request request = new Request.Builder()
                 .url(url)
@@ -278,10 +384,12 @@ public class MyBookingsActivity extends AppCompatActivity implements BookingsAda
         try {
             JSONObject body = new JSONObject();
             body.put("status", newStatus);
-            if ("completed".equals(newStatus)) {
-                body.put("completed_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")
-                        .format(new java.util.Date()));
-            }
+            // Note: completed_at column may not exist in basic schema
+            // Only add it for completed status if your DB has this column
+            // if ("completed".equals(newStatus)) {
+            //     body.put("completed_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")
+            //             .format(new java.util.Date()));
+            // }
 
             String url = SUPABASE_URL + "/rest/v1/bookings?id=eq." + bookingId;
 
