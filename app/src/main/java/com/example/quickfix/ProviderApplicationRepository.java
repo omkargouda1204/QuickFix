@@ -160,6 +160,8 @@ public class ProviderApplicationRepository {
                     String respBody = r.body() != null ? r.body().string() : "";
                     Log.d(TAG, "submitApplication HTTP " + code + " | " + respBody);
                     if (code == 200 || code == 201 || code == 204) {
+                        // ── Notify all admins about the new application ──────
+                        FcmNotificationHelper.notifyAdminsNewApplication(name, businessName, category);
                         MAIN.post(callback::onSuccess);
                     } else {
                         MAIN.post(() -> callback.onError("HTTP " + code + ": " + respBody));
@@ -440,6 +442,9 @@ public class ProviderApplicationRepository {
                     } catch (Exception ignored) { /* non-fatal */ }
                 }
 
+                // ── Step 5: Notify provider their application was approved ─
+                FcmNotificationHelper.notifyProviderApproved(app.firebaseUid, app.businessName);
+
                 MAIN.post(callback::onSuccess);
 
             } catch (IOException e) {
@@ -473,6 +478,29 @@ public class ProviderApplicationRepository {
                 String timestamp = new SimpleDateFormat(
                         "yyyy-MM-dd'T'HH:mm:ss", Locale.US).format(new Date());
 
+                // ── Fetch applicant firebase_uid for notification ──────────
+                // We need it to look up the FCM token after rejection.
+                final String[] applicantUid = {null};
+                try {
+                    String fetchUrl = SUPABASE_URL
+                            + "/rest/v1/provider_applications"
+                            + "?id=eq." + applicationId
+                            + "&select=firebase_uid&limit=1";
+                    try (Response fr = HTTP.newCall(new Request.Builder()
+                            .url(fetchUrl).get()
+                            .addHeader("apikey",        ANON_KEY)
+                            .addHeader("Authorization", "Bearer " + ANON_KEY)
+                            .addHeader("Accept",        "application/json")
+                            .build()).execute()) {
+                        String fb = fr.body() != null ? fr.body().string() : "[]";
+                        if (fr.code() == 200) {
+                            JSONArray arr = new JSONArray(fb);
+                            if (arr.length() > 0)
+                                applicantUid[0] = arr.getJSONObject(0).optString("firebase_uid", null);
+                        }
+                    }
+                } catch (Exception ignored) { /* non-fatal */ }
+
                 JSONObject body = new JSONObject();
                 body.put("status",           "rejected");
                 body.put("rejection_reason", rejectionReason);
@@ -495,6 +523,11 @@ public class ProviderApplicationRepository {
                     int code = r.code();
                     Log.d(TAG, "rejectApplication HTTP " + code);
                     if (code == 200 || code == 204) {
+                        // ── Notify provider of rejection ─────────────────
+                        if (applicantUid[0] != null && !applicantUid[0].isEmpty()) {
+                            FcmNotificationHelper.notifyProviderRejected(
+                                    applicantUid[0], rejectionReason);
+                        }
                         MAIN.post(callback::onSuccess);
                     } else {
                         String err = r.body() != null ? r.body().string() : "";

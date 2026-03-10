@@ -56,6 +56,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG                      = "MainActivity";
     private static final int    LOCATION_PERMISSION_REQ  = 1001;
+    private static final int    NOTIFICATION_PERMISSION_REQ = 1002;
 
     // ── Location ──────────────────────────────────────────────────────────
     private LinearLayout        locationSelector;
@@ -156,6 +157,9 @@ public class MainActivity extends AppCompatActivity {
             Log.d("FCM_TOKEN", "Token retrieved (stored in DB, not shown to user)");
             SupabaseClient.saveFcmToken(currentUser.getUid(), token);
         });
+
+        // Request POST_NOTIFICATIONS permission on Android 13+ (API 33+)
+        requestNotificationPermission();
     }
 
     // ── Init Views ────────────────────────────────────────────────────────
@@ -361,6 +365,10 @@ public class MainActivity extends AppCompatActivity {
                 fetchLiveLocationNow();
             else
                 Toast.makeText(this, "Location permission denied", Toast.LENGTH_SHORT).show();
+        } else if (req == NOTIFICATION_PERMISSION_REQ) {
+            boolean granted = results.length > 0
+                    && results[0] == PackageManager.PERMISSION_GRANTED;
+            Log.d(TAG, "POST_NOTIFICATIONS permission " + (granted ? "GRANTED" : "DENIED"));
         }
     }
 
@@ -882,6 +890,20 @@ public class MainActivity extends AppCompatActivity {
             homeOfferAdapter.setItems(homeOffers);
         }
     }
+
+    // ── Notification permission (Android 13+) ────────────────────────────
+    private void requestNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(
+                        this,
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        NOTIFICATION_PERMISSION_REQ);
+            }
+        }
+    }
+
 
     // ── Navigation ────────────────────────────────────────────────────────
     private void redirectToLogin() {
