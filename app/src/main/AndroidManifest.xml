@@ -236,12 +236,6 @@
             android:parentActivityName=".ProviderDashboardActivity"
             android:windowSoftInputMode="adjustResize" />
 
-        <!-- My Services Activity -->
-        <activity
-            android:name=".MyServicesActivity"
-            android:exported="false"
-            android:parentActivityName=".ProviderDashboardActivity"
-            android:windowSoftInputMode="adjustResize" />
 
         <!-- Earnings Activity -->
         <activity

@@ -10,13 +10,18 @@ import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.appcompat.widget.Toolbar;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
+import com.example.quickfix.adapters.BusinessMediaAdapter;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.FirebaseAuth;
@@ -24,7 +29,10 @@ import com.google.firebase.auth.FirebaseUser;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.MediaType;
@@ -37,32 +45,45 @@ public class BusinessProfileActivity extends AppCompatActivity {
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    private static final int MAX_MEDIA_ITEMS = 10;
+
     private ImageView ivBusinessImage;
     private TextInputEditText etBusinessName, etDescription, etExperience, 
                               etAddress, etCity, etPhone;
     private AutoCompleteTextView acCategory;
     private SwitchCompat switchAvailability;
-    private MaterialButton btnSelectImage, btnSave;
+    private MaterialButton btnSelectImage, btnSave, btnAddMedia;
+    private TextView tvMediaCount;
+    private RecyclerView rvMediaGallery;
     private ProgressBar progressBar;
+
     private FirebaseAuth mAuth;
     private String providerId;
     private Uri selectedImageUri;
     private String currentImageUrl = "";
+
+    private BusinessMediaAdapter mediaAdapter;
+    private List<BusinessMediaItem> uploadedMedia = new ArrayList<>();
+
     private final String[] categories = {
             "Plumbing", "Electrical", "Carpentry", "Painting", 
             "Cleaning", "AC Repair", "Appliance Repair", "Pest Control"
     };
+
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .build();
+
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private ActivityResultLauncher<String> imagePickerLauncher;
+    private ActivityResultLauncher<String> mediaPickerLauncher;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_business_profile);
-        // Initialize ActivityResultLauncher here (must be after super.onCreate())
+
+        // Initialize ActivityResultLauncher for profile image
         imagePickerLauncher = registerForActivityResult(
                 new ActivityResultContracts.GetContent(),
                 uri -> {
@@ -73,6 +94,22 @@ public class BusinessProfileActivity extends AppCompatActivity {
                         }
                     }
                 });
+
+        // Initialize ActivityResultLauncher for media gallery
+        mediaPickerLauncher = registerForActivityResult(
+                new ActivityResultContracts.GetContent(),
+                uri -> {
+                    if (uri != null && mediaAdapter != null) {
+                        if (getTotalMediaCount() < MAX_MEDIA_ITEMS) {
+                            mediaAdapter.addLocalMedia(uri);
+                            updateMediaCount();
+                        } else {
+                            Toast.makeText(this, "Maximum " + MAX_MEDIA_ITEMS + " media items allowed",
+                                    Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+
         mAuth = FirebaseAuth.getInstance();
         FirebaseUser user = mAuth.getCurrentUser();
         if (user == null) {
@@ -80,9 +117,12 @@ public class BusinessProfileActivity extends AppCompatActivity {
             return;
         }
         providerId = user.getUid();
+
         setupToolbar();
         initViews();
+        setupMediaGallery();
         loadProfile();
+        loadBusinessMedia();
     }
     private void setupToolbar() {
         Toolbar toolbar = findViewById(R.id.toolbar);
@@ -104,8 +144,12 @@ public class BusinessProfileActivity extends AppCompatActivity {
         etPhone = findViewById(R.id.etPhone);
         switchAvailability = findViewById(R.id.switchAvailability);
         btnSelectImage = findViewById(R.id.btnSelectImage);
+        btnAddMedia = findViewById(R.id.btnAddMedia);
+        tvMediaCount = findViewById(R.id.tvMediaCount);
+        rvMediaGallery = findViewById(R.id.rvMediaGallery);
         btnSave = findViewById(R.id.btnSave);
         progressBar = findViewById(R.id.progressBar);
+
         if (acCategory != null) {
             ArrayAdapter<String> categoryAdapter = new ArrayAdapter<>(this,
                     android.R.layout.simple_dropdown_item_1line, categories);
@@ -114,9 +158,59 @@ public class BusinessProfileActivity extends AppCompatActivity {
         if (btnSelectImage != null) {
             btnSelectImage.setOnClickListener(v -> imagePickerLauncher.launch("image/*"));
         }
+        if (btnAddMedia != null) {
+            btnAddMedia.setOnClickListener(v -> showMediaPickerDialog());
+        }
         if (btnSave != null) {
             btnSave.setOnClickListener(v -> saveProfile());
         }
+    }
+
+    private void setupMediaGallery() {
+        mediaAdapter = new BusinessMediaAdapter(this, new BusinessMediaAdapter.MediaActionListener() {
+            @Override
+            public void onDelete(Object item, int position) {
+                confirmDeleteMedia(item, position);
+            }
+
+            @Override
+            public void onView(Object item) {
+                // TODO: Implement fullscreen media viewer
+                if (item instanceof BusinessMediaItem) {
+                    BusinessMediaItem media = (BusinessMediaItem) item;
+                    Toast.makeText(BusinessProfileActivity.this,
+                            "View: " + media.mediaType, Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        rvMediaGallery.setLayoutManager(new GridLayoutManager(this, 3));
+        rvMediaGallery.setAdapter(mediaAdapter);
+    }
+
+    private void showMediaPickerDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Add Media")
+                .setItems(new String[]{"Photo", "Video"}, (dialog, which) -> {
+                    if (which == 0) {
+                        mediaPickerLauncher.launch("image/*");
+                    } else {
+                        mediaPickerLauncher.launch("video/*");
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void updateMediaCount() {
+        int total = getTotalMediaCount();
+        if (tvMediaCount != null) {
+            tvMediaCount.setText(total + "/" + MAX_MEDIA_ITEMS);
+        }
+    }
+
+    private int getTotalMediaCount() {
+        return (mediaAdapter != null ? mediaAdapter.getItemCount() : 0);
     }
     private void loadProfile() {
         if (progressBar != null) {
@@ -198,6 +292,117 @@ public class BusinessProfileActivity extends AppCompatActivity {
             Toast.makeText(this, "Error parsing profile", Toast.LENGTH_SHORT).show();
         }
     }
+
+    private void loadBusinessMedia() {
+        String url = SUPABASE_URL + "/rest/v1/business_media" +
+                "?provider_id=eq." + providerId +
+                "&order=display_order.asc,created_at.asc" +
+                "&select=*";
+
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "Failed to load media: " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                String body = response.body() != null ? response.body().string() : "[]";
+                int code = response.code();
+                response.close();
+
+                if (code == 200) {
+                    mainHandler.post(() -> parseBusinessMedia(body));
+                }
+            }
+        });
+    }
+
+    private void parseBusinessMedia(String json) {
+        try {
+            JSONArray arr = new JSONArray(json);
+            uploadedMedia.clear();
+
+            for (int i = 0; i < arr.length(); i++) {
+                BusinessMediaItem item = BusinessMediaItem.fromJson(arr.getJSONObject(i));
+                if (item != null) {
+                    uploadedMedia.add(item);
+                }
+            }
+
+            if (mediaAdapter != null) {
+                mediaAdapter.setUploadedMedia(uploadedMedia);
+                updateMediaCount();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Parse media error: " + e.getMessage());
+        }
+    }
+
+    private void confirmDeleteMedia(Object item, int position) {
+        new AlertDialog.Builder(this)
+                .setTitle("Delete Media")
+                .setMessage("Are you sure you want to delete this media?")
+                .setPositiveButton("Delete", (d, w) -> deleteMedia(item, position))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void deleteMedia(Object item, int position) {
+        if (item instanceof BusinessMediaItem) {
+            BusinessMediaItem media = (BusinessMediaItem) item;
+            deleteMediaFromServer(media, position);
+        } else if (item instanceof Uri) {
+            mediaAdapter.removeLocalMedia((Uri) item);
+            updateMediaCount();
+        }
+    }
+
+    private void deleteMediaFromServer(BusinessMediaItem media, int position) {
+        String url = SUPABASE_URL + "/rest/v1/business_media?id=eq." + media.id;
+
+        Request request = new Request.Builder()
+                .url(url)
+                .delete()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                mainHandler.post(() -> Toast.makeText(BusinessProfileActivity.this,
+                        "Delete failed: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                int code = response.code();
+                response.close();
+
+                mainHandler.post(() -> {
+                    if (code == 200 || code == 204) {
+                        uploadedMedia.remove(media);
+                        mediaAdapter.setUploadedMedia(uploadedMedia);
+                        updateMediaCount();
+                        Toast.makeText(BusinessProfileActivity.this,
+                                "Media deleted", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(BusinessProfileActivity.this,
+                                "Delete failed: HTTP " + code, Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        });
+    }
+
     private void saveProfile() {
         String businessName = getText(etBusinessName);
         String description = getText(etDescription);
@@ -207,6 +412,7 @@ public class BusinessProfileActivity extends AppCompatActivity {
         String city = getText(etCity);
         String phone = getText(etPhone);
         boolean isAvailable = switchAvailability != null && switchAvailability.isChecked();
+
         if (businessName.isEmpty()) {
             if (etBusinessName != null) {
                 etBusinessName.setError("Business name required");
@@ -221,18 +427,106 @@ public class BusinessProfileActivity extends AppCompatActivity {
             }
             return;
         }
+
         if (progressBar != null) {
             progressBar.setVisibility(View.VISIBLE);
         }
         if (btnSave != null) {
             btnSave.setEnabled(false);
         }
-        if (selectedImageUri != null) {
-            uploadImageAndSave(businessName, description, category, experience, 
-                              address, city, phone, isAvailable);
-        } else {
-            updateProfile(businessName, description, category, experience, 
-                         address, city, phone, isAvailable, currentImageUrl);
+
+        // Upload pending media first, then update profile
+        uploadPendingMedia(() -> {
+            if (selectedImageUri != null) {
+                uploadImageAndSave(businessName, description, category, experience,
+                                  address, city, phone, isAvailable);
+            } else {
+                updateProfile(businessName, description, category, experience,
+                             address, city, phone, isAvailable, currentImageUrl);
+            }
+        });
+    }
+
+    private void uploadPendingMedia(Runnable onComplete) {
+        List<Uri> pendingUploads = mediaAdapter != null ? mediaAdapter.getPendingUploads() : new ArrayList<>();
+
+        if (pendingUploads.isEmpty()) {
+            onComplete.run();
+            return;
+        }
+
+        AtomicInteger completed = new AtomicInteger(0);
+        int total = pendingUploads.size();
+
+        for (Uri uri : pendingUploads) {
+            String mediaType = isVideo(uri) ? "video" : "image";
+            String bucket = SupabaseStorageHelper.BUCKET_BUSINESS_IMAGES;
+            String prefix = "provider_" + providerId + "_gallery";
+
+            SupabaseStorageHelper.uploadFile(this, uri, bucket, prefix,
+                    new SupabaseStorageHelper.UploadCallback() {
+                        @Override
+                        public void onSuccess(String publicUrl) {
+                            saveMediaToDatabase(publicUrl, mediaType, () -> {
+                                if (completed.incrementAndGet() >= total) {
+                                    loadBusinessMedia();
+                                    onComplete.run();
+                                }
+                            });
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            Log.e(TAG, "Media upload failed: " + error);
+                            if (completed.incrementAndGet() >= total) {
+                                loadBusinessMedia();
+                                onComplete.run();
+                            }
+                        }
+                    });
+        }
+    }
+
+    private boolean isVideo(Uri uri) {
+        String mimeType = getContentResolver().getType(uri);
+        return mimeType != null && mimeType.startsWith("video/");
+    }
+
+    private void saveMediaToDatabase(String mediaUrl, String mediaType, Runnable onComplete) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("provider_id", providerId);
+            body.put("media_url", mediaUrl);
+            body.put("media_type", mediaType);
+            body.put("display_order", uploadedMedia.size());
+
+            String url = SUPABASE_URL + "/rest/v1/business_media";
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .post(RequestBody.create(body.toString(), JSON))
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "return=minimal")
+                    .build();
+
+            httpClient.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "Save media DB failed: " + e.getMessage());
+                    mainHandler.post(onComplete);
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    response.close();
+                    mainHandler.post(onComplete);
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "Save media error: " + e.getMessage());
+            onComplete.run();
         }
     }
     private void uploadImageAndSave(String businessName, String description, String category,

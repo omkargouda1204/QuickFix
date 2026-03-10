@@ -3,9 +3,8 @@ package com.example.quickfix;
 import android.content.Intent;
 import android.os.Bundle;
 import android.widget.TextView;
-import android.widget.Toast;
 
-import androidx.appcompat.app.AlertDialog;
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.cardview.widget.CardView;
@@ -22,17 +21,14 @@ import com.google.firebase.auth.FirebaseUser;
  *
  * Features:
  *   - My Bookings    (incoming service requests)
- *   - My Services    (services the provider offers)
  *   - Earnings       (revenue summary)
  *   - Profile        (business profile)
  *   - Back to Home   (still use the app as a regular user)
  */
 public class ProviderDashboardActivity extends AppCompatActivity {
 
-    private static final String TAG = "ProviderDashboard";
-
     private TextView  providerNameText, providerEmailText;
-    private CardView  cardMyBookings, cardMyServices, cardEarnings, cardProfile;
+    private CardView  cardMyBookings, cardEarnings, cardProfile;
     private com.google.android.material.button.MaterialButton btnBackToHome;
     private FirebaseAuth mAuth;
 
@@ -47,6 +43,14 @@ public class ProviderDashboardActivity extends AppCompatActivity {
         initViews();
         loadProviderInfo();
         setupClickListeners();
+
+        // Handle system back consistently with toolbar back: return to MainActivity.
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                goBackToHome();
+            }
+        });
     }
 
     private void setupToolbar() {
@@ -57,7 +61,7 @@ public class ProviderDashboardActivity extends AppCompatActivity {
                 getSupportActionBar().setDisplayHomeAsUpEnabled(true);
                 getSupportActionBar().setDisplayShowTitleEnabled(false);
             }
-            toolbar.setNavigationOnClickListener(v -> finish());
+            toolbar.setNavigationOnClickListener(v -> goBackToHome());
         }
     }
 
@@ -65,7 +69,6 @@ public class ProviderDashboardActivity extends AppCompatActivity {
         providerNameText  = findViewById(R.id.providerNameText);
         providerEmailText = findViewById(R.id.providerEmailText);
         cardMyBookings    = findViewById(R.id.cardMyBookings);
-        cardMyServices    = findViewById(R.id.cardMyServices);
         cardEarnings      = findViewById(R.id.cardEarnings);
         cardProfile       = findViewById(R.id.cardProfile);
         btnBackToHome     = findViewById(R.id.btnBackToHome);
@@ -90,10 +93,6 @@ public class ProviderDashboardActivity extends AppCompatActivity {
             cardMyBookings.setOnClickListener(v ->
                     startActivity(new Intent(this, MyBookingsActivity.class)));
 
-        if (cardMyServices != null)
-            cardMyServices.setOnClickListener(v ->
-                    startActivity(new Intent(this, MyServicesActivity.class)));
-
         if (cardEarnings != null)
             cardEarnings.setOnClickListener(v ->
                     startActivity(new Intent(this, EarningsActivity.class)));
@@ -112,9 +111,7 @@ public class ProviderDashboardActivity extends AppCompatActivity {
             });
     }
 
-    @Override
-    public void onBackPressed() {
-        // Go back to main home screen (provider is also a regular user)
+    private void goBackToHome() {
         Intent i = new Intent(this, MainActivity.class);
         i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         startActivity(i);
@@ -128,4 +125,3 @@ public class ProviderDashboardActivity extends AppCompatActivity {
         finish();
     }
 }
-
