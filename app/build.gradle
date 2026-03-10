@@ -33,6 +33,8 @@ android {
         buildConfigField "String", "SUPABASE_ANON_KEY",           "\"${supabaseProps.getProperty('SUPABASE_ANON_KEY', '')}\""
         buildConfigField "String", "SUPABASE_BUCKET_ID_PROOF",    "\"${supabaseProps.getProperty('SUPABASE_BUCKET_ID_PROOF', 'QuickFix')}\""
         buildConfigField "String", "SUPABASE_BUCKET_BUSINESS_IMG","\"${supabaseProps.getProperty('SUPABASE_BUCKET_BUSINESS_IMG', 'business-images')}\""
+        // Edge Function URL for FCM push notifications (stored securely, never hardcoded)
+        buildConfigField "String", "SUPABASE_NOTIFY_FN_URL",     "\"${supabaseProps.getProperty('SUPABASE_NOTIFY_FN_URL', '')}\""
     }
 
     buildFeatures {
