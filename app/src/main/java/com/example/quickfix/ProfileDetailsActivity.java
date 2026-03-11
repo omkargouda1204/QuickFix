@@ -43,7 +43,7 @@ import okhttp3.Response;
  *
  * <p>Displays: Avatar initial, Full Name, Email, Phone, City, Address.
  */
-public class ProfileDetailsActivity extends AppCompatActivity {
+public class ProfileDetailsActivity extends BaseActivity {
 
     private static final String TAG = "ProfileDetails";
 

@@ -30,7 +30,7 @@ import com.google.android.material.button.MaterialButton;
  *   i.putExtra(EXTRA_TITLE, "Business Image");
  *   startActivity(i);
  */
-public class FullScreenImageActivity extends AppCompatActivity {
+public class FullScreenImageActivity extends BaseActivity {
 
     public static final String EXTRA_IMAGE_URL = "image_url";
     public static final String EXTRA_TITLE     = "image_title";

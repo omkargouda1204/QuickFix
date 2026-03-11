@@ -40,7 +40,7 @@ import okhttp3.Response;
  * UserBookingsActivity — Displays bookings for a regular (customer) user.
  * Filters: All | Upcoming | Completed | Cancelled
  */
-public class UserBookingsActivity extends AppCompatActivity
+public class UserBookingsActivity extends BaseActivity
         implements UserBookingsAdapter.BookingActionListener {
 
     private static final String TAG      = "UserBookings";

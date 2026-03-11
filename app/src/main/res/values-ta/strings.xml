@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    values-ta/strings.xml — Tamil (தமிழ்) translations
+    Only translatable UI strings are listed here. Strings not present here
+    fall back automatically to values/strings.xml (English).
+-->
+<resources>
+    <!-- App -->
+    <string name="app_name">குவிக்ஃபிக்ஸ்</string>
+
+    <!-- Login Screen -->
+    <string name="welcome_back">மீண்டும் வருக!</string>
+    <string name="login_subtitle">தொடர உள்நுழையவும்</string>
+    <string name="email_hint">மின்னஞ்சல் முகவரி</string>
+    <string name="password_hint">கடவுச்சொல்</string>
+    <string name="login_button">உள்நுழைவு</string>
+    <string name="forgot_password">கடவுச்சொல் மறந்துவிட்டீர்களா?</string>
+    <string name="or_continue_with">அல்லது தொடரவும்</string>
+    <string name="google_sign_in">Google மூலம் உள்நுழையவும்</string>
+    <string name="no_account">கணக்கு இல்லையா?</string>
+    <string name="sign_up">பதிவு செய்யவும்</string>
+
+    <!-- Forgot Password -->
+    <string name="forgot_password_title">கடவுச்சொல் மறந்தீர்களா</string>
+    <string name="forgot_password_subtitle">கடவுச்சொல் மீட்டமைக்க மின்னஞ்சல் உள்ளிடவும்</string>
+    <string name="reset_password">கடவுச்சொல் மீட்டமைக்கவும்</string>
+    <string name="back_to_login">உள்நுழைவுக்கு திரும்பவும்</string>
+
+    <!-- Validation -->
+    <string name="error_email_required">மின்னஞ்சல் தேவை</string>
+    <string name="error_invalid_email">சரியான மின்னஞ்சல் உள்ளிடவும்</string>
+    <string name="error_password_required">கடவுச்சொல் தேவை</string>
+    <string name="error_password_length">கடவுச்சொல் குறைந்தது 6 எழுத்துக்கள் இருக்க வேண்டும்</string>
+    <string name="error_login_failed">உள்நுழைவு தோல்வியடைந்தது. மீண்டும் முயற்சிக்கவும்</string>
+    <string name="error_network">நெட்வொர்க் பிழை. உங்கள் இணைப்பை சரிபார்க்கவும்</string>
+    <string name="success_login">உள்நுழைவு வெற்றிகரமாக முடிந்தது!</string>
+
+    <!-- Registration -->
+    <string name="registration_title">கணக்கு உருவாக்கவும்</string>
+    <string name="welcome_new_user">குவிக்ஃபிக்ஸ்-க்கு வரவேற்கிறோம்!</string>
+    <string name="registration_subtitle">எங்கள் சமூகத்தில் சேரவும்</string>
+    <string name="full_name_hint">முழு பெயர்</string>
+    <string name="phone_hint">தொலைபேசி எண்</string>
+    <string name="signup_button">பதிவு செய்யவும்</string>
+    <string name="google_sign_up">Google மூலம் பதிவு செய்யவும்</string>
+    <string name="have_account">ஏற்கனவே கணக்கு உள்ளதா?</string>
+    <string name="login_here">இங்கே உள்நுழையவும்</string>
+    <string name="error_fullname_required">முழு பெயர் தேவை</string>
+    <string name="error_fullname_length">பெயர் குறைந்தது 3 எழுத்துக்கள் இருக்க வேண்டும்</string>
+    <string name="error_phone_required">தொலைபேசி எண் தேவை</string>
+    <string name="error_phone_invalid">சரியான தொலைபேசி எண் உள்ளிடவும்</string>
+    <string name="error_passwords_not_match">கடவுச்சொற்கள் பொருந்தவில்லை</string>
+    <string name="error_signup_failed">பதிவு தோல்வியடைந்தது. மீண்டும் முயற்சிக்கவும்</string>
+
+    <!-- Home Screen -->
+    <string name="hello_user">வணக்கம், %1$s! 👋</string>
+    <string name="find_services">உங்கள் அருகில் வீட்டு சேவைகளை கண்டறியவும்</string>
+    <string name="search_hint">சேவைகளை தேடவும்…</string>
+    <string name="our_services">எங்கள் சேவைகள்</string>
+    <string name="see_all">அனைத்தையும் பார்க்கவும்</string>
+    <string name="featured_services">சிறப்பு சேவைகள்</string>
+    <string name="quick_actions">விரைவு செயல்கள்</string>
+    <string name="book_service">சேவை முன்பதிவு</string>
+    <string name="emergency_help">அவசர உதவி</string>
+    <string name="track_booking">முன்பதிவு கண்காணிக்கவும்</string>
+    <string name="cat_plumbing">குழாய் வேலை</string>
+    <string name="cat_electrical">மின்சாரம்</string>
+    <string name="cat_cleaning">சுத்தம்</string>
+    <string name="cat_repair">பழுதுபார்ப்பு</string>
+    <string name="cat_ac">AC சேவை</string>
+    <string name="cat_painting">வண்ணம் பூசுதல்</string>
+    <string name="cat_carpentry">மரவேலை</string>
+    <string name="cat_more">மேலும்</string>
+    <string name="nav_home">முகப்பு</string>
+    <string name="nav_bookings">முன்பதிவுகள்</string>
+    <string name="nav_messages">செய்திகள்</string>
+    <string name="nav_profile">சுயவிவரம்</string>
+    <string name="promo_title">முதல் முன்பதிவில் 20% தள்ளுபடி பெறுங்கள்!</string>
+    <string name="promo_subtitle">செக்அவுட்டில் QUICKFIX20 குறியீட்டைப் பயன்படுத்தவும்</string>
+    <string name="logout">வெளியேறவும்</string>
+
+    <!-- Profile Screen -->
+    <string name="profile_title">என் சுயவிவரம்</string>
+    <string name="profile_account_section">கணக்கு</string>
+    <string name="profile_services_section">சேவைகள்</string>
+    <string name="profile_preferences_section">விருப்பங்கள்</string>
+    <string name="profile_information_section">தகவல்</string>
+    <string name="profile_my_profile">என் சுயவிவரம்</string>
+    <string name="profile_settings">அமைப்புகள்</string>
+    <string name="profile_list_business">உங்கள் வணிகத்தை பட்டியலிடவும்</string>
+    <string name="profile_list_business_sub">இலவசமாக சம்பாதிக்கத் தொடங்கவும்</string>
+    <string name="profile_my_bookings">என் முன்பதிவுகள்</string>
+    <string name="profile_notifications">அறிவிப்புகள்</string>
+    <string name="profile_language">மொழி</string>
+    <string name="profile_dark_mode">இருண்ட முறை</string>
+    <string name="profile_help_support">உதவி மற்றும் ஆதரவு</string>
+    <string name="profile_privacy_policy">தனியுரிமைக் கொள்கை</string>
+    <string name="profile_terms">விதிமுறைகள் மற்றும் நிபந்தனைகள்</string>
+    <string name="profile_about_app">செயலி பற்றி</string>
+    <string name="profile_logout">வெளியேறவும்</string>
+    <string name="profile_logout_confirm_title">வெளியேறவும்</string>
+    <string name="profile_logout_confirm_msg">நீங்கள் நிச்சயமாக வெளியேற விரும்புகிறீர்களா?</string>
+
+    <!-- Language -->
+    <string name="profile_lang_current_default">தமிழ்</string>
+    <string name="language_changed_toast">மொழி: %1$s</string>
+
+    <!-- Profile Details -->
+    <string name="pd_section_personal">தனிப்பட்ட தகவல்</string>
+    <string name="pd_label_full_name">முழு பெயர்</string>
+    <string name="pd_label_email_address">மின்னஞ்சல் முகவரி</string>
+    <string name="pd_label_phone_number">தொலைபேசி எண்</string>
+    <string name="pd_label_city">நகரம்</string>
+    <string name="pd_label_address">முகவரி</string>
+    <string name="pd_loading">தயவுசெய்து காத்திருங்கள்\u2026</string>
+
+    <!-- Settings -->
+    <string name="settings_title">அமைப்புகள்</string>
+    <string name="settings_push_notif">புஷ் அறிவிப்புகள்</string>
+    <string name="settings_dark_mode">இருண்ட முறை</string>
+    <string name="settings_change_password">கடவுச்சொல் மாற்றவும்</string>
+
+    <!-- Status -->
+    <string name="status_pending">நிலுவையில்</string>
+    <string name="status_approved">அனுமதிக்கப்பட்டது</string>
+    <string name="status_rejected">நிராகரிக்கப்பட்டது</string>
+
+    <!-- Provider Onboarding -->
+    <string name="onboarding_title">குவிக்ஃபிக்ஸ் மூலம் உங்கள் வணிகத்தை வளர்க்கவும்</string>
+    <string name="onboarding_submit">விண்ணப்பம் சமர்ப்பிக்கவும்</string>
+    <string name="onboarding_success_title">விண்ணப்பம் சமர்ப்பிக்கப்பட்டது! 🎉</string>
+    <string name="onboarding_back_home">முகப்புக்கு திரும்பவும்</string>
+
+    <!-- Validation -->
+    <string name="error_business_name_required">வணிகத்தின் பெயர் தேவை</string>
+    <string name="error_owner_name_required">உரிமையாளர் பெயர் தேவை</string>
+    <string name="error_category_required">சேவை வகையை தேர்ந்தெடுக்கவும்</string>
+    <string name="error_city_required">நகரம் தேவை</string>
+    <string name="error_network_retry">நெட்வொர்க் பிழை. மீண்டும் முயற்சிக்கவும்.</string>
+</resources>
+

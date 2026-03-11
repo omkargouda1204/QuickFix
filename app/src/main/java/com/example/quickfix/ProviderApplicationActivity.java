@@ -32,7 +32,7 @@ import com.google.firebase.auth.FirebaseUser;
  *  • Email          : pre-filled from account, read-only
  *  • Terms          : must scroll to bottom first, then tick checkbox
  */
-public class ProviderApplicationActivity extends AppCompatActivity {
+public class ProviderApplicationActivity extends BaseActivity {
 
     // ── Views ─────────────────────────────────────────────────────────────
     private TextInputLayout  layoutBusinessName, layoutOwnerName, layoutPhone,

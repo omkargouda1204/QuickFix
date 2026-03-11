@@ -40,7 +40,7 @@ import okhttp3.Response;
 /**
  * EarningsActivity — Provider's earnings and transaction history
  */
-public class EarningsActivity extends AppCompatActivity {
+public class EarningsActivity extends BaseActivity {
 
     private static final String TAG = "EarningsActivity";
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;

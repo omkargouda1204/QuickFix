@@ -16,7 +16,7 @@ import com.google.android.material.switchmaterial.SwitchMaterial;
 /**
  * SettingsActivity — App settings: notifications, dark mode, account preferences.
  */
-public class SettingsActivity extends AppCompatActivity {
+public class SettingsActivity extends BaseActivity {
 
     private static final String PREFS_NAME    = "quickfix_prefs";
     private static final String KEY_DARK_MODE = "dark_mode_enabled";

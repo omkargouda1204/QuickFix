@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    values-te/strings.xml — Telugu (తెలుగు) translations
+    Only translatable UI strings are listed here. Strings not present here
+    fall back automatically to values/strings.xml (English).
+-->
+<resources>
+    <!-- App -->
+    <string name="app_name">క్విక్‌ఫిక్స్</string>
+
+    <!-- Login Screen -->
+    <string name="welcome_back">తిరిగి స్వాగతం!</string>
+    <string name="login_subtitle">కొనసాగించడానికి సైన్ ఇన్ చేయండి</string>
+    <string name="email_hint">ఇమెయిల్ చిరునామా</string>
+    <string name="password_hint">పాస్‌వర్డ్</string>
+    <string name="login_button">లాగిన్</string>
+    <string name="forgot_password">పాస్‌వర్డ్ మర్చిపోయారా?</string>
+    <string name="or_continue_with">లేదా కొనసాగించండి</string>
+    <string name="google_sign_in">Google తో సైన్ ఇన్</string>
+    <string name="no_account">అకౌంట్ లేదా?</string>
+    <string name="sign_up">సైన్ అప్</string>
+
+    <!-- Forgot Password -->
+    <string name="forgot_password_title">పాస్‌వర్డ్ మర్చిపోయారా</string>
+    <string name="forgot_password_subtitle">పాస్‌వర్డ్ రీసెట్ చేయడానికి ఇమెయిల్ నమోదు చేయండి</string>
+    <string name="reset_password">పాస్‌వర్డ్ రీసెట్</string>
+    <string name="back_to_login">లాగిన్‌కు తిరిగి వెళ్ళు</string>
+
+    <!-- Validation -->
+    <string name="error_email_required">ఇమెయిల్ అవసరం</string>
+    <string name="error_invalid_email">చెల్లుబాటు అయ్యే ఇమెయిల్ నమోదు చేయండి</string>
+    <string name="error_password_required">పాస్‌వర్డ్ అవసరం</string>
+    <string name="error_password_length">పాస్‌వర్డ్ కనీసం 6 అక్షరాలు ఉండాలి</string>
+    <string name="error_login_failed">లాగిన్ విఫలమైంది. మళ్ళీ ప్రయత్నించండి</string>
+    <string name="error_network">నెట్‌వర్క్ లోపం. మీ కనెక్షన్ తనిఖీ చేయండి</string>
+    <string name="success_login">లాగిన్ విజయవంతమైంది!</string>
+
+    <!-- Registration -->
+    <string name="registration_title">అకౌంట్ సృష్టించండి</string>
+    <string name="welcome_new_user">క్విక్‌ఫిక్స్‌కు స్వాగతం!</string>
+    <string name="registration_subtitle">మా సమాజంలో చేరండి</string>
+    <string name="full_name_hint">పూర్తి పేరు</string>
+    <string name="phone_hint">ఫోన్ నంబర్</string>
+    <string name="signup_button">సైన్ అప్</string>
+    <string name="google_sign_up">Google తో సైన్ అప్</string>
+    <string name="have_account">అప్పటికే అకౌంట్ ఉందా?</string>
+    <string name="login_here">ఇక్కడ లాగిన్ చేయండి</string>
+    <string name="error_fullname_required">పూర్తి పేరు అవసరం</string>
+    <string name="error_fullname_length">పేరు కనీసం 3 అక్షరాలు ఉండాలి</string>
+    <string name="error_phone_required">ఫోన్ నంబర్ అవసరం</string>
+    <string name="error_phone_invalid">చెల్లుబాటు అయ్యే ఫోన్ నంబర్ నమోదు చేయండి</string>
+    <string name="error_passwords_not_match">పాస్‌వర్డ్‌లు సరిపోలడం లేదు</string>
+    <string name="error_signup_failed">సైన్ అప్ విఫలమైంది. మళ్ళీ ప్రయత్నించండి</string>
+
+    <!-- Home Screen -->
+    <string name="hello_user">నమస్కారం, %1$s! 👋</string>
+    <string name="find_services">మీ దగ్గర గృహ సేవలు కనుగొనండి</string>
+    <string name="search_hint">సేవలు వెతకండి…</string>
+    <string name="our_services">మా సేవలు</string>
+    <string name="see_all">అన్నీ చూడండి</string>
+    <string name="featured_services">విశేష సేవలు</string>
+    <string name="quick_actions">త్వరిత చర్యలు</string>
+    <string name="book_service">సేవ బుక్ చేయండి</string>
+    <string name="emergency_help">అత్యవసర సహాయం</string>
+    <string name="track_booking">బుకింగ్ ట్రాక్ చేయండి</string>
+    <string name="cat_plumbing">ప్లంబింగ్</string>
+    <string name="cat_electrical">ఎలక్ట్రికల్</string>
+    <string name="cat_cleaning">శుభ్రత</string>
+    <string name="cat_repair">మరమ్మత్తు</string>
+    <string name="cat_ac">AC సేవ</string>
+    <string name="cat_painting">పెయింటింగ్</string>
+    <string name="cat_carpentry">వడ్రంగి పని</string>
+    <string name="cat_more">మరిన్ని</string>
+    <string name="nav_home">హోమ్</string>
+    <string name="nav_bookings">బుకింగ్‌లు</string>
+    <string name="nav_messages">సందేశాలు</string>
+    <string name="nav_profile">ప్రొఫైల్</string>
+    <string name="promo_title">మొదటి బుకింగ్‌లో 20% తగ్గింపు పొందండి!</string>
+    <string name="promo_subtitle">చెక్‌అవుట్‌లో QUICKFIX20 కోడ్ ఉపయోగించండి</string>
+    <string name="logout">లాగ్ అవుట్</string>
+
+    <!-- Profile Screen -->
+    <string name="profile_title">నా ప్రొఫైల్</string>
+    <string name="profile_account_section">అకౌంట్</string>
+    <string name="profile_services_section">సేవలు</string>
+    <string name="profile_preferences_section">ప్రాధాన్యతలు</string>
+    <string name="profile_information_section">సమాచారం</string>
+    <string name="profile_my_profile">నా ప్రొఫైల్</string>
+    <string name="profile_settings">సెట్టింగ్‌లు</string>
+    <string name="profile_list_business">మీ వ్యాపారాన్ని జాబితా చేయండి</string>
+    <string name="profile_list_business_sub">ఉచితంగా సంపాదించడం ప్రారంభించండి</string>
+    <string name="profile_my_bookings">నా బుకింగ్‌లు</string>
+    <string name="profile_notifications">నోటిఫికేషన్‌లు</string>
+    <string name="profile_language">భాష</string>
+    <string name="profile_dark_mode">డార్క్ మోడ్</string>
+    <string name="profile_help_support">సహాయం మరియు మద్దతు</string>
+    <string name="profile_privacy_policy">గోప్యతా విధానం</string>
+    <string name="profile_terms">నిబంధనలు మరియు షరతులు</string>
+    <string name="profile_about_app">యాప్ గురించి</string>
+    <string name="profile_logout">లాగ్ అవుట్</string>
+    <string name="profile_logout_confirm_title">లాగ్ అవుట్</string>
+    <string name="profile_logout_confirm_msg">మీరు నిజంగా లాగ్ అవుట్ చేయాలనుకుంటున్నారా?</string>
+
+    <!-- Language -->
+    <string name="profile_lang_current_default">తెలుగు</string>
+    <string name="language_changed_toast">భాష: %1$s</string>
+
+    <!-- Profile Details -->
+    <string name="pd_section_personal">వ్యక్తిగత సమాచారం</string>
+    <string name="pd_label_full_name">పూర్తి పేరు</string>
+    <string name="pd_label_email_address">ఇమెయిల్ చిరునామా</string>
+    <string name="pd_label_phone_number">ఫోన్ నంబర్</string>
+    <string name="pd_label_city">నగరం</string>
+    <string name="pd_label_address">చిరునామా</string>
+    <string name="pd_loading">దయచేసి వేచి ఉండండి\u2026</string>
+
+    <!-- Settings -->
+    <string name="settings_title">సెట్టింగ్‌లు</string>
+    <string name="settings_push_notif">పుష్ నోటిఫికేషన్‌లు</string>
+    <string name="settings_dark_mode">డార్క్ మోడ్</string>
+    <string name="settings_change_password">పాస్‌వర్డ్ మార్చండి</string>
+
+    <!-- Status -->
+    <string name="status_pending">పెండింగ్</string>
+    <string name="status_approved">ఆమోదించబడింది</string>
+    <string name="status_rejected">తిరస్కరించబడింది</string>
+
+    <!-- Provider Onboarding -->
+    <string name="onboarding_title">క్విక్‌ఫిక్స్‌తో మీ వ్యాపారాన్ని పెంచుకోండి</string>
+    <string name="onboarding_submit">దరఖాస్తు సమర్పించండి</string>
+    <string name="onboarding_success_title">దరఖాస్తు సమర్పించబడింది! 🎉</string>
+    <string name="onboarding_back_home">హోమ్‌కు తిరిగి వెళ్ళు</string>
+
+    <!-- Validation -->
+    <string name="error_business_name_required">వ్యాపారం పేరు అవసరం</string>
+    <string name="error_owner_name_required">యజమాని పేరు అవసరం</string>
+    <string name="error_category_required">సేవా వర్గాన్ని ఎంచుకోండి</string>
+    <string name="error_city_required">నగరం అవసరం</string>
+    <string name="error_network_retry">నెట్‌వర్క్ లోపం. దయచేసి మళ్ళీ ప్రయత్నించండి.</string>
+</resources>
+

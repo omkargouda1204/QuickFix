@@ -42,7 +42,7 @@ import okhttp3.Response;
  * Fetches from the existing `bookings` table using only existing columns.
  * Features: search, status filter chips, pull-to-refresh, newest first.
  */
-public class AdminBookingsActivity extends AppCompatActivity {
+public class AdminBookingsActivity extends BaseActivity {
 
     private static final String TAG = "AdminBookings";
 

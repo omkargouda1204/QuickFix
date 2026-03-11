@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    values-hi/strings.xml — Hindi (हिन्दी) translations
+    Only translatable UI strings are listed here. Strings not present here
+    fall back automatically to values/strings.xml (English).
+-->
+<resources>
+    <!-- App -->
+    <string name="app_name">क्विकफिक्स</string>
+
+    <!-- Login Screen -->
+    <string name="welcome_back">वापसी पर स्वागत है!</string>
+    <string name="login_subtitle">जारी रखने के लिए साइन इन करें</string>
+    <string name="email_hint">ईमेल पता</string>
+    <string name="password_hint">पासवर्ड</string>
+    <string name="login_button">लॉगिन</string>
+    <string name="forgot_password">पासवर्ड भूल गए?</string>
+    <string name="or_continue_with">या जारी रखें</string>
+    <string name="google_sign_in">Google से साइन इन करें</string>
+    <string name="no_account">खाता नहीं है?</string>
+    <string name="sign_up">साइन अप</string>
+
+    <!-- Forgot Password -->
+    <string name="forgot_password_title">पासवर्ड भूल गए</string>
+    <string name="forgot_password_subtitle">पासवर्ड रीसेट लिंक पाने के लिए ईमेल दर्ज करें</string>
+    <string name="reset_password">पासवर्ड रीसेट करें</string>
+    <string name="back_to_login">लॉगिन पर वापस जाएं</string>
+
+    <!-- Validation -->
+    <string name="error_email_required">ईमेल आवश्यक है</string>
+    <string name="error_invalid_email">वैध ईमेल दर्ज करें</string>
+    <string name="error_password_required">पासवर्ड आवश्यक है</string>
+    <string name="error_password_length">पासवर्ड कम से कम 6 अक्षर का होना चाहिए</string>
+    <string name="error_login_failed">लॉगिन विफल हुआ। पुनः प्रयास करें</string>
+    <string name="error_network">नेटवर्क त्रुटि। अपना कनेक्शन जांचें</string>
+    <string name="success_login">लॉगिन सफल!</string>
+
+    <!-- Registration -->
+    <string name="registration_title">खाता बनाएं</string>
+    <string name="welcome_new_user">क्विकफिक्स में आपका स्वागत है!</string>
+    <string name="registration_subtitle">हमारे समुदाय से जुड़ें</string>
+    <string name="full_name_hint">पूरा नाम</string>
+    <string name="phone_hint">फोन नंबर</string>
+    <string name="signup_button">साइन अप</string>
+    <string name="google_sign_up">Google से साइन अप करें</string>
+    <string name="have_account">पहले से खाता है?</string>
+    <string name="login_here">यहां लॉगिन करें</string>
+    <string name="error_fullname_required">पूरा नाम आवश्यक है</string>
+    <string name="error_fullname_length">नाम कम से कम 3 अक्षर का होना चाहिए</string>
+    <string name="error_phone_required">फोन नंबर आवश्यक है</string>
+    <string name="error_phone_invalid">वैध फोन नंबर दर्ज करें</string>
+    <string name="error_passwords_not_match">पासवर्ड मेल नहीं खाते</string>
+    <string name="error_signup_failed">साइन अप विफल। पुनः प्रयास करें</string>
+
+    <!-- Home Screen -->
+    <string name="hello_user">नमस्ते, %1$s! 👋</string>
+    <string name="find_services">अपने पास घरेलू सेवाएं खोजें</string>
+    <string name="search_hint">सेवाएं खोजें…</string>
+    <string name="our_services">हमारी सेवाएं</string>
+    <string name="see_all">सभी देखें</string>
+    <string name="featured_services">विशेष सेवाएं</string>
+    <string name="quick_actions">त्वरित कार्रवाई</string>
+    <string name="book_service">सेवा बुक करें</string>
+    <string name="emergency_help">आपातकालीन सहायता</string>
+    <string name="track_booking">बुकिंग ट्रैक करें</string>
+    <string name="cat_plumbing">प्लंबिंग</string>
+    <string name="cat_electrical">इलेक्ट्रिकल</string>
+    <string name="cat_cleaning">सफाई</string>
+    <string name="cat_repair">मरम्मत</string>
+    <string name="cat_ac">AC सेवा</string>
+    <string name="cat_painting">पेंटिंग</string>
+    <string name="cat_carpentry">बढ़ईगीरी</string>
+    <string name="cat_more">और अधिक</string>
+    <string name="nav_home">होम</string>
+    <string name="nav_bookings">बुकिंग</string>
+    <string name="nav_messages">संदेश</string>
+    <string name="nav_profile">प्रोफ़ाइल</string>
+    <string name="promo_title">पहली बुकिंग पर 20% की छूट पाएं!</string>
+    <string name="promo_subtitle">चेकआउट पर QUICKFIX20 कोड का उपयोग करें</string>
+    <string name="logout">लॉग आउट</string>
+
+    <!-- Profile Screen -->
+    <string name="profile_title">मेरी प्रोफ़ाइल</string>
+    <string name="profile_account_section">खाता</string>
+    <string name="profile_services_section">सेवाएं</string>
+    <string name="profile_preferences_section">प्राथमिकताएं</string>
+    <string name="profile_information_section">जानकारी</string>
+    <string name="profile_my_profile">मेरी प्रोफ़ाइल</string>
+    <string name="profile_settings">सेटिंग्स</string>
+    <string name="profile_list_business">अपना व्यवसाय सूचीबद्ध करें</string>
+    <string name="profile_list_business_sub">मुफ़्त में कमाई शुरू करें</string>
+    <string name="profile_my_bookings">मेरी बुकिंग</string>
+    <string name="profile_notifications">सूचनाएं</string>
+    <string name="profile_language">भाषा</string>
+    <string name="profile_dark_mode">डार्क मोड</string>
+    <string name="profile_help_support">सहायता और समर्थन</string>
+    <string name="profile_privacy_policy">गोपनीयता नीति</string>
+    <string name="profile_terms">नियम और शर्तें</string>
+    <string name="profile_about_app">ऐप के बारे में</string>
+    <string name="profile_logout">लॉग आउट</string>
+    <string name="profile_logout_confirm_title">लॉग आउट</string>
+    <string name="profile_logout_confirm_msg">क्या आप वाकई लॉग आउट करना चाहते हैं?</string>
+
+    <!-- Language -->
+    <string name="profile_lang_current_default">हिन्दी</string>
+    <string name="language_changed_toast">भाषा: %1$s</string>
+
+    <!-- Profile Details -->
+    <string name="pd_section_personal">व्यक्तिगत जानकारी</string>
+    <string name="pd_label_full_name">पूरा नाम</string>
+    <string name="pd_label_email_address">ईमेल पता</string>
+    <string name="pd_label_phone_number">फोन नंबर</string>
+    <string name="pd_label_city">शहर</string>
+    <string name="pd_label_address">पता</string>
+    <string name="pd_loading">कृपया प्रतीक्षा करें\u2026</string>
+
+    <!-- Settings -->
+    <string name="settings_title">सेटिंग्स</string>
+    <string name="settings_push_notif">पुश सूचनाएं</string>
+    <string name="settings_dark_mode">डार्क मोड</string>
+    <string name="settings_change_password">पासवर्ड बदलें</string>
+
+    <!-- Status -->
+    <string name="status_pending">लंबित</string>
+    <string name="status_approved">अनुमोदित</string>
+    <string name="status_rejected">अस्वीकृत</string>
+
+    <!-- Provider Onboarding -->
+    <string name="onboarding_title">क्विकफिक्स के साथ अपना व्यवसाय बढ़ाएं</string>
+    <string name="onboarding_submit">आवेदन जमा करें</string>
+    <string name="onboarding_success_title">आवेदन जमा हो गया! 🎉</string>
+    <string name="onboarding_back_home">होम पर वापस जाएं</string>
+
+    <!-- Provider Application Validation -->
+    <string name="error_business_name_required">व्यवसाय का नाम आवश्यक है</string>
+    <string name="error_owner_name_required">मालिक का नाम आवश्यक है</string>
+    <string name="error_category_required">कृपया एक सेवा श्रेणी चुनें</string>
+    <string name="error_city_required">शहर आवश्यक है</string>
+    <string name="error_network_retry">नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।</string>
+</resources>
+

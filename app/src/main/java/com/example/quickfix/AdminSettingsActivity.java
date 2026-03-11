@@ -29,7 +29,7 @@ import com.google.firebase.auth.FirebaseUser;
  *  • Daily Email Digest     → saved, loaded on next open
  *  • Maintenance Mode       → saved; SplashActivity reads it and blocks users
  */
-public class AdminSettingsActivity extends AppCompatActivity {
+public class AdminSettingsActivity extends BaseActivity {
 
     // Views — Notifications
     private SwitchMaterial switchPush, switchEmail, switchAdminAlerts;

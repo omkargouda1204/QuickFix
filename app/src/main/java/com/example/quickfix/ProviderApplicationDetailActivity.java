@@ -32,7 +32,7 @@ import java.util.Locale;
  * - ID Proof: fetches a signed URL from Supabase private bucket (admin only), then opens viewer.
  * - Approve / Reject buttons (shown only for pending applications).
  */
-public class ProviderApplicationDetailActivity extends AppCompatActivity {
+public class ProviderApplicationDetailActivity extends BaseActivity {
 
     public static final String EXTRA_APP_ID           = "app_id";
     public static final String EXTRA_FIREBASE_UID     = "firebase_uid";

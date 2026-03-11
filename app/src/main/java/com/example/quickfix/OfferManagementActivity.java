@@ -53,7 +53,7 @@ import okhttp3.Response;
  * Offers stored in Supabase `offers` table.
  * When an offer is created with "Send notification" checked → FCM push sent to all users.
  */
-public class OfferManagementActivity extends AppCompatActivity {
+public class OfferManagementActivity extends BaseActivity {
 
     private static final String TAG = "OfferMgmt";
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;

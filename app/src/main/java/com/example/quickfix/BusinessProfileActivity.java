@@ -40,7 +40,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
-public class BusinessProfileActivity extends AppCompatActivity {
+public class BusinessProfileActivity extends BaseActivity {
     private static final String TAG = "BusinessProfile";
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;

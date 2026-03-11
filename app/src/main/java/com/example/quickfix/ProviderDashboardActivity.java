@@ -25,7 +25,7 @@ import com.google.firebase.auth.FirebaseUser;
  *   - Profile        (business profile)
  *   - Back to Home   (still use the app as a regular user)
  */
-public class ProviderDashboardActivity extends AppCompatActivity {
+public class ProviderDashboardActivity extends BaseActivity {
 
     private TextView  providerNameText, providerEmailText;
     private CardView  cardMyBookings, cardEarnings, cardProfile;

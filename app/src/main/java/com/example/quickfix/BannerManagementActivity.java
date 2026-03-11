@@ -56,7 +56,7 @@ import okhttp3.Response;
  * BannerManagementActivity — Admin page to add/edit/delete home screen promotional banners.
  * Banners are stored in Supabase `banners` table. Images are uploaded to `banner-images` bucket.
  */
-public class BannerManagementActivity extends AppCompatActivity {
+public class BannerManagementActivity extends BaseActivity {
 
     private static final String TAG = "BannerMgmt";
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;

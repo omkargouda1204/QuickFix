@@ -32,7 +32,7 @@ import com.google.firebase.auth.FirebaseUser;
  *  ✦ Profile bottom sheet: name, role badge, Settings, View UI, Logout
  *  ✦ Logout ONLY accessible from bottom sheet — not on main screen
  */
-public class AdminDashboardActivity extends AppCompatActivity {
+public class AdminDashboardActivity extends BaseActivity {
 
     private static final String TAG = "AdminDashboard";
 

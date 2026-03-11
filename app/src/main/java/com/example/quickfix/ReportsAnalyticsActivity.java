@@ -48,7 +48,7 @@ import okhttp3.Response;
  *  ✦ Time period selection (Today, Week, Month, Year)
  *  ✦ Growth indicators and performance charts
  */
-public class ReportsAnalyticsActivity extends AppCompatActivity {
+public class ReportsAnalyticsActivity extends BaseActivity {
 
     private static final String TAG = "ReportsAnalytics";
 

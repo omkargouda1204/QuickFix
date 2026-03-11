@@ -28,7 +28,7 @@ import okhttp3.Response;
  * CategoriesActivity — full-page grid of all service categories.
  * Tapping a category opens ProvidersListActivity filtered by that category.
  */
-public class CategoriesActivity extends AppCompatActivity {
+public class CategoriesActivity extends BaseActivity {
 
     private static final String TAG = "CategoriesActivity";
 

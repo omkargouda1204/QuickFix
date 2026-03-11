@@ -31,7 +31,7 @@ import java.util.Locale;
  *  • rejected → rejection reason + 24-hour countdown to re-apply
  *  • loading  → shows spinner while fetching from Supabase
  */
-public class ApplicationStatusActivity extends AppCompatActivity {
+public class ApplicationStatusActivity extends BaseActivity {
 
     private static final String TAG = "AppStatusActivity";
 

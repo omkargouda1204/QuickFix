@@ -36,7 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class AdminProviderApprovalActivity extends AppCompatActivity
+public class AdminProviderApprovalActivity extends BaseActivity
         implements ProviderApplicationAdapter.OnActionListener {
 
     private static final String TAG = "AdminProviderApproval";

@@ -3,7 +3,6 @@ package com.example.quickfix;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.res.Configuration;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -17,7 +16,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.switchmaterial.SwitchMaterial;
@@ -27,7 +25,6 @@ import com.google.firebase.auth.FirebaseUser;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -39,7 +36,7 @@ import okhttp3.Response;
  * Gradient header · avatar · role badge · sectioned menu cards
  * Supabase user fetch · language picker · dark mode · logout
  */
-public class ProfileActivity extends AppCompatActivity {
+public class ProfileActivity extends BaseActivity {
 
     private static final String TAG           = "ProfileActivity";
     private static final String PREFS_NAME    = "quickfix_prefs";
@@ -372,60 +369,44 @@ public class ProfileActivity extends AppCompatActivity {
                 .inflate(R.layout.bottom_sheet_language, findViewById(android.R.id.content), false);
         dialog.setContentView(view);
 
-        String current = prefs.getString(KEY_LANGUAGE, "English");
-
-        // Hide all checks, then show only the current one
+        // Mark the currently active language with a checkmark
+        String currentDisplay = LocaleHelper.getSavedDisplayName(this);
         int[] checkIds = {R.id.checkEnglish, R.id.checkKannada, R.id.checkHindi,
-                R.id.checkTamil, R.id.checkTelugu, R.id.checkMalayalam};
-        String[] names = {"English", "Kannada", "Hindi", "Tamil", "Telugu", "Malayalam"};
+                          R.id.checkTamil,   R.id.checkTelugu,  R.id.checkMalayalam};
+        String[] names  = {"English", "Kannada", "Hindi", "Tamil", "Telugu", "Malayalam"};
         for (int i = 0; i < checkIds.length; i++) {
             View chk = view.findViewById(checkIds[i]);
-            if (chk != null) chk.setVisibility(names[i].equals(current) ? View.VISIBLE : View.GONE);
+            if (chk != null) chk.setVisibility(names[i].equals(currentDisplay) ? View.VISIBLE : View.GONE);
         }
 
-        view.findViewById(R.id.optionEnglish) .setOnClickListener(v -> { applyLanguage("English",   "en"); dialog.dismiss(); });
-        view.findViewById(R.id.optionKannada) .setOnClickListener(v -> { applyLanguage("Kannada",   "kn"); dialog.dismiss(); });
-        view.findViewById(R.id.optionHindi)   .setOnClickListener(v -> { applyLanguage("Hindi",     "hi"); dialog.dismiss(); });
-        view.findViewById(R.id.optionTamil)   .setOnClickListener(v -> { applyLanguage("Tamil",     "ta"); dialog.dismiss(); });
-        view.findViewById(R.id.optionTelugu)  .setOnClickListener(v -> { applyLanguage("Telugu",    "te"); dialog.dismiss(); });
-        view.findViewById(R.id.optionMalayalam).setOnClickListener(v -> { applyLanguage("Malayalam", "ml"); dialog.dismiss(); });
+        view.findViewById(R.id.optionEnglish)  .setOnClickListener(v -> { applyLanguage("en"); dialog.dismiss(); });
+        view.findViewById(R.id.optionKannada)  .setOnClickListener(v -> { applyLanguage("kn"); dialog.dismiss(); });
+        view.findViewById(R.id.optionHindi)    .setOnClickListener(v -> { applyLanguage("hi"); dialog.dismiss(); });
+        view.findViewById(R.id.optionTamil)    .setOnClickListener(v -> { applyLanguage("ta"); dialog.dismiss(); });
+        view.findViewById(R.id.optionTelugu)   .setOnClickListener(v -> { applyLanguage("te"); dialog.dismiss(); });
+        view.findViewById(R.id.optionMalayalam).setOnClickListener(v -> { applyLanguage("ml"); dialog.dismiss(); });
         dialog.show();
     }
 
-    private void applyLanguage(String displayName, String localeCode) {
-        prefs.edit().putString(KEY_LANGUAGE, displayName).apply();
+    /**
+     * Persist the chosen locale via {@link LocaleHelper}, update the label, and recreate.
+     *
+     * @param localeCode BCP-47 code: "en", "kn", "hi", "ta", "te", "ml"
+     */
+    private void applyLanguage(String localeCode) {
+        LocaleHelper.setLocale(this, localeCode);
+        String displayName = LocaleHelper.codeToDisplayName(localeCode);
         if (tvCurrentLanguage != null) tvCurrentLanguage.setText(displayName);
-        Locale locale = new Locale(localeCode);
-        Locale.setDefault(locale);
-        Configuration config = new Configuration(getResources().getConfiguration());
-        config.setLocale(locale);
-        getResources().updateConfiguration(config, getResources().getDisplayMetrics());
-        Toast.makeText(this, "Language: " + displayName, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, getString(R.string.language_changed_toast, displayName),
+                Toast.LENGTH_SHORT).show();
+        // Recreate so all strings in this Activity render in the new language instantly
         recreate();
     }
 
+    /** Update the language label from the persisted preference (called in onCreate). */
     private void applyLanguageFromPrefs() {
-        String saved = prefs.getString(KEY_LANGUAGE, "English");
-        if (tvCurrentLanguage != null) tvCurrentLanguage.setText(saved);
-        String code = localeCodeForLanguage(saved);
-        Locale locale = new Locale(code);
-        Locale.setDefault(locale);
-        Configuration config = new Configuration(getResources().getConfiguration());
-        config.setLocale(locale);
-        getResources().updateConfiguration(config, getResources().getDisplayMetrics());
-    }
-
-    /** Map language display name → BCP-47 locale code */
-    private static String localeCodeForLanguage(String name) {
-        if (name == null) return "en";
-        switch (name) {
-            case "Kannada":   return "kn";
-            case "Hindi":     return "hi";
-            case "Tamil":     return "ta";
-            case "Telugu":    return "te";
-            case "Malayalam": return "ml";
-            default:          return "en";
-        }
+        String display = LocaleHelper.getSavedDisplayName(this);
+        if (tvCurrentLanguage != null) tvCurrentLanguage.setText(display);
     }
 
     // ── Dark Mode ─────────────────────────────────────────────────────────

@@ -41,7 +41,7 @@ import okhttp3.Response;
  * SearchResultsActivity — full-screen search results filtered by query + city.
  * Queries Supabase provider_applications (approved) + services tables.
  */
-public class SearchResultsActivity extends AppCompatActivity
+public class SearchResultsActivity extends BaseActivity
         implements SearchResultsAdapter.OnResultClickListener {
 
     public static final String EXTRA_QUERY = "query";

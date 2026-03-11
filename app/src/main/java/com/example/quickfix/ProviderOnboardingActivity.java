@@ -52,7 +52,7 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
-public class ProviderOnboardingActivity extends AppCompatActivity {
+public class ProviderOnboardingActivity extends BaseActivity {
 
     private static final String TAG = "ProviderOnboarding";
 

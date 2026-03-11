@@ -45,7 +45,7 @@ import com.google.firebase.auth.FirebaseUser;
  *  • Pull-to-refresh
  *  • Shimmer loading / error / empty states
  */
-public class UserManagementActivity extends AppCompatActivity
+public class UserManagementActivity extends BaseActivity
         implements UserAdapter.ActionListener {
 
     // ── Views ──────────────────────────────────────────────────────────────

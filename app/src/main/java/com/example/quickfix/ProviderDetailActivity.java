@@ -21,7 +21,7 @@ import com.google.android.material.button.MaterialButton;
  * ProviderDetailActivity — full detail view for a single approved provider.
  * Launched from ProvidersListActivity.
  */
-public class ProviderDetailActivity extends AppCompatActivity {
+public class ProviderDetailActivity extends BaseActivity {
 
     public static final String EXTRA_PROVIDER_ID  = "provider_id";
     public static final String EXTRA_BUSINESS_NAME= "business_name";

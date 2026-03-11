@@ -35,7 +35,7 @@ import okhttp3.Response;
  * ProvidersListActivity — shows approved providers filtered by category + city.
  * Launched from home screen category icons or CategoriesActivity.
  */
-public class ProvidersListActivity extends AppCompatActivity
+public class ProvidersListActivity extends BaseActivity
         implements ProvidersAdapter.OnProviderActionListener {
 
     public static final String EXTRA_CATEGORY = "category";

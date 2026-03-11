@@ -30,7 +30,7 @@ import com.google.firebase.auth.FirebaseUser;
  *
  * Back / "Back to Login" → sign out → LoginActivity
  */
-public class EmailVerificationActivity extends AppCompatActivity {
+public class EmailVerificationActivity extends BaseActivity {
 
     private static final String TAG = "EmailVerificationActivity";
 

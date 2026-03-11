@@ -38,7 +38,7 @@ import okhttp3.Response;
  * NotificationsActivity — Displays user notifications from Supabase notifications table.
  * Supports mark as read, delete, pull-to-refresh.
  */
-public class NotificationsActivity extends AppCompatActivity
+public class NotificationsActivity extends BaseActivity
         implements NotificationsAdapter.NotificationActionListener {
 
     private static final String TAG      = "Notifications";

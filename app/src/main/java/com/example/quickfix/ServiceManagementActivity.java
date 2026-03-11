@@ -57,7 +57,7 @@ import okhttp3.Response;
  * Columns that do NOT exist (never query them):
  *   name, icon, icon_url, category_id, base_price
  */
-public class ServiceManagementActivity extends AppCompatActivity {
+public class ServiceManagementActivity extends BaseActivity {
 
     private static final String TAG          = "ServiceMgmt";
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;

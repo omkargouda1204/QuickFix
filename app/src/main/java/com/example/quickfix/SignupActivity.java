@@ -29,7 +29,7 @@ import com.google.firebase.auth.UserProfileChangeRequest;
  *   2. upsertUser in Supabase (is_user=true, non-blocking)
  *   3. sendEmailVerification → sign out → EmailVerificationActivity
  */
-public class SignupActivity extends AppCompatActivity {
+public class SignupActivity extends BaseActivity {
 
     private static final String TAG = "SignupActivity";
 

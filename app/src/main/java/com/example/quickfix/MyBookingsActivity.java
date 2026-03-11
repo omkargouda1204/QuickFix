@@ -42,7 +42,7 @@ import okhttp3.Response;
 /**
  * MyBookingsActivity — Provider's bookings list with filters and actions
  */
-public class MyBookingsActivity extends AppCompatActivity implements BookingsAdapter.BookingActionListener {
+public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.BookingActionListener {
 
     private static final String TAG = "MyBookingsActivity";
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;

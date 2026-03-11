@@ -44,7 +44,7 @@ import com.google.firebase.auth.GoogleAuthProvider;
  *   - Google login : googleSignInButton disabled, overlay shown with status text
  *   - Both buttons disabled while ANY operation is running (isLoading flag)
  */
-public class LoginActivity extends AppCompatActivity {
+public class LoginActivity extends BaseActivity {
 
     private static final String TAG = "LoginActivity";
 

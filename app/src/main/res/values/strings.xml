@@ -232,6 +232,9 @@
     <string name="profile_lang_malayalam">🇮🇳  മലയാളം (Malayalam)</string>
     <string name="profile_lang_current_default">English</string>
 
+    <!-- Language change toast (%1$s = language display name) -->
+    <string name="language_changed_toast">Language: %1$s</string>
+
     <!-- Profile Details screen -->
     <string name="cd_back">Back</string>
     <string name="cd_edit_profile">Edit Profile</string>

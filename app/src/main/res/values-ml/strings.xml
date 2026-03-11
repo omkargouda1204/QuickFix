@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    values-ml/strings.xml — Malayalam (മലയാളം) translations
+    Only translatable UI strings are listed here. Strings not present here
+    fall back automatically to values/strings.xml (English).
+-->
+<resources>
+    <!-- App -->
+    <string name="app_name">ക്വിക്ക്ഫിക്സ്</string>
+
+    <!-- Login Screen -->
+    <string name="welcome_back">തിരിച്ചു സ്വാഗതം!</string>
+    <string name="login_subtitle">തുടരാൻ സൈൻ ഇൻ ചെയ്യുക</string>
+    <string name="email_hint">ഇമെയിൽ വിലാസം</string>
+    <string name="password_hint">പാസ്‌വേഡ്</string>
+    <string name="login_button">ലോഗിൻ</string>
+    <string name="forgot_password">പാസ്‌വേഡ് മറന്നോ?</string>
+    <string name="or_continue_with">അല്ലെങ്കിൽ തുടരുക</string>
+    <string name="google_sign_in">Google ഉപയോഗിച്ച് സൈൻ ഇൻ</string>
+    <string name="no_account">അക്കൗണ്ട് ഇല്ലേ?</string>
+    <string name="sign_up">സൈൻ അപ്പ്</string>
+
+    <!-- Forgot Password -->
+    <string name="forgot_password_title">പാസ്‌വേഡ് മറന്നോ</string>
+    <string name="forgot_password_subtitle">പാസ്‌വേഡ് റീസെറ്റ് ചെയ്യാൻ ഇമെയിൽ നൽകുക</string>
+    <string name="reset_password">പാസ്‌വേഡ് റീസെറ്റ്</string>
+    <string name="back_to_login">ലോഗിനിലേക്ക് മടങ്ങുക</string>
+
+    <!-- Validation -->
+    <string name="error_email_required">ഇമെയിൽ ആവശ്യമാണ്</string>
+    <string name="error_invalid_email">സാധുവായ ഇമെയിൽ നൽകുക</string>
+    <string name="error_password_required">പാസ്‌വേഡ് ആവശ്യമാണ്</string>
+    <string name="error_password_length">പാസ്‌വേഡ് കുറഞ്ഞത് 6 അക്ഷരങ്ങൾ ഉണ്ടായിരിക്കണം</string>
+    <string name="error_login_failed">ലോഗിൻ പരാജയപ്പെട്ടു. വീണ്ടും ശ്രമിക്കുക</string>
+    <string name="error_network">നെറ്റ്‌വർക്ക് പിശക്. നിങ്ങളുടെ കണക്ഷൻ പരിശോധിക്കുക</string>
+    <string name="success_login">ലോഗിൻ വിജയകരമായി!</string>
+
+    <!-- Registration -->
+    <string name="registration_title">അക്കൗണ്ട് ഉണ്ടാക്കുക</string>
+    <string name="welcome_new_user">ക്വിക്ക്ഫിക്സിലേക്ക് സ്വാഗതം!</string>
+    <string name="registration_subtitle">ഞങ്ങളുടെ കമ്മ്യൂണിറ്റിയിൽ ചേരുക</string>
+    <string name="full_name_hint">പൂർണ്ണ നാമം</string>
+    <string name="phone_hint">ഫോൺ നമ്പർ</string>
+    <string name="signup_button">സൈൻ അപ്പ്</string>
+    <string name="google_sign_up">Google ഉപയോഗിച്ച് സൈൻ അപ്പ്</string>
+    <string name="have_account">ഇതിനകം അക്കൗണ്ട് ഉണ്ടോ?</string>
+    <string name="login_here">ഇവിടെ ലോഗിൻ ചെയ്യുക</string>
+    <string name="error_fullname_required">പൂർണ്ണ നാമം ആവശ്യമാണ്</string>
+    <string name="error_fullname_length">പേര് കുറഞ്ഞത് 3 അക്ഷരങ്ങൾ ഉണ്ടായിരിക്കണം</string>
+    <string name="error_phone_required">ഫോൺ നമ്പർ ആവശ്യമാണ്</string>
+    <string name="error_phone_invalid">സാധുവായ ഫോൺ നമ്പർ നൽകുക</string>
+    <string name="error_passwords_not_match">പാസ്‌വേഡുകൾ പൊരുത്തപ്പെടുന്നില്ല</string>
+    <string name="error_signup_failed">സൈൻ അപ്പ് പരാജയപ്പെട്ടു. വീണ്ടും ശ്രമിക്കുക</string>
+
+    <!-- Home Screen -->
+    <string name="hello_user">നമസ്കാരം, %1$s! 👋</string>
+    <string name="find_services">നിങ്ങളുടെ അടുത്ത് ഗൃഹ സേവനങ്ങൾ കണ്ടെത്തുക</string>
+    <string name="search_hint">സേവനങ്ങൾ തിരയുക…</string>
+    <string name="our_services">ഞങ്ങളുടെ സേവനങ്ങൾ</string>
+    <string name="see_all">എല്ലാം കാണുക</string>
+    <string name="featured_services">പ്രത്യേക സേവനങ്ങൾ</string>
+    <string name="quick_actions">ദ്രുത പ്രവർത്തനങ്ങൾ</string>
+    <string name="book_service">സേവനം ബുക്ക് ചെയ്യുക</string>
+    <string name="emergency_help">അടിയന്തര സഹായം</string>
+    <string name="track_booking">ബുക്കിംഗ് ട്രാക്ക് ചെയ്യുക</string>
+    <string name="cat_plumbing">പ്ലംബിംഗ്</string>
+    <string name="cat_electrical">ഇലക്ട്രിക്കൽ</string>
+    <string name="cat_cleaning">ശുചീകരണം</string>
+    <string name="cat_repair">അറ്റകുറ്റപ്പണി</string>
+    <string name="cat_ac">AC സേവനം</string>
+    <string name="cat_painting">പെയിന്റിംഗ്</string>
+    <string name="cat_carpentry">മരപ്പണി</string>
+    <string name="cat_more">കൂടുതൽ</string>
+    <string name="nav_home">ഹോം</string>
+    <string name="nav_bookings">ബുക്കിംഗ്</string>
+    <string name="nav_messages">സന്ദേശങ്ങൾ</string>
+    <string name="nav_profile">പ്രൊഫൈൽ</string>
+    <string name="promo_title">ആദ്യ ബുക്കിംഗിൽ 20% കിഴിവ് നേടുക!</string>
+    <string name="promo_subtitle">ചെക്കൗട്ടിൽ QUICKFIX20 കോഡ് ഉപയോഗിക്കുക</string>
+    <string name="logout">ലോഗ് ഔട്ട്</string>
+
+    <!-- Profile Screen -->
+    <string name="profile_title">എന്റെ പ്രൊഫൈൽ</string>
+    <string name="profile_account_section">അക്കൗണ്ട്</string>
+    <string name="profile_services_section">സേവനങ്ങൾ</string>
+    <string name="profile_preferences_section">മുൻഗണനകൾ</string>
+    <string name="profile_information_section">വിവരങ്ങൾ</string>
+    <string name="profile_my_profile">എന്റെ പ്രൊഫൈൽ</string>
+    <string name="profile_settings">ക്രമീകരണങ്ങൾ</string>
+    <string name="profile_list_business">നിങ്ങളുടെ ബിസിനസ്സ് ലിസ്റ്റ് ചെയ്യുക</string>
+    <string name="profile_list_business_sub">സൗജന്യമായി സമ്പാദിക്കാൻ ആരംഭിക്കുക</string>
+    <string name="profile_my_bookings">എന്റെ ബുക്കിംഗ്</string>
+    <string name="profile_notifications">അറിയിപ്പുകൾ</string>
+    <string name="profile_language">ഭാഷ</string>
+    <string name="profile_dark_mode">ഡാർക്ക് മോഡ്</string>
+    <string name="profile_help_support">സഹായവും പിന്തുണയും</string>
+    <string name="profile_privacy_policy">സ്വകാര്യതാ നയം</string>
+    <string name="profile_terms">നിബന്ധനകളും വ്യവസ്ഥകളും</string>
+    <string name="profile_about_app">ആപ്പിനെ കുറിച്ച്</string>
+    <string name="profile_logout">ലോഗ് ഔട്ട്</string>
+    <string name="profile_logout_confirm_title">ലോഗ് ഔട്ട്</string>
+    <string name="profile_logout_confirm_msg">നിങ്ങൾ തീർച്ചയായും ലോഗ് ഔട്ട് ചെയ്യണോ?</string>
+
+    <!-- Language -->
+    <string name="profile_lang_current_default">മലയാളം</string>
+    <string name="language_changed_toast">ഭാഷ: %1$s</string>
+
+    <!-- Profile Details -->
+    <string name="pd_section_personal">വ്യക്തിഗത വിവരങ്ങൾ</string>
+    <string name="pd_label_full_name">പൂർണ്ണ നാമം</string>
+    <string name="pd_label_email_address">ഇമെയിൽ വിലാസം</string>
+    <string name="pd_label_phone_number">ഫോൺ നമ്പർ</string>
+    <string name="pd_label_city">നഗരം</string>
+    <string name="pd_label_address">വിലാസം</string>
+    <string name="pd_loading">ദയവായി കാത്തിരിക്കുക\u2026</string>
+
+    <!-- Settings -->
+    <string name="settings_title">ക്രമീകരണങ്ങൾ</string>
+    <string name="settings_push_notif">പുഷ് അറിയിപ്പുകൾ</string>
+    <string name="settings_dark_mode">ഡാർക്ക് മോഡ്</string>
+    <string name="settings_change_password">പാസ്‌വേഡ് മാറ്റുക</string>
+
+    <!-- Status -->
+    <string name="status_pending">തീർപ്പാക്കാത്തത്</string>
+    <string name="status_approved">അനുമതി ലഭിച്ചു</string>
+    <string name="status_rejected">നിരസിക്കപ്പെട്ടു</string>
+
+    <!-- Provider Onboarding -->
+    <string name="onboarding_title">ക്വിക്ക്ഫിക്സ് ഉപയോഗിച്ച് നിങ്ങളുടെ ബിസിനസ്സ് വളർത്തുക</string>
+    <string name="onboarding_submit">അപേക്ഷ സമർപ്പിക്കുക</string>
+    <string name="onboarding_success_title">അപേക്ഷ സമർപ്പിച്ചു! 🎉</string>
+    <string name="onboarding_back_home">ഹോമിലേക്ക് മടങ്ങുക</string>
+
+    <!-- Validation -->
+    <string name="error_business_name_required">ബിസിനസ്സ് പേര് ആവശ്യമാണ്</string>
+    <string name="error_owner_name_required">ഉടമസ്ഥന്റെ പേര് ആവശ്യമാണ്</string>
+    <string name="error_category_required">ഒരു സേവന വിഭാഗം തിരഞ്ഞെടുക്കുക</string>
+    <string name="error_city_required">നഗരം ആവശ്യമാണ്</string>
+    <string name="error_network_retry">നെറ്റ്‌വർക്ക് പിശക്. വീണ്ടും ശ്രമിക്കുക.</string>
+</resources>
+

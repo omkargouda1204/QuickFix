@@ -38,7 +38,7 @@ import com.google.firebase.auth.FirebaseAuthException;
  *
  * NO Firestore. NO backend. No OTP. Pure Firebase.
  */
-public class ForgotPasswordActivity extends AppCompatActivity {
+public class ForgotPasswordActivity extends BaseActivity {
 
     private static final String TAG = "ForgotPasswordActivity";
 

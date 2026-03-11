@@ -19,7 +19,7 @@ import com.google.android.material.button.MaterialButton;
  * When "Check Again" is tapped it re-reads SharedPreferences; if maintenance
  * mode has been turned off by admin the user proceeds normally.
  */
-public class MaintenanceActivity extends AppCompatActivity {
+public class MaintenanceActivity extends BaseActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

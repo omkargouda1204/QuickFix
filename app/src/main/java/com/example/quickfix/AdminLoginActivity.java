@@ -11,7 +11,7 @@ import androidx.appcompat.app.AppCompatActivity;
  * Role check after login automatically routes admins to AdminDashboardActivity.
  * This stub simply redirects to LoginActivity to avoid any stale deep-links.
  */
-public class AdminLoginActivity extends AppCompatActivity {
+public class AdminLoginActivity extends BaseActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

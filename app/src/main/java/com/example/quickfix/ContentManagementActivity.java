@@ -30,7 +30,7 @@ import okhttp3.Response;
  * ContentManagementActivity — Admin hub for Banner and Offer management.
  * Shows live counts from Supabase and navigates to respective management screens.
  */
-public class ContentManagementActivity extends AppCompatActivity {
+public class ContentManagementActivity extends BaseActivity {
 
     private static final String TAG = "ContentMgmt";
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
