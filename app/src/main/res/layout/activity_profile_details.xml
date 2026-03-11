@@ -32,7 +32,7 @@
                 android:paddingEnd="16dp"
                 android:orientation="vertical">
 
-                <!-- Top bar: back | title | edit/save -->
+                <!-- Top bar: back | title | spacer -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="40dp"
@@ -64,17 +64,10 @@
                         android:ellipsize="end"
                         android:maxLines="1" />
 
-                    <ImageView
-                        android:id="@+id/btnEditSave"
+                    <!-- Spacer to balance back button and keep title centered -->
+                    <View
                         android:layout_width="40dp"
-                        android:layout_height="40dp"
-                        android:src="@drawable/ic_edit"
-                        app:tint="@color/white"
-                        android:padding="8dp"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:contentDescription="@string/cd_edit_profile" />
+                        android:layout_height="40dp" />
 
                 </LinearLayout>
 
@@ -86,15 +79,14 @@
                     android:gravity="center"
                     android:layout_marginTop="16dp">
 
-                    <!-- Avatar -->
+                    <!-- Avatar (read-only) -->
                     <FrameLayout
                         android:id="@+id/avatarFrame"
                         android:layout_width="104dp"
                         android:layout_height="104dp"
                         android:background="@drawable/bg_profile_avatar"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:foreground="?attr/selectableItemBackgroundBorderless">
+                        android:clickable="false"
+                        android:focusable="false">
 
                         <ImageView
                             android:id="@+id/ivAvatar"
@@ -118,24 +110,6 @@
                             android:textStyle="bold"
                             android:background="@drawable/bg_profile_avatar_inner" />
 
-                        <!-- Camera badge — visible in edit mode only -->
-                        <FrameLayout
-                            android:id="@+id/cameraOverlay"
-                            android:layout_width="30dp"
-                            android:layout_height="30dp"
-                            android:layout_gravity="bottom|end"
-                            android:layout_marginEnd="2dp"
-                            android:layout_marginBottom="2dp"
-                            android:background="@drawable/bg_profile_avatar"
-                            android:visibility="gone">
-                            <ImageView
-                                android:layout_width="18dp"
-                                android:layout_height="18dp"
-                                android:layout_gravity="center"
-                                android:src="@drawable/ic_edit"
-                                app:tint="@color/white"
-                                android:contentDescription="@string/cd_change_photo" />
-                        </FrameLayout>
                     </FrameLayout>
 
                     <TextView
@@ -157,16 +131,6 @@
                         android:textColor="#CCE3F2FD"
                         android:textSize="13sp" />
 
-                    <!-- Shown only in edit mode: tap avatar hint -->
-                    <TextView
-                        android:id="@+id/tvChangePhotoHint"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="@string/pd_change_photo_hint"
-                        android:textColor="#AAFFFFFF"
-                        android:textSize="11sp"
-                        android:visibility="gone" />
 
                 </LinearLayout>
             </LinearLayout>
@@ -329,210 +293,10 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Edit Profile button (view mode) -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnEditProfile"
-                style="@style/Widget.Material3.Button"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:layout_marginStart="16dp"
-                android:layout_marginEnd="16dp"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="8dp"
-                android:text="@string/pd_btn_edit_profile"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                app:icon="@drawable/ic_edit"
-                app:iconGravity="textStart"
-                app:iconPadding="8dp"
-                app:cornerRadius="14dp" />
+
 
             <!-- ═══════════════ EDIT MODE CARD ═══════════════ -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardEditMode"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
-                android:layout_marginEnd="16dp"
-                android:layout_marginTop="20dp"
-                android:layout_marginBottom="8dp"
-                app:cardCornerRadius="18dp"
-                app:cardElevation="4dp"
-                app:strokeWidth="0dp"
-                android:visibility="gone">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="20dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/pd_section_edit"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/primary"
-                        android:letterSpacing="0.04"
-                        android:layout_marginBottom="16dp" />
-
-                    <!-- Name field -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilName"
-                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="14dp"
-                        android:hint="@string/pd_hint_full_name"
-                        app:startIconDrawable="@drawable/ic_person"
-                        app:startIconTint="@color/primary"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etName"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="textPersonName|textCapWords"
-                            android:textColor="@color/text_primary"
-                            android:imeOptions="actionNext" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <!-- Email (read-only) -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilEmail"
-                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="14dp"
-                        android:hint="@string/pd_hint_email_readonly"
-                        app:startIconDrawable="@drawable/ic_email"
-                        app:startIconTint="@color/text_secondary"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etEmail"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="textEmailAddress"
-                            android:textColor="@color/text_secondary"
-                            android:focusable="false"
-                            android:enabled="false" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <!-- Phone field -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilPhone"
-                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="14dp"
-                        android:hint="@string/pd_hint_phone"
-                        app:startIconDrawable="@drawable/ic_phone"
-                        app:startIconTint="@color/primary"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etPhone"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="phone"
-                            android:textColor="@color/text_primary"
-                            android:imeOptions="actionNext" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <!-- City field -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilCity"
-                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="14dp"
-                        android:hint="@string/pd_hint_city"
-                        app:startIconDrawable="@drawable/ic_city"
-                        app:startIconTint="@color/primary"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etCity"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="textCapWords"
-                            android:textColor="@color/text_primary"
-                            android:imeOptions="actionNext" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <!-- Address field -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilAddress"
-                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="20dp"
-                        android:hint="@string/pd_hint_address"
-                        app:startIconDrawable="@drawable/ic_location"
-                        app:startIconTint="@color/primary"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etAddress"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="textMultiLine|textCapSentences"
-                            android:minLines="2"
-                            android:textColor="@color/text_primary"
-                            android:imeOptions="actionDone" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <!-- Save + Cancel buttons -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:baselineAligned="false"
-                        android:gravity="end"
-                        android:layout_marginTop="4dp">
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnCancelEdit"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="48dp"
-                            android:text="@string/pd_btn_cancel"
-                            android:textColor="@color/primary"
-                            app:strokeColor="@color/primary"
-                            app:cornerRadius="12dp"
-                            android:layout_marginEnd="10dp"
-                            android:paddingStart="20dp"
-                            android:paddingEnd="20dp" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnSaveProfile"
-                            style="@style/Widget.Material3.Button"
-                            android:layout_width="wrap_content"
-                            android:layout_height="48dp"
-                            android:text="@string/pd_btn_save"
-                            android:textStyle="bold"
-                            app:icon="@drawable/ic_check"
-                            app:iconGravity="textStart"
-                            app:iconPadding="6dp"
-                            app:cornerRadius="12dp"
-                            android:paddingStart="20dp"
-                            android:paddingEnd="20dp" />
-                    </LinearLayout>
-
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+            <!-- REMOVED: edit mode card no longer needed (read-only profile) -->
 
             <View android:layout_width="match_parent" android:layout_height="32dp" />
 

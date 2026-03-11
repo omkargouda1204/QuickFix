@@ -51,7 +51,7 @@
                 android:src="@drawable/ic_services"
                 android:contentDescription="Refresh"
                 android:padding="9dp"
-                android:tint="@color/white" />
+                app:tint="@color/white" />
         </LinearLayout>
 
         <TextView
