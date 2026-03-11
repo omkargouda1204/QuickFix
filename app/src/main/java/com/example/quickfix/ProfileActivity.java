@@ -70,6 +70,11 @@ public class ProfileActivity extends AppCompatActivity {
     private volatile boolean hasApplied = false;
     private volatile String  applicationStatus = "";
 
+    // ── Cached profile data (populated after Supabase fetch) ──────────────
+    private volatile String cachedProfileName  = null;
+    private volatile String cachedProfileEmail = null;
+    private volatile String cachedProfilePhone = null;
+
     // ── Firebase + HTTP ───────────────────────────────────────────────────
     private FirebaseAuth mAuth;
     private static final OkHttpClient HTTP = new OkHttpClient.Builder()
@@ -163,7 +168,7 @@ public class ProfileActivity extends AppCompatActivity {
             // Try by UID first
             String url = BuildConfig.SUPABASE_URL
                     + "/rest/v1/users?firebase_uid=eq." + uid
-                    + "&select=name,email,is_user,is_service_provider,is_admin&limit=1";
+                    + "&select=name,email,phone,is_user,is_service_provider,is_admin&limit=1";
             try (Response r = HTTP.newCall(buildGet(url)).execute()) {
                 String body = r.body() != null ? r.body().string() : "[]";
                 if (r.code() == 200) {
@@ -176,7 +181,7 @@ public class ProfileActivity extends AppCompatActivity {
                 String enc = java.net.URLEncoder.encode(email, java.nio.charset.StandardCharsets.UTF_8.name());
                 String urlE = BuildConfig.SUPABASE_URL
                         + "/rest/v1/users?email=eq." + enc
-                        + "&select=name,email,is_user,is_service_provider,is_admin&limit=1";
+                        + "&select=name,email,phone,is_user,is_service_provider,is_admin&limit=1";
                 try (Response r2 = HTTP.newCall(buildGet(urlE)).execute()) {
                     String body2 = r2.body() != null ? r2.body().string() : "[]";
                     if (r2.code() == 200) {
@@ -193,6 +198,7 @@ public class ProfileActivity extends AppCompatActivity {
         UserModel m = new UserModel();
         m.name              = o.optString("name", "");
         m.email             = o.optString("email", "");
+        m.phone             = o.optString("phone", "");
         m.isAdmin           = o.optBoolean("is_admin", false);
         m.isServiceProvider = o.optBoolean("is_service_provider", false);
         m.isUser            = o.optBoolean("is_user", true);
@@ -200,6 +206,11 @@ public class ProfileActivity extends AppCompatActivity {
     }
 
     private void applyUserModel(UserModel m) {
+        // Cache for later use when opening ProfileDetailsActivity
+        if (m.name  != null && !m.name.isEmpty())  cachedProfileName  = m.name;
+        if (m.email != null && !m.email.isEmpty())  cachedProfileEmail = m.email;
+        if (m.phone != null && !m.phone.isEmpty())  cachedProfilePhone = m.phone;
+
         if (m.name  != null && !m.name.isEmpty())  { tvUserName.setText(m.name);  tvAvatarInitial.setText(String.valueOf(m.name.charAt(0)).toUpperCase()); }
         if (m.email != null && !m.email.isEmpty())   tvUserEmail.setText(m.email);
         isAdmin    = m.isAdmin;
@@ -251,7 +262,18 @@ public class ProfileActivity extends AppCompatActivity {
         if (btnBack != null) btnBack.setOnClickListener(v -> finish());
 
         menuMyProfile.setOnClickListener(v -> {
-            startActivity(new Intent(this, ProfileDetailsActivity.class));
+            Intent intent = new Intent(this, ProfileDetailsActivity.class);
+            // Pass cached data so ProfileDetailsActivity can show it instantly (no waiting)
+            FirebaseUser cur = mAuth.getCurrentUser();
+            if (cur != null) {
+                intent.putExtra(ProfileDetailsActivity.EXTRA_NAME,
+                        cachedProfileName  != null ? cachedProfileName  : safeStr(cur.getDisplayName()));
+                intent.putExtra(ProfileDetailsActivity.EXTRA_EMAIL,
+                        cachedProfileEmail != null ? cachedProfileEmail : safeStr(cur.getEmail()));
+                intent.putExtra(ProfileDetailsActivity.EXTRA_PHONE,
+                        cachedProfilePhone != null ? cachedProfilePhone : "");
+            }
+            startActivity(intent);
             overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
         });
 
@@ -262,10 +284,6 @@ public class ProfileActivity extends AppCompatActivity {
 
         menuListBusiness.setOnClickListener(v -> handleListBusinessClick());
 
-        menuMyBookings.setOnClickListener(v -> {
-            startActivity(new Intent(this, UserBookingsActivity.class));
-            overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
-        });
 
         menuNotifications.setOnClickListener(v -> {
             startActivity(new Intent(this, NotificationsActivity.class));
@@ -468,5 +486,8 @@ public class ProfileActivity extends AppCompatActivity {
                 .addHeader("Accept",        "application/json")
                 .build();
     }
+
+    /** Returns the string as-is, or "" if it is null. */
+    private static String safeStr(String s) { return s != null ? s : ""; }
 }
 
