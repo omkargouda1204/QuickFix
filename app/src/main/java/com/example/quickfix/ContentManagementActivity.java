@@ -8,20 +8,12 @@ import android.util.Log;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
-import android.widget.Toast;
-
-import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
-import org.json.JSONArray;
-
-import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
-import okhttp3.Call;
-import okhttp3.Callback;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -106,44 +98,39 @@ public class ContentManagementActivity extends BaseActivity {
 
     /**
      * Fetch all rows from `table` and return the row count on the main thread.
+     * Uses Thread (not enqueue) — same pattern as MainActivity which reliably fetches data.
      */
     private void fetchCount(String table, CountCallback callback) {
-        // Use select=id to minimise payload; HEAD count would need RPC, this is simpler.
-        String url = SUPABASE_URL + "/rest/v1/" + table + "?select=id";
+        final String url = SUPABASE_URL + "/rest/v1/" + table + "?select=id";
+        Log.d(TAG, "fetchCount(" + table + ") URL=" + url);
 
-        Request req = new Request.Builder()
-                .url(url)
-                .addHeader("apikey",        ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .addHeader("Accept",        "application/json")
-                .get()
-                .build();
-
-        http.newCall(req).enqueue(new Callback() {
-            @Override public void onFailure(Call call, IOException e) {
-                Log.e(TAG, "fetchCount(" + table + ") failed: " + e.getMessage());
+        new Thread(() -> {
+            try {
+                Request req = new Request.Builder()
+                        .url(url)
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept",        "application/json")
+                        .build();
+                try (Response resp = http.newCall(req).execute()) {
+                    int    code = resp.code();
+                    String body = resp.body() != null ? resp.body().string() : "[]";
+                    Log.d(TAG, "fetchCount(" + table + ") HTTP " + code + " body=" + body);
+                    int count = 0;
+                    if (code == 200) {
+                        try { count = new org.json.JSONArray(body).length(); }
+                        catch (Exception ex) { Log.e(TAG, "parse error: " + ex.getMessage()); }
+                    } else {
+                        Log.e(TAG, "fetchCount(" + table + ") HTTP " + code + ": " + body);
+                    }
+                    final int finalCount = count;
+                    main.post(() -> callback.onCount(finalCount));
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "fetchCount(" + table + ") exception: " + e.getMessage(), e);
                 main.post(() -> callback.onCount(0));
             }
-
-            @Override public void onResponse(Call call, Response resp) throws IOException {
-                int    code = resp.code();
-                String body = resp.body() != null ? resp.body().string() : "[]";
-                resp.close();
-                int count = 0;
-                if (code == 200) {
-                    try { count = new JSONArray(body).length(); }
-                    catch (Exception ex) { Log.e(TAG, "parse error: " + ex.getMessage()); }
-                } else {
-                    Log.e(TAG, "fetchCount(" + table + ") HTTP " + code + ": " + body);
-                    main.post(() ->
-                            Toast.makeText(ContentManagementActivity.this,
-                                    "Failed to load " + table + " count (HTTP " + code + ")",
-                                    Toast.LENGTH_SHORT).show());
-                }
-                final int finalCount = count;
-                main.post(() -> callback.onCount(finalCount));
-            }
-        });
+        }).start();
     }
 
     @Override

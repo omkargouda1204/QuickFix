@@ -89,6 +89,9 @@ public class FcmNotificationHelper {
                             "provider_application", null);
                 }
 
+                // 3. Save in-app notification for all admins (broadcast: userId=null)
+                saveInAppNotification(null, title, body, "provider_application");
+
                 Log.d(TAG, "notifyAdminsNewApplication: sent to " + adminTokens.size() + " admins");
 
             } catch (Exception e) {
@@ -123,6 +126,9 @@ public class FcmNotificationHelper {
 
                 sendViaEdgeFunction(token, title, body,
                         "provider_approved", providerFirebaseUid);
+
+                // Save in-app notification for the provider
+                saveInAppNotification(providerFirebaseUid, title, body, "provider_approved");
 
                 Log.d(TAG, "notifyProviderApproved: sent to uid=" + providerFirebaseUid);
 
@@ -160,10 +166,62 @@ public class FcmNotificationHelper {
                 sendViaEdgeFunction(token, title, body,
                         "provider_rejected", providerFirebaseUid);
 
+                // Save in-app notification for the provider
+                saveInAppNotification(providerFirebaseUid, title, body, "provider_rejected");
+
                 Log.d(TAG, "notifyProviderRejected: sent to uid=" + providerFirebaseUid);
 
             } catch (Exception e) {
                 Log.w(TAG, "notifyProviderRejected failed (non-fatal): " + e.getMessage());
+            }
+        }).start();
+    }
+
+    // ── Public single-token send (used by OfferManagement) ───────────────
+
+    /**
+     * Send a single FCM push notification to one device token for an offer.
+     * Called from OfferManagementActivity for each user token found.
+     */
+    public static void sendOfferFcm(String deviceToken, String title, String body) {
+        new Thread(() -> sendViaEdgeFunction(deviceToken, title, body, "offer", null)).start();
+    }
+
+    // ── In-App Notification Storage ───────────────────────────────────────
+
+    /**
+     * Stores a notification record in the `notifications` table so it appears
+     * in the user's in-app notification list. userId = null = broadcast to all admins.
+     */
+    private static void saveInAppNotification(String userId, String title,
+                                               String message, String type) {
+        new Thread(() -> {
+            try {
+                JSONObject notif = new JSONObject();
+                notif.put("id",      java.util.UUID.randomUUID().toString());
+                notif.put("title",   title);
+                notif.put("message", message);
+                notif.put("type",    type != null ? type : "general");
+                notif.put("is_read", false);
+                // user_id = null means broadcast (visible to admin / all users)
+                if (userId != null && !userId.isEmpty()) {
+                    notif.put("user_id", userId);
+                }
+                // created_at handled by DB default
+
+                try (Response resp = HTTP.newCall(new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/notifications")
+                        .post(RequestBody.create(notif.toString(), JSON_TYPE))
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type",  "application/json")
+                        .addHeader("Prefer",        "return=minimal")
+                        .build()).execute()) {
+                    Log.d(TAG, "saveInAppNotification HTTP " + resp.code()
+                            + " type=" + type + " userId=" + userId);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "saveInAppNotification failed (non-fatal): " + e.getMessage());
             }
         }).start();
     }
@@ -180,8 +238,8 @@ public class FcmNotificationHelper {
         String url = SUPABASE_URL
                 + "/rest/v1/users"
                 + "?is_admin=eq.true"
-                + "&select=fcm_token"
-                + "&fcm_token=not.is.null";   // skip rows with no token
+                + "&fcm_token=not.is.null"
+                + "&select=fcm_token";
 
         Request req = new Request.Builder()
                 .url(url)
@@ -217,6 +275,7 @@ public class FcmNotificationHelper {
         String url = SUPABASE_URL
                 + "/rest/v1/users"
                 + "?firebase_uid=eq." + firebaseUid
+                + "&fcm_token=not.is.null"
                 + "&select=fcm_token"
                 + "&limit=1";
 

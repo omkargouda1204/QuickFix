@@ -2,6 +2,8 @@ package com.example.quickfix;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -18,6 +20,14 @@ import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+
+import org.json.JSONArray;
+
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 /**
  * AdminDashboardActivity — Premium Material Design 3 Admin Panel.
@@ -44,6 +54,9 @@ public class AdminDashboardActivity extends BaseActivity {
     private TextView statTotalUsers, statTotalProviders,
                      statActiveBookings, statPendingApprovals;
 
+    // ── Promotions overview ───────────────────────────────────────────────
+    private TextView dashTotalBanners, dashTotalOffers;
+
     // ── Feature card buttons ──────────────────────────────────────────────
     private MaterialButton btnBusinessApprovals, btnUserManagement,
                            btnServiceManagement, btnContentManagement,
@@ -58,6 +71,13 @@ public class AdminDashboardActivity extends BaseActivity {
 
     // ── Firebase ──────────────────────────────────────────────────────────
     private FirebaseAuth mAuth;
+
+    // ── HTTP ──────────────────────────────────────────────────────────────
+    private final OkHttpClient http = new OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .build();
+    private final Handler mainH = new Handler(Looper.getMainLooper());
 
     // ── State ─────────────────────────────────────────────────────────────
     private String adminName  = "Admin";
@@ -77,6 +97,7 @@ public class AdminDashboardActivity extends BaseActivity {
         setupBottomNavigation();
         loadAdminNameFromSupabase();
         loadQuickStats();
+        loadBannerOfferCounts();
 
         // Handle back press with AndroidX dispatcher (replaces deprecated onBackPressed)
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
@@ -103,6 +124,10 @@ public class AdminDashboardActivity extends BaseActivity {
         statTotalProviders   = findViewById(R.id.statTotalProviders);
         statActiveBookings   = findViewById(R.id.statActiveBookings);
         statPendingApprovals = findViewById(R.id.statPendingApprovals);
+
+        // Promotions overview
+        dashTotalBanners = findViewById(R.id.dashTotalBanners);
+        dashTotalOffers  = findViewById(R.id.dashTotalOffers);
 
         cardOpenUserView       = findViewById(R.id.cardOpenUserView);
         cardBusinessApprovals  = findViewById(R.id.cardBusinessApprovals);
@@ -157,10 +182,10 @@ public class AdminDashboardActivity extends BaseActivity {
     // ── Click listeners ───────────────────────────────────────────────────
 
     private void setupClickListeners() {
-        // Header: notifications
+        // Header: notifications → open AdminNotificationsActivity
         View btnNotif = findViewById(R.id.btnNotifications);
         if (btnNotif != null) btnNotif.setOnClickListener(v ->
-                Toast.makeText(this, "Notifications — coming soon", Toast.LENGTH_SHORT).show());
+                startActivity(new Intent(this, AdminNotificationsActivity.class)));
 
         // Header: avatar → bottom sheet
         View btnAvatar = findViewById(R.id.btnAdminAvatar);
@@ -179,8 +204,7 @@ public class AdminDashboardActivity extends BaseActivity {
         if (cardContentManagement != null)
             cardContentManagement.setOnClickListener(v -> goTo(ContentManagementActivity.class));
         if (cardReports != null)
-            cardReports.setOnClickListener(v ->
-                    Toast.makeText(this, "Reports & Analytics — coming soon", Toast.LENGTH_SHORT).show());
+            cardReports.setOnClickListener(v -> goTo(ReportsAnalyticsActivity.class));
 
         // Feature card buttons (individual buttons also work)
         if (btnBusinessApprovals != null)
@@ -192,10 +216,19 @@ public class AdminDashboardActivity extends BaseActivity {
         if (btnContentManagement != null)
             btnContentManagement.setOnClickListener(v -> goTo(ContentManagementActivity.class));
         if (btnViewReports != null)
-            btnViewReports.setOnClickListener(v -> {
-                Intent intent = new Intent(this, ReportsAnalyticsActivity.class);
-                startActivity(intent);
-            });
+            btnViewReports.setOnClickListener(v -> goTo(ReportsAnalyticsActivity.class));
+
+        // Promotions overview — Banner card
+        View cardDashBanners    = findViewById(R.id.cardDashBanners);
+        View btnDashManageBanners = findViewById(R.id.btnDashManageBanners);
+        if (cardDashBanners     != null) cardDashBanners.setOnClickListener(v     -> goTo(BannerManagementActivity.class));
+        if (btnDashManageBanners!= null) btnDashManageBanners.setOnClickListener(v-> goTo(BannerManagementActivity.class));
+
+        // Promotions overview — Offer card
+        View cardDashOffers    = findViewById(R.id.cardDashOffers);
+        View btnDashManageOffers = findViewById(R.id.btnDashManageOffers);
+        if (cardDashOffers     != null) cardDashOffers.setOnClickListener(v      -> goTo(OfferManagementActivity.class));
+        if (btnDashManageOffers!= null) btnDashManageOffers.setOnClickListener(v -> goTo(OfferManagementActivity.class));
     }
 
     // ── Bottom Navigation ─────────────────────────────────────────────────
@@ -377,6 +410,63 @@ public class AdminDashboardActivity extends BaseActivity {
                 }
             }
         });
+    }
+
+    // ── Load Banner + Offer counts for dashboard overview ────────────────
+
+    private void loadBannerOfferCounts() {
+        loadRowCount("banners", dashTotalBanners);
+        loadRowCount("offers",  dashTotalOffers);
+    }
+
+    /**
+     * Fetches all rows from `table` using Thread-based OkHttp (same pattern as MainActivity).
+     * Parses JSON array length and posts result to UI thread.
+     */
+    private void loadRowCount(String table, TextView target) {
+        if (target == null) return;
+        target.setText("…");
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/" + table + "?select=id";
+        Log.d(TAG, "loadRowCount(" + table + ") → " + url);
+
+        new Thread(() -> {
+            try {
+                Request req = new Request.Builder()
+                        .url(url)
+                        .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Accept",        "application/json")
+                        .build();
+                try (Response resp = http.newCall(req).execute()) {
+                    int    code = resp.code();
+                    String body = resp.body() != null ? resp.body().string() : "[]";
+                    Log.d(TAG, "loadRowCount(" + table + ") HTTP " + code
+                            + " body_len=" + body.length());
+                    int count = 0;
+                    if (code == 200) {
+                        try { count = new JSONArray(body).length(); }
+                        catch (Exception ex) { Log.e(TAG, "parse error: " + ex.getMessage()); }
+                    } else {
+                        Log.e(TAG, "loadRowCount(" + table + ") FAILED HTTP " + code + ": " + body);
+                    }
+                    final int finalCount = count;
+                    mainH.post(() -> {
+                        if (target != null) target.setText(String.valueOf(finalCount));
+                    });
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "loadRowCount(" + table + ") exception: " + e.getMessage(), e);
+                mainH.post(() -> { if (target != null) target.setText("—"); });
+            }
+        }).start();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Refresh banner/offer counts every time admin returns to dashboard
+        loadBannerOfferCounts();
+        loadQuickStats();
     }
 
     // ── Navigation helper ─────────────────────────────────────────────────

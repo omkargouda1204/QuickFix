@@ -16,7 +16,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -33,15 +32,12 @@ import com.google.firebase.auth.FirebaseUser;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-import okhttp3.Call;
-import okhttp3.Callback;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -55,15 +51,15 @@ import okhttp3.Response;
  */
 public class OfferManagementActivity extends BaseActivity {
 
-    private static final String TAG = "OfferMgmt";
+    private static final String TAG          = "OfferMgmt";
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY     = BuildConfig.SUPABASE_ANON_KEY;
-    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    private static final MediaType JSON_MT   = MediaType.get("application/json; charset=utf-8");
 
     private final OkHttpClient http = new OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(20, TimeUnit.SECONDS)
             .build();
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -74,7 +70,7 @@ public class OfferManagementActivity extends BaseActivity {
     private TextView           tvTotalOffers, tvActiveOffers, tvExpiredOffers;
     private ExtendedFloatingActionButton fabAdd;
 
-    // Adapter
+    // Data
     private OfferAdapter      adapter;
     private final List<Offer> offers = new ArrayList<>();
 
@@ -111,93 +107,83 @@ public class OfferManagementActivity extends BaseActivity {
 
     private void setupRecyclerView() {
         adapter = new OfferAdapter(this, offers, new OfferAdapter.Listener() {
-            @Override public void onEdit(Offer offer) { showAddEditDialog(offer); }
-            @Override public void onDelete(Offer offer) { confirmDelete(offer); }
-            @Override public void onToggleActive(Offer offer, boolean active) {
-                toggleOfferActive(offer, active);
-            }
+            @Override public void onEdit(Offer o)   { showAddEditDialog(o); }
+            @Override public void onDelete(Offer o) { confirmDelete(o); }
+            @Override public void onToggleActive(Offer o, boolean active) { toggleOfferActive(o, active); }
         });
         rvOffers.setLayoutManager(new LinearLayoutManager(this));
         rvOffers.setAdapter(adapter);
     }
 
     private void setupSwipeRefresh() {
-        swipeRefresh.setColorSchemeResources(R.color.accent_orange);
+        swipeRefresh.setColorSchemeResources(R.color.primary);
         swipeRefresh.setOnRefreshListener(this::loadOffers);
     }
 
     private void setupFab() {
-        fabAdd.setOnClickListener(v -> showAddEditDialog(null));
+        if (fabAdd != null) fabAdd.setOnClickListener(v -> showAddEditDialog(null));
     }
 
-    // ── Load Offers ────────────────────────────────────────────────────────
+    // ── LOAD OFFERS ── Thread-based (same pattern as MainActivity) ─────────
     private void loadOffers() {
         setLoading(true);
-        // Fetch ALL rows — admin sees everything, no filters applied
-        String url = SUPABASE_URL + "/rest/v1/offers?select=*";
+        String url = SUPABASE_URL + "/rest/v1/offers?select=*&order=created_at.desc";
+        Log.d(TAG, "loadOffers → " + url);
 
-        Log.d(TAG, "loadOffers URL: " + url);
-
-        Request req = new Request.Builder()
-                .url(url)
-                .addHeader("apikey",        ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .addHeader("Accept",        "application/json")
-                .addHeader("Content-Type",  "application/json")
-                .get()
-                .build();
-
-        http.newCall(req).enqueue(new Callback() {
-            @Override public void onFailure(Call call, IOException e) {
-                Log.e(TAG, "loadOffers onFailure: " + e.getMessage());
+        new Thread(() -> {
+            try {
+                Request req = new Request.Builder()
+                        .url(url)
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept",        "application/json")
+                        .build();
+                try (Response resp = http.newCall(req).execute()) {
+                    int    code = resp.code();
+                    String body = resp.body() != null ? resp.body().string() : "[]";
+                    Log.d(TAG, "loadOffers HTTP " + code + " | body_len=" + body.length());
+                    main.post(() -> {
+                        setLoading(false);
+                        swipeRefresh.setRefreshing(false);
+                        if (code == 200) {
+                            parseOffers(body);
+                        } else {
+                            Log.e(TAG, "loadOffers FAILED " + code + ": " + body);
+                            showError("Failed to load offers (HTTP " + code + ")");
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "loadOffers exception: " + e.getMessage(), e);
                 main.post(() -> {
                     setLoading(false);
                     swipeRefresh.setRefreshing(false);
                     showError("Network error: " + e.getMessage());
                 });
             }
-            @Override public void onResponse(Call call, Response resp) throws IOException {
-                int    code = resp.code();
-                String body = resp.body() != null ? resp.body().string() : "[]";
-                Log.d(TAG, "loadOffers HTTP " + code);
-                Log.d(TAG, "loadOffers BODY: " + body);
-                main.post(() -> {
-                    setLoading(false);
-                    swipeRefresh.setRefreshing(false);
-                    if (code == 200) {
-                        parseOffers(body);
-                    } else {
-                        Log.e(TAG, "loadOffers FAILED HTTP " + code + ": " + body);
-                        showError("Load failed: HTTP " + code + "\n" + body);
-                    }
-                });
-            }
-        });
+        }).start();
     }
 
     private void parseOffers(String json) {
         offers.clear();
         try {
             JSONArray arr = new JSONArray(json);
-            Log.d(TAG, "parseOffers: received " + arr.length() + " rows");
+            Log.d(TAG, "parseOffers: " + arr.length() + " rows received");
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
-                Offer offer = new Offer();
+                Offer offer            = new Offer();
                 offer.id               = o.optString("id");
                 offer.title            = o.optString("title");
                 offer.description      = o.optString("description");
-                offer.offerCode        = o.optString("offer_code");        // exact DB column
+                offer.offerCode        = o.optString("offer_code");
                 offer.discountType     = o.optString("discount_type", "percentage");
-                offer.discountValue    = o.optDouble("discount_value", 0); // exact DB column
+                offer.discountValue    = o.optDouble("discount_value", 0);
                 offer.minBookingAmount = o.optDouble("min_booking_amount", 0);
                 offer.expiryDate       = o.optString("expiry_date");
                 offer.createdAt        = o.optString("created_at");
-                offer.isActive         = o.optBoolean("is_active", true);  // exact DB column
+                offer.isActive         = o.optBoolean("is_active", true);
                 offer.status           = offer.isActive ? "active" : "inactive";
                 offers.add(offer);
-                Log.d(TAG, "  offer[" + i + "]: id=" + offer.id
-                        + " title=" + offer.title + " code=" + offer.offerCode
-                        + " isActive=" + offer.isActive);
             }
         } catch (Exception e) {
             Log.e(TAG, "parseOffers exception: " + e.getMessage(), e);
@@ -205,30 +191,27 @@ public class OfferManagementActivity extends BaseActivity {
         Log.d(TAG, "parseOffers: parsed " + offers.size() + " offers");
         adapter.setItems(offers);
         updateStats();
-        if (offers.isEmpty()) {
-            emptyStateLayout.setVisibility(View.VISIBLE);
-            rvOffers.setVisibility(View.GONE);
-        } else {
-            emptyStateLayout.setVisibility(View.GONE);
-            rvOffers.setVisibility(View.VISIBLE);
-        }
+        showListOrEmpty();
+    }
+
+    private void showListOrEmpty() {
+        boolean empty = offers.isEmpty();
+        if (emptyStateLayout != null) emptyStateLayout.setVisibility(empty ? View.VISIBLE : View.GONE);
+        if (rvOffers         != null) rvOffers.setVisibility(empty ? View.GONE : View.VISIBLE);
     }
 
     private void updateStats() {
-        int total   = offers.size();
-        int active  = 0;
-        int expired = 0;
         String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
                 java.util.Locale.getDefault()).format(new java.util.Date());
+        int total = offers.size(), active = 0, expired = 0;
         for (Offer o : offers) {
             if (o.isActive) active++;
             if (o.expiryDate != null && !o.expiryDate.isEmpty()
                     && o.expiryDate.compareTo(today) < 0) expired++;
         }
-        if (tvTotalOffers  != null) tvTotalOffers.setText(String.valueOf(total));
-        if (tvActiveOffers != null) tvActiveOffers.setText(String.valueOf(active));
-        if (tvExpiredOffers!= null) tvExpiredOffers.setText(String.valueOf(expired));
-        Log.d(TAG, "updateStats: total=" + total + " active=" + active + " expired=" + expired);
+        if (tvTotalOffers   != null) tvTotalOffers.setText(String.valueOf(total));
+        if (tvActiveOffers  != null) tvActiveOffers.setText(String.valueOf(active));
+        if (tvExpiredOffers != null) tvExpiredOffers.setText(String.valueOf(expired));
     }
 
     private void showError(String msg) {
@@ -237,28 +220,25 @@ public class OfferManagementActivity extends BaseActivity {
         if (rvOffers         != null) rvOffers.setVisibility(View.GONE);
     }
 
-    // ── Add / Edit Dialog ─────────────────────────────────────────────────
+    // ── ADD / EDIT DIALOG ─────────────────────────────────────────────────
     private void showAddEditDialog(Offer existing) {
         boolean isEdit = (existing != null);
+        View dv = LayoutInflater.from(this).inflate(R.layout.dialog_add_edit_offer, null);
 
-        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_edit_offer, null);
+        TextView             tvTitle   = dv.findViewById(R.id.tvDialogTitle);
+        TextInputEditText    etTitle   = dv.findViewById(R.id.etOfferTitle);
+        TextInputEditText    etDesc    = dv.findViewById(R.id.etOfferDescription);
+        TextInputEditText    etCode    = dv.findViewById(R.id.etOfferCode);
+        AutoCompleteTextView actvType  = dv.findViewById(R.id.actvDiscountType);
+        TextInputEditText    etValue   = dv.findViewById(R.id.etDiscountValue);
+        TextInputEditText    etMinAmt  = dv.findViewById(R.id.etMinAmount);
+        TextInputEditText    etExpiry  = dv.findViewById(R.id.etOfferExpiry);
+        SwitchMaterial       swActive  = dv.findViewById(R.id.switchOfferActive);
+        CheckBox             cbNotif   = dv.findViewById(R.id.cbSendNotification);
 
-        TextView          tvTitle     = dialogView.findViewById(R.id.tvDialogTitle);
-        TextInputEditText etTitle     = dialogView.findViewById(R.id.etOfferTitle);
-        TextInputEditText etDesc      = dialogView.findViewById(R.id.etOfferDescription);
-        TextInputEditText etCode      = dialogView.findViewById(R.id.etOfferCode);
-        AutoCompleteTextView actvType = dialogView.findViewById(R.id.actvDiscountType);
-        TextInputEditText etValue     = dialogView.findViewById(R.id.etDiscountValue);
-        TextInputEditText etMinAmt    = dialogView.findViewById(R.id.etMinAmount);
-        TextInputEditText etExpiry    = dialogView.findViewById(R.id.etOfferExpiry);
-        SwitchMaterial    switchActive= dialogView.findViewById(R.id.switchOfferActive);
-        CheckBox          cbNotif     = dialogView.findViewById(R.id.cbSendNotification);
-
-        // Discount type dropdown
         String[] types = {"percentage", "fixed"};
-        ArrayAdapter<String> typeAdapter = new ArrayAdapter<>(this,
-                android.R.layout.simple_dropdown_item_1line, types);
-        actvType.setAdapter(typeAdapter);
+        actvType.setAdapter(new ArrayAdapter<>(this,
+                android.R.layout.simple_dropdown_item_1line, types));
 
         tvTitle.setText(isEdit ? "Edit Offer" : "Add Offer");
 
@@ -270,286 +250,272 @@ public class OfferManagementActivity extends BaseActivity {
             etValue.setText(String.valueOf((int) existing.discountValue));
             etMinAmt.setText(String.valueOf((int) existing.minBookingAmount));
             etExpiry.setText(existing.expiryDate);
-            switchActive.setChecked(existing.isActive);
-            cbNotif.setChecked(false); // no notification on edit by default
+            swActive.setChecked(existing.isActive);
+            if (cbNotif != null) cbNotif.setChecked(false);
         }
 
-        // Date picker
         etExpiry.setOnClickListener(v -> showDatePicker(etExpiry));
         etExpiry.setOnFocusChangeListener((v, f) -> { if (f) showDatePicker(etExpiry); });
 
-        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
-                .setView(dialogView)
-                .create();
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(dv).create();
+        dv.findViewById(R.id.btnCancel).setOnClickListener(v -> dialog.dismiss());
+        dv.findViewById(R.id.btnSave).setOnClickListener(v -> {
+            String  title      = getET(etTitle);
+            String  desc       = getET(etDesc);
+            String  code       = getET(etCode).toUpperCase();
+            String  type       = actvType.getText().toString().trim();
+            String  valStr     = getET(etValue);
+            String  minStr     = getET(etMinAmt);
+            String  expiry     = getET(etExpiry);
+            boolean active     = swActive.isChecked();
+            boolean sendNotif  = cbNotif != null && cbNotif.isChecked() && !isEdit;
 
-        dialogView.findViewById(R.id.btnCancel).setOnClickListener(v -> dialog.dismiss());
-        dialogView.findViewById(R.id.btnSave).setOnClickListener(v -> {
-            String title    = getText(etTitle);
-            String desc     = getText(etDesc);
-            String code     = getText(etCode).toUpperCase();
-            String type     = actvType.getText().toString().trim();
-            String valStr   = getText(etValue);
-            String minStr   = getText(etMinAmt);
-            String expiry   = getText(etExpiry);
-            boolean active  = switchActive.isChecked();
-            boolean sendNotif = cbNotif.isChecked() && !isEdit;
-
-            // Validation
             if (title.isEmpty()) {
-                setError(dialogView.findViewById(R.id.tilOfferTitle), "Title is required");
-                return;
+                setFieldError(dv.findViewById(R.id.tilOfferTitle), "Title is required"); return;
             }
             if (code.isEmpty()) {
-                setError(dialogView.findViewById(R.id.tilOfferCode), "Offer code is required");
-                return;
+                setFieldError(dv.findViewById(R.id.tilOfferCode), "Code is required"); return;
             }
             if (type.isEmpty()) {
-                Toast.makeText(this, "Select discount type", Toast.LENGTH_SHORT).show();
-                return;
+                Toast.makeText(this, "Select discount type", Toast.LENGTH_SHORT).show(); return;
             }
             if (valStr.isEmpty()) {
-                setError(dialogView.findViewById(R.id.tilDiscountValue), "Discount value is required");
-                return;
+                setFieldError(dv.findViewById(R.id.tilDiscountValue), "Value is required"); return;
             }
 
-            double value  = 0;
-            double minAmt = 0;
+            double value  = 0, minAmt = 0;
             try { value  = Double.parseDouble(valStr); } catch (Exception ignored) {}
-            try { minAmt = Double.parseDouble(minStr); } catch (Exception ignored) {}
+            try { minAmt = Double.parseDouble(minStr);  } catch (Exception ignored) {}
 
             saveOffer(title, desc, code, type, value, minAmt, expiry, active,
-                    isEdit ? existing.id : null, sendNotif, title, dialog);
+                    isEdit ? existing.id : null, sendNotif, dialog);
         });
-
         dialog.show();
     }
 
+    // ── SAVE OFFER (Thread-based) ─────────────────────────────────────────
     private void saveOffer(String title, String desc, String code, String discountType,
-                           double discountValue, double minAmount, String expiryDate,
-                           boolean isActive, String existingId, boolean sendNotif,
-                           String notifTitle, AlertDialog dialog) {
-        try {
-            JSONObject body = new JSONObject();
-            body.put("title",              title);
-            body.put("description",        desc);
-            body.put("offer_code",         code);          // exact DB column name
-            body.put("discount_type",      discountType);
-            body.put("discount_value",     discountValue); // exact DB column name (numeric)
-            body.put("min_booking_amount", minAmount);
-            body.put("expiry_date",        expiryDate.isEmpty() ? JSONObject.NULL : expiryDate);
-            body.put("is_active",          isActive);
-            // NO status, coupon_code, or discount_percent columns in DB
-
-            RequestBody rb = RequestBody.create(body.toString(), JSON);
-            Request.Builder rb2 = new Request.Builder()
-                    .addHeader("apikey", ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Prefer", "return=minimal");
-
-            if (existingId != null) {
-                rb2.url(SUPABASE_URL + "/rest/v1/offers?id=eq." + existingId).patch(rb);
-            } else {
-                body.put("id", UUID.randomUUID().toString());
-                rb = RequestBody.create(body.toString(), JSON);
-                rb2.url(SUPABASE_URL + "/rest/v1/offers").post(rb);
-            }
-
-            String discountStr = discountType.equals("percentage")
-                    ? (int) discountValue + "% OFF"
-                    : "₹" + (int) discountValue + " OFF";
-
-            http.newCall(rb2.build()).enqueue(new Callback() {
-                @Override public void onFailure(Call call, IOException e) {
-                    main.post(() -> Toast.makeText(OfferManagementActivity.this,
-                            "Save failed: " + e.getMessage(), Toast.LENGTH_SHORT).show());
-                }
-                @Override public void onResponse(Call call, Response resp) throws IOException {
-                    main.post(() -> {
-                        if (resp.isSuccessful()) {
-                            dialog.dismiss();
-                            Toast.makeText(OfferManagementActivity.this,
-                                    existingId != null ? "Offer updated" : "Offer created",
-                                    Toast.LENGTH_SHORT).show();
-                            loadOffers();
-
-                            // Send FCM push notification to all users if requested
-                            if (sendNotif) {
-                                sendOfferPushNotification(notifTitle, code, discountStr);
-                            }
-                        } else {
-                            try {
-                                String err = resp.body() != null ? resp.body().string() : "";
-                                Toast.makeText(OfferManagementActivity.this,
-                                        "Error " + resp.code() + ": " + err, Toast.LENGTH_LONG).show();
-                            } catch (IOException ignored) {}
-                        }
-                    });
-                }
-            });
-        } catch (Exception e) {
-            Log.e(TAG, "saveOffer: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Sends an FCM push notification to all users by fetching their tokens from Supabase
-     * and storing a notification record in the `notifications` table.
-     * The actual FCM delivery to each device is handled via the `notifications` table
-     * which is monitored, OR via server-side triggers.
-     *
-     * For in-app: we insert a broadcast notification row that all users will see.
-     */
-    private void sendOfferPushNotification(String offerTitle, String code, String discountStr) {
+                            double discountValue, double minAmount, String expiryDate,
+                            boolean isActive, String existingId, boolean sendNotif,
+                            AlertDialog dialog) {
         new Thread(() -> {
             try {
-                // Insert a broadcast notification into `notifications` table
-                // All users will see it when they open the notifications screen
-                JSONObject notif = new JSONObject();
-                notif.put("id",       UUID.randomUUID().toString());
-                notif.put("user_id",  JSONObject.NULL);  // null = broadcast to all
-                notif.put("title",    "New Offer Available 🎉");
-                notif.put("message",  "Get " + discountStr + " on your booking. Use code " + code + " now!");
-                notif.put("type",     "offer");
-                notif.put("is_read",  false);
+                JSONObject body = new JSONObject();
+                body.put("title",              title);
+                body.put("description",        desc != null ? desc : "");
+                body.put("offer_code",         code);
+                body.put("discount_type",      discountType);
+                body.put("discount_value",     discountValue);
+                body.put("min_booking_amount", minAmount);
+                body.put("expiry_date",        (expiryDate == null || expiryDate.isEmpty())
+                        ? JSONObject.NULL : expiryDate);
+                body.put("is_active", isActive);
 
-                RequestBody rb = RequestBody.create(notif.toString(), JSON);
+                String url;
+                String method;
+                if (existingId != null && !existingId.isEmpty()) {
+                    url    = SUPABASE_URL + "/rest/v1/offers?id=eq." + existingId;
+                    method = "PATCH";
+                } else {
+                    body.put("id", UUID.randomUUID().toString());
+                    url    = SUPABASE_URL + "/rest/v1/offers";
+                    method = "POST";
+                }
+
                 Request req = new Request.Builder()
-                        .url(SUPABASE_URL + "/rest/v1/notifications")
-                        .addHeader("apikey", ANON_KEY)
+                        .url(url)
+                        .method(method, RequestBody.create(body.toString(), JSON_MT))
+                        .addHeader("apikey",        ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type", "application/json")
-                        .addHeader("Prefer", "return=minimal")
-                        .post(rb)
+                        .addHeader("Content-Type",  "application/json")
+                        .addHeader("Prefer",        "return=minimal")
                         .build();
+
                 try (Response resp = http.newCall(req).execute()) {
+                    int    respCode = resp.code();
+                    String respBody = resp.body() != null ? resp.body().string() : "";
+                    Log.d(TAG, "saveOffer " + method + " HTTP " + respCode);
                     main.post(() -> {
-                        if (resp.isSuccessful()) {
-                            Log.d(TAG, "Broadcast notification stored in DB");
+                        if (respCode == 200 || respCode == 201 || respCode == 204) {
+                            dialog.dismiss();
                             Toast.makeText(OfferManagementActivity.this,
-                                    "Offer notification sent to all users 🎉",
+                                    existingId != null ? "Offer updated ✓" : "Offer created ✓",
                                     Toast.LENGTH_SHORT).show();
+                            loadOffers(); // auto-refresh
+                            if (sendNotif) {
+                                String discStr = discountType.equals("percentage")
+                                        ? (int) discountValue + "% OFF"
+                                        : "₹" + (int) discountValue + " OFF";
+                                sendOfferNotification(title, code, discStr);
+                            }
+                        } else {
+                            Log.e(TAG, "saveOffer FAILED " + respCode + ": " + respBody);
+                            Toast.makeText(OfferManagementActivity.this,
+                                    "Save failed (HTTP " + respCode + "): " + respBody,
+                                    Toast.LENGTH_LONG).show();
                         }
                     });
                 }
             } catch (Exception e) {
-                Log.e(TAG, "sendOfferPushNotification: " + e.getMessage());
+                Log.e(TAG, "saveOffer exception: " + e.getMessage(), e);
+                main.post(() -> Toast.makeText(OfferManagementActivity.this,
+                        "Error: " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
         }).start();
-
-        // Also send FCM push via individual user tokens
-        sendFcmToAllUsers(offerTitle, code, discountStr);
     }
 
-    /**
-     * Fetches all user FCM tokens from the `users` table and sends FCM push
-     * to each one via Supabase-stored tokens.
-     * NOTE: For production, this should be done server-side (Supabase Edge Function / Cloud Function).
-     * Here we save the notification record and let the server-side function handle FCM delivery.
-     */
-    private void sendFcmToAllUsers(String offerTitle, String code, String discountStr) {
-        // Fetch all fcm_tokens from users table, then send push
-        // This is best handled via a Supabase Edge Function or Firebase Cloud Messaging Admin SDK
-        // Here we log the intent and show user feedback
-        Log.d(TAG, "FCM push notification triggered for offer: " + offerTitle + " (" + code + ")");
-        // In production: call a backend endpoint / Edge Function that sends FCM to all tokens
-    }
+    // ── SEND OFFER NOTIFICATION ────────────────────────────────────────────
+    private void sendOfferNotification(String offerTitle, String code, String discStr) {
+        new Thread(() -> {
+            try {
+                // 1. Store broadcast notification in `notifications` table (in-app)
+                JSONObject notif = new JSONObject();
+                notif.put("id",      UUID.randomUUID().toString());
+                notif.put("title",   "New Offer Available 🎉");
+                notif.put("message", "Get " + discStr + " on your booking. Use code " + code + " now!");
+                notif.put("type",    "offer");
+                notif.put("is_read", false);
+                // user_id = null → broadcast visible to all users and admin
 
-    private void toggleOfferActive(Offer offer, boolean newState) {
-        try {
-            JSONObject body = new JSONObject();
-            body.put("is_active", newState);
-            // NO status column in DB — only is_active (boolean)
-            RequestBody rb = RequestBody.create(body.toString(), JSON);
-            Request req = new Request.Builder()
-                    .url(SUPABASE_URL + "/rest/v1/offers?id=eq." + offer.id)
-                    .addHeader("apikey", ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Prefer", "return=minimal")
-                    .patch(rb)
-                    .build();
-            http.newCall(req).enqueue(new Callback() {
-                @Override public void onFailure(Call call, IOException e) {
-                    main.post(() -> Toast.makeText(OfferManagementActivity.this,
-                            "Update failed", Toast.LENGTH_SHORT).show());
+                try (Response r = http.newCall(new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/notifications")
+                        .post(RequestBody.create(notif.toString(), JSON_MT))
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type",  "application/json")
+                        .addHeader("Prefer",        "return=minimal")
+                        .build()).execute()) {
+                    Log.d(TAG, "sendOfferNotification store HTTP " + r.code());
                 }
-                @Override public void onResponse(Call call, Response resp) throws IOException {
+
+                // 2. Fetch all user FCM tokens and trigger FCM push
+                String tokenUrl = SUPABASE_URL + "/rest/v1/users"
+                        + "?select=fcm_token&fcm_token=not.is.null";
+                try (Response tr = http.newCall(new Request.Builder()
+                        .url(tokenUrl)
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept",        "application/json")
+                        .build()).execute()) {
+                    if (tr.code() == 200) {
+                        String tokBody = tr.body() != null ? tr.body().string() : "[]";
+                        JSONArray tokens = new JSONArray(tokBody);
+                        Log.d(TAG, "sendOfferNotification: " + tokens.length() + " user tokens found");
+                        for (int i = 0; i < tokens.length(); i++) {
+                            String token = tokens.getJSONObject(i).optString("fcm_token", "");
+                            if (!token.isEmpty()) {
+                                FcmNotificationHelper.sendOfferFcm(token,
+                                        "New Offer Available 🎉",
+                                        "Get " + discStr + " — use code " + code);
+                            }
+                        }
+                    }
+                }
+
+                main.post(() -> Toast.makeText(OfferManagementActivity.this,
+                        "Notification sent to all users ✓", Toast.LENGTH_SHORT).show());
+
+            } catch (Exception e) {
+                Log.e(TAG, "sendOfferNotification exception: " + e.getMessage(), e);
+            }
+        }).start();
+    }
+
+    // ── TOGGLE ACTIVE (Thread-based) ──────────────────────────────────────
+    private void toggleOfferActive(Offer offer, boolean newState) {
+        new Thread(() -> {
+            try {
+                JSONObject body = new JSONObject();
+                body.put("is_active", newState);
+                try (Response resp = http.newCall(new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/offers?id=eq." + offer.id)
+                        .patch(RequestBody.create(body.toString(), JSON_MT))
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type",  "application/json")
+                        .addHeader("Prefer",        "return=minimal")
+                        .build()).execute()) {
                     main.post(() -> {
                         if (resp.isSuccessful()) {
                             offer.isActive = newState;
                             offer.status   = newState ? "active" : "inactive";
                             adapter.notifyDataSetChanged();
                             updateStats();
+                            Toast.makeText(OfferManagementActivity.this,
+                                    newState ? "Offer enabled" : "Offer disabled",
+                                    Toast.LENGTH_SHORT).show();
                         }
                     });
                 }
-            });
-        } catch (Exception e) {
-            Log.e(TAG, "toggleOfferActive: " + e.getMessage());
-        }
+            } catch (Exception e) {
+                main.post(() -> Toast.makeText(OfferManagementActivity.this,
+                        "Update failed", Toast.LENGTH_SHORT).show());
+            }
+        }).start();
     }
 
+    // ── DELETE (Thread-based) ─────────────────────────────────────────────
     private void confirmDelete(Offer offer) {
         new MaterialAlertDialogBuilder(this)
                 .setTitle("Delete Offer")
-                .setMessage("Delete \"" + offer.title + "\"? This cannot be undone.")
+                .setMessage("Delete \"" + offer.title + "\"?")
                 .setPositiveButton("Delete", (d, w) -> deleteOffer(offer))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
     private void deleteOffer(Offer offer) {
-        Request req = new Request.Builder()
-                .url(SUPABASE_URL + "/rest/v1/offers?id=eq." + offer.id)
-                .addHeader("apikey", ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .addHeader("Prefer", "return=minimal")
-                .delete()
-                .build();
-        http.newCall(req).enqueue(new Callback() {
-            @Override public void onFailure(Call call, IOException e) {
+        new Thread(() -> {
+            try {
+                try (Response resp = http.newCall(new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/offers?id=eq." + offer.id)
+                        .delete()
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Prefer",        "return=minimal")
+                        .build()).execute()) {
+                    main.post(() -> {
+                        if (resp.isSuccessful()) {
+                            offers.remove(offer);
+                            adapter.notifyDataSetChanged();
+                            updateStats();
+                            showListOrEmpty();
+                            Toast.makeText(OfferManagementActivity.this,
+                                    "Offer deleted", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(OfferManagementActivity.this,
+                                    "Delete failed", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            } catch (Exception e) {
                 main.post(() -> Toast.makeText(OfferManagementActivity.this,
-                        "Delete failed", Toast.LENGTH_SHORT).show());
+                        "Delete error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
             }
-            @Override public void onResponse(Call call, Response resp) throws IOException {
-                main.post(() -> {
-                    if (resp.isSuccessful()) {
-                        offers.remove(offer);
-                        adapter.notifyDataSetChanged();
-                        updateStats();
-                        emptyStateLayout.setVisibility(offers.isEmpty() ? View.VISIBLE : View.GONE);
-                        Toast.makeText(OfferManagementActivity.this,
-                                "Offer deleted", Toast.LENGTH_SHORT).show();
-                    }
-                });
-            }
-        });
+        }).start();
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────
+    // ── HELPERS ───────────────────────────────────────────────────────────
+    private void setLoading(boolean loading) {
+        if (shimmerLayout    != null) shimmerLayout.setVisibility(loading ? View.VISIBLE : View.GONE);
+        if (rvOffers         != null) rvOffers.setVisibility(loading ? View.GONE : View.VISIBLE);
+        if (emptyStateLayout != null && loading) emptyStateLayout.setVisibility(View.GONE);
+    }
+
     private void showDatePicker(TextInputEditText field) {
         Calendar cal = Calendar.getInstance();
-        new DatePickerDialog(this, (v, y, m, d) -> {
-            String date = String.format(java.util.Locale.getDefault(), "%04d-%02d-%02d", y, m + 1, d);
-            field.setText(date);
-        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show();
+        new DatePickerDialog(this, (v, y, m, d) ->
+                field.setText(String.format(java.util.Locale.getDefault(),
+                        "%04d-%02d-%02d", y, m + 1, d)),
+                cal.get(Calendar.YEAR), cal.get(Calendar.MONTH),
+                cal.get(Calendar.DAY_OF_MONTH)).show();
     }
 
-    private void setLoading(boolean loading) {
-        if (shimmerLayout != null)
-            shimmerLayout.setVisibility(loading ? View.VISIBLE : View.GONE);
-        if (rvOffers != null)
-            rvOffers.setVisibility(loading ? View.GONE : View.VISIBLE);
-        if (emptyStateLayout != null && loading)
-            emptyStateLayout.setVisibility(View.GONE);
+    private String getET(TextInputEditText et) {
+        return et != null && et.getText() != null ? et.getText().toString().trim() : "";
     }
 
-    private String getText(TextInputEditText et) {
-        return et.getText() != null ? et.getText().toString().trim() : "";
-    }
-
-    private void setError(TextInputLayout til, String msg) {
+    private void setFieldError(TextInputLayout til, String msg) {
         if (til != null) til.setError(msg);
     }
 }

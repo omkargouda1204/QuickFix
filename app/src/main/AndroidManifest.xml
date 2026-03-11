@@ -119,6 +119,12 @@
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Admin Notifications Activity -->
+        <activity
+            android:name=".AdminNotificationsActivity"
+            android:exported="false"
+            android:parentActivityName=".AdminDashboardActivity" />
+
         <!-- Admin Dashboard Activity -->
         <activity
             android:name=".AdminDashboardActivity"

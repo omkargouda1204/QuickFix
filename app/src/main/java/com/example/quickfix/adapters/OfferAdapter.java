@@ -1,5 +1,6 @@
 package com.example.quickfix.adapters;
 
+import android.content.res.ColorStateList;
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -8,6 +9,7 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.quickfix.Offer;
@@ -25,9 +27,9 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
         void onToggleActive(Offer offer, boolean active);
     }
 
-    private final Context      ctx;
-    private final List<Offer>  items;
-    private final Listener     listener;
+    private final Context     ctx;
+    private final List<Offer> items;
+    private final Listener    listener;
 
     public OfferAdapter(Context ctx, List<Offer> items, Listener listener) {
         this.ctx      = ctx;
@@ -46,33 +48,36 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
     public void onBindViewHolder(@NonNull VH h, int pos) {
         Offer o = items.get(pos);
 
-        h.tvTitle.setText(o.title != null ? o.title : "");
-        h.tvCode.setText("Code: " + (o.offerCode != null ? o.offerCode : "—"));
+        if (h.tvTitle     != null) h.tvTitle.setText(o.title != null ? o.title : "");
+        if (h.tvCode      != null) h.tvCode.setText("Code: " + (o.offerCode != null ? o.offerCode : "—"));
+        if (h.tvExpiry    != null) h.tvExpiry.setText("Expires: " + (o.expiryDate != null && !o.expiryDate.isEmpty() ? o.expiryDate : "No expiry"));
+        if (h.tvMinAmount != null) h.tvMinAmount.setText("Min: ₹" + (int) o.minBookingAmount);
 
-        String discountStr = o.discountType != null && o.discountType.equals("percentage")
-                ? (int) o.discountValue + "% OFF"
-                : "₹" + (int) o.discountValue + " OFF";
-        h.tvDiscount.setText(discountStr);
-        h.tvExpiry.setText("Expires: " + (o.expiryDate != null ? o.expiryDate : "No expiry"));
-        h.tvMinAmount.setText("Min: ₹" + (int) o.minBookingAmount);
-
-        if (o.isEffectivelyActive()) {
-            h.chipStatus.setText("Active");
-            h.chipStatus.setChipBackgroundColorResource(R.color.chip_active_bg);
-        } else {
-            h.chipStatus.setText("Disabled");
-            h.chipStatus.setChipBackgroundColorResource(R.color.chip_disabled_bg);
+        if (h.tvDiscount != null) {
+            String discStr = (o.discountType != null && o.discountType.equals("percentage"))
+                    ? (int) o.discountValue + "% OFF"
+                    : "₹" + (int) o.discountValue + " OFF";
+            h.tvDiscount.setText(discStr);
         }
 
-        h.btnEdit.setOnClickListener(v   -> { if (listener != null) listener.onEdit(o); });
-        h.btnDelete.setOnClickListener(v -> { if (listener != null) listener.onDelete(o); });
-        h.chipStatus.setOnClickListener(v -> {
-            if (listener != null) listener.onToggleActive(o, !o.isEffectivelyActive());
-        });
+        // Status chip — use ColorStateList.valueOf to avoid crash on Material3
+        if (h.chipStatus != null) {
+            boolean active = o.isEffectivelyActive();
+            h.chipStatus.setText(active ? "Active" : "Disabled");
+            int colorRes = active ? R.color.chip_active_bg : R.color.chip_disabled_bg;
+            h.chipStatus.setChipBackgroundColor(
+                    ColorStateList.valueOf(ContextCompat.getColor(ctx, colorRes)));
+            h.chipStatus.setOnClickListener(v -> {
+                if (listener != null) listener.onToggleActive(o, !o.isEffectivelyActive());
+            });
+        }
+
+        if (h.btnEdit   != null) h.btnEdit.setOnClickListener(v   -> { if (listener != null) listener.onEdit(o); });
+        if (h.btnDelete != null) h.btnDelete.setOnClickListener(v -> { if (listener != null) listener.onDelete(o); });
     }
 
     @Override
-    public int getItemCount() { return items.size(); }
+    public int getItemCount() { return items != null ? items.size() : 0; }
 
     public void setItems(List<Offer> newItems) {
         items.clear();
@@ -98,4 +103,3 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
         }
     }
 }
-
