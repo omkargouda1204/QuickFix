@@ -212,6 +212,17 @@
     <string name="profile_logout_confirm_msg">Are you sure you want to logout?</string>
     <string name="profile_version">QuickFix v1.0 · Made with ❤️</string>
 
+    <!-- Bookings Screen -->
+    <string name="booking_title">My Bookings</string>
+    <string name="booking_empty">No bookings found</string>
+    <string name="booking_status_pending">Pending</string>
+    <string name="booking_status_confirmed">Confirmed</string>
+    <string name="booking_status_completed">Completed</string>
+    <string name="booking_status_cancelled">Cancelled</string>
+    <string name="booking_cancel">Cancel Booking</string>
+    <string name="booking_reschedule">Reschedule</string>
+    <string name="booking_view_details">View Details</string>
+
     <!-- Settings Screen -->
     <string name="settings_title">Settings</string>
     <string name="settings_push_notif">Push Notifications</string>

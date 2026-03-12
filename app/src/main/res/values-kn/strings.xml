@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    values-kn/strings.xml — Kannada (ಕನ್ನಡ) translations
-    Only translatable UI strings are listed here. Strings not present here
-    fall back automatically to values/strings.xml (English). Never translate:
-    app_name, default_web_client_id, URL/email literals, format specifiers.
+    values-kn/strings.xml — ಕನ್ನಡ (ಕನ್ನಡ) ಅನುವಾದಗಳು
+    ಇಲ್ಲಿರುವ ಅನುವಾದಗೊಳ್ಳಬಹುದಾದ UI ಪಠ್ಯಗಳನ್ನು ಮಾತ್ರ ಇಲ್ಲಿ ನೀಡಲಾಗಿದೆ. ಇಲ್ಲಿ ಇಲ್ಲದ ಪಠ್ಯಗಳು
+    ಸ್ವಯಂಚಾಲಿತವಾಗಿ values/strings.xml (ಇಂಗ್ಲಿಷ್) ಗೆ ಹಿಂತಿರುಗುತ್ತವೆ. ಎಂದಿಗೂ ಅನುವಾದಿಸಬಾರದು:
+    app_name, default_web_client_id, URL/ಇಮೇಲ್ ಅಕ್ಷರಗಳು, ಫಾರ್ಮಾಟ್ ಸ್ಪೆಸಿಫೈಯರ್‌ಗಳು.
 -->
 <resources>
-    <!-- App -->
+    <!-- ಅಪ್ಲಿಕೇಶನ್ -->
     <string name="app_name">ಕ್ವಿಕ್‌ಫಿಕ್ಸ್</string>
+    <string name="welcome_text">ಕ್ವಿಕ್‌ಫಿಕ್ಸ್ ಗೆ ಸ್ವಾಗತ</string>
 
-    <!-- Login Screen -->
+    <!-- ಲಾಗಿನ್ ಪರದೆ -->
+    <string name="login_title">ಲಾಗಿನ್</string>
     <string name="welcome_back">ಮರಳಿ ಸ್ವಾಗತ!</string>
     <string name="login_subtitle">ಮುಂದುವರಿಯಲು ಸೈನ್ ಇನ್ ಮಾಡಿ</string>
     <string name="email_hint">ಇಮೇಲ್ ವಿಳಾಸ</string>
@@ -21,13 +23,18 @@
     <string name="no_account">ಖಾತೆ ಇಲ್ಲವೇ?</string>
     <string name="sign_up">ಸೈನ್ ಅಪ್</string>
 
-    <!-- Forgot Password -->
+    <!-- ಪಾಸ್‌ವರ್ಡ್ ಮರೆತಿದ್ದೀರಾ -->
     <string name="forgot_password_title">ಪಾಸ್‌ವರ್ಡ್ ಮರೆತಿದ್ದೀರಾ</string>
     <string name="forgot_password_subtitle">ಪಾಸ್‌ವರ್ಡ್ ಮರುಹೊಂದಿಸಲು ನಿಮ್ಮ ಇಮೇಲ್ ನಮೂದಿಸಿ</string>
+    <string name="send_otp">OTP ಕಳಿಸಿ</string>
+    <string name="enter_otp">OTP ನಮೂದಿಸಿ</string>
+    <string name="verify_otp">OTP ಪರಿಶೀಲಿಸಿ</string>
+    <string name="new_password">ಹೊಸ ಪಾಸ್‌ವರ್ಡ್</string>
+    <string name="confirm_password">ಪಾಸ್‌ವರ್ಡ್ ದೃಢೀಕರಿಸಿ</string>
     <string name="reset_password">ಪಾಸ್‌ವರ್ಡ್ ಮರುಹೊಂದಿಸಿ</string>
     <string name="back_to_login">ಲಾಗಿನ್‌ಗೆ ಹಿಂತಿರುಗಿ</string>
 
-    <!-- Validation -->
+    <!-- ಮಾನ್ಯತೆ -->
     <string name="error_email_required">ಇಮೇಲ್ ಅಗತ್ಯ</string>
     <string name="error_invalid_email">ಮಾನ್ಯ ಇಮೇಲ್ ನಮೂದಿಸಿ</string>
     <string name="error_password_required">ಪಾಸ್‌ವರ್ಡ್ ಅಗತ್ಯ</string>
@@ -35,10 +42,21 @@
     <string name="error_login_failed">ಲಾಗಿನ್ ವಿಫಲವಾಗಿದೆ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ</string>
     <string name="error_network">ನೆಟ್‌ವರ್ಕ್ ದೋಷ. ನಿಮ್ಮ ಸಂಪರ್ಕ ಪರಿಶೀಲಿಸಿ</string>
     <string name="success_login">ಲಾಗಿನ್ ಯಶಸ್ವಿಯಾಗಿದೆ!</string>
+    <string name="otp_sent">ನಿಮ್ಮ ಇಮೇಲ್‌ಗೆ OTP ಕಳಿಸಲಾಗಿದೆ</string>
+    <string name="password_reset_success">ಪಾಸ್‌ವರ್ಡ್ ಯಶಸ್ವಿಯಾಗಿ ಮರುಹೊಂದಿಸಲಾಗಿದೆ</string>
 
-    <!-- Registration -->
+    <!-- OTP ಪರಿಶೀಲನೆ -->
+    <string name="otp_verification_title">ಇಮೇಲ್ ಪರಿಶೀಲಿಸಿ</string>
+    <string name="otp_verification_subtitle">ನಿಮ್ಮ ಇಮೇಲ್‌ಗೆ ಕಳಿಸಿದ OTP ನಮೂದಿಸಿ</string>
+    <string name="otp_code_hint">6 ಅಂಕಿಯ OTP ನಮೂದಿಸಿ</string>
+    <string name="verify_button">ಪರಿಶೀಲಿಸಿ</string>
+    <string name="resend_otp">OTP ಮರಳಿ ಕಳಿಸಿ</string>
+    <string name="otp_verified">ಇಮೇಲ್ ಯಶಸ್ವಿಯಾಗಿ ಪರಿಶೀಲಿಸಲಾಗಿದೆ!</string>
+    <string name="account_created">ಖಾತೆ ಯಶಸ್ವಿಯಾಗಿ ರಚಿಸಲಾಗಿದೆ!</string>
+
+    <!-- ನೋಂದಣಿ -->
     <string name="registration_title">ಖಾತೆ ರಚಿಸಿ</string>
-    <string name="welcome_new_user">ಕ್ವಿಕ್‌ಫಿಕ್ಸ್‌ಗೆ ಸ್ವಾಗತ!</string>
+    <string name="welcome_new_user">ಕ್ವಿಕ್‌ಫಿಕ್ಸ್ ಗೆ ಸ್ವಾಗತ!</string>
     <string name="registration_subtitle">ನಮ್ಮ ಸಮುದಾಯಕ್ಕೆ ಸೇರಿ</string>
     <string name="full_name_hint">ಪೂರ್ಣ ಹೆಸರು</string>
     <string name="phone_hint">ಫೋನ್ ನಂಬರ್</string>
@@ -51,9 +69,12 @@
     <string name="error_phone_required">ಫೋನ್ ನಂಬರ್ ಅಗತ್ಯ</string>
     <string name="error_phone_invalid">ಮಾನ್ಯ ಫೋನ್ ನಂಬರ್ ನಮೂದಿಸಿ</string>
     <string name="error_passwords_not_match">ಪಾಸ್‌ವರ್ಡ್‌ಗಳು ಹೊಂದಾಣಿಕೆಯಾಗುತ್ತಿಲ್ಲ</string>
+    <string name="error_user_exists">ಇಮೇಲ್ ಈಗಾಗಲೇ ನೋಂದಾಯಿತವಾಗಿದೆ. ಲಾಗಿನ್ ಮಾಡಿ</string>
     <string name="error_signup_failed">ಸೈನ್ ಅಪ್ ವಿಫಲವಾಗಿದೆ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ</string>
+    <string name="error_otp_invalid">ಅಮಾನ್ಯ OTP. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ</string>
+    <string name="error_otp_expired">OTP ಅವಧಿ ಮೀರಿದೆ. ಹೊಸ OTP ಕೇಳಿ</string>
 
-    <!-- Home Screen -->
+    <!-- ಮನೆ ಪರದೆ -->
     <string name="hello_user">ನಮಸ್ಕಾರ, %1$s! 👋</string>
     <string name="find_services">ನಿಮ್ಮ ಹತ್ತಿರ ಮನೆ ಸೇವೆಗಳನ್ನು ಹುಡುಕಿ</string>
     <string name="search_hint">ಸೇವೆಗಳನ್ನು ಹುಡುಕಿ…</string>
@@ -72,15 +93,98 @@
     <string name="cat_painting">ಪೇಂಟಿಂಗ್</string>
     <string name="cat_carpentry">ಬಡಗಿ ಕೆಲಸ</string>
     <string name="cat_more">ಇನ್ನಷ್ಟು</string>
+    <string name="featured_card1_title">ಮನೆಯ ಆಳ ಸ್ವಚ್ಛತೆ</string>
+    <string name="featured_card1_sub">₹499 ರಿಂದ ಶುರು</string>
+    <string name="featured_card1_desc">ನಿಮ್ಮ ಮನೆಗೆ ವೃತ್ತಿಪರ ಸ್ವಚ್ಛತೆ</string>
+    <string name="featured_card2_title">AC ಅಳವಡಿಕೆ</string>
+    <string name="featured_card2_sub">₹799 ರಿಂದ ಶುರು</string>
+    <string name="featured_card2_desc">ತಜ್ಞ AC ಫಿಟ್ಟಿಂಗ್ ಮತ್ತು ಸರ್ವೀಸಿಂಗ್</string>
+    <string name="featured_card3_title">ಪ್ಲಂಬಿಂಗ್ ಸರಿಪಡಿಸಿ</string>
+    <string name="featured_card3_sub">₹299 ರಿಂದ ಶುರು</string>
+    <string name="featured_card3_desc">ನಿಮ್ಮ ಮನೆ ಬಾಗಿಲಲ್ಲಿ ಲೀಕ್ ಮರಾಮತ್ತು</string>
     <string name="nav_home">ಹೋಮ್</string>
     <string name="nav_bookings">ಬುಕಿಂಗ್ಸ್</string>
     <string name="nav_messages">ಸಂದೇಶಗಳು</string>
     <string name="nav_profile">ಪ್ರೊಫೈಲ್</string>
+    <string name="nav_dashboard">ಡ್ಯಾಶ್‌ಬೋರ್ಡ್</string>
+    <string name="nav_providers">ಪ್ರದಾತರು</string>
     <string name="promo_title">ನಿಮ್ಮ ಮೊದಲ ಬುಕಿಂಗ್‌ನಲ್ಲಿ 20% ರಿಯಾಯಿತಿ ಪಡೆಯಿರಿ!</string>
     <string name="promo_subtitle">ಚೆಕ್‌ಔಟ್‌ನಲ್ಲಿ QUICKFIX20 ಕೋಡ್ ಬಳಸಿ</string>
     <string name="logout">ಲಾಗ್ ಔಟ್</string>
 
-    <!-- Profile Screen -->
+    <!-- ನಿಮ್ಮ ವ್ಯವಹಾರ ಪಟ್ಟಿ ಮಾಡಿ -->
+    <string name="list_business_title">ನಿಮ್ಮ ವ್ಯವಹಾರ ಪಟ್ಟಿ ಮಾಡಿ</string>
+    <string name="list_business_subtitle">ಉಚಿತವಾಗಿ ಪ್ರಾರಂಭಿಸಿ</string>
+    <string name="list_business_cta">ಪ್ರಾರಂಭಿಸಿ</string>
+
+    <!-- ಬುಕಿಂಗ್‌ಗಳು ಪರದೆ -->
+    <string name="booking_title">ನನ್ನ ಬುಕಿಂಗ್ಸ್</string>
+    <string name="booking_empty">ಯಾವುದೇ ಬುಕಿಂಗ್ ಕಂಡುಬಂದಿಲ್ಲ</string>
+    <string name="booking_status_pending">ಬಾಕಿ</string>
+    <string name="booking_status_confirmed">ದೃಢಪಡಿಸಲಾಗಿದೆ</string>
+    <string name="booking_status_completed">ಪೂರ್ಣಗೊಂಡಿದೆ</string>
+    <string name="booking_status_cancelled">ರದ್ದಾಗಿದೆ</string>
+    <string name="booking_cancel">ಬುಕಿಂಗ್ ರದ್ದು ಮಾಡಿ</string>
+    <string name="booking_reschedule">ಮರು ಅಮಲಿಗೆ ತರಿ</string>
+    <string name="booking_view_details">ವಿವರಗಳನ್ನು ನೋಡಿ</string>
+
+    <!-- ಒಪ್ಪಂದದ ಶರತ್ತುಗಳು -->
+    <string name="onboarding_title">QuickFix ನೊಂದಿಗೆ ನಿಮ್ಮ ವ್ಯವಹಾರ ಬೆಳೆಸಿ</string>
+    <string name="onboarding_benefit_1">✅  ಹತ್ತಿರದ ಗ್ರಾಹಕರನ್ನು ಪಡೆಯಿರಿ</string>
+    <string name="onboarding_benefit_2">✅  ಬುಕಿಂಗ್ ಸುಲಭವಾಗಿ ನಿರ್ವಹಿಸಿ</string>
+    <string name="onboarding_benefit_3">✅  ಗೋಚರತೆ ಹೆಚ್ಚಿಸಿ</string>
+    <string name="onboarding_benefit_4">✅  ಮುಂಗಡ ವೆಚ್ಚವಿಲ್ಲ</string>
+    <string name="onboarding_terms_title">ನಿಯಮ ಮತ್ತು ಷರತ್ತುಗಳು</string>
+    <string name="onboarding_terms_agree">ನಾನು ನಿಯಮ ಮತ್ತು ಷರತ್ತುಗಳಿಗೆ ಒಪ್ಪುತ್ತೇನೆ</string>
+    <string name="onboarding_hint_business_name">ವ್ಯವಹಾರದ ಹೆಸರು *</string>
+    <string name="onboarding_hint_owner_name">ಮಾಲೀಕರ ಹೆಸರು *</string>
+    <string name="onboarding_hint_phone">ಫೋನ್ ನಂಬರ್ *</string>
+    <string name="onboarding_hint_email">ಇಮೇಲ್ ವಿಳಾಸ *</string>
+    <string name="onboarding_hint_address">ವ್ಯವಹಾರದ ವಿಳಾಸ / ಸ್ಥಳ *</string>
+    <string name="onboarding_hint_experience">ಅನುಭವದ ವರ್ಷಗಳು *</string>
+    <string name="onboarding_hint_description">ವ್ಯವಹಾರ ವಿವರ (ಐಚ್ಛಿಕ)</string>
+    <string name="onboarding_hint_city">ನಗರ *</string>
+    <string name="onboarding_service_category">ಸೇವಾ ವಿಭಾಗ *</string>
+    <string name="onboarding_section_details">ವ್ಯವಹಾರ ವಿವರಗಳು</string>
+    <string name="onboarding_screen_title">ಸೇವಾ ಪ್ರದಾತರಾಗಿ</string>
+    <string name="onboarding_screen_subtitle">ನಿಮ್ಮ ವ್ಯವಹಾರವನ್ನು ಉಚಿತವಾಗಿ ಪಟ್ಟಿ ಮಾಡಿ</string>
+    <string name="onboarding_upload_id">📎  ID / ಪುರಾವೆ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ (ಅಗತ್ಯ)</string>
+    <string name="onboarding_upload_business_img">🖼️  ವ್ಯವಹಾರ ಚಿತ್ರ ಸೇರಿಸಿ (ಐಚ್ಛಿಕ)</string>
+    <string name="onboarding_submit">ಅರ್ಜಿ ಸಲ್ಲಿಸಿ</string>
+    <string name="onboarding_success_title">ಅರ್ಜಿ ಸಲ್ಲಿಸಲಾಗಿದೆ! 🎉</string>
+    <string name="onboarding_success_msg">ನಮ್ಮ ತಂಡ 24–48 ಗಂಟೆಗಳಲ್ಲಿ ನಿಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸುತ್ತದೆ.</string>
+    <string name="onboarding_back_home">ಹೋಮ್‌ಗೆ ಹಿಂತಿರುಗಿ</string>
+
+    <!-- ಒಪ್ಪಂದದ ಅರ್ಜಿ ಮಾನ್ಯತೆ -->
+    <string name="error_business_name_required">ವ್ಯವಹಾರದ ಹೆಸರು ಅಗತ್ಯ</string>
+    <string name="error_owner_name_required">ಮಾಲೀಕರ ಹೆಸರು ಅಗತ್ಯ</string>
+    <string name="error_category_required">ಸೇವಾ ವಿಭಾಗ ಆಯ್ಕೆ ಮಾಡಿ</string>
+    <string name="error_city_required">ನಗರ ಅಗತ್ಯ</string>
+    <string name="error_experience_required">ಅನುಭವದ ವರ್ಷಗಳು ಅಗತ್ಯ</string>
+    <string name="error_description_required">ವ್ಯವಹಾರ ವಿವರ ಅಗತ್ಯ</string>
+    <string name="error_terms_not_accepted">ನಿಯಮ ಮತ್ತು ಷರತ್ತುಗಳನ್ನು ಓದಿ ಒಪ್ಪಿಕೊಳ್ಳಿ</string>
+    <string name="error_duplicate_application">ನಿಮ್ಮ ಅರ್ಜಿ ಈಗಾಗಲೇ ಬಾಕಿ ಅಥವಾ ಅನುಮೋದಿಸಲಾಗಿದೆ</string>
+    <string name="error_network_retry">ನೆಟ್‌ವರ್ಕ್ ದೋಷ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.</string>
+
+    <!-- ನಿರ್ವಹಣಾ ಒಪ್ಪಂದದ ಅನುಮೋದನೆ -->
+    <string name="admin_approval_title">ಪ್ರದಾತ ಅರ್ಜಿಗಳು</string>
+    <string name="admin_approval_subtitle">ಪ್ರದಾತ ವಿನಂತಿಗಳನ್ನು ಪರಿಶೀಲಿಸಿ</string>
+    <string name="approve_success">ಪ್ರದಾತ ಅರ್ಜಿ ಯಶಸ್ವಿಯಾಗಿ ಅನುಮೋದಿಸಲಾಗಿದೆ</string>
+    <string name="reject_success">ಪ್ರದಾತ ಅರ್ಜಿ ತಿರಸ್ಕರಿಸಲಾಗಿದೆ</string>
+    <string name="reject_dialog_title">ಅರ್ಜಿ ತಿರಸ್ಕರಿಸಿ</string>
+    <string name="reject_dialog_message">ತಿರಸ್ಕರಣೆಗೆ ಕಾರಣ ನಮೂದಿಸಿ:</string>
+    <string name="reject_reason_hint">ತಿರಸ್ಕರಣೆ ಕಾರಣ ನಮೂದಿಸಿ…</string>
+    <string name="error_reject_reason_empty">ತಿರಸ್ಕರಣೆ ಕಾರಣ ಅಗತ್ಯ</string>
+    <string name="approval_details_title">ಅರ್ಜಿ ವಿವರ</string>
+    <string name="approval_approve_btn">ಅನುಮೋದಿಸಿ</string>
+    <string name="approval_reject_btn">ತಿರಸ್ಕರಿಸಿ</string>
+    <string name="approval_close_btn">ಮುಚ್ಚಿ</string>
+    <string name="approval_tap_to_view">ನೋಡಲು ಟ್ಯಾಪ್ ಮಾಡಿ</string>
+    <string name="status_pending">ಬಾಕಿ ಇದೆ</string>
+    <string name="status_approved">ಅನುಮೋದಿಸಲಾಗಿದೆ</string>
+    <string name="status_rejected">ತಿರಸ್ಕರಿಸಲಾಗಿದೆ</string>
+
+    <!-- ಪ್ರೊಫೈಲ್ ಪರದೆ -->
     <string name="profile_title">ನನ್ನ ಪ್ರೊಫೈಲ್</string>
     <string name="profile_account_section">ಖಾತೆ</string>
     <string name="profile_services_section">ಸೇವೆಗಳು</string>
@@ -99,37 +203,44 @@
     <string name="profile_terms">ನಿಯಮ ಮತ್ತು ಷರತ್ತುಗಳು</string>
     <string name="profile_about_app">ಅಪ್ಲಿಕೇಶನ್ ಬಗ್ಗೆ</string>
     <string name="profile_logout">ಲಾಗ್ ಔಟ್</string>
+    <string name="profile_admin_dashboard">ಅಡ್ಮಿನ್ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್</string>
+    <string name="profile_provider_dashboard">ಪ್ರದಾತ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್</string>
     <string name="profile_logout_confirm_title">ಲಾಗ್ ಔಟ್</string>
     <string name="profile_logout_confirm_msg">ನೀವು ಖಂಡಿತವಾಗಿಯೂ ಲಾಗ್ ಔಟ್ ಮಾಡಲು ಬಯಸುವಿರಾ?</string>
+    <string name="profile_version">QuickFix v1.0 · ❤️ ನಿಂದ ತಯಾರಿಸಲಾಗಿದೆ</string>
 
-    <!-- Language -->
+    <!-- ಭಾಷೆ -->
     <string name="profile_lang_current_default">ಕನ್ನಡ</string>
     <string name="language_changed_toast">ಭಾಷೆ: %1$s</string>
 
-    <!-- Profile Details -->
+    <!-- ಪ್ರೊಫೈಲ್ ವಿವರಗಳು -->
     <string name="pd_section_personal">ವೈಯಕ್ತಿಕ ಮಾಹಿತಿ</string>
+    <string name="pd_section_edit">ವೈಯಕ್ತಿಕ ಮಾಹಿತಿ ಸಂಪಾದಿಸಿ</string>
     <string name="pd_label_full_name">ಪೂರ್ಣ ಹೆಸರು</string>
     <string name="pd_label_email_address">ಇಮೇಲ್ ವಿಳಾಸ</string>
     <string name="pd_label_phone_number">ಫೋನ್ ನಂಬರ್</string>
     <string name="pd_label_city">ನಗರ</string>
     <string name="pd_label_address">ವಿಳಾಸ</string>
+    <string name="pd_hint_full_name">ಪೂರ್ಣ ಹೆಸರು</string>
+    <string name="pd_hint_email_readonly">ಇಮೇಲ್ (ಓದಲು ಮಾತ್ರ)</string>
+    <string name="pd_hint_phone">ಫೋನ್ ನಂಬರ್</string>
+    <string name="pd_hint_city">ನಗರ</string>
+    <string name="pd_hint_address">ವಿಳಾಸ (ಐಚ್ಛಿಕ)</string>
+    <string name="pd_btn_edit_profile">ಪ್ರೊಫೈಲ್ ಸಂಪಾದಿಸಿ</string>
+    <string name="pd_btn_save">ಬದಲಾವಣೆಗಳನ್ನು ಉಳಿಸಿ</string>
+    <string name="pd_btn_cancel">ರದ್ದುಮಾಡಿ</string>
     <string name="pd_loading">ದಯವಿಟ್ಟು ನಿರೀಕ್ಷಿಸಿ\u2026</string>
 
-    <!-- Settings -->
+    <!-- ಸೆಟ್ಟಿಂಗ್‌ಗಳು -->
     <string name="settings_title">ಸೆಟ್ಟಿಂಗ್ಸ್</string>
     <string name="settings_push_notif">ಪುಶ್ ಅಧಿಸೂಚನೆಗಳು</string>
+    <string name="settings_email_notif">ಇಮೇಲ್ ಅಧಿಸೂಚನೆಗಳು</string>
+    <string name="settings_booking_reminders">ಬುಕಿಂಗ್ ರಿಮೈಂಡರ್</string>
     <string name="settings_dark_mode">ಡಾರ್ಕ್ ಮೋಡ್</string>
     <string name="settings_change_password">ಪಾಸ್‌ವರ್ಡ್ ಬದಲಾಯಿಸಿ</string>
+    <string name="settings_delete_account">ಖಾತೆ ಅಳಿಸಿ</string>
 
-    <!-- Status -->
-    <string name="status_pending">ಬಾಕಿ ಇದೆ</string>
-    <string name="status_approved">ಅನುಮೋದಿಸಲಾಗಿದೆ</string>
-    <string name="status_rejected">ತಿರಸ್ಕರಿಸಲಾಗಿದೆ</string>
-
-    <!-- Provider Onboarding -->
-    <string name="onboarding_title">ಕ್ವಿಕ್‌ಫಿಕ್ಸ್‌ನೊಂದಿಗೆ ನಿಮ್ಮ ವ್ಯವಹಾರ ಬೆಳೆಸಿ</string>
-    <string name="onboarding_submit">ಅರ್ಜಿ ಸಲ್ಲಿಸಿ</string>
-    <string name="onboarding_success_title">ಅರ್ಜಿ ಸಲ್ಲಿಸಲಾಗಿದೆ! 🎉</string>
-    <string name="onboarding_back_home">ಮುಖಪುಟಕ್ಕೆ ಹಿಂತಿರುಗಿ</string>
+    <!-- ಪ್ರದಾತ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್ -->
+    <string name="provider_app_title">ಸೇವಾ ಪ್ರದಾತರಾಗಿ</string>
+    <string name="provider_app_subtitle">QuickFix ನಿಂದ ಗಳಿಸಲು ಪ್ರಾರಂಭಿಸಿ</string>
 </resources>
-

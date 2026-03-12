@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     values-ta/strings.xml — Tamil (தமிழ்) translations
-    Only translatable UI strings are listed here. Strings not present here
-    fall back automatically to values/strings.xml (English).
+    Strings not present here fall back to values/strings.xml (English).
 -->
 <resources>
     <!-- App -->
-    <string name="app_name">குவிக்ஃபிக்ஸ்</string>
+    <string name="app_name">QuickFix</string>
+    <string name="welcome_text">QuickFix-க்கு வரவேற்கிறோம்</string>
 
     <!-- Login Screen -->
+    <string name="login_title">உள்நுழைவு</string>
     <string name="welcome_back">மீண்டும் வருக!</string>
     <string name="login_subtitle">தொடர உள்நுழையவும்</string>
     <string name="email_hint">மின்னஞ்சல் முகவரி</string>
@@ -23,6 +24,11 @@
     <!-- Forgot Password -->
     <string name="forgot_password_title">கடவுச்சொல் மறந்தீர்களா</string>
     <string name="forgot_password_subtitle">கடவுச்சொல் மீட்டமைக்க மின்னஞ்சல் உள்ளிடவும்</string>
+    <string name="send_otp">OTP அனுப்பவும்</string>
+    <string name="enter_otp">OTP உள்ளிடவும்</string>
+    <string name="verify_otp">OTP சரிபார்க்கவும்</string>
+    <string name="new_password">புதிய கடவுச்சொல்</string>
+    <string name="confirm_password">கடவுச்சொல் உறுதிப்படுத்தவும்</string>
     <string name="reset_password">கடவுச்சொல் மீட்டமைக்கவும்</string>
     <string name="back_to_login">உள்நுழைவுக்கு திரும்பவும்</string>
 
@@ -34,10 +40,21 @@
     <string name="error_login_failed">உள்நுழைவு தோல்வியடைந்தது. மீண்டும் முயற்சிக்கவும்</string>
     <string name="error_network">நெட்வொர்க் பிழை. உங்கள் இணைப்பை சரிபார்க்கவும்</string>
     <string name="success_login">உள்நுழைவு வெற்றிகரமாக முடிந்தது!</string>
+    <string name="otp_sent">உங்கள் மின்னஞ்சலுக்கு OTP அனுப்பப்பட்டது</string>
+    <string name="password_reset_success">கடவுச்சொல் வெற்றிகரமாக மீட்டமைக்கப்பட்டது</string>
+
+    <!-- OTP Verification -->
+    <string name="otp_verification_title">மின்னஞ்சல் சரிபார்க்கவும்</string>
+    <string name="otp_verification_subtitle">உங்கள் மின்னஞ்சலுக்கு அனுப்பிய OTP உள்ளிடவும்</string>
+    <string name="otp_code_hint">6 இலக்க OTP உள்ளிடவும்</string>
+    <string name="verify_button">சரிபார்க்கவும்</string>
+    <string name="resend_otp">OTP மீண்டும் அனுப்பவும்</string>
+    <string name="otp_verified">மின்னஞ்சல் வெற்றிகரமாக சரிபார்க்கப்பட்டது!</string>
+    <string name="account_created">கணக்கு வெற்றிகரமாக உருவாக்கப்பட்டது!</string>
 
     <!-- Registration -->
     <string name="registration_title">கணக்கு உருவாக்கவும்</string>
-    <string name="welcome_new_user">குவிக்ஃபிக்ஸ்-க்கு வரவேற்கிறோம்!</string>
+    <string name="welcome_new_user">QuickFix-க்கு வரவேற்கிறோம்!</string>
     <string name="registration_subtitle">எங்கள் சமூகத்தில் சேரவும்</string>
     <string name="full_name_hint">முழு பெயர்</string>
     <string name="phone_hint">தொலைபேசி எண்</string>
@@ -50,7 +67,10 @@
     <string name="error_phone_required">தொலைபேசி எண் தேவை</string>
     <string name="error_phone_invalid">சரியான தொலைபேசி எண் உள்ளிடவும்</string>
     <string name="error_passwords_not_match">கடவுச்சொற்கள் பொருந்தவில்லை</string>
+    <string name="error_user_exists">மின்னஞ்சல் ஏற்கனவே பதிவு செய்யப்பட்டுள்ளது. உள்நுழையவும்</string>
     <string name="error_signup_failed">பதிவு தோல்வியடைந்தது. மீண்டும் முயற்சிக்கவும்</string>
+    <string name="error_otp_invalid">தவறான OTP. மீண்டும் முயற்சிக்கவும்</string>
+    <string name="error_otp_expired">OTP காலாவதியானது. புதிய OTP கேளுங்கள்</string>
 
     <!-- Home Screen -->
     <string name="hello_user">வணக்கம், %1$s! 👋</string>
@@ -71,13 +91,96 @@
     <string name="cat_painting">வண்ணம் பூசுதல்</string>
     <string name="cat_carpentry">மரவேலை</string>
     <string name="cat_more">மேலும்</string>
+    <string name="featured_card1_title">வீட்டு ஆழ சுத்தம்</string>
+    <string name="featured_card1_sub">₹499 முதல் தொடங்கும்</string>
+    <string name="featured_card1_desc">உங்கள் முழு வீட்டிற்கும் தொழில்முறை சுத்தம்</string>
+    <string name="featured_card2_title">AC நிறுவல்</string>
+    <string name="featured_card2_sub">₹799 முதல் தொடங்கும்</string>
+    <string name="featured_card2_desc">நிபுணர் AC பொருத்துதல் மற்றும் சேவை</string>
+    <string name="featured_card3_title">குழாய் வேலை சரிசெய்தல்</string>
+    <string name="featured_card3_sub">₹299 முதல் தொடங்கும்</string>
+    <string name="featured_card3_desc">உங்கள் வீட்டிலேயே குழாய் பழுது திருத்தம்</string>
     <string name="nav_home">முகப்பு</string>
     <string name="nav_bookings">முன்பதிவுகள்</string>
     <string name="nav_messages">செய்திகள்</string>
     <string name="nav_profile">சுயவிவரம்</string>
+    <string name="nav_dashboard">டாஷ்போர்டு</string>
+    <string name="nav_providers">சேவையாளர்கள்</string>
     <string name="promo_title">முதல் முன்பதிவில் 20% தள்ளுபடி பெறுங்கள்!</string>
     <string name="promo_subtitle">செக்அவுட்டில் QUICKFIX20 குறியீட்டைப் பயன்படுத்தவும்</string>
     <string name="logout">வெளியேறவும்</string>
+
+    <!-- List Your Business -->
+    <string name="list_business_title">உங்கள் வணிகத்தை பட்டியலிடவும்</string>
+    <string name="list_business_subtitle">இலவசமாக தொடங்கவும்</string>
+    <string name="list_business_cta">தொடங்கவும்</string>
+
+    <!-- Bookings Screen -->
+    <string name="booking_title">என் முன்பதிவுகள்</string>
+    <string name="booking_empty">முன்பதிவுகள் எதுவும் இல்லை</string>
+    <string name="booking_status_pending">நிலுவையில்</string>
+    <string name="booking_status_confirmed">உறுதிப்படுத்தப்பட்டது</string>
+    <string name="booking_status_completed">முடிந்தது</string>
+    <string name="booking_status_cancelled">ரத்து செய்யப்பட்டது</string>
+    <string name="booking_cancel">முன்பதிவை ரத்து செய்யவும்</string>
+    <string name="booking_reschedule">மறு திட்டமிடவும்</string>
+    <string name="booking_view_details">விவரங்களை பார்க்கவும்</string>
+
+    <!-- Provider Onboarding -->
+    <string name="onboarding_title">QuickFix மூலம் உங்கள் வணிகத்தை வளர்க்கவும்</string>
+    <string name="onboarding_benefit_1">✅  அருகிலுள்ள வாடிக்கையாளர்களை பெறுங்கள்</string>
+    <string name="onboarding_benefit_2">✅  முன்பதிவுகளை எளிதாக நிர்வகிக்கவும்</string>
+    <string name="onboarding_benefit_3">✅  தெரிவுநிலையை அதிகரிக்கவும்</string>
+    <string name="onboarding_benefit_4">✅  முன்கூட்டிய செலவு இல்லை</string>
+    <string name="onboarding_terms_title">விதிமுறைகள் மற்றும் நிபந்தனைகள்</string>
+    <string name="onboarding_terms_agree">விதிமுறைகள் மற்றும் நிபந்தனைகளை ஏற்கிறேன்</string>
+    <string name="onboarding_hint_business_name">வணிகத்தின் பெயர் *</string>
+    <string name="onboarding_hint_owner_name">உரிமையாளர் பெயர் *</string>
+    <string name="onboarding_hint_phone">தொலைபேசி எண் *</string>
+    <string name="onboarding_hint_email">மின்னஞ்சல் முகவரி *</string>
+    <string name="onboarding_hint_address">வணிக முகவரி / இடம் *</string>
+    <string name="onboarding_hint_experience">அனுபவ ஆண்டுகள் *</string>
+    <string name="onboarding_hint_description">வணிக விளக்கம் (விருப்பமானது)</string>
+    <string name="onboarding_hint_city">நகரம் *</string>
+    <string name="onboarding_service_category">சேவை வகை *</string>
+    <string name="onboarding_section_details">வணிக விவரங்கள்</string>
+    <string name="onboarding_screen_title">சேவையாளராகவும்</string>
+    <string name="onboarding_screen_subtitle">உங்கள் வணிகத்தை இலவசமாக பட்டியலிடவும்</string>
+    <string name="onboarding_upload_id">📎  ID / சான்றிதழ் பதிவேற்றவும் (தேவை)</string>
+    <string name="onboarding_upload_business_img">🖼️  வணிக படம் சேர்க்கவும் (விருப்பமானது)</string>
+    <string name="onboarding_submit">விண்ணப்பம் சமர்ப்பிக்கவும்</string>
+    <string name="onboarding_success_title">விண்ணப்பம் சமர்ப்பிக்கப்பட்டது! 🎉</string>
+    <string name="onboarding_success_msg">எங்கள் குழு 24–48 மணி நேரத்திற்குள் உங்களை தொடர்பு கொள்ளும்.</string>
+    <string name="onboarding_back_home">முகப்புக்கு திரும்பவும்</string>
+
+    <!-- Provider Application Validation -->
+    <string name="error_business_name_required">வணிகத்தின் பெயர் தேவை</string>
+    <string name="error_owner_name_required">உரிமையாளர் பெயர் தேவை</string>
+    <string name="error_category_required">சேவை வகையை தேர்ந்தெடுக்கவும்</string>
+    <string name="error_city_required">நகரம் தேவை</string>
+    <string name="error_experience_required">அனுபவ ஆண்டுகள் தேவை</string>
+    <string name="error_description_required">வணிக விளக்கம் தேவை</string>
+    <string name="error_terms_not_accepted">விதிமுறைகளை படித்து ஏற்கவும்</string>
+    <string name="error_duplicate_application">உங்கள் விண்ணப்பம் ஏற்கனவே நிலுவையில் அல்லது அனுமதிக்கப்பட்டுள்ளது</string>
+    <string name="error_network_retry">நெட்வொர்க் பிழை. மீண்டும் முயற்சிக்கவும்.</string>
+
+    <!-- Admin Provider Approval -->
+    <string name="admin_approval_title">சேவையாளர் விண்ணப்பங்கள்</string>
+    <string name="admin_approval_subtitle">சேவையாளர் கோரிக்கைகளை மதிப்பாய்வு செய்யவும்</string>
+    <string name="approve_success">சேவையாளர் விண்ணப்பம் வெற்றிகரமாக அனுமதிக்கப்பட்டது</string>
+    <string name="reject_success">சேவையாளர் விண்ணப்பம் நிராகரிக்கப்பட்டது</string>
+    <string name="reject_dialog_title">விண்ணப்பத்தை நிராகரிக்கவும்</string>
+    <string name="reject_dialog_message">நிராகரிப்பின் காரணத்தை உள்ளிடவும்:</string>
+    <string name="reject_reason_hint">நிராகரிப்பு காரணம் உள்ளிடவும்…</string>
+    <string name="error_reject_reason_empty">நிராகரிப்பு காரணம் தேவை</string>
+    <string name="approval_details_title">விண்ணப்ப விவரங்கள்</string>
+    <string name="approval_approve_btn">அனுமதிக்கவும்</string>
+    <string name="approval_reject_btn">நிராகரிக்கவும்</string>
+    <string name="approval_close_btn">மூடவும்</string>
+    <string name="approval_tap_to_view">பார்க்க தட்டவும்</string>
+    <string name="status_pending">நிலுவையில்</string>
+    <string name="status_approved">அனுமதிக்கப்பட்டது</string>
+    <string name="status_rejected">நிராகரிக்கப்பட்டது</string>
 
     <!-- Profile Screen -->
     <string name="profile_title">என் சுயவிவரம்</string>
@@ -98,8 +201,11 @@
     <string name="profile_terms">விதிமுறைகள் மற்றும் நிபந்தனைகள்</string>
     <string name="profile_about_app">செயலி பற்றி</string>
     <string name="profile_logout">வெளியேறவும்</string>
+    <string name="profile_admin_dashboard">நிர்வாக டாஷ்போர்டு</string>
+    <string name="profile_provider_dashboard">சேவையாளர் டாஷ்போர்டு</string>
     <string name="profile_logout_confirm_title">வெளியேறவும்</string>
     <string name="profile_logout_confirm_msg">நீங்கள் நிச்சயமாக வெளியேற விரும்புகிறீர்களா?</string>
+    <string name="profile_version">QuickFix v1.0 · ❤️ உடன் தயாரிக்கப்பட்டது</string>
 
     <!-- Language -->
     <string name="profile_lang_current_default">தமிழ்</string>
@@ -107,35 +213,32 @@
 
     <!-- Profile Details -->
     <string name="pd_section_personal">தனிப்பட்ட தகவல்</string>
+    <string name="pd_section_edit">தனிப்பட்ட தகவலை திருத்தவும்</string>
     <string name="pd_label_full_name">முழு பெயர்</string>
     <string name="pd_label_email_address">மின்னஞ்சல் முகவரி</string>
     <string name="pd_label_phone_number">தொலைபேசி எண்</string>
     <string name="pd_label_city">நகரம்</string>
     <string name="pd_label_address">முகவரி</string>
+    <string name="pd_hint_full_name">முழு பெயர்</string>
+    <string name="pd_hint_email_readonly">மின்னஞ்சல் (படிக்க மட்டுமே)</string>
+    <string name="pd_hint_phone">தொலைபேசி எண்</string>
+    <string name="pd_hint_city">நகரம்</string>
+    <string name="pd_hint_address">முகவரி (விருப்பமானது)</string>
+    <string name="pd_btn_edit_profile">சுயவிவரத்தை திருத்தவும்</string>
+    <string name="pd_btn_save">மாற்றங்களை சேமிக்கவும்</string>
+    <string name="pd_btn_cancel">ரத்து செய்யவும்</string>
     <string name="pd_loading">தயவுசெய்து காத்திருங்கள்\u2026</string>
 
     <!-- Settings -->
     <string name="settings_title">அமைப்புகள்</string>
     <string name="settings_push_notif">புஷ் அறிவிப்புகள்</string>
+    <string name="settings_email_notif">மின்னஞ்சல் அறிவிப்புகள்</string>
+    <string name="settings_booking_reminders">முன்பதிவு நினைவூட்டல்கள்</string>
     <string name="settings_dark_mode">இருண்ட முறை</string>
     <string name="settings_change_password">கடவுச்சொல் மாற்றவும்</string>
+    <string name="settings_delete_account">கணக்கை நீக்கவும்</string>
 
-    <!-- Status -->
-    <string name="status_pending">நிலுவையில்</string>
-    <string name="status_approved">அனுமதிக்கப்பட்டது</string>
-    <string name="status_rejected">நிராகரிக்கப்பட்டது</string>
-
-    <!-- Provider Onboarding -->
-    <string name="onboarding_title">குவிக்ஃபிக்ஸ் மூலம் உங்கள் வணிகத்தை வளர்க்கவும்</string>
-    <string name="onboarding_submit">விண்ணப்பம் சமர்ப்பிக்கவும்</string>
-    <string name="onboarding_success_title">விண்ணப்பம் சமர்ப்பிக்கப்பட்டது! 🎉</string>
-    <string name="onboarding_back_home">முகப்புக்கு திரும்பவும்</string>
-
-    <!-- Validation -->
-    <string name="error_business_name_required">வணிகத்தின் பெயர் தேவை</string>
-    <string name="error_owner_name_required">உரிமையாளர் பெயர் தேவை</string>
-    <string name="error_category_required">சேவை வகையை தேர்ந்தெடுக்கவும்</string>
-    <string name="error_city_required">நகரம் தேவை</string>
-    <string name="error_network_retry">நெட்வொர்க் பிழை. மீண்டும் முயற்சிக்கவும்.</string>
+    <!-- Provider Dashboard -->
+    <string name="provider_app_title">சேவையாளராகவும்</string>
+    <string name="provider_app_subtitle">QuickFix மூலம் சம்பாதிக்கத் தொடங்கவும்</string>
 </resources>
-
