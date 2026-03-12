@@ -79,8 +79,14 @@ public class BusinessProfileActivity extends BaseActivity {
     private ActivityResultLauncher<String> imagePickerLauncher;
     private ActivityResultLauncher<String> mediaPickerLauncher;
 
+    private boolean isUploadingMedia = false;
+
     private interface PendingMediaUploadCallback {
-        void onComplete(boolean allSucceeded, String firstError);
+        void onComplete(int successCount, int failedCount, String firstError);
+    }
+
+    private interface MediaDbSaveCallback {
+        void onComplete(boolean success, String error);
     }
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -439,19 +445,24 @@ public class BusinessProfileActivity extends BaseActivity {
             btnSave.setEnabled(false);
         }
 
+        if (isUploadingMedia) {
+            Toast.makeText(this, "Upload already in progress, please wait...", Toast.LENGTH_SHORT).show();
+            if (progressBar != null) progressBar.setVisibility(View.GONE);
+            if (btnSave != null) btnSave.setEnabled(true);
+            return;
+        }
+
+        isUploadingMedia = true;
+
         // Upload pending media first, then update profile
-        uploadPendingMedia((allSucceeded, firstError) -> {
-            if (!allSucceeded) {
-                if (progressBar != null) {
-                    progressBar.setVisibility(View.GONE);
-                }
-                if (btnSave != null) {
-                    btnSave.setEnabled(true);
-                }
+        uploadPendingMedia((successCount, failedCount, firstError) -> {
+            isUploadingMedia = false;
+
+            if (failedCount > 0) {
                 Toast.makeText(BusinessProfileActivity.this,
-                        firstError != null ? firstError : "Some media uploads failed. Please retry.",
+                        "Uploaded " + successCount + " media, failed " + failedCount +
+                                (firstError != null ? ". " + firstError : ""),
                         Toast.LENGTH_LONG).show();
-                return;
             }
 
             if (selectedImageUri != null) {
@@ -468,11 +479,12 @@ public class BusinessProfileActivity extends BaseActivity {
         List<Uri> pendingUploads = mediaAdapter != null ? mediaAdapter.getPendingUploads() : new ArrayList<>();
 
         if (pendingUploads.isEmpty()) {
-            onComplete.onComplete(true, null);
+            onComplete.onComplete(0, 0, null);
             return;
         }
 
         AtomicInteger completed = new AtomicInteger(0);
+        AtomicInteger success = new AtomicInteger(0);
         AtomicInteger failed = new AtomicInteger(0);
         final String[] firstError = {null};
         int total = pendingUploads.size();
@@ -486,10 +498,23 @@ public class BusinessProfileActivity extends BaseActivity {
                     new SupabaseStorageHelper.UploadCallback() {
                         @Override
                         public void onSuccess(String publicUrl) {
-                            saveMediaToDatabase(publicUrl, mediaType, () -> {
+                            saveMediaToDatabase(publicUrl, mediaType, (dbSuccess, dbError) -> {
+                                if (dbSuccess) {
+                                    success.incrementAndGet();
+                                    if (mediaAdapter != null) {
+                                        mediaAdapter.removeLocalMedia(uri);
+                                        updateMediaCount();
+                                    }
+                                } else {
+                                    failed.incrementAndGet();
+                                    if (firstError[0] == null) {
+                                        firstError[0] = dbError;
+                                    }
+                                }
+
                                 if (completed.incrementAndGet() >= total) {
                                     loadBusinessMedia();
-                                    onComplete.onComplete(failed.get() == 0, firstError[0]);
+                                    onComplete.onComplete(success.get(), failed.get(), firstError[0]);
                                 }
                             });
                         }
@@ -503,7 +528,7 @@ public class BusinessProfileActivity extends BaseActivity {
                             }
                             if (completed.incrementAndGet() >= total) {
                                 loadBusinessMedia();
-                                onComplete.onComplete(false, firstError[0]);
+                                onComplete.onComplete(success.get(), failed.get(), firstError[0]);
                             }
                         }
                     });
@@ -515,7 +540,7 @@ public class BusinessProfileActivity extends BaseActivity {
         return mimeType != null && mimeType.startsWith("video/");
     }
 
-    private void saveMediaToDatabase(String mediaUrl, String mediaType, Runnable onComplete) {
+    private void saveMediaToDatabase(String mediaUrl, String mediaType, MediaDbSaveCallback onComplete) {
         try {
             JSONObject body = new JSONObject();
             body.put("provider_id", providerId);
@@ -531,25 +556,36 @@ public class BusinessProfileActivity extends BaseActivity {
                     .addHeader("apikey", ANON_KEY)
                     .addHeader("Authorization", "Bearer " + ANON_KEY)
                     .addHeader("Content-Type", "application/json")
-                    .addHeader("Prefer", "return=minimal")
+                    .addHeader("Prefer", "resolution=ignore-duplicates,return=minimal")
                     .build();
 
             httpClient.newCall(request).enqueue(new Callback() {
                 @Override
                 public void onFailure(Call call, IOException e) {
                     Log.e(TAG, "Save media DB failed: " + e.getMessage());
-                    mainHandler.post(onComplete);
+                    mainHandler.post(() -> onComplete.onComplete(false, "Failed to save media record."));
                 }
 
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
+                    int code = response.code();
+                    String resp = response.body() != null ? response.body().string() : "";
                     response.close();
-                    mainHandler.post(onComplete);
+
+                    mainHandler.post(() -> {
+                        // 200, 201, 204 = success; 409 = duplicate row = already saved, treat as success
+                        if (code == 200 || code == 201 || code == 204 || code == 409) {
+                            onComplete.onComplete(true, null);
+                        } else {
+                            Log.e(TAG, "Save media DB HTTP " + code + " | " + resp);
+                            onComplete.onComplete(false, "Media DB save failed: HTTP " + code);
+                        }
+                    });
                 }
             });
         } catch (Exception e) {
             Log.e(TAG, "Save media error: " + e.getMessage());
-            onComplete.run();
+            onComplete.onComplete(false, "Failed to prepare media save.");
         }
     }
     private void uploadImageAndSave(String businessName, String description, String category,

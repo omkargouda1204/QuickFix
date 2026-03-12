@@ -177,6 +177,52 @@ public class FcmNotificationHelper {
         }).start();
     }
 
+    /**
+     * Notify a provider that a new booking request has been received.
+     * Called after a customer successfully creates a booking.
+     *
+     * @param providerFirebaseUid The firebase_uid of the provider.
+     * @param customerName        Name of the customer who booked.
+     * @param serviceName         The service/category that was booked.
+     */
+    public static void notifyProviderNewBooking(String providerFirebaseUid,
+                                                 String customerName,
+                                                 String serviceName) {
+        if (providerFirebaseUid == null || providerFirebaseUid.isEmpty()) return;
+
+        new Thread(() -> {
+            try {
+                String token = fetchUserFcmToken(providerFirebaseUid);
+                if (token == null || token.isEmpty()) {
+                    Log.d(TAG, "notifyProviderNewBooking: no token for uid=" + providerFirebaseUid);
+                    // Still save in-app notification even if push fails
+                }
+
+                String title = "📋 New Booking Request!";
+                String body  = (customerName != null && !customerName.isEmpty()
+                        ? customerName : "A customer")
+                        + " has requested a booking"
+                        + (serviceName != null && !serviceName.isEmpty()
+                        ? " for " + serviceName : "")
+                        + ". Tap to review and accept.";
+
+                // Send push notification if token available
+                if (token != null && !token.isEmpty()) {
+                    sendViaEdgeFunction(token, title, body,
+                            "booking_request", providerFirebaseUid);
+                }
+
+                // Save in-app notification for the provider
+                saveInAppNotification(providerFirebaseUid, title, body, "booking_request");
+
+                Log.d(TAG, "notifyProviderNewBooking: sent to uid=" + providerFirebaseUid);
+
+            } catch (Exception e) {
+                Log.w(TAG, "notifyProviderNewBooking failed (non-fatal): " + e.getMessage());
+            }
+        }).start();
+    }
+
     // ── Public single-token send (used by OfferManagement) ───────────────
 
     /**

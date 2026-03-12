@@ -429,6 +429,7 @@ public class ProvidersListActivity extends BaseActivity
         // Open provider detail screen (pass data as extras)
         Intent intent = new Intent(this, ProviderDetailActivity.class);
         intent.putExtra(ProviderDetailActivity.EXTRA_PROVIDER_ID,        provider.id);
+        intent.putExtra(ProviderDetailActivity.EXTRA_FIREBASE_UID,       provider.firebaseUid);
         intent.putExtra(ProviderDetailActivity.EXTRA_BUSINESS_NAME,      provider.businessName);
         intent.putExtra(ProviderDetailActivity.EXTRA_OWNER_NAME,         provider.ownerName);
         intent.putExtra(ProviderDetailActivity.EXTRA_CATEGORY,           provider.category);
@@ -449,6 +450,7 @@ public class ProvidersListActivity extends BaseActivity
         // For now launch detail screen with booking flag
         Intent intent = new Intent(this, ProviderDetailActivity.class);
         intent.putExtra(ProviderDetailActivity.EXTRA_PROVIDER_ID,   provider.id);
+        intent.putExtra(ProviderDetailActivity.EXTRA_FIREBASE_UID,  provider.firebaseUid);
         intent.putExtra(ProviderDetailActivity.EXTRA_BUSINESS_NAME, provider.businessName);
         intent.putExtra(ProviderDetailActivity.EXTRA_OWNER_NAME,    provider.ownerName);
         intent.putExtra(ProviderDetailActivity.EXTRA_CATEGORY,      provider.category);

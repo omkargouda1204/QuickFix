@@ -38,6 +38,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 
     // Notification channel IDs
     public static final String CHANNEL_PROVIDER = "provider_apps";
+    public static final String CHANNEL_BOOKINGS = "bookings";
     public static final String CHANNEL_GENERAL  = "general";
 
     // Auto-incrementing notification ID so multiple notifications stack
@@ -133,6 +134,11 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
                 channelId      = CHANNEL_PROVIDER;
                 targetActivity = ApplicationStatusActivity.class;
                 break;
+            case "booking_request":
+                // Provider receives this → open My Bookings page
+                channelId      = CHANNEL_BOOKINGS;
+                targetActivity = MyBookingsActivity.class;
+                break;
             default:
                 channelId      = CHANNEL_GENERAL;
                 targetActivity = MainActivity.class;
@@ -203,6 +209,17 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         providerChannel.setLightColor(Color.BLUE);
         providerChannel.enableVibration(true);
         manager.createNotificationChannel(providerChannel);
+
+        // Bookings channel — high importance for booking requests
+        NotificationChannel bookingsChannel = new NotificationChannel(
+                CHANNEL_BOOKINGS,
+                "Booking Requests",
+                NotificationManager.IMPORTANCE_HIGH);
+        bookingsChannel.setDescription("Notifications for new booking requests and updates");
+        bookingsChannel.enableLights(true);
+        bookingsChannel.setLightColor(Color.YELLOW);
+        bookingsChannel.enableVibration(true);
+        manager.createNotificationChannel(bookingsChannel);
 
         // General channel — default importance
         NotificationChannel generalChannel = new NotificationChannel(

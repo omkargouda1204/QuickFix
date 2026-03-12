@@ -39,9 +39,9 @@ public class SupabaseStorageHelper {
     private static final String ANON_KEY     = BuildConfig.SUPABASE_ANON_KEY;
 
     private static final OkHttpClient HTTP = new OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(60,    TimeUnit.SECONDS)
-            .writeTimeout(60,   TimeUnit.SECONDS)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(180,   TimeUnit.SECONDS)
+            .writeTimeout(180,  TimeUnit.SECONDS)
             .build();
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
@@ -74,9 +74,10 @@ public class SupabaseStorageHelper {
                 String mimeType = context.getContentResolver().getType(fileUri);
                 if (mimeType == null) mimeType = "application/octet-stream";
 
-                // Generate unique file name
+                // Generate unique file name — full UUID ensures no path collisions
                 String ext = mimeTypeToExtension(mimeType);
-                String fileName = prefix + "_" + UUID.randomUUID().toString().substring(0, 8) + ext;
+                String uniqueId = UUID.randomUUID().toString().replace("-", "");
+                String fileName = uniqueId + ext;
                 String storagePath = prefix + "/" + fileName;
 
                 // Read file bytes (compatible with API 24+)
@@ -112,10 +113,12 @@ public class SupabaseStorageHelper {
                     String body = response.body() != null ? response.body().string() : "";
                     Log.d(TAG, "uploadFile HTTP " + code + " | " + body);
 
-                    if (code == 200 || code == 201) {
-                        // Build public URL
-                        String publicUrl = SUPABASE_URL + "/storage/v1/object/public/"
-                                + bucket + "/" + storagePath;
+                    String publicUrl = SUPABASE_URL + "/storage/v1/object/public/"
+                            + bucket + "/" + storagePath;
+
+                    if (code == 200 || code == 201 || code == 204 || code == 409
+                            || isAlreadyExistsConflict(code, body)) {
+                        // 409 can happen when server sees a duplicate/object conflict.
                         Log.d(TAG, "Upload success: " + publicUrl);
                         MAIN.post(() -> callback.onSuccess(publicUrl));
                     } else {
@@ -207,6 +210,15 @@ public class SupabaseStorageHelper {
         }).start();
     }
 
+    private static boolean isAlreadyExistsConflict(int code, String body) {
+        if (code != 409) return false;
+        String safeBody = body == null ? "" : body.toLowerCase();
+        return safeBody.contains("already exists")
+                || safeBody.contains("duplicate")
+                || safeBody.contains("resource already")
+                || safeBody.contains("key") && safeBody.contains("exists");
+    }
+
     private static String formatUploadError(int code, String body, String bucket) {
         String safeBody = body == null ? "" : body;
         String lower = safeBody.toLowerCase();
@@ -227,16 +239,18 @@ public class SupabaseStorageHelper {
     private static String mimeTypeToExtension(String mimeType) {
         if (mimeType == null) return ".bin";
         switch (mimeType) {
-            case "image/jpeg": return ".jpg";
-            case "image/png":  return ".png";
-            case "image/webp": return ".webp";
-            case "image/gif":  return ".gif";
+            case "image/jpeg":  return ".jpg";
+            case "image/png":   return ".png";
+            case "image/webp":  return ".webp";
+            case "image/gif":   return ".gif";
+            case "video/mp4":   return ".mp4";
+            case "video/3gpp":  return ".3gp";
+            case "video/webm":  return ".webm";
+            case "video/quicktime": return ".mov";
             case "application/pdf": return ".pdf";
             default:
-                // Try to extract from mime
-                if (mimeType.startsWith("image/")) {
-                    return "." + mimeType.substring(6);
-                }
+                if (mimeType.startsWith("image/")) return "." + mimeType.substring(6);
+                if (mimeType.startsWith("video/")) return "." + mimeType.substring(6);
                 return ".bin";
         }
     }

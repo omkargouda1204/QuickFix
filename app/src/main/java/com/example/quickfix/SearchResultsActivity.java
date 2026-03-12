@@ -349,7 +349,108 @@ public class SearchResultsActivity extends BaseActivity
 
     @Override
     public void onResultClick(SearchResult result) {
-        Toast.makeText(this, result.name + " — details coming soon", Toast.LENGTH_SHORT).show();
+        if (SearchResult.TYPE_PROVIDER.equals(result.type)) {
+            // Fetch full provider profile from Supabase, then open detail
+            fetchProviderAndOpenDetail(result.id);
+        } else if (SearchResult.TYPE_SERVICE.equals(result.type)) {
+            // Open providers list filtered by service category
+            Intent intent = new Intent(this, ProvidersListActivity.class);
+            intent.putExtra(ProvidersListActivity.EXTRA_CATEGORY, result.subtitle); // category
+            intent.putExtra(ProvidersListActivity.EXTRA_CITY, cityFilter);
+            startActivity(intent);
+        }
+    }
+
+    private void fetchProviderAndOpenDetail(String providerId) {
+        showLoading(true);
+        new Thread(() -> {
+            try {
+                // Try provider_profiles first
+                String url = BASE_URL + "/rest/v1/provider_profiles"
+                        + "?id=eq." + providerId
+                        + "&select=*&limit=1";
+
+                Request req = new Request.Builder().url(url)
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
+                try (Response r = HTTP.newCall(req).execute()) {
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    if (r.code() == 200) {
+                        JSONArray arr = new JSONArray(body);
+                        if (arr.length() > 0) {
+                            JSONObject o = arr.getJSONObject(0);
+                            MAIN.post(() -> {
+                                showLoading(false);
+                                openProviderDetail(o);
+                            });
+                            return;
+                        }
+                    }
+                }
+
+                // Fallback: try provider_applications
+                String url2 = BASE_URL + "/rest/v1/provider_applications"
+                        + "?id=eq." + providerId
+                        + "&select=*&limit=1";
+
+                Request req2 = new Request.Builder().url(url2)
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
+                try (Response r2 = HTTP.newCall(req2).execute()) {
+                    String body2 = r2.body() != null ? r2.body().string() : "[]";
+                    if (r2.code() == 200) {
+                        JSONArray arr = new JSONArray(body2);
+                        if (arr.length() > 0) {
+                            JSONObject o = arr.getJSONObject(0);
+                            MAIN.post(() -> {
+                                showLoading(false);
+                                openProviderDetail(o);
+                            });
+                            return;
+                        }
+                    }
+                }
+
+                MAIN.post(() -> {
+                    showLoading(false);
+                    Toast.makeText(this, "Provider details not found", Toast.LENGTH_SHORT).show();
+                });
+
+            } catch (Exception e) {
+                Log.e(TAG, "fetchProviderAndOpenDetail: " + e.getMessage());
+                MAIN.post(() -> {
+                    showLoading(false);
+                    Toast.makeText(this, "Error loading provider details", Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
+    }
+
+    private void openProviderDetail(JSONObject o) {
+        Intent intent = new Intent(this, ProviderDetailActivity.class);
+        intent.putExtra(ProviderDetailActivity.EXTRA_PROVIDER_ID, o.optString("id"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_FIREBASE_UID, o.optString("firebase_uid"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_BUSINESS_NAME, o.optString("business_name"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_OWNER_NAME,
+                o.optString("owner_name", o.optString("user_name", "")));
+        intent.putExtra(ProviderDetailActivity.EXTRA_CATEGORY, o.optString("category"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_CITY, o.optString("city"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_PHONE, o.optString("phone"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_EMAIL, o.optString("email"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_DESCRIPTION, o.optString("description"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_EXPERIENCE,
+                o.optString("experience_yrs", o.optString("experience", "")));
+        intent.putExtra(ProviderDetailActivity.EXTRA_IMAGE_URL, o.optString("business_image_url"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_IS_VERIFIED, o.optBoolean("is_verified", false));
+        intent.putExtra(ProviderDetailActivity.EXTRA_RATING, (float) o.optDouble("rating", 0));
+        startActivity(intent);
+        overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
     }
 }
 
