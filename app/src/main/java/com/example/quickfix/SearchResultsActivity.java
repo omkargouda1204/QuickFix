@@ -187,19 +187,27 @@ public class SearchResultsActivity extends BaseActivity
         }).start();
     }
 
-    /** Query provider_applications (approved) filtered by business_name / category + city. */
+    /**
+     * Query provider_profiles (active approved providers) first.
+     * Falls back to provider_applications (approved) if profiles returns nothing.
+     * City filter is skipped when cityFilter is empty → shows all providers.
+     */
     private List<SearchResult> searchProviders(String query) {
         List<SearchResult> list = new ArrayList<>();
         if (query.isEmpty()) return list;
         try {
             String enc = java.net.URLEncoder.encode(query, "UTF-8");
+
+            // ── 1st try: provider_profiles ────────────────────────────────
             StringBuilder url = new StringBuilder(BASE_URL)
-                    .append("/rest/v1/provider_applications")
-                    .append("?status=eq.approved")
-                    .append("&or=(business_name.ilike.*").append(enc).append("*,category.ilike.*").append(enc).append("*,owner_name.ilike.*").append(enc).append("*)")
+                    .append("/rest/v1/provider_profiles")
+                    .append("?status=eq.active")
+                    .append("&or=(business_name.ilike.*").append(enc)
+                    .append("*,category.ilike.*").append(enc)
+                    .append("*,owner_name.ilike.*").append(enc).append("*)")
                     .append("&select=id,business_name,category,city,owner_name")
                     .append("&limit=30");
-
+            // Only add city filter when a location is actually selected
             if (!cityFilter.isEmpty()) {
                 url.append("&city=ilike.*")
                    .append(java.net.URLEncoder.encode(cityFilter, "UTF-8")).append("*");
@@ -217,21 +225,62 @@ public class SearchResultsActivity extends BaseActivity
                     JSONArray arr = new JSONArray(body);
                     for (int i = 0; i < arr.length(); i++) {
                         JSONObject o = arr.getJSONObject(i);
+                        String name  = o.optString("business_name", "—");
+                        String sub   = o.optString("category", "");
+                        String owner = o.optString("owner_name", "");
+                        if (!owner.isEmpty()) sub = sub + " • " + owner;
                         list.add(new SearchResult(
-                            o.optString("id"),
-                            o.optString("business_name", "—"),
-                            o.optString("category", "") + " • " + o.optString("owner_name", ""),
-                            o.optString("city", ""),
-                            SearchResult.TYPE_PROVIDER
-                        ));
+                            o.optString("id"), name, sub,
+                            o.optString("city", ""), SearchResult.TYPE_PROVIDER));
                     }
                 }
             }
+
+            // ── 2nd try: provider_applications fallback ───────────────────
+            if (list.isEmpty()) {
+                StringBuilder url2 = new StringBuilder(BASE_URL)
+                        .append("/rest/v1/provider_applications")
+                        .append("?status=eq.approved")
+                        .append("&or=(business_name.ilike.*").append(enc)
+                        .append("*,category.ilike.*").append(enc)
+                        .append("*,user_name.ilike.*").append(enc).append("*)")
+                        .append("&select=id,business_name,category,city,user_name")
+                        .append("&limit=30");
+                if (!cityFilter.isEmpty()) {
+                    url2.append("&city=ilike.*")
+                        .append(java.net.URLEncoder.encode(cityFilter, "UTF-8")).append("*");
+                }
+                Request req2 = new Request.Builder().url(url2.toString())
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept",        "application/json")
+                        .build();
+                try (Response r2 = HTTP.newCall(req2).execute()) {
+                    String body2 = r2.body() != null ? r2.body().string() : "[]";
+                    if (r2.code() == 200) {
+                        JSONArray arr = new JSONArray(body2);
+                        for (int i = 0; i < arr.length(); i++) {
+                            JSONObject o = arr.getJSONObject(i);
+                            String name  = o.optString("business_name", "—");
+                            String sub   = o.optString("category", "");
+                            String owner = o.optString("user_name", "");
+                            if (!owner.isEmpty()) sub = sub + " • " + owner;
+                            list.add(new SearchResult(
+                                o.optString("id"), name, sub,
+                                o.optString("city", ""), SearchResult.TYPE_PROVIDER));
+                        }
+                    }
+                }
+            }
+
         } catch (Exception e) { Log.e(TAG, "searchProviders: " + e.getMessage()); }
         return list;
     }
 
-    /** Query services table if it exists (gracefully skipped if 404). */
+    /**
+     * Query services table — gracefully skipped if table doesn't exist.
+     * City filter only applied when cityFilter is non-empty.
+     */
     private List<SearchResult> searchServices(String query) {
         List<SearchResult> list = new ArrayList<>();
         if (query.isEmpty()) return list;
@@ -239,14 +288,11 @@ public class SearchResultsActivity extends BaseActivity
             String enc = java.net.URLEncoder.encode(query, "UTF-8");
             StringBuilder url = new StringBuilder(BASE_URL)
                     .append("/rest/v1/services")
-                    .append("?or=(name.ilike.*").append(enc).append("*,category.ilike.*").append(enc).append("*)")
-                    .append("&select=id,name,category,city")
-                    .append("&limit=30");
-
-            if (!cityFilter.isEmpty()) {
-                url.append("&city=ilike.*")
-                   .append(java.net.URLEncoder.encode(cityFilter, "UTF-8")).append("*");
-            }
+                    .append("?or=(title.ilike.*").append(enc)
+                    .append("*,category.ilike.*").append(enc).append("*)")
+                    .append("&select=id,title,category")
+                    .append("&limit=20");
+            // No city filter on services table (it usually has no city column)
 
             Request req = new Request.Builder().url(url.toString())
                     .addHeader("apikey",        ANON_KEY)
@@ -255,7 +301,7 @@ public class SearchResultsActivity extends BaseActivity
                     .build();
 
             try (Response r = HTTP.newCall(req).execute()) {
-                if (r.code() == 404 || r.code() == 400) return list; // table doesn't exist yet
+                if (r.code() == 404 || r.code() == 400) return list; // table may not exist
                 String body = r.body() != null ? r.body().string() : "[]";
                 if (r.code() == 200) {
                     JSONArray arr = new JSONArray(body);
@@ -263,9 +309,9 @@ public class SearchResultsActivity extends BaseActivity
                         JSONObject o = arr.getJSONObject(i);
                         list.add(new SearchResult(
                             o.optString("id"),
-                            o.optString("name", "—"),
+                            o.optString("title", o.optString("name", "—")),
                             o.optString("category", ""),
-                            o.optString("city", ""),
+                            "",
                             SearchResult.TYPE_SERVICE
                         ));
                     }

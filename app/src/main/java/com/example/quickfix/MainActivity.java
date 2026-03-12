@@ -110,6 +110,10 @@ public class MainActivity extends BaseActivity {
     private final List<Banner> homeBanners = new java.util.ArrayList<>();
     private final List<Offer>  homeOffers  = new java.util.ArrayList<>();
 
+
+    // ── Pull-to-Refresh ───────────────────────────────────────────────────
+    private androidx.swiperefreshlayout.widget.SwipeRefreshLayout homeSwipeRefresh;
+
     // ── Bottom Nav ────────────────────────────────────────────────────────
     private LinearLayout navHome, navBookings, navMessages, navProfile;
     private ImageView    navHomeIcon, navBookingsIcon, navMessagesIcon, navProfileIcon;
@@ -241,6 +245,23 @@ public class MainActivity extends BaseActivity {
         navBookingsText = findViewById(R.id.navBookingsText);
         navMessagesText = findViewById(R.id.navMessagesText);
         navProfileText  = findViewById(R.id.navProfileText);
+
+        // Pull-to-refresh (silent background refresh — no visible spinner shown)
+        homeSwipeRefresh = findViewById(R.id.homeSwipeRefresh);
+        if (homeSwipeRefresh != null) {
+            homeSwipeRefresh.setColorSchemeResources(R.color.primary);
+            // Make the circle indicator invisible so it feels like a background refresh
+            homeSwipeRefresh.setProgressBackgroundColorSchemeColor(
+                    android.graphics.Color.TRANSPARENT);
+            homeSwipeRefresh.setProgressViewOffset(false, 0, 0);
+            homeSwipeRefresh.setOnRefreshListener(() -> {
+                loadBannersAndOffers();
+                // Dismiss spinner after a short delay
+                MAIN.postDelayed(() -> {
+                    if (homeSwipeRefresh != null) homeSwipeRefresh.setRefreshing(false);
+                }, 1500);
+            });
+        }
     }
 
     // ── Load User Data ────────────────────────────────────────────────────
@@ -307,6 +328,7 @@ public class MainActivity extends BaseActivity {
         EditText     etSearch    = sv.findViewById(R.id.etLocationSearch);
         ImageView    btnClear    = sv.findViewById(R.id.btnClearLocationSearch);
         LinearLayout btnLive     = sv.findViewById(R.id.btnUseLiveLocation);
+        LinearLayout btnClearLoc = sv.findViewById(R.id.btnClearLocation);
         TextView     tvLiveSub   = sv.findViewById(R.id.tvLiveLocationSub);
         ProgressBar  progress    = sv.findViewById(R.id.locationProgress);
         LinearLayout citiesGrid  = sv.findViewById(R.id.popularCitiesGrid);
@@ -315,10 +337,22 @@ public class MainActivity extends BaseActivity {
         ImageView    btnClose    = sv.findViewById(R.id.btnCloseLocationSheet);
         TextView     tvPopLabel  = sv.findViewById(R.id.tvPopularCitiesLabel);
 
-        // Show saved city as subtitle
+        // Show saved city as subtitle on GPS button
         String saved = locationManager.getSavedCity();
         if (tvLiveSub != null && saved != null && !saved.isEmpty())
             tvLiveSub.setText("Current: " + saved);
+
+        // Show "Clear Location" button only if a city is already selected
+        if (btnClearLoc != null) {
+            btnClearLoc.setVisibility(
+                    (saved != null && !saved.isEmpty()) ? View.VISIBLE : View.GONE);
+            btnClearLoc.setOnClickListener(x -> {
+                locationManager.clearCity();
+                updateLocationDisplay("Select Location", false);
+                Toast.makeText(this, "Location cleared — showing all providers", Toast.LENGTH_SHORT).show();
+                sheet.dismiss();
+            });
+        }
 
         if (btnClose != null) btnClose.setOnClickListener(x -> sheet.dismiss());
 
@@ -369,7 +403,7 @@ public class MainActivity extends BaseActivity {
         }
         if (btnClear != null) btnClear.setOnClickListener(x -> { if (etSearch != null) etSearch.setText(""); });
 
-        // Live location button
+        // Live location button — always overrides any existing manual selection
         if (btnLive != null) {
             btnLive.setOnClickListener(x -> {
                 if (progress != null) progress.setVisibility(View.VISIBLE);
@@ -384,9 +418,12 @@ public class MainActivity extends BaseActivity {
                     sheet.dismiss();
                     return;
                 }
+                // clearCity() first so GPS always wins over any previously saved manual city
+                locationManager.clearCity();
                 locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
                     @Override public void onSuccess(String city, double lat, double lng) {
                         if (progress != null) progress.setVisibility(View.GONE);
+                        // fetchLiveLocation already saved city to prefs
                         String d = (city == null || city.isEmpty()) ? "Location detected" : city;
                         updateLocationDisplay(d, true);
                         Toast.makeText(MainActivity.this, "📍 " + d, Toast.LENGTH_SHORT).show();
@@ -563,10 +600,16 @@ public class MainActivity extends BaseActivity {
             try {
                 String enc  = java.net.URLEncoder.encode(query, "UTF-8");
                 String city = locationManager.getSavedCity();
+
+                // ── 1. Query provider_profiles (approved providers) ──
                 StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
-                    .append("/rest/v1/provider_applications?status=eq.approved")
-                    .append("&or=(business_name.ilike.*").append(enc).append("*,category.ilike.*").append(enc).append("*)")
+                    .append("/rest/v1/provider_profiles")
+                    .append("?status=eq.active")
+                    .append("&or=(business_name.ilike.*").append(enc)
+                    .append("*,category.ilike.*").append(enc)
+                    .append("*,owner_name.ilike.*").append(enc).append("*)")
                     .append("&select=id,business_name,category,city&limit=6");
+                // Only add city filter if a location is selected
                 if (!city.isEmpty())
                     url.append("&city=ilike.*")
                        .append(java.net.URLEncoder.encode(city, "UTF-8")).append("*");
@@ -591,6 +634,41 @@ public class MainActivity extends BaseActivity {
                         }
                     }
                 }
+
+                // ── 2. If no results from profiles, try provider_applications ──
+                if (list.isEmpty()) {
+                    StringBuilder url2 = new StringBuilder(BuildConfig.SUPABASE_URL)
+                        .append("/rest/v1/provider_applications?status=eq.approved")
+                        .append("&or=(business_name.ilike.*").append(enc)
+                        .append("*,category.ilike.*").append(enc)
+                        .append("*,user_name.ilike.*").append(enc).append("*)")
+                        .append("&select=id,business_name,category,city&limit=6");
+                    if (!city.isEmpty())
+                        url2.append("&city=ilike.*")
+                            .append(java.net.URLEncoder.encode(city, "UTF-8")).append("*");
+
+                    Request req2 = new Request.Builder().url(url2.toString())
+                        .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Accept",        "application/json")
+                        .build();
+                    try (Response r2 = HTTP.newCall(req2).execute()) {
+                        if (r2.code() == 200) {
+                            String body2 = r2.body() != null ? r2.body().string() : "[]";
+                            JSONArray arr2 = new JSONArray(body2);
+                            for (int i = 0; i < arr2.length(); i++) {
+                                JSONObject o = arr2.getJSONObject(i);
+                                list.add(new SearchResult(
+                                    o.optString("id"),
+                                    o.optString("business_name", ""),
+                                    o.optString("category", ""),
+                                    o.optString("city", ""),
+                                    SearchResult.TYPE_PROVIDER));
+                            }
+                        }
+                    }
+                }
+
             } catch (Exception e) { Log.e(TAG, "fetchSuggestions: " + e.getMessage()); }
 
             MAIN.post(() -> {
