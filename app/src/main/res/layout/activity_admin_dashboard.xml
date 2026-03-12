@@ -440,7 +440,64 @@
                     android:layout_marginBottom="12dp"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="4dp"
-                    app:cardBackgroundColor="@color/card_bg"/>
+                    app:cardBackgroundColor="@color/card_bg">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:padding="18dp">
+
+                        <FrameLayout
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:background="@drawable/bg_card_icon">
+
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_approval"
+                                app:tint="#1E88E5" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:layout_marginHorizontal="14dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Business Approvals"
+                                android:textColor="@color/text_primary"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="Approve/reject providers"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnBusinessApprovals"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="View"
+                            android:textSize="12sp"
+                            android:textColor="#FFFFFF"
+                            style="@style/Widget.Material3.Button"
+                            app:backgroundTint="#1E88E5"
+                            app:cornerRadius="8dp" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
 
                 <!-- ── Card 2: User Management ── -->
                 <androidx.cardview.widget.CardView
@@ -450,7 +507,64 @@
                     android:layout_marginBottom="12dp"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="4dp"
-                    app:cardBackgroundColor="@color/card_bg"/>
+                    app:cardBackgroundColor="@color/card_bg">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:padding="18dp">
+
+                        <FrameLayout
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:background="@drawable/bg_card_icon">
+
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_users"
+                                app:tint="#43A047" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:layout_marginHorizontal="14dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="User Management"
+                                android:textColor="@color/text_primary"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:text="Search &amp; manage all users"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnUserManagement"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="Manage"
+                            android:textSize="12sp"
+                            android:textColor="#FFFFFF"
+                            style="@style/Widget.Material3.Button"
+                            app:backgroundTint="#43A047"
+                            app:cornerRadius="8dp" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
 
                 <!-- ── Card 3: Service Management ── -->
                 <androidx.cardview.widget.CardView
@@ -656,51 +770,6 @@
             </LinearLayout>
             <!-- end cards -->
 
-            <!-- ══════════════════════════════════════════
-                 BANNER &amp; OFFER OVERVIEW SECTION
-                 ══════════════════════════════════════════ -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Promotions Overview"
-                android:textColor="@color/text_primary"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:layout_marginStart="20dp"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="8dp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingHorizontal="16dp"
-                android:paddingBottom="16dp"
-                android:weightSum="2">
-
-                <!-- Banners card -->
-                <androidx.cardview.widget.CardView
-                    android:id="@+id/cardDashBanners"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="8dp"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="5dp"
-                    app:cardBackgroundColor="@color/card_bg"/>
-
-                <!-- Offers card -->
-                <androidx.cardview.widget.CardView
-                    android:id="@+id/cardDashOffers"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="5dp"
-                    app:cardBackgroundColor="@color/card_bg"/>
-
-            </LinearLayout>
-
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
@@ -720,4 +789,3 @@
         app:labelVisibilityMode="labeled" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
-
