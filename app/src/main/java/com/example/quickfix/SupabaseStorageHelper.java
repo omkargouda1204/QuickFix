@@ -22,12 +22,14 @@ import okhttp3.Response;
  * Buckets used:
  *   • provider-business-images  (business_image_url)
  *   • provider-id-proofs        (id_proof_url)
+ *   • Quickfix                  (business media: images and videos)
  *
- * Both buckets must exist in Supabase Storage and be configured as PUBLIC or have
+ * All buckets must exist in Supabase Storage and be configured as PUBLIC or have
  * the appropriate RLS policies for INSERT from anon key.
  *
  * CREATE STORAGE BUCKET: provider-business-images  (public: true)
  * CREATE STORAGE BUCKET: provider-id-proofs        (public: false, admin-readable)
+ * CREATE STORAGE BUCKET: Quickfix                  (public: true)
  */
 public class SupabaseStorageHelper {
 
@@ -53,6 +55,7 @@ public class SupabaseStorageHelper {
     public static final String BUCKET_BUSINESS_IMAGES = "provider-business-images";
     public static final String BUCKET_ID_PROOFS       = "provider-id-proofs";
     public static final String BUCKET_PROFILE_IMAGES  = "profile-images";
+    public static final String BUCKET_QUICKFIX        = "Quickfix";
 
     /**
      * Upload a file from a Uri to a Supabase Storage bucket.
@@ -116,7 +119,8 @@ public class SupabaseStorageHelper {
                         Log.d(TAG, "Upload success: " + publicUrl);
                         MAIN.post(() -> callback.onSuccess(publicUrl));
                     } else {
-                        MAIN.post(() -> callback.onError("Upload failed HTTP " + code + ": " + body));
+                        String message = formatUploadError(code, body, bucket);
+                        MAIN.post(() -> callback.onError(message));
                     }
                 }
 
@@ -203,6 +207,23 @@ public class SupabaseStorageHelper {
         }).start();
     }
 
+    private static String formatUploadError(int code, String body, String bucket) {
+        String safeBody = body == null ? "" : body;
+        String lower = safeBody.toLowerCase();
+
+        if (code == 401 || code == 403 || lower.contains("\"error\":\"unauth\"")
+                || lower.contains("\"statuscode\":\"403\"")) {
+            return "Storage permission denied for bucket '" + bucket +
+                    "'. Please add Supabase Storage INSERT policy for role anon.";
+        }
+
+        if (lower.contains("bucket") && lower.contains("not") && lower.contains("found")) {
+            return "Bucket '" + bucket + "' not found in Supabase Storage.";
+        }
+
+        return "Upload failed HTTP " + code + ": " + safeBody;
+    }
+
     private static String mimeTypeToExtension(String mimeType) {
         if (mimeType == null) return ".bin";
         switch (mimeType) {
@@ -220,4 +241,3 @@ public class SupabaseStorageHelper {
         }
     }
 }
-

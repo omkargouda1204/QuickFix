@@ -78,6 +78,10 @@ public class BusinessProfileActivity extends BaseActivity {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private ActivityResultLauncher<String> imagePickerLauncher;
     private ActivityResultLauncher<String> mediaPickerLauncher;
+
+    private interface PendingMediaUploadCallback {
+        void onComplete(boolean allSucceeded, String firstError);
+    }
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -436,7 +440,20 @@ public class BusinessProfileActivity extends BaseActivity {
         }
 
         // Upload pending media first, then update profile
-        uploadPendingMedia(() -> {
+        uploadPendingMedia((allSucceeded, firstError) -> {
+            if (!allSucceeded) {
+                if (progressBar != null) {
+                    progressBar.setVisibility(View.GONE);
+                }
+                if (btnSave != null) {
+                    btnSave.setEnabled(true);
+                }
+                Toast.makeText(BusinessProfileActivity.this,
+                        firstError != null ? firstError : "Some media uploads failed. Please retry.",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+
             if (selectedImageUri != null) {
                 uploadImageAndSave(businessName, description, category, experience,
                                   address, city, phone, isAvailable);
@@ -447,20 +464,22 @@ public class BusinessProfileActivity extends BaseActivity {
         });
     }
 
-    private void uploadPendingMedia(Runnable onComplete) {
+    private void uploadPendingMedia(PendingMediaUploadCallback onComplete) {
         List<Uri> pendingUploads = mediaAdapter != null ? mediaAdapter.getPendingUploads() : new ArrayList<>();
 
         if (pendingUploads.isEmpty()) {
-            onComplete.run();
+            onComplete.onComplete(true, null);
             return;
         }
 
         AtomicInteger completed = new AtomicInteger(0);
+        AtomicInteger failed = new AtomicInteger(0);
+        final String[] firstError = {null};
         int total = pendingUploads.size();
 
         for (Uri uri : pendingUploads) {
             String mediaType = isVideo(uri) ? "video" : "image";
-            String bucket = SupabaseStorageHelper.BUCKET_BUSINESS_IMAGES;
+            String bucket = SupabaseStorageHelper.BUCKET_QUICKFIX;
             String prefix = "provider_" + providerId + "_gallery";
 
             SupabaseStorageHelper.uploadFile(this, uri, bucket, prefix,
@@ -470,7 +489,7 @@ public class BusinessProfileActivity extends BaseActivity {
                             saveMediaToDatabase(publicUrl, mediaType, () -> {
                                 if (completed.incrementAndGet() >= total) {
                                     loadBusinessMedia();
-                                    onComplete.run();
+                                    onComplete.onComplete(failed.get() == 0, firstError[0]);
                                 }
                             });
                         }
@@ -478,9 +497,13 @@ public class BusinessProfileActivity extends BaseActivity {
                         @Override
                         public void onError(String error) {
                             Log.e(TAG, "Media upload failed: " + error);
+                            failed.incrementAndGet();
+                            if (firstError[0] == null) {
+                                firstError[0] = error;
+                            }
                             if (completed.incrementAndGet() >= total) {
                                 loadBusinessMedia();
-                                onComplete.run();
+                                onComplete.onComplete(false, firstError[0]);
                             }
                         }
                     });
@@ -535,7 +558,7 @@ public class BusinessProfileActivity extends BaseActivity {
         SupabaseStorageHelper.uploadFile(
                 this,
                 selectedImageUri,
-                SupabaseStorageHelper.BUCKET_BUSINESS_IMAGES,
+                SupabaseStorageHelper.BUCKET_QUICKFIX,
                 "provider_" + providerId,
                 new SupabaseStorageHelper.UploadCallback() {
                     @Override
@@ -642,3 +665,4 @@ public class BusinessProfileActivity extends BaseActivity {
         return editText.getText().toString().trim();
     }
 }
+
