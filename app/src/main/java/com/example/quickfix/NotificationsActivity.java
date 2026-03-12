@@ -11,7 +11,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -108,43 +107,66 @@ public class NotificationsActivity extends BaseActivity
         showLoading(true);
         new Thread(() -> {
             try {
-                String url = BASE_URL
-                        + "/rest/v1/notifications?user_id=eq." + userId
-                        + "&select=*&order=created_at.desc";
-                Request req = new Request.Builder().url(url)
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept",        "application/json")
-                        .build();
-                try (Response r = HTTP.newCall(req).execute()) {
-                    String body = r.body() != null ? r.body().string() : "[]";
-                    Log.d(TAG, "loadNotifications HTTP " + r.code());
-                    if (r.code() == 200) {
-                        JSONArray arr = new JSONArray(body);
-                        List<Notification> list = new ArrayList<>();
-                        for (int i = 0; i < arr.length(); i++) {
-                            Notification n = Notification.fromJson(arr.getJSONObject(i));
-                            if (n != null) list.add(n);
-                        }
-                        allNotifications = list;
-                        MAIN.post(() -> {
-                            showLoading(false);
-                            adapter.setNotifications(list);
-                            updateUnreadCount();
-                            emptyState.setVisibility(list.isEmpty() ? View.VISIBLE : View.GONE);
-                            recyclerView.setVisibility(list.isEmpty() ? View.GONE : View.VISIBLE);
-                        });
-                    } else {
-                        MAIN.post(() -> { showLoading(false);
-                            Toast.makeText(this, "Failed to load notifications", Toast.LENGTH_SHORT).show(); });
-                    }
+                // Try querying by user_id (firebase_uid stored as user_id)
+                List<Notification> list = fetchNotifications("user_id", userId);
+
+                // If empty, also check for firebase_uid column (schema variants)
+                if (list.isEmpty()) {
+                    List<Notification> byFirebaseUid = fetchNotifications("firebase_uid", userId);
+                    if (!byFirebaseUid.isEmpty()) list = byFirebaseUid;
                 }
+
+                final List<Notification> finalList = list;
+                allNotifications = new ArrayList<>(finalList);
+                MAIN.post(() -> {
+                    showLoading(false);
+                    adapter.setNotifications(finalList);
+                    updateUnreadCount();
+                    emptyState.setVisibility(finalList.isEmpty() ? View.VISIBLE : View.GONE);
+                    recyclerView.setVisibility(finalList.isEmpty() ? View.GONE : View.VISIBLE);
+                });
             } catch (Exception e) {
                 Log.e(TAG, "loadNotifications: " + e.getMessage());
-                MAIN.post(() -> { showLoading(false);
-                    Toast.makeText(this, "Network error", Toast.LENGTH_SHORT).show(); });
+                MAIN.post(() -> {
+                    showLoading(false);
+                    // Show empty state gracefully instead of error toast
+                    emptyState.setVisibility(View.VISIBLE);
+                    recyclerView.setVisibility(View.GONE);
+                    if (tvUnreadCount != null) tvUnreadCount.setText("No notifications");
+                });
             }
         }).start();
+    }
+
+    /** Fetch notifications filtering by a given column name. Returns empty list on any error. */
+    private List<Notification> fetchNotifications(String column, String value) {
+        List<Notification> result = new ArrayList<>();
+        try {
+            String url = BASE_URL
+                    + "/rest/v1/notifications?" + column + "=eq." + value
+                    + "&select=*&order=created_at.desc";
+            Request req = new Request.Builder().url(url)
+                    .addHeader("apikey",        ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept",        "application/json")
+                    .build();
+            try (Response r = HTTP.newCall(req).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                Log.d(TAG, "fetchNotifications(" + column + ") HTTP " + r.code());
+                if (r.code() == 200 && body.startsWith("[")) {
+                    JSONArray arr = new JSONArray(body);
+                    for (int i = 0; i < arr.length(); i++) {
+                        Notification n = Notification.fromJson(arr.getJSONObject(i));
+                        if (n != null) result.add(n);
+                    }
+                } else if (r.code() != 200) {
+                    Log.w(TAG, "fetchNotifications HTTP " + r.code() + " body=" + body);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "fetchNotifications exception: " + e.getMessage());
+        }
+        return result;
     }
 
     @Override

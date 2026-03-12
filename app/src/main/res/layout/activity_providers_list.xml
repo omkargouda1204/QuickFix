@@ -7,14 +7,14 @@
     android:orientation="vertical"
     android:background="@color/screen_background">
 
-    <!-- Gradient header -->
+    <!-- ── GRADIENT HEADER ─────────────────────────────────────────────── -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_profile_header_gradient"
         android:orientation="vertical"
         android:paddingTop="44dp"
-        android:paddingBottom="16dp"
+        android:paddingBottom="14dp"
         android:paddingStart="16dp"
         android:paddingEnd="16dp">
 
@@ -62,25 +62,13 @@
                     android:textSize="12sp" />
             </LinearLayout>
 
-            <!-- Filter icon -->
-            <ImageView
-                android:id="@+id/btnFilter"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:src="@drawable/ic_search"
-                app:tint="#FFFFFF"
-                android:padding="8dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="Filter" />
         </LinearLayout>
 
-        <!-- Location row -->
+        <!-- Location row with change button -->
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="8dp"
             android:layout_marginStart="44dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
@@ -94,17 +82,87 @@
 
             <TextView
                 android:id="@+id/tvLocationLabel"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
                 android:layout_marginStart="4dp"
                 android:text="All locations"
                 android:textColor="#CCFFFFFF"
                 android:textSize="12sp" />
+
+            <!-- Change location button -->
+            <TextView
+                android:id="@+id/btnChangeLocation"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Change"
+                android:textColor="#FFFFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:background="@drawable/bg_location_chip"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:layout_marginEnd="4dp" />
+
+        </LinearLayout>
+
+        <!-- Search bar -->
+        <LinearLayout
+            android:id="@+id/searchBar"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:layout_marginTop="10dp"
+            android:background="@color/card_bg"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingEnd="4dp">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_search"
+                app:tint="@color/text_secondary"
+                android:contentDescription="Search" />
+
+            <EditText
+                android:id="@+id/etSearch"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:background="@android:color/transparent"
+                android:hint="Search by name, category, city..."
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_secondary"
+                android:textSize="13sp"
+                android:imeOptions="actionSearch"
+                android:inputType="text"
+                android:singleLine="true"
+                android:maxLines="1" />
+
+            <ImageView
+                android:id="@+id/btnClearSearch"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_close"
+                app:tint="@color/text_secondary"
+                android:padding="8dp"
+                android:visibility="gone"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Clear" />
+
         </LinearLayout>
 
     </LinearLayout>
 
-    <!-- Sort / filter chip bar -->
+    <!-- ── SORT / FILTER CHIPS ─────────────────────────────────────────── -->
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -148,7 +206,7 @@
         </com.google.android.material.chip.ChipGroup>
     </HorizontalScrollView>
 
-    <!-- Content area -->
+    <!-- ── CONTENT ─────────────────────────────────────────────────────── -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -196,7 +254,7 @@
         <!-- Empty state -->
         <LinearLayout
             android:id="@+id/emptyState"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:orientation="vertical"
@@ -246,7 +304,7 @@
         <!-- Error state -->
         <LinearLayout
             android:id="@+id/errorState"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:orientation="vertical"
@@ -265,10 +323,19 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Connection Error"
-                android:textColor="#424242"
+                android:text="Could not load providers"
+                android:textColor="@color/text_primary"
                 android:textSize="16sp"
                 android:textStyle="bold"
+                android:gravity="center" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="Check your internet connection and try again."
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
                 android:gravity="center" />
 
             <com.google.android.material.button.MaterialButton
@@ -285,5 +352,4 @@
     </FrameLayout>
 
 </LinearLayout>
-
 
