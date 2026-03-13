@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="@color/white"
+    android:background="@color/card_bg"
     android:paddingBottom="32dp">
 
     <!-- Drag handle -->
@@ -14,7 +14,7 @@
         android:layout_gravity="center_horizontal"
         android:layout_marginTop="12dp"
         android:layout_marginBottom="16dp"
-        android:background="#DDDDDD"/>
+        android:background="@color/drag_handle"/>
 
     <!-- Avatar + Name header -->
     <LinearLayout
@@ -166,5 +166,3 @@
     </LinearLayout>
 
 </LinearLayout>
-
-

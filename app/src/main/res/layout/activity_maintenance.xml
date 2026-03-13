@@ -16,7 +16,7 @@
         android:src="@drawable/ic_settings"
         android:contentDescription="Maintenance"
         android:layout_marginBottom="24dp"
-        app:tint="#3B82F6" />
+        app:tint="@color/primary" />
 
     <!-- Title -->
     <TextView
@@ -71,7 +71,7 @@
                     android:src="@drawable/ic_calendar"
                     android:layout_marginEnd="6dp"
                     android:contentDescription="Time"
-                    app:tint="#6B7280" />
+                    app:tint="@color/text_secondary" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -115,13 +115,13 @@
                 android:src="@drawable/ic_info"
                 android:layout_marginEnd="12dp"
                 android:contentDescription="Info"
-                app:tint="#1D4ED8" />
+                app:tint="@color/info_text" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Services are temporarily unavailable. Please check back soon."
-                android:textColor="#1E40AF"
+                android:textColor="@color/info_text"
                 android:textSize="13sp"
                 android:lineSpacingMultiplier="1.4" />
 
@@ -136,7 +136,7 @@
         android:text="Check Again"
         android:textSize="15sp"
         android:textStyle="bold"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/white"
         app:backgroundTint="@color/primary"
         app:cornerRadius="14dp"
         android:layout_marginBottom="16dp" />
@@ -149,5 +149,4 @@
         android:visibility="gone" />
 
 </LinearLayout>
-
 

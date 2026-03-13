@@ -71,7 +71,7 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:text="Push Notifications"
-                            android:textColor="#1E293B"
+                            android:textColor="@color/text_primary"
                             android:textSize="15sp" />
                         <com.google.android.material.switchmaterial.SwitchMaterial
                             android:id="@+id/switchAdminPushNotifications"
@@ -81,7 +81,7 @@
                     </LinearLayout>
 
                     <View android:layout_width="match_parent" android:layout_height="1dp"
-                        android:layout_marginStart="16dp" android:background="#F1F5F9" />
+                        android:layout_marginStart="16dp" android:background="@color/divider" />
 
                     <!-- Email Notifications -->
                     <LinearLayout
@@ -96,7 +96,7 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:text="Email Notifications"
-                            android:textColor="#1E293B"
+                            android:textColor="@color/text_primary"
                             android:textSize="15sp" />
                         <com.google.android.material.switchmaterial.SwitchMaterial
                             android:id="@+id/switchAdminEmailNotifications"
@@ -106,7 +106,7 @@
                     </LinearLayout>
 
                     <View android:layout_width="match_parent" android:layout_height="1dp"
-                        android:layout_marginStart="16dp" android:background="#F1F5F9" />
+                        android:layout_marginStart="16dp" android:background="@color/divider" />
 
                     <!-- Admin Alerts -->
                     <LinearLayout
@@ -127,7 +127,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="Admin Alerts"
-                                android:textColor="#1E293B"
+                                android:textColor="@color/text_primary"
                                 android:textSize="15sp" />
                             <com.google.android.material.switchmaterial.SwitchMaterial
                                 android:id="@+id/switchAdminAlerts"
@@ -140,7 +140,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
                             android:text="Get notified about critical events, new applications, and system alerts"
-                            android:textColor="#94A3B8"
+                            android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
                     </LinearLayout>
 
@@ -182,7 +182,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="Dark Mode"
-                        android:textColor="#1E293B"
+                        android:textColor="@color/text_primary"
                         android:textSize="15sp" />
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/switchAdminDarkMode"
@@ -240,7 +240,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="Auto-approve Providers"
-                                android:textColor="#1E293B"
+                                android:textColor="@color/text_primary"
                                 android:textSize="15sp" />
                             <com.google.android.material.switchmaterial.SwitchMaterial
                                 android:id="@+id/switchAutoApprove"
@@ -253,12 +253,12 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
                             android:text="Automatically approve provider applications that meet minimum requirements"
-                            android:textColor="#94A3B8"
+                            android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
                     </LinearLayout>
 
                     <View android:layout_width="match_parent" android:layout_height="1dp"
-                        android:layout_marginStart="16dp" android:background="#F1F5F9" />
+                        android:layout_marginStart="16dp" android:background="@color/divider" />
 
                     <!-- Email Digest -->
                     <LinearLayout
@@ -279,7 +279,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="Daily Email Digest"
-                                android:textColor="#1E293B"
+                                android:textColor="@color/text_primary"
                                 android:textSize="15sp" />
                             <com.google.android.material.switchmaterial.SwitchMaterial
                                 android:id="@+id/switchEmailDigest"
@@ -292,7 +292,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
                             android:text="Receive daily summary of platform activity and pending actions"
-                            android:textColor="#94A3B8"
+                            android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
                     </LinearLayout>
 
@@ -346,7 +346,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="Maintenance Mode"
-                                android:textColor="#1E293B"
+                                android:textColor="@color/text_primary"
                                 android:textSize="15sp" />
                             <com.google.android.material.switchmaterial.SwitchMaterial
                                 android:id="@+id/switchMaintenanceMode"
@@ -359,7 +359,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
                             android:text="Block user and provider access. Admin panel stays active."
-                            android:textColor="#94A3B8"
+                            android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
                     </LinearLayout>
 
@@ -383,7 +383,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:text="⚠️ Maintenance mode is active. Users see maintenance page."
-                            android:textColor="#B45309"
+                            android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
                     </LinearLayout>
 
@@ -435,18 +435,18 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:text="Change Password"
-                            android:textColor="#1E293B"
+                            android:textColor="@color/text_primary"
                             android:textSize="15sp" />
                         <ImageView
                             android:layout_width="16dp"
                             android:layout_height="16dp"
                             android:src="@drawable/ic_arrow_right"
-                            app:tint="#CBD5E1"
+                            app:tint="@color/muted_icon"
                             android:contentDescription="Navigate" />
                     </LinearLayout>
 
                     <View android:layout_width="match_parent" android:layout_height="1dp"
-                        android:layout_marginStart="16dp" android:background="#F1F5F9" />
+                        android:layout_marginStart="16dp" android:background="@color/divider" />
 
                     <!-- View Profile -->
                     <LinearLayout
@@ -465,18 +465,18 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:text="View Profile"
-                            android:textColor="#1E293B"
+                            android:textColor="@color/text_primary"
                             android:textSize="15sp" />
                         <ImageView
                             android:layout_width="16dp"
                             android:layout_height="16dp"
                             android:src="@drawable/ic_arrow_right"
-                            app:tint="#CBD5E1"
+                            app:tint="@color/muted_icon"
                             android:contentDescription="Navigate" />
                     </LinearLayout>
 
                     <View android:layout_width="match_parent" android:layout_height="1dp"
-                        android:layout_marginStart="16dp" android:background="#F1F5F9" />
+                        android:layout_marginStart="16dp" android:background="@color/divider" />
 
                     <!-- Logout -->
                     <LinearLayout
@@ -495,14 +495,14 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:text="Logout"
-                            android:textColor="#EF4444"
+                            android:textColor="@color/error_red"
                             android:textSize="15sp"
                             android:textStyle="bold" />
                         <ImageView
                             android:layout_width="16dp"
                             android:layout_height="16dp"
                             android:src="@drawable/ic_logout"
-                            app:tint="#EF4444"
+                            app:tint="@color/error_red"
                             android:contentDescription="Logout" />
                     </LinearLayout>
 
@@ -548,7 +548,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="Admin Email"
-                            android:textColor="#94A3B8"
+                            android:textColor="@color/text_secondary"
                             android:textSize="11sp"
                             android:textStyle="bold"
                             android:letterSpacing="0.05" />
@@ -558,7 +558,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
                             android:text="admin@quickfix.com"
-                            android:textColor="#1E293B"
+                            android:textColor="@color/text_primary"
                             android:textSize="14sp" />
                     </LinearLayout>
 
@@ -572,7 +572,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="Role"
-                            android:textColor="#94A3B8"
+                            android:textColor="@color/text_secondary"
                             android:textSize="11sp"
                             android:textStyle="bold"
                             android:letterSpacing="0.05" />
@@ -582,7 +582,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
                             android:text="Administrator"
-                            android:textColor="#1E293B"
+                            android:textColor="@color/text_primary"
                             android:textSize="14sp" />
                     </LinearLayout>
 
@@ -595,7 +595,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="App Version"
-                            android:textColor="#94A3B8"
+                            android:textColor="@color/text_secondary"
                             android:textSize="11sp"
                             android:textStyle="bold"
                             android:letterSpacing="0.05" />
@@ -605,7 +605,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
                             android:text="v1.0.0"
-                            android:textColor="#1E293B"
+                            android:textColor="@color/text_primary"
                             android:textSize="14sp" />
                     </LinearLayout>
 

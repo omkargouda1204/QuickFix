@@ -275,7 +275,7 @@
                     <!-- ── Business Name ── -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilBusinessName"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        style="@style/Widget.QuickFix.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="14dp"
@@ -289,14 +289,14 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textCapWords"
-                            android:textColor="#000000"
+                            android:textColor="@color/input_text"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <!-- ── Owner Name ── -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilOwnerName"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        style="@style/Widget.QuickFix.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="14dp"
@@ -310,14 +310,14 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textPersonName|textCapWords"
-                            android:textColor="#000000"
+                            android:textColor="@color/input_text"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <!-- ── Phone Number (FULL WIDTH — not in row) ── -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilPhone"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        style="@style/Widget.QuickFix.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="14dp"
@@ -333,14 +333,14 @@
                             android:layout_height="wrap_content"
                             android:inputType="phone"
                             android:maxLength="10"
-                            android:textColor="#000000"
+                            android:textColor="@color/input_text"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <!-- ── Email (FULL WIDTH — read-only, pre-filled from account) ── -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilEmail"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        style="@style/Widget.QuickFix.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="14dp"
@@ -382,14 +382,14 @@
                             android:layout_height="wrap_content"
                             android:inputType="none"
                             android:focusable="false"
-                            android:textColor="#000000"
+                            android:textColor="@color/input_text"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <!-- ── Years of Experience (FULL WIDTH) ── -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilExperience"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        style="@style/Widget.QuickFix.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="14dp"
@@ -404,14 +404,14 @@
                             android:layout_height="wrap_content"
                             android:inputType="number"
                             android:maxLength="2"
-                            android:textColor="#000000"
+                            android:textColor="@color/input_text"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <!-- ── City (FULL WIDTH) ── -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilCity"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        style="@style/Widget.QuickFix.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="14dp"
@@ -425,14 +425,14 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textCapWords"
-                            android:textColor="#000000"
+                            android:textColor="@color/input_text"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <!-- ── Business Address ── -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilAddress"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        style="@style/Widget.QuickFix.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="14dp"
@@ -448,14 +448,14 @@
                             android:inputType="textMultiLine|textCapSentences"
                             android:minLines="2"
                             android:maxLines="4"
-                            android:textColor="#000000"
+                            android:textColor="@color/input_text"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <!-- ── Description (Optional) ── -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilDescription"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        style="@style/Widget.QuickFix.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:hint="Description of Services (Optional)"
@@ -470,7 +470,7 @@
                             android:inputType="textMultiLine|textCapSentences"
                             android:minLines="3"
                             android:maxLines="6"
-                            android:textColor="#000000"
+                            android:textColor="@color/input_text"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 

@@ -513,7 +513,8 @@ public class MainActivity extends BaseActivity {
         public VH onCreateViewHolder(@NonNull android.view.ViewGroup p, int t) {
             TextView tv = new TextView(p.getContext());
             int pad = (int)(14 * p.getContext().getResources().getDisplayMetrics().density);
-            tv.setPadding(pad, pad, pad, pad); tv.setTextSize(14f); tv.setTextColor(0xFF212121);
+            tv.setPadding(pad, pad, pad, pad); tv.setTextSize(14f);
+            tv.setTextColor(ContextCompat.getColor(p.getContext(), R.color.text_primary));
             tv.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_location, 0, 0, 0);
             tv.setCompoundDrawablePadding(pad / 2);
             tv.setLayoutParams(new RecyclerView.LayoutParams(

@@ -192,7 +192,7 @@
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_arrow_right"
-                                app:tint="#C0C0C0"
+                                app:tint="@color/muted_icon"
                                 android:contentDescription="@string/nav_home" />
                         </LinearLayout>
 
@@ -235,7 +235,7 @@
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_arrow_right"
-                                app:tint="#C0C0C0"
+                                app:tint="@color/muted_icon"
                                 android:contentDescription="@string/nav_home" />
                         </LinearLayout>
 
@@ -363,7 +363,7 @@
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_arrow_right"
-                                app:tint="#C0C0C0"
+                                app:tint="@color/muted_icon"
                                 android:contentDescription="@string/nav_home" />
                         </LinearLayout>
 
@@ -422,7 +422,7 @@
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_arrow_right"
-                                app:tint="#C0C0C0"
+                                app:tint="@color/muted_icon"
                                 android:contentDescription="@string/nav_home" />
                         </LinearLayout>
 
@@ -463,7 +463,7 @@
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_arrow_right"
-                                app:tint="#C0C0C0"
+                                app:tint="@color/muted_icon"
                                 android:contentDescription="@string/nav_home" />
                         </LinearLayout>
 
@@ -581,7 +581,7 @@
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_arrow_right"
-                                app:tint="#C0C0C0"
+                                app:tint="@color/muted_icon"
                                 android:contentDescription="@string/nav_home" />
                         </LinearLayout>
 
@@ -691,7 +691,7 @@
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_arrow_right"
-                                app:tint="#C0C0C0"
+                                app:tint="@color/muted_icon"
                                 android:contentDescription="@string/nav_home" />
                         </LinearLayout>
 
@@ -734,7 +734,7 @@
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_arrow_right"
-                                app:tint="#C0C0C0"
+                                app:tint="@color/muted_icon"
                                 android:contentDescription="@string/nav_home" />
                         </LinearLayout>
 
@@ -777,7 +777,7 @@
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_arrow_right"
-                                app:tint="#C0C0C0"
+                                app:tint="@color/muted_icon"
                                 android:contentDescription="@string/nav_home" />
                         </LinearLayout>
 
@@ -820,7 +820,7 @@
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_arrow_right"
-                                app:tint="#C0C0C0"
+                                app:tint="@color/muted_icon"
                                 android:contentDescription="@string/nav_home" />
                         </LinearLayout>
 
@@ -889,7 +889,7 @@
         android:id="@+id/profileLoadingOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#80FFFFFF"
+        android:background="@color/overlay_scrim_soft"
         android:visibility="gone">
         <ProgressBar
             android:layout_width="48dp"

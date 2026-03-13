@@ -2,7 +2,9 @@ package com.example.quickfix;
 
 import android.content.Context;
 import android.content.Intent;
+import android.os.Bundle;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -21,6 +23,7 @@ import com.google.firebase.auth.FirebaseUser;
 public abstract class BaseActivity extends AppCompatActivity {
 
     private boolean maintenanceCheckInFlight;
+    private boolean appliedDarkMode;
 
     @Override
     protected void attachBaseContext(Context base) {
@@ -29,8 +32,23 @@ public abstract class BaseActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        ThemeManager.applyFromPrefs(this);
+        appliedDarkMode = ThemeManager.isDarkMode(this);
+        super.onCreate(savedInstanceState);
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
+        boolean currentDarkMode = ThemeManager.isDarkMode(this);
+        if (currentDarkMode != appliedDarkMode) {
+            appliedDarkMode = currentDarkMode;
+            if (!isFinishing() && !isDestroyed()) {
+                recreate();
+            }
+            return;
+        }
         enforceMaintenanceAccessIfNeeded();
     }
 

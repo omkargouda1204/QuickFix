@@ -36,6 +36,8 @@ public class ThemeManager {
     private static final String TAG        = "ThemeManager";
     private static final String PREFS_NAME = "quickfix_theme_prefs";
     private static final String KEY        = "dark_mode_enabled";
+    private static final String LEGACY_PREFS_NAME = "quickfix_prefs";
+    private static final String LEGACY_KEY = "dark_mode_enabled";
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
@@ -51,12 +53,34 @@ public class ThemeManager {
 
     /** Save dark mode preference locally */
     public static void save(Context ctx, boolean darkMode) {
+        if (ctx == null) return;
         prefs(ctx).edit().putBoolean(KEY, darkMode).apply();
+        ctx.getApplicationContext()
+                .getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(LEGACY_KEY, darkMode)
+                .apply();
+        AppSettings.set(ctx, AppSettings.KEY_DARK_MODE, darkMode);
     }
 
     /** Read saved preference (default: light mode) */
     public static boolean isDarkMode(Context ctx) {
-        return prefs(ctx).getBoolean(KEY, false);
+        if (ctx == null) return AppSettings.DEFAULT_DARK_MODE;
+
+        SharedPreferences themePrefs = prefs(ctx);
+        if (themePrefs.contains(KEY)) {
+            return themePrefs.getBoolean(KEY, AppSettings.DEFAULT_DARK_MODE);
+        }
+
+        SharedPreferences legacyPrefs = ctx.getApplicationContext()
+                .getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE);
+        if (legacyPrefs.contains(LEGACY_KEY)) {
+            boolean legacyValue = legacyPrefs.getBoolean(LEGACY_KEY, AppSettings.DEFAULT_DARK_MODE);
+            save(ctx, legacyValue);
+            return legacyValue;
+        }
+
+        return AppSettings.isDarkMode(ctx);
     }
 
     // ── Apply ─────────────────────────────────────────────────────────────
@@ -66,6 +90,7 @@ public class ThemeManager {
      * In Application.onCreate() this sets the mode for the entire session.
      */
     public static void applyFromPrefs(Context ctx) {
+        if (ctx == null) return;
         apply(isDarkMode(ctx));
     }
 
@@ -84,6 +109,7 @@ public class ThemeManager {
      * This is the single method called from any settings screen.
      */
     public static void toggle(Context ctx, boolean darkMode) {
+        if (ctx == null) return;
         save(ctx, darkMode);
         apply(darkMode);
         pushToSupabase(darkMode);

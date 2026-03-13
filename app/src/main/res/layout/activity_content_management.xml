@@ -88,7 +88,7 @@
                 android:layout_marginEnd="8dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="3dp"
-                app:cardBackgroundColor="@color/white">
+                app:cardBackgroundColor="@color/card_bg">
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -128,7 +128,7 @@
                 android:layout_marginStart="8dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="3dp"
-                app:cardBackgroundColor="@color/white">
+                app:cardBackgroundColor="@color/card_bg">
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -139,7 +139,7 @@
                         android:layout_width="28dp"
                         android:layout_height="28dp"
                         android:src="@drawable/ic_services"
-                        app:tint="#FF9800"
+                        app:tint="@color/accent_orange"
                         android:contentDescription="Offers" />
                     <TextView
                         android:id="@+id/tvTotalOffers"
@@ -147,7 +147,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
                         android:text="—"
-                        android:textColor="#FF9800"
+                        android:textColor="@color/accent_orange"
                         android:textSize="26sp"
                         android:textStyle="bold" />
                     <TextView

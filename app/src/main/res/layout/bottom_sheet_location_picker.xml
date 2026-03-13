@@ -14,7 +14,7 @@
         android:layout_gravity="center_horizontal"
         android:layout_marginTop="10dp"
         android:layout_marginBottom="4dp"
-        android:background="#DDDDDD" />
+        android:background="@color/drag_handle" />
 
     <!-- Header -->
     <LinearLayout
@@ -217,7 +217,7 @@
             android:layout_width="0dp"
             android:layout_height="1dp"
             android:layout_weight="1"
-            android:background="#E0E0E0" />
+            android:background="@color/divider" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -230,7 +230,7 @@
             android:layout_width="0dp"
             android:layout_height="1dp"
             android:layout_weight="1"
-            android:background="#E0E0E0" />
+            android:background="@color/divider" />
     </LinearLayout>
 
     <!-- Popular Cities label -->

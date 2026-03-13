@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#F5F7FA">
+    android:background="@color/screen_background">
 
     <!-- Header gradient -->
     <LinearLayout
@@ -32,7 +32,7 @@
                 android:layout_height="40dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_back"
-                android:tint="#FFFFFF"
+                app:tint="@color/white"
                 android:contentDescription="Back"
                 android:layout_marginEnd="8dp" />
 
@@ -45,7 +45,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="All Bookings"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/white"
                     android:textSize="20sp"
                     android:textStyle="bold" />
                 <TextView
@@ -53,7 +53,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Loading…"
-                    android:textColor="#CCE0FF"
+                    android:textColor="@color/on_gradient_secondary"
                     android:textSize="12sp" />
             </LinearLayout>
 
@@ -63,7 +63,7 @@
                 android:layout_height="40dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_settings"
-                android:tint="#FFFFFF"
+                app:tint="@color/white"
                 android:contentDescription="Refresh"
                 android:padding="8dp" />
         </LinearLayout>
@@ -73,23 +73,23 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="Search by customer, provider, service…"
-            app:boxBackgroundColor="@color/card_bg"
+            style="@style/Widget.QuickFix.TextInputLayout.Filled"
+            app:boxBackgroundColor="@color/input_background"
             app:boxCornerRadiusTopStart="12dp"
             app:boxCornerRadiusTopEnd="12dp"
             app:boxCornerRadiusBottomStart="12dp"
             app:boxCornerRadiusBottomEnd="12dp"
             app:boxBackgroundMode="filled"
-            app:hintTextColor="#94A3B8"
+            app:hintTextColor="@color/input_hint"
             app:startIconDrawable="@drawable/ic_search"
-            app:startIconTint="#94A3B8"
-            style="@style/Widget.MaterialComponents.TextInputLayout.FilledBox"
+            app:startIconTint="@color/input_icon"
             android:layout_marginBottom="12dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etSearch"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:textColor="#1E293B"
+                android:textColor="@color/input_text"
                 android:textSize="14sp"
                 android:imeOptions="actionSearch"
                 android:inputType="text"
@@ -113,9 +113,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="32dp"
                     android:text="All"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/white"
                     android:layout_marginEnd="8dp"
-                    app:chipBackgroundColor="#3B82F6"
+                    app:chipBackgroundColor="@color/primary"
                     app:chipCornerRadius="16dp"
                     app:chipStrokeWidth="0dp"
                     android:checkable="true"
@@ -126,9 +126,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="32dp"
                     android:text="Pending"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/white"
                     android:layout_marginEnd="8dp"
-                    app:chipBackgroundColor="#64748B"
+                    app:chipBackgroundColor="@color/neutral_chip_bg"
                     app:chipCornerRadius="16dp"
                     app:chipStrokeWidth="0dp"
                     android:checkable="true" />
@@ -138,9 +138,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="32dp"
                     android:text="Accepted"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/white"
                     android:layout_marginEnd="8dp"
-                    app:chipBackgroundColor="#64748B"
+                    app:chipBackgroundColor="@color/neutral_chip_bg"
                     app:chipCornerRadius="16dp"
                     app:chipStrokeWidth="0dp"
                     android:checkable="true" />
@@ -150,9 +150,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="32dp"
                     android:text="Completed"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/white"
                     android:layout_marginEnd="8dp"
-                    app:chipBackgroundColor="#64748B"
+                    app:chipBackgroundColor="@color/neutral_chip_bg"
                     app:chipCornerRadius="16dp"
                     app:chipStrokeWidth="0dp"
                     android:checkable="true" />
@@ -162,9 +162,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="32dp"
                     android:text="Cancelled"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/white"
                     android:layout_marginEnd="8dp"
-                    app:chipBackgroundColor="#64748B"
+                    app:chipBackgroundColor="@color/neutral_chip_bg"
                     app:chipCornerRadius="16dp"
                     app:chipStrokeWidth="0dp"
                     android:checkable="true" />
@@ -227,7 +227,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="No Bookings Found"
-                    android:textColor="#94A3B8"
+                    android:textColor="@color/text_secondary"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:layout_marginTop="16dp" />
@@ -236,7 +236,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="No bookings match your current filters."
-                    android:textColor="#CBD5E1"
+                    android:textColor="@color/text_secondary"
                     android:textSize="13sp"
                     android:gravity="center"
                     android:layout_marginTop="8dp" />
@@ -247,5 +247,4 @@
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
 </LinearLayout>
-
 

@@ -183,14 +183,14 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="14dp">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="@string/pd_label_full_name" android:textSize="11sp" android:textColor="#9E9E9E" />
+                                android:text="@string/pd_label_full_name" android:textSize="11sp" android:textColor="@color/text_secondary" />
                             <TextView android:id="@+id/tvDisplayName" android:layout_width="wrap_content"
                                 android:layout_height="wrap_content" android:text="@string/pd_dash"
                                 android:textSize="15sp" android:textColor="@color/text_primary" android:textStyle="bold" />
                         </LinearLayout>
                     </LinearLayout>
 
-                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#F0F0F0" android:layout_marginStart="54dp"/>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" android:layout_marginStart="54dp"/>
 
                     <!-- Email row -->
                     <LinearLayout
@@ -208,14 +208,14 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="14dp">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="@string/pd_label_email_address" android:textSize="11sp" android:textColor="#9E9E9E" />
+                                android:text="@string/pd_label_email_address" android:textSize="11sp" android:textColor="@color/text_secondary" />
                             <TextView android:id="@+id/tvDisplayEmail" android:layout_width="wrap_content"
                                 android:layout_height="wrap_content" android:text="@string/pd_dash"
                                 android:textSize="15sp" android:textColor="@color/text_primary" android:textStyle="bold" />
                         </LinearLayout>
                     </LinearLayout>
 
-                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#F0F0F0" android:layout_marginStart="54dp"/>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" android:layout_marginStart="54dp"/>
 
                     <!-- Phone row -->
                     <LinearLayout
@@ -233,14 +233,14 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="14dp">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="@string/pd_label_phone_number" android:textSize="11sp" android:textColor="#9E9E9E" />
+                                android:text="@string/pd_label_phone_number" android:textSize="11sp" android:textColor="@color/text_secondary" />
                             <TextView android:id="@+id/tvDisplayPhone" android:layout_width="wrap_content"
                                 android:layout_height="wrap_content" android:text="@string/pd_dash"
                                 android:textSize="15sp" android:textColor="@color/text_primary" android:textStyle="bold" />
                         </LinearLayout>
                     </LinearLayout>
 
-                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#F0F0F0" android:layout_marginStart="54dp"/>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" android:layout_marginStart="54dp"/>
 
                     <!-- City row -->
                     <LinearLayout
@@ -258,14 +258,14 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="14dp">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="@string/pd_label_city" android:textSize="11sp" android:textColor="#9E9E9E" />
+                                android:text="@string/pd_label_city" android:textSize="11sp" android:textColor="@color/text_secondary" />
                             <TextView android:id="@+id/tvDisplayCity" android:layout_width="wrap_content"
                                 android:layout_height="wrap_content" android:text="@string/pd_dash"
                                 android:textSize="15sp" android:textColor="@color/text_primary" android:textStyle="bold" />
                         </LinearLayout>
                     </LinearLayout>
 
-                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#F0F0F0" android:layout_marginStart="54dp"/>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" android:layout_marginStart="54dp"/>
 
                     <!-- Address row -->
                     <LinearLayout
@@ -283,7 +283,7 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="14dp">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="@string/pd_label_address" android:textSize="11sp" android:textColor="#9E9E9E" />
+                                android:text="@string/pd_label_address" android:textSize="11sp" android:textColor="@color/text_secondary" />
                             <TextView android:id="@+id/tvDisplayAddress" android:layout_width="wrap_content"
                                 android:layout_height="wrap_content" android:text="@string/pd_dash"
                                 android:textSize="15sp" android:textColor="@color/text_primary" android:maxLines="3" />
@@ -308,7 +308,7 @@
                         app:iconGravity="textStart"
                         app:iconTint="@color/white"
                         app:iconPadding="8dp"
-                        app:rippleColor="#33FFFFFF" />
+                        app:rippleColor="@color/overlay_scrim_soft" />
 
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -535,7 +535,7 @@
         android:id="@+id/loadingOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#99000000"
+        android:background="@color/overlay_scrim"
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true">

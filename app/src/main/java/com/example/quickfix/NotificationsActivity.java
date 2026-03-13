@@ -269,7 +269,7 @@ public class NotificationsActivity extends BaseActivity
         if (tvUnreadCount == null) return;
         long unread = allNotifications.stream().filter(n -> !n.isRead).count();
         tvUnreadCount.setText(unread > 0 ? unread + " unread" : "All read");
-        tvUnreadCount.setTextColor(unread > 0 ? 0xFFD32F2F : 0xFF388E3C);
+        tvUnreadCount.setTextColor(getColor(unread > 0 ? R.color.error_red : R.color.success_green));
     }
 
     private void showLoading(boolean show) {

@@ -180,7 +180,7 @@
                             android:layout_width="16dp"
                             android:layout_height="16dp"
                             android:src="@drawable/ic_arrow_right"
-                            app:tint="#C0C0C0"
+                            app:tint="@color/muted_icon"
                             android:contentDescription="@string/nav_home" />
                     </LinearLayout>
 
@@ -226,7 +226,7 @@
         android:id="@+id/settingsLoadingOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#CC000000"
+        android:background="@color/overlay_scrim"
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true"
@@ -268,6 +268,5 @@
     </FrameLayout>
 
 </FrameLayout>
-
 
 

@@ -1,7 +1,7 @@
 package com.example.quickfix;
 
 import android.content.Intent;
-import android.graphics.Color;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.util.Log;
@@ -143,7 +143,7 @@ public class ApplicationStatusActivity extends BaseActivity {
 
     // ── PENDING ───────────────────────────────────────────────────────────
     private void showPendingState() {
-        applyBadge("PENDING", "#E65100", "#FFF3E0");
+        applyBadge("PENDING", R.color.warning_text, R.color.warning_bg);
         setText(tvStatusTitle,    "Application Under Review");
         setText(tvStatusSubtitle, "Our team will review your request and get back to you soon.");
 
@@ -161,7 +161,7 @@ public class ApplicationStatusActivity extends BaseActivity {
 
     // ── APPROVED ──────────────────────────────────────────────────────────
     private void showApprovedState() {
-        applyBadge("APPROVED", "#1B5E20", "#E8F5E9");
+        applyBadge("APPROVED", R.color.success_text, R.color.success_bg);
         setText(tvStatusTitle,    "You're a Service Provider! 🎉");
         setText(tvStatusSubtitle, "Your account is approved. Manage your services from the Provider Dashboard.");
 
@@ -182,7 +182,7 @@ public class ApplicationStatusActivity extends BaseActivity {
 
     // ── REJECTED ──────────────────────────────────────────────────────────
     private void showRejectedState(ProviderApplication app, String uid) {
-        applyBadge("REJECTED", "#B71C1C", "#FFEBEE");
+        applyBadge("REJECTED", R.color.error_red, R.color.chip_disabled_bg);
         setText(tvStatusTitle,    "Application Not Approved");
         setText(tvStatusSubtitle, "Unfortunately your application was not approved this time.");
 
@@ -256,12 +256,12 @@ public class ApplicationStatusActivity extends BaseActivity {
         if (contentLayout != null) contentLayout.setVisibility(show ? View.GONE : View.VISIBLE);
     }
 
-    private void applyBadge(String text, String textColor, String bgColor) {
+    private void applyBadge(String text, int textColorRes, int bgColorRes) {
         if (tvStatusBadge == null) return;
         tvStatusBadge.setText(text);
         try {
-            tvStatusBadge.setTextColor(Color.parseColor(textColor));
-            tvStatusBadge.setBackgroundColor(Color.parseColor(bgColor));
+            tvStatusBadge.setTextColor(getColor(textColorRes));
+            tvStatusBadge.setBackgroundTintList(ColorStateList.valueOf(getColor(bgColorRes)));
         } catch (Exception ignored) {}
     }
 

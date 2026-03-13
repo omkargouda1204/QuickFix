@@ -263,13 +263,13 @@ public class ProfileActivity extends BaseActivity {
         switch (role) {
             case "Admin":
                 tvRoleBadge.setBackgroundResource(R.drawable.bg_role_badge_admin);
-                tvRoleBadge.setTextColor(0xFF6A1B9A); break;
+                tvRoleBadge.setTextColor(getColor(R.color.accent_purple)); break;
             case "Provider":
                 tvRoleBadge.setBackgroundResource(R.drawable.bg_role_badge_provider);
-                tvRoleBadge.setTextColor(0xFF2E7D32); break;
+                tvRoleBadge.setTextColor(getColor(R.color.accent_green)); break;
             default:
                 tvRoleBadge.setBackgroundResource(R.drawable.bg_role_badge_user);
-                tvRoleBadge.setTextColor(0xFF1565C0); break;
+                tvRoleBadge.setTextColor(getColor(R.color.primary)); break;
         }
     }
 

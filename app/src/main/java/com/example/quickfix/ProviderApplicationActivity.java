@@ -161,7 +161,7 @@ public class ProviderApplicationActivity extends BaseActivity {
                 checkboxTerms.setEnabled(true);
                 if (tvScrollHint != null) {
                     // Change banner to "all read" success style
-                    tvScrollHint.setBackgroundColor(0xFFE8F5E9);
+                    tvScrollHint.setBackgroundColor(getColor(R.color.success_bg));
                 }
                 updateSubmitButtonState();
             }

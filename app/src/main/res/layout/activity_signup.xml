@@ -43,7 +43,7 @@
             android:layout_gravity="center"
             android:layout_marginTop="16dp"
             android:text="@string/registration_title"
-            android:textColor="@color/black"
+            android:textColor="@color/text_primary"
             android:textSize="28sp"
             android:textStyle="bold"
             android:fontFamily="sans-serif-medium" />
@@ -252,7 +252,7 @@
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:gravity="center"
-        android:background="#CC000000"
+        android:background="@color/overlay_scrim"
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true">
