@@ -64,6 +64,14 @@
                             android:layout_gravity="center"
                             android:background="@drawable/bg_profile_avatar_inner">
 
+                            <ImageView
+                                android:id="@+id/ivHeaderAvatar"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:scaleType="centerCrop"
+                                android:visibility="gone"
+                                android:contentDescription="@string/cd_profile_photo" />
+
                             <TextView
                                 android:id="@+id/tvAvatarInitial"
                                 android:layout_width="wrap_content"
@@ -891,5 +899,4 @@
     </FrameLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
-
 

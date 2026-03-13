@@ -274,4 +274,13 @@
     <string name="pd_btn_save">Save Changes</string>
     <string name="pd_loading">Please wait\u2026</string>
     <string name="pd_change_photo_hint">Tap avatar to change photo</string>
+    <string name="pd_edit_before_photo">Tap Edit Profile before changing photo.</string>
+    <string name="pd_uploading_photo">Uploading photo...</string>
+    <string name="pd_photo_upload_failed">Photo upload failed. Please try again.</string>
+    <string name="pd_saving">Saving...</string>
+    <string name="pd_saved_ok">Profile saved successfully.</string>
+    <string name="pd_save_http_error">Save failed (HTTP %1$d). Please try again.</string>
+    <string name="pd_load_http_error">Could not load profile (HTTP %1$d).</string>
+    <string name="pd_network_error">Network error. Check your connection and try again.</string>
+    <string name="pd_network_showing_cached">Network error. Showing cached profile data.</string>
 </resources>

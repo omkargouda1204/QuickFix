@@ -9,6 +9,9 @@ public class UserModel {
     public String name;
     public String email;
     public String phone;
+    public String city;
+    public String address;
+    public String profileImage;
     public boolean isUser;
     public boolean isServiceProvider;
     public boolean isAdmin;
@@ -34,10 +37,10 @@ public class UserModel {
         UserModel u = new UserModel();
         u.id = id; u.firebaseUid = firebaseUid; u.name = name;
         u.email = email; u.phone = phone;
+        u.city = city; u.address = address; u.profileImage = profileImage;
         u.isUser = isUser; u.isServiceProvider = isServiceProvider;
         u.isAdmin = isAdmin; u.isVerified = isVerified;
         u.isActive = isActive; u.createdAt = createdAt; u.updatedAt = updatedAt;
         return u;
     }
 }
-

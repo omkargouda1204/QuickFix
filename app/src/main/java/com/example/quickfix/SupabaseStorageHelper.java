@@ -51,6 +51,11 @@ public class SupabaseStorageHelper {
         void onError(String message);
     }
 
+    public interface PrivateUploadCallback {
+        void onSuccess(String storagePath);
+        void onError(String message);
+    }
+
     // ── Bucket names ───────────────────────────────────────────────────────
     public static final String BUCKET_BUSINESS_IMAGES = "provider-business-images";
     public static final String BUCKET_ID_PROOFS       = "provider-id-proofs";
@@ -70,65 +75,46 @@ public class SupabaseStorageHelper {
                                   String prefix, UploadCallback callback) {
         new Thread(() -> {
             try {
-                // Determine MIME type
-                String mimeType = context.getContentResolver().getType(fileUri);
-                if (mimeType == null) mimeType = "application/octet-stream";
+                UploadPayload payload = buildUploadPayload(context, fileUri, prefix);
+                ResponseResult result = uploadBytes(bucket, payload.storagePath, payload.fileBytes, payload.mimeType);
+                Log.d(TAG, "uploadFile HTTP " + result.httpCode + " | " + result.body);
 
-                // Generate unique file name — full UUID ensures no path collisions
-                String ext = mimeTypeToExtension(mimeType);
-                String uniqueId = UUID.randomUUID().toString().replace("-", "");
-                String fileName = uniqueId + ext;
-                String storagePath = prefix + "/" + fileName;
+                String publicUrl = SUPABASE_URL + "/storage/v1/object/public/"
+                        + bucket + "/" + payload.storagePath;
 
-                // Read file bytes (compatible with API 24+)
-                byte[] fileBytes;
-                try (InputStream is = context.getContentResolver().openInputStream(fileUri)) {
-                    if (is == null) {
-                        MAIN.post(() -> callback.onError("Cannot read file"));
-                        return;
-                    }
-                    java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
-                    byte[] chunk = new byte[8192];
-                    int nRead;
-                    while ((nRead = is.read(chunk, 0, chunk.length)) != -1) {
-                        buffer.write(chunk, 0, nRead);
-                    }
-                    fileBytes = buffer.toByteArray();
-                }
-
-                // Upload to Supabase Storage
-                String uploadUrl = SUPABASE_URL + "/storage/v1/object/" + bucket + "/" + storagePath;
-
-                Request request = new Request.Builder()
-                        .url(uploadUrl)
-                        .post(RequestBody.create(fileBytes, MediaType.parse(mimeType)))
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type",  mimeType)
-                        .addHeader("x-upsert",      "true")
-                        .build();
-
-                try (Response response = HTTP.newCall(request).execute()) {
-                    int code = response.code();
-                    String body = response.body() != null ? response.body().string() : "";
-                    Log.d(TAG, "uploadFile HTTP " + code + " | " + body);
-
-                    String publicUrl = SUPABASE_URL + "/storage/v1/object/public/"
-                            + bucket + "/" + storagePath;
-
-                    if (code == 200 || code == 201 || code == 204 || code == 409
-                            || isAlreadyExistsConflict(code, body)) {
-                        // 409 can happen when server sees a duplicate/object conflict.
-                        Log.d(TAG, "Upload success: " + publicUrl);
-                        MAIN.post(() -> callback.onSuccess(publicUrl));
-                    } else {
-                        String message = formatUploadError(code, body, bucket);
-                        MAIN.post(() -> callback.onError(message));
-                    }
+                if (isUploadSuccess(result.httpCode, result.body)) {
+                    MAIN.post(() -> callback.onSuccess(publicUrl));
+                } else {
+                    String message = formatUploadError(result.httpCode, result.body, bucket);
+                    MAIN.post(() -> callback.onError(message));
                 }
 
             } catch (Exception e) {
                 Log.e(TAG, "uploadFile exception: " + e.getMessage());
+                MAIN.post(() -> callback.onError("Upload error: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    /**
+     * Upload to a private bucket. Caller should persist storagePath in DB and request signed URL for display.
+     */
+    public static void uploadPrivateFile(Context context, Uri fileUri, String bucket,
+                                         String prefix, PrivateUploadCallback callback) {
+        new Thread(() -> {
+            try {
+                UploadPayload payload = buildUploadPayload(context, fileUri, prefix);
+                ResponseResult result = uploadBytes(bucket, payload.storagePath, payload.fileBytes, payload.mimeType);
+                Log.d(TAG, "uploadPrivateFile HTTP " + result.httpCode + " | " + result.body);
+
+                if (isUploadSuccess(result.httpCode, result.body)) {
+                    MAIN.post(() -> callback.onSuccess(payload.storagePath));
+                } else {
+                    String message = formatUploadError(result.httpCode, result.body, bucket);
+                    MAIN.post(() -> callback.onError(message));
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "uploadPrivateFile exception: " + e.getMessage());
                 MAIN.post(() -> callback.onError("Upload error: " + e.getMessage()));
             }
         }).start();
@@ -253,5 +239,68 @@ public class SupabaseStorageHelper {
                 if (mimeType.startsWith("video/")) return "." + mimeType.substring(6);
                 return ".bin";
         }
+    }
+
+    private static boolean isUploadSuccess(int code, String body) {
+        return code == 200 || code == 201 || code == 204 || code == 409
+                || isAlreadyExistsConflict(code, body);
+    }
+
+    private static final class UploadPayload {
+        byte[] fileBytes;
+        String mimeType;
+        String storagePath;
+    }
+
+    private static final class ResponseResult {
+        int httpCode;
+        String body;
+    }
+
+    private static UploadPayload buildUploadPayload(Context context, Uri fileUri, String prefix) throws Exception {
+        UploadPayload payload = new UploadPayload();
+
+        String mimeType = context.getContentResolver().getType(fileUri);
+        if (mimeType == null) mimeType = "application/octet-stream";
+        payload.mimeType = mimeType;
+
+        String ext = mimeTypeToExtension(mimeType);
+        String uniqueId = UUID.randomUUID().toString().replace("-", "");
+        String safePrefix = prefix == null ? "user" : prefix.trim();
+        if (safePrefix.isEmpty()) safePrefix = "user";
+        payload.storagePath = safePrefix + "/" + uniqueId + ext;
+
+        try (InputStream is = context.getContentResolver().openInputStream(fileUri)) {
+            if (is == null) throw new IllegalStateException("Cannot read file");
+            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+            byte[] chunk = new byte[8192];
+            int nRead;
+            while ((nRead = is.read(chunk, 0, chunk.length)) != -1) {
+                buffer.write(chunk, 0, nRead);
+            }
+            payload.fileBytes = buffer.toByteArray();
+        }
+
+        return payload;
+    }
+
+    private static ResponseResult uploadBytes(String bucket, String storagePath, byte[] fileBytes,
+                                              String mimeType) throws Exception {
+        String uploadUrl = SUPABASE_URL + "/storage/v1/object/" + bucket + "/" + storagePath;
+        Request request = new Request.Builder()
+                .url(uploadUrl)
+                .post(RequestBody.create(fileBytes, MediaType.parse(mimeType)))
+                .addHeader("apikey",        ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Content-Type",  mimeType)
+                .addHeader("x-upsert",      "true")
+                .build();
+
+        ResponseResult out = new ResponseResult();
+        try (Response response = HTTP.newCall(request).execute()) {
+            out.httpCode = response.code();
+            out.body = response.body() != null ? response.body().string() : "";
+        }
+        return out;
     }
 }

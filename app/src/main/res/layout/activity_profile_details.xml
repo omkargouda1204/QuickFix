@@ -346,6 +346,21 @@
                         android:letterSpacing="0.04"
                         android:layout_marginBottom="16dp" />
 
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnUploadProfileImage"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginBottom="14dp"
+                        android:text="@string/cd_change_photo"
+                        android:textAllCaps="false"
+                        android:textSize="14sp"
+                        app:icon="@drawable/ic_profile"
+                        app:iconGravity="textStart"
+                        app:iconPadding="8dp"
+                        app:iconTint="@color/white"
+                        app:cornerRadius="12dp"
+                        app:backgroundTint="@color/primary" />
+
                     <!-- Email (read-only display) -->
                     <TextView
                         android:layout_width="wrap_content"

@@ -1,5 +1,6 @@
 package com.example.quickfix;
 
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -11,6 +12,8 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 
 import com.bumptech.glide.Glide;
@@ -51,11 +54,13 @@ import okhttp3.Response;
 public class ProfileDetailsActivity extends BaseActivity {
 
     private static final String TAG = "ProfileDetails";
+    private static final int AVATAR_SIGNED_URL_TTL_SEC = 3600;
 
     // ── Intent extras (passed by ProfileActivity for instant pre-fill) ────
     public static final String EXTRA_NAME  = "extra_profile_name";
     public static final String EXTRA_EMAIL = "extra_profile_email";
     public static final String EXTRA_PHONE = "extra_profile_phone";
+    public static final String EXTRA_IMAGE = "extra_profile_image";
 
     // ── Header views ──────────────────────────────────────────────────────
     private ImageView   ivAvatar;
@@ -80,6 +85,7 @@ public class ProfileDetailsActivity extends BaseActivity {
     private TextInputEditText   etEditName, etEditPhone, etEditCity, etEditAddress;
     private TextView            tvEditEmailReadonly;
     private MaterialButton      btnSaveChanges, btnCancelEdit;
+    private MaterialButton      btnUploadProfileImage;
 
     // ── Scroll view (to scroll to top on mode switch) ─────────────────────
     private androidx.core.widget.NestedScrollView profileScrollView;
@@ -91,9 +97,10 @@ public class ProfileDetailsActivity extends BaseActivity {
     private String cachedPhone   = "";
     private String cachedCity    = "";
     private String cachedAddress = "";
-    private String cachedImgUrl  = null;
+    private String cachedProfileImagePath = "";
     private boolean isEditMode   = false;
     private boolean isSaving     = false;
+    private Uri pendingAvatarUri = null;
 
     private final OkHttpClient HTTP = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -101,6 +108,28 @@ public class ProfileDetailsActivity extends BaseActivity {
             .writeTimeout(20, TimeUnit.SECONDS)
             .build();
     private final Handler MAIN = new Handler(Looper.getMainLooper());
+
+    private static final class ProfileFetchResult {
+        JSONObject row;
+        int httpCode;
+        String body;
+    }
+
+    private final ActivityResultLauncher<String> imagePickerLauncher =
+            registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
+                if (uri == null) return;
+                pendingAvatarUri = uri;
+                if (ivAvatar != null && tvAvatarInitial != null) {
+                    ivAvatar.setVisibility(View.VISIBLE);
+                    tvAvatarInitial.setVisibility(View.GONE);
+                    Glide.with(this)
+                            .load(uri)
+                            .circleCrop()
+                            .placeholder(R.drawable.bg_profile_avatar_inner)
+                            .error(R.drawable.bg_profile_avatar_inner)
+                            .into(ivAvatar);
+                }
+            });
 
     // ═════════════════════════════════════════════════════════════════════
     @Override
@@ -119,6 +148,7 @@ public class ProfileDetailsActivity extends BaseActivity {
         String extraName  = getIntent().getStringExtra(EXTRA_NAME);
         String extraEmail = getIntent().getStringExtra(EXTRA_EMAIL);
         String extraPhone = getIntent().getStringExtra(EXTRA_PHONE);
+        String extraImage = getIntent().getStringExtra(EXTRA_IMAGE);
 
         // ── Step 2: fill any gaps from Firebase metadata ─────────────────
         if (TextUtils.isEmpty(extraName)  && user.getDisplayName() != null)
@@ -130,7 +160,7 @@ public class ProfileDetailsActivity extends BaseActivity {
 
         if (!TextUtils.isEmpty(extraName) || !TextUtils.isEmpty(extraEmail)) {
             applyProfile(safeStr(extraName), safeStr(extraEmail),
-                         safeStr(extraPhone), "", "", null);
+                         safeStr(extraPhone), "", "", safeStr(extraImage));
         }
 
         // ── Step 3: authoritative load from Supabase ─────────────────────
@@ -169,6 +199,7 @@ public class ProfileDetailsActivity extends BaseActivity {
         tvEditEmailReadonly = findViewById(R.id.tvEditEmailReadonly);
         btnSaveChanges      = findViewById(R.id.btnSaveChanges);
         btnCancelEdit       = findViewById(R.id.btnCancelEdit);
+        btnUploadProfileImage = findViewById(R.id.btnUploadProfileImage);
 
         showEditMode(false);
     }
@@ -179,6 +210,15 @@ public class ProfileDetailsActivity extends BaseActivity {
         if (btnEditProfile  != null) btnEditProfile.setOnClickListener(v -> enterEditMode());
         if (btnCancelEdit   != null) btnCancelEdit.setOnClickListener(v -> handleCancelEdit());
         if (btnSaveChanges  != null) btnSaveChanges.setOnClickListener(v -> validateAndSave());
+        if (btnUploadProfileImage != null) {
+            btnUploadProfileImage.setOnClickListener(v -> {
+                if (!isEditMode) {
+                    showSnack(getString(R.string.pd_edit_before_photo));
+                    return;
+                }
+                imagePickerLauncher.launch("image/*");
+            });
+        }
 
         // ── Back-press: prompt to discard changes if in edit mode ─────────
         getOnBackPressedDispatcher().addCallback(this,
@@ -201,10 +241,11 @@ public class ProfileDetailsActivity extends BaseActivity {
 
     /** Returns true if any edit field differs from the cached (saved) value. */
     private boolean hasUnsavedChanges() {
-        return !getText(etEditName).trim().equals(cachedName)
+        boolean fieldsChanged = !getText(etEditName).trim().equals(cachedName)
             || !getText(etEditPhone).trim().equals(cachedPhone)
             || !getText(etEditCity).trim().equals(cachedCity)
             || !getText(etEditAddress).trim().equals(cachedAddress);
+        return fieldsChanged || pendingAvatarUri != null;
     }
 
     private void showDiscardDialog() {
@@ -228,6 +269,7 @@ public class ProfileDetailsActivity extends BaseActivity {
         if (tvEditEmailReadonly != null)
             tvEditEmailReadonly.setText(TextUtils.isEmpty(cachedEmail) ? "—" : cachedEmail);
         clearFieldErrors();
+        pendingAvatarUri = null;
         showEditMode(true);
     }
 
@@ -260,7 +302,40 @@ public class ProfileDetailsActivity extends BaseActivity {
         String newCity    = getText(etEditCity).trim();
         String newAddress = getText(etEditAddress).trim();
 
-        saveToSupabase(newName, newPhone, newCity, newAddress);
+        if (pendingAvatarUri != null) {
+            uploadAvatarThenSave(newName, newPhone, newCity, newAddress);
+        } else {
+            saveToSupabase(newName, newPhone, newCity, newAddress, cachedProfileImagePath);
+        }
+    }
+
+    private void uploadAvatarThenSave(String name, String phone, String city, String address) {
+        showLoading(true);
+        setSaveButtonState(true, getString(R.string.pd_uploading_photo));
+        SupabaseStorageHelper.uploadPrivateFile(
+                this,
+                pendingAvatarUri,
+                SupabaseStorageHelper.BUCKET_PROFILE_IMAGES,
+                firebaseUid,
+                new SupabaseStorageHelper.PrivateUploadCallback() {
+                    @Override
+                    public void onSuccess(String storagePath) {
+                        saveToSupabase(name, phone, city, address, safeStr(storagePath));
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        MAIN.post(() -> {
+                            isSaving = false;
+                            showLoading(false);
+                            setSaveButtonState(false, getString(R.string.pd_btn_save));
+                            showSnack(TextUtils.isEmpty(message)
+                                    ? getString(R.string.pd_photo_upload_failed)
+                                    : message);
+                        });
+                    }
+                }
+        );
     }
 
     private boolean validateFields() {
@@ -298,10 +373,10 @@ public class ProfileDetailsActivity extends BaseActivity {
         return valid;
     }
 
-    private void saveToSupabase(String name, String phone, String city, String address) {
+    private void saveToSupabase(String name, String phone, String city, String address, String profileImagePath) {
         isSaving = true;
         showLoading(true);
-        setSaveButtonState(true, "Saving…");
+        setSaveButtonState(true, getString(R.string.pd_saving));
 
         new Thread(() -> {
             try {
@@ -310,11 +385,12 @@ public class ProfileDetailsActivity extends BaseActivity {
                 body.put("phone",   phone);
                 body.put("city",    city);
                 body.put("address", address);
+                body.put("profile_image", safeStr(profileImagePath));
                 if (!TextUtils.isEmpty(cachedEmail)) body.put("email", cachedEmail);
 
-                // ── PATCH existing row ────────────────────────────────────
+                String encodedUid = java.net.URLEncoder.encode(firebaseUid, java.nio.charset.StandardCharsets.UTF_8.name());
                 String patchUrl = BuildConfig.SUPABASE_URL
-                        + "/rest/v1/users?firebase_uid=eq." + firebaseUid;
+                        + "/rest/v1/users?firebase_uid=eq." + encodedUid;
 
                 Request patchReq = new Request.Builder()
                         .url(patchUrl)
@@ -329,43 +405,28 @@ public class ProfileDetailsActivity extends BaseActivity {
 
                 try (Response r = HTTP.newCall(patchReq).execute()) {
                     int code = r.code();
-                    Log.d(TAG, "PATCH /users HTTP " + code);
+                    String errBody = r.body() != null ? r.body().string() : "";
+                    Log.d(TAG, "PATCH /users HTTP " + code + " | " + errBody);
 
-                    if (code == 200 || code == 204) {
-                        // Successful update
-                        MAIN.post(() -> onSaveSuccess(name, phone, city, address, "Profile updated ✅"));
-                    } else if (code == 406) {
-                        // 406 = "Not Acceptable" — can happen when Prefer header is mismatched;
-                        // treat as success if body is empty (Supabase PATCH with return=minimal)
-                        String errBody = r.body() != null ? r.body().string() : "";
-                        if (errBody.isEmpty() || errBody.equals("[]") || errBody.equals("{}")) {
-                            MAIN.post(() -> onSaveSuccess(name, phone, city, address, "Profile updated ✅"));
-                        } else {
-                            Log.w(TAG, "PATCH 406: " + errBody);
-                            // Row may not exist — fall through to upsert
-                            upsertSupabaseRow(name, phone, city, address);
-                        }
+                    if (code == 200 || code == 204 || (code == 406 &&
+                            (errBody.isEmpty() || errBody.equals("[]") || errBody.equals("{}")))) {
+                        MAIN.post(() -> onSaveSuccess(name, phone, city, address, profileImagePath,
+                                getString(R.string.pd_saved_ok)));
+                    } else if (code == 400 || code == 404 || code == 409 || errBody.isEmpty() || errBody.equals("[]")) {
+                        upsertSupabaseRow(name, phone, city, address, profileImagePath);
                     } else {
-                        // Any other non-success code — attempt upsert as fallback
-                        String errBody = r.body() != null ? r.body().string() : "";
-                        Log.w(TAG, "PATCH failed HTTP " + code + " | " + errBody);
-                        // If 0 rows matched (empty array body) try upsert
-                        if (errBody.equals("[]") || errBody.isEmpty()) {
-                            upsertSupabaseRow(name, phone, city, address);
-                        } else {
-                            MAIN.post(() -> onSaveError("Save failed (HTTP " + code + "). Try again."));
-                        }
+                        MAIN.post(() -> onSaveError(getString(R.string.pd_save_http_error, code)));
                     }
                 }
             } catch (Exception e) {
                 Log.e(TAG, "saveToSupabase exception: " + e.getMessage(), e);
-                MAIN.post(() -> onSaveError("Network error. Check your connection and try again."));
+                MAIN.post(() -> onSaveError(getString(R.string.pd_network_error)));
             }
         }).start();
     }
 
     /** Upsert (INSERT or UPDATE) — used when PATCH found 0 matching rows. */
-    private void upsertSupabaseRow(String name, String phone, String city, String address) {
+    private void upsertSupabaseRow(String name, String phone, String city, String address, String profileImagePath) {
         try {
             JSONObject body = new JSONObject();
             body.put("firebase_uid",        firebaseUid);
@@ -374,6 +435,7 @@ public class ProfileDetailsActivity extends BaseActivity {
             body.put("phone",               phone);
             body.put("city",                city);
             body.put("address",             address);
+            body.put("profile_image",       safeStr(profileImagePath));
             body.put("is_user",             true);
             body.put("is_service_provider", false);
             body.put("is_admin",            false);
@@ -393,26 +455,30 @@ public class ProfileDetailsActivity extends BaseActivity {
                 int code = r.code();
                 Log.d(TAG, "upsertSupabaseRow HTTP " + code);
                 if (code == 200 || code == 201 || code == 204) {
-                    MAIN.post(() -> onSaveSuccess(name, phone, city, address, "Profile saved ✅"));
+                    MAIN.post(() -> onSaveSuccess(name, phone, city, address, profileImagePath,
+                            getString(R.string.pd_saved_ok)));
                 } else {
                     String errBody = r.body() != null ? r.body().string() : "";
                     Log.w(TAG, "upsert error HTTP " + code + " | " + errBody);
-                    MAIN.post(() -> onSaveError("Could not save profile (HTTP " + code + "). Try again."));
+                    MAIN.post(() -> onSaveError(getString(R.string.pd_save_http_error, code)));
                 }
             }
         } catch (Exception e) {
             Log.e(TAG, "upsertSupabaseRow exception: " + e.getMessage(), e);
-            MAIN.post(() -> onSaveError("Network error. Check your connection and try again."));
+            MAIN.post(() -> onSaveError(getString(R.string.pd_network_error)));
         }
     }
 
-    private void onSaveSuccess(String name, String phone, String city, String address, String msg) {
+    private void onSaveSuccess(String name, String phone, String city, String address,
+                               String profileImagePath, String msg) {
         isSaving = false;
         showLoading(false);
         setSaveButtonState(false, getString(R.string.pd_btn_save));
         showEditMode(false);
-        applyProfile(name, cachedEmail, phone, city, address, cachedImgUrl);
+        pendingAvatarUri = null;
+        applyProfile(name, cachedEmail, phone, city, address, safeStr(profileImagePath));
         showSnack(msg);
+        setResult(RESULT_OK);
     }
 
     private void onSaveError(String msg) {
@@ -437,65 +503,86 @@ public class ProfileDetailsActivity extends BaseActivity {
         showLoading(true);
         new Thread(() -> {
             try {
-                String url = BuildConfig.SUPABASE_URL
-                        + "/rest/v1/users?firebase_uid=eq." + firebaseUid
-                        + "&select=name,email,phone,city,address,profile_image_url&limit=1";
+                ProfileFetchResult fetch = fetchProfileByUid("name,email,phone,city,address,profile_image", false);
+                if (fetch.httpCode == 400) {
+                    // Backward compatibility when DB still has legacy profile_image_url column.
+                    fetch = fetchProfileByUid("name,email,phone,city,address,profile_image_url", true);
+                }
 
-                Request req = new Request.Builder().url(url)
-                        .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Accept",        "application/json")
-                        .build();
+                Log.d(TAG, "loadProfile HTTP " + fetch.httpCode + " | " + fetch.body);
 
-                try (Response r = HTTP.newCall(req).execute()) {
-                    String body = r.body() != null ? r.body().string() : "[]";
-                    Log.d(TAG, "loadProfile HTTP " + r.code() + " | " + body);
+                if (fetch.httpCode == 200 && fetch.row != null) {
+                    JSONObject o   = fetch.row;
+                    String name    = nullSafe(o, "name");
+                    String email   = nullSafe(o, "email");
+                    String phone   = nullSafe(o, "phone");
+                    String city    = nullSafe(o, "city");
+                    String address = nullSafe(o, "address");
+                    String imagePath = nullSafe(o, "profile_image");
+                    if (TextUtils.isEmpty(imagePath)) imagePath = nullSafe(o, "profile_image_url");
 
-                    if (r.code() == 200) {
-                        JSONArray arr = new JSONArray(body);
-                        if (arr.length() > 0) {
-                            JSONObject o   = arr.getJSONObject(0);
-                            String name    = nullSafe(o, "name");
-                            String email   = nullSafe(o, "email");
-                            String phone   = nullSafe(o, "phone");
-                            String city    = nullSafe(o, "city");
-                            String address = nullSafe(o, "address");
-                            String rawImg  = o.isNull("profile_image_url") ? null
-                                            : o.optString("profile_image_url", "");
-                            String imgUrl  = TextUtils.isEmpty(rawImg) ? null : rawImg;
+                    if (TextUtils.isEmpty(name))  name  = fallbackName;
+                    if (TextUtils.isEmpty(email)) email = fallbackEmail;
+                    if (TextUtils.isEmpty(phone)) phone = fallbackPhone;
 
-                            // Merge: prefer DB fields; fall back to Firebase/extras
-                            if (TextUtils.isEmpty(name))  name  = fallbackName;
-                            if (TextUtils.isEmpty(email)) email = fallbackEmail;
-                            if (TextUtils.isEmpty(phone)) phone = fallbackPhone;
-
-                            final String fName = name, fEmail = email, fPhone = phone,
-                                         fCity = city, fAddr = address, fImg = imgUrl;
-                            MAIN.post(() -> applyProfile(fName, fEmail, fPhone, fCity, fAddr, fImg));
-                        } else {
-                            // No row yet — seed one from Firebase data
-                            Log.i(TAG, "No Supabase row — seeding.");
-                            seedSupabaseRow(fallbackName, fallbackEmail, fallbackPhone, "", "");
-                            MAIN.post(() -> applyProfile(
-                                    fallbackName, fallbackEmail, fallbackPhone, "", "", null));
-                        }
-                    } else {
-                        Log.w(TAG, "loadProfile HTTP " + r.code());
-                        MAIN.post(() -> showSnack("Could not load profile (HTTP " + r.code() + ")"));
-                    }
+                    final String fName = name, fEmail = email, fPhone = phone,
+                            fCity = city, fAddr = address, fImg = imagePath;
+                    MAIN.post(() -> applyProfile(fName, fEmail, fPhone, fCity, fAddr, fImg));
+                } else if (fetch.httpCode == 200) {
+                    Log.i(TAG, "No Supabase row — seeding.");
+                    seedSupabaseRow(fallbackName, fallbackEmail, fallbackPhone, "", "", "");
+                    MAIN.post(() -> applyProfile(fallbackName, fallbackEmail, fallbackPhone, "", "", ""));
+                } else {
+                    MAIN.post(() -> showSnack(getString(R.string.pd_load_http_error, fetch.httpCode)));
                 }
             } catch (Exception e) {
                 Log.e(TAG, "loadProfile exception: " + e.getMessage(), e);
-                MAIN.post(() -> showSnack("Network error. Showing cached data."));
+                MAIN.post(() -> showSnack(getString(R.string.pd_network_showing_cached)));
             } finally {
                 MAIN.post(() -> showLoading(false));
             }
         }).start();
     }
 
+    private ProfileFetchResult fetchProfileByUid(String selectColumns, boolean legacyImageKey) {
+        ProfileFetchResult out = new ProfileFetchResult();
+        out.httpCode = 0;
+        out.body = "[]";
+        try {
+            String encodedUid = java.net.URLEncoder.encode(firebaseUid, java.nio.charset.StandardCharsets.UTF_8.name());
+            String url = BuildConfig.SUPABASE_URL
+                    + "/rest/v1/users?firebase_uid=eq." + encodedUid
+                    + "&select=" + selectColumns + "&limit=1";
+
+            Request req = new Request.Builder().url(url)
+                    .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Accept",        "application/json")
+                    .build();
+
+            try (Response r = HTTP.newCall(req).execute()) {
+                out.httpCode = r.code();
+                out.body = r.body() != null ? r.body().string() : "[]";
+                if (r.code() == 200) {
+                    JSONArray arr = new JSONArray(out.body);
+                    if (arr.length() > 0) {
+                        JSONObject row = arr.getJSONObject(0);
+                        if (legacyImageKey && !row.has("profile_image") && row.has("profile_image_url")) {
+                            row.put("profile_image", nullSafe(row, "profile_image_url"));
+                        }
+                        out.row = row;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "fetchProfileByUid exception: " + e.getMessage(), e);
+        }
+        return out;
+    }
+
     /** Non-blocking seed — creates the row in background; failure is non-fatal. */
     private void seedSupabaseRow(String name, String email, String phone,
-                                  String city, String address) {
+                                  String city, String address, String profileImagePath) {
         try {
             JSONObject body = new JSONObject();
             body.put("firebase_uid",        firebaseUid);
@@ -504,6 +591,7 @@ public class ProfileDetailsActivity extends BaseActivity {
             body.put("phone",               TextUtils.isEmpty(phone)   ? "" : phone.trim());
             body.put("city",                TextUtils.isEmpty(city)    ? "" : city.trim());
             body.put("address",             TextUtils.isEmpty(address) ? "" : address.trim());
+            body.put("profile_image",       TextUtils.isEmpty(profileImagePath) ? "" : profileImagePath.trim());
             body.put("is_user",             true);
             body.put("is_service_provider", false);
             body.put("is_admin",            false);
@@ -531,13 +619,13 @@ public class ProfileDetailsActivity extends BaseActivity {
     // ─────────────────────────────────────────────────────────────────────
 
     private void applyProfile(String name, String email, String phone,
-                               String city, String address, String imgUrl) {
+                               String city, String address, String imagePath) {
         cachedName    = safeStr(name);
         cachedEmail   = safeStr(email);
         cachedPhone   = safeStr(phone);
         cachedCity    = safeStr(city);
         cachedAddress = safeStr(address);
-        cachedImgUrl  = imgUrl;
+        cachedProfileImagePath = safeStr(imagePath);
 
         // Header
         String displayName = TextUtils.isEmpty(cachedName)
@@ -545,7 +633,7 @@ public class ProfileDetailsActivity extends BaseActivity {
         if (tvName  != null) tvName .setText(TextUtils.isEmpty(displayName) ? "User" : displayName);
         if (tvEmail != null) tvEmail.setText(cachedEmail);
 
-        applyAvatar(cachedName, imgUrl);
+        applyAvatar(cachedName, cachedProfileImagePath);
 
         // Card rows
         setTextOrFallback(tvDisplayName,    cachedName,    "—");
@@ -555,23 +643,55 @@ public class ProfileDetailsActivity extends BaseActivity {
         setTextOrFallback(tvDisplayAddress, cachedAddress, "Not set");
     }
 
-    private void applyAvatar(String name, String imgUrl) {
+    private void applyAvatar(String name, String imagePath) {
         if (ivAvatar == null || tvAvatarInitial == null) return;
-        if (!TextUtils.isEmpty(imgUrl)) {
+        if (!TextUtils.isEmpty(imagePath)) {
             ivAvatar.setVisibility(View.VISIBLE);
             tvAvatarInitial.setVisibility(View.GONE);
-            Glide.with(this).load(imgUrl).circleCrop()
-                    .placeholder(R.drawable.bg_profile_avatar_inner)
-                    .error(R.drawable.bg_profile_avatar_inner)
-                    .into(ivAvatar);
+            if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+                Glide.with(this).load(imagePath).circleCrop()
+                        .placeholder(R.drawable.bg_profile_avatar_inner)
+                        .error(R.drawable.bg_profile_avatar_inner)
+                        .into(ivAvatar);
+                return;
+            }
+            SupabaseStorageHelper.getSignedUrl(
+                    SupabaseStorageHelper.BUCKET_PROFILE_IMAGES,
+                    imagePath,
+                    AVATAR_SIGNED_URL_TTL_SEC,
+                    new SupabaseStorageHelper.SignedUrlCallback() {
+                        @Override
+                        public void onSuccess(String signedUrl) {
+                            if (isFinishing() || isDestroyed()) return;
+                            Glide.with(ProfileDetailsActivity.this)
+                                    .load(signedUrl)
+                                    .circleCrop()
+                                    .placeholder(R.drawable.bg_profile_avatar_inner)
+                                    .error(R.drawable.bg_profile_avatar_inner)
+                                    .into(ivAvatar);
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            Log.w(TAG, "Signed URL failed: " + message);
+                            showInitialAvatar(name);
+                        }
+                    }
+            );
         } else {
-            ivAvatar.setVisibility(View.GONE);
+            showInitialAvatar(name);
+        }
+    }
+
+    private void showInitialAvatar(String name) {
+        if (ivAvatar != null) ivAvatar.setVisibility(View.GONE);
+        if (tvAvatarInitial != null) {
             tvAvatarInitial.setVisibility(View.VISIBLE);
             String initial = !TextUtils.isEmpty(name)
                     ? String.valueOf(name.charAt(0)).toUpperCase()
                     : !TextUtils.isEmpty(cachedEmail)
-                      ? String.valueOf(cachedEmail.charAt(0)).toUpperCase()
-                      : "U";
+                    ? String.valueOf(cachedEmail.charAt(0)).toUpperCase()
+                    : "U";
             tvAvatarInitial.setText(initial);
         }
     }

@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -15,8 +16,11 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 
+import com.bumptech.glide.Glide;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.google.firebase.auth.FirebaseAuth;
@@ -43,10 +47,12 @@ public class ProfileActivity extends BaseActivity {
     private static final String KEY_LANGUAGE  = "selected_language";
     private static final String KEY_DARK_MODE = "dark_mode_enabled";
     private static final String KEY_NOTIF     = "notifications_enabled";
+    private static final int AVATAR_SIGNED_URL_TTL_SEC = 3600;
 
     // ── Header ────────────────────────────────────────────────────────────
     private TextView  tvAvatarInitial, tvUserName, tvUserEmail, tvRoleBadge;
     private ImageView btnBack;
+    private ImageView ivHeaderAvatar;
 
     // ── Menu rows ─────────────────────────────────────────────────────────
     private LinearLayout menuMyProfile, menuSettings, menuListBusiness,
@@ -71,6 +77,7 @@ public class ProfileActivity extends BaseActivity {
     private volatile String cachedProfileName  = null;
     private volatile String cachedProfileEmail = null;
     private volatile String cachedProfilePhone = null;
+    private volatile String cachedProfileImage = null;
 
     // ── Firebase + HTTP ───────────────────────────────────────────────────
     private FirebaseAuth mAuth;
@@ -80,6 +87,14 @@ public class ProfileActivity extends BaseActivity {
             .build();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
+
+    private final ActivityResultLauncher<Intent> profileDetailsLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result != null && result.getResultCode() == RESULT_OK) {
+                    FirebaseUser user = mAuth != null ? mAuth.getCurrentUser() : null;
+                    if (user != null) loadUserDataFromSupabase(user);
+                }
+            });
 
     // ═════════════════════════════════════════════════════════════════════
     @Override
@@ -108,6 +123,7 @@ public class ProfileActivity extends BaseActivity {
         tvUserEmail           = findViewById(R.id.tvUserEmail);
         tvRoleBadge           = findViewById(R.id.tvRoleBadge);
         btnBack               = findViewById(R.id.btnBack);
+        ivHeaderAvatar        = findViewById(R.id.ivHeaderAvatar);
         menuMyProfile         = findViewById(R.id.menuMyProfile);
         menuSettings          = findViewById(R.id.menuSettings);
         menuListBusiness      = findViewById(R.id.menuListBusiness);
@@ -145,6 +161,7 @@ public class ProfileActivity extends BaseActivity {
             tvAvatarInitial.setText("U");
         }
         applyRoleBadge("User");
+        applyAvatar(name, email, null);
     }
 
     // ── Load user data from Supabase ──────────────────────────────────────
@@ -162,23 +179,40 @@ public class ProfileActivity extends BaseActivity {
 
     private UserModel fetchUserRow(String uid, String email) {
         try {
-            // Try by UID first
+            String encodedUid = java.net.URLEncoder.encode(uid, java.nio.charset.StandardCharsets.UTF_8.name());
             String url = BuildConfig.SUPABASE_URL
-                    + "/rest/v1/users?firebase_uid=eq." + uid
-                    + "&select=name,email,phone,is_user,is_service_provider,is_admin&limit=1";
+                    + "/rest/v1/users?firebase_uid=eq." + encodedUid
+                    + "&select=name,email,phone,profile_image,is_user,is_service_provider,is_admin&limit=1";
             try (Response r = HTTP.newCall(buildGet(url)).execute()) {
                 String body = r.body() != null ? r.body().string() : "[]";
                 if (r.code() == 200) {
                     JSONArray arr = new JSONArray(body);
                     if (arr.length() > 0) return parseUser(arr.getJSONObject(0));
+                } else if (r.code() == 400) {
+                    // Backward compatibility for legacy column profile_image_url.
+                    String legacyUrl = BuildConfig.SUPABASE_URL
+                            + "/rest/v1/users?firebase_uid=eq." + encodedUid
+                            + "&select=name,email,phone,profile_image_url,is_user,is_service_provider,is_admin&limit=1";
+                    try (Response rLegacy = HTTP.newCall(buildGet(legacyUrl)).execute()) {
+                        String legacyBody = rLegacy.body() != null ? rLegacy.body().string() : "[]";
+                        if (rLegacy.code() == 200) {
+                            JSONArray arrLegacy = new JSONArray(legacyBody);
+                            if (arrLegacy.length() > 0) {
+                                JSONObject row = arrLegacy.getJSONObject(0);
+                                if (!row.has("profile_image") && row.has("profile_image_url")) {
+                                    row.put("profile_image", row.optString("profile_image_url", ""));
+                                }
+                                return parseUser(row);
+                            }
+                        }
+                    }
                 }
             }
-            // Fallback by email
             if (!email.isEmpty()) {
                 String enc = java.net.URLEncoder.encode(email, java.nio.charset.StandardCharsets.UTF_8.name());
                 String urlE = BuildConfig.SUPABASE_URL
                         + "/rest/v1/users?email=eq." + enc
-                        + "&select=name,email,phone,is_user,is_service_provider,is_admin&limit=1";
+                        + "&select=name,email,phone,profile_image,is_user,is_service_provider,is_admin&limit=1";
                 try (Response r2 = HTTP.newCall(buildGet(urlE)).execute()) {
                     String body2 = r2.body() != null ? r2.body().string() : "[]";
                     if (r2.code() == 200) {
@@ -196,6 +230,7 @@ public class ProfileActivity extends BaseActivity {
         m.name              = o.optString("name", "");
         m.email             = o.optString("email", "");
         m.phone             = o.optString("phone", "");
+        m.profileImage      = o.optString("profile_image", "");
         m.isAdmin           = o.optBoolean("is_admin", false);
         m.isServiceProvider = o.optBoolean("is_service_provider", false);
         m.isUser            = o.optBoolean("is_user", true);
@@ -207,9 +242,11 @@ public class ProfileActivity extends BaseActivity {
         if (m.name  != null && !m.name.isEmpty())  cachedProfileName  = m.name;
         if (m.email != null && !m.email.isEmpty())  cachedProfileEmail = m.email;
         if (m.phone != null && !m.phone.isEmpty())  cachedProfilePhone = m.phone;
+        cachedProfileImage = safeStr(m.profileImage);
 
         if (m.name  != null && !m.name.isEmpty())  { tvUserName.setText(m.name);  tvAvatarInitial.setText(String.valueOf(m.name.charAt(0)).toUpperCase()); }
         if (m.email != null && !m.email.isEmpty())   tvUserEmail.setText(m.email);
+        applyAvatar(m.name, m.email, m.profileImage);
         isAdmin    = m.isAdmin;
         isProvider = m.isServiceProvider;
         applyRoleBadge(isAdmin ? "Admin" : isProvider ? "Provider" : "User");
@@ -269,8 +306,10 @@ public class ProfileActivity extends BaseActivity {
                         cachedProfileEmail != null ? cachedProfileEmail : safeStr(cur.getEmail()));
                 intent.putExtra(ProfileDetailsActivity.EXTRA_PHONE,
                         cachedProfilePhone != null ? cachedProfilePhone : "");
+                intent.putExtra(ProfileDetailsActivity.EXTRA_IMAGE,
+                        cachedProfileImage != null ? cachedProfileImage : "");
             }
-            startActivity(intent);
+            profileDetailsLauncher.launch(intent);
             overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
         });
 
@@ -458,6 +497,63 @@ public class ProfileActivity extends BaseActivity {
     private void showLoading(boolean show) {
         if (profileLoadingOverlay != null)
             profileLoadingOverlay.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+
+    private void applyAvatar(String name, String email, String imagePath) {
+        if (ivHeaderAvatar == null || tvAvatarInitial == null) return;
+
+        if (!TextUtils.isEmpty(imagePath)) {
+            ivHeaderAvatar.setVisibility(View.VISIBLE);
+            tvAvatarInitial.setVisibility(View.GONE);
+            if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+                Glide.with(this)
+                        .load(imagePath)
+                        .circleCrop()
+                        .placeholder(R.drawable.bg_profile_avatar_inner)
+                        .error(R.drawable.bg_profile_avatar_inner)
+                        .into(ivHeaderAvatar);
+                return;
+            }
+
+            SupabaseStorageHelper.getSignedUrl(
+                    SupabaseStorageHelper.BUCKET_PROFILE_IMAGES,
+                    imagePath,
+                    AVATAR_SIGNED_URL_TTL_SEC,
+                    new SupabaseStorageHelper.SignedUrlCallback() {
+                        @Override
+                        public void onSuccess(String signedUrl) {
+                            if (isFinishing() || isDestroyed()) return;
+                            Glide.with(ProfileActivity.this)
+                                    .load(signedUrl)
+                                    .circleCrop()
+                                    .placeholder(R.drawable.bg_profile_avatar_inner)
+                                    .error(R.drawable.bg_profile_avatar_inner)
+                                    .into(ivHeaderAvatar);
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            Log.w(TAG, "applyAvatar signed URL failed: " + message);
+                            showInitial(name, email);
+                        }
+                    }
+            );
+            return;
+        }
+
+        showInitial(name, email);
+    }
+
+    private void showInitial(String name, String email) {
+        if (ivHeaderAvatar != null) ivHeaderAvatar.setVisibility(View.GONE);
+        if (tvAvatarInitial != null) {
+            tvAvatarInitial.setVisibility(View.VISIBLE);
+            String source = !TextUtils.isEmpty(name) ? name : email;
+            String initial = !TextUtils.isEmpty(source)
+                    ? String.valueOf(source.charAt(0)).toUpperCase()
+                    : "U";
+            tvAvatarInitial.setText(initial);
+        }
     }
 
     private static Request buildGet(String url) {
