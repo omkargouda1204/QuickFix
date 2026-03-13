@@ -87,4 +87,14 @@
     <color name="info_text">#90CAF9</color>
     <color name="neutral_chip_bg">#455468</color>
     <color name="neutral_chip_text">#FFFFFF</color>
+
+    <!-- Semantic/status colors used across Java + XML -->
+    <color name="status_pending_text">#FFB74D</color>
+    <color name="status_approved_text">#81C784</color>
+    <color name="status_rejected_text">#EF9A9A</color>
+    <color name="status_neutral_text">#B0BEC5</color>
+
+    <!-- Shared subtle surfaces -->
+    <color name="surface_soft">#232833</color>
+    <color name="on_gradient_muted">#D6E8FF</color>
 </resources>

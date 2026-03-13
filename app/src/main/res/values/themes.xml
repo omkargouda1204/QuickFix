@@ -18,6 +18,10 @@
         <item name="android:navigationBarColor">@color/screen_background</item>
         <!-- Bottom sheets follow theme -->
         <item name="bottomSheetDialogTheme">@style/Theme.QuickFix.BottomSheet</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+        <item name="materialButtonStyle">@style/Widget.QuickFix.Button</item>
+        <item name="chipStyle">@style/Widget.QuickFix.Chip.Filter</item>
+        <item name="textInputStyle">@style/Widget.QuickFix.TextInputLayout</item>
     </style>
 
     <style name="Theme.QuickFix" parent="Base.Theme.QuickFix" />

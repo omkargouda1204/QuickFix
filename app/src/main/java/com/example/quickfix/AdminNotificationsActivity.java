@@ -39,8 +39,7 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 /**
- * AdminNotificationsActivity — displays all notifications from the `notifications` table.
- * Admin sees: provider applications, offer broadcasts, and system alerts.
+ * AdminNotificationsActivity — displays all notifications from the `admin_notifications` table.
  * Supports mark-as-read, filter by type, pull-to-refresh.
  */
 public class AdminNotificationsActivity extends BaseActivity {
@@ -133,14 +132,10 @@ public class AdminNotificationsActivity extends BaseActivity {
     private void loadNotifications() {
         setLoading(true);
 
-        // Fetch notifications relevant to admin:
-        // 1. Notifications with no user_id (broadcast / admin-targeted)
-        // 2. Notifications with firebase_uid = admin's uid
-        // Using OR filter: user_id=is.null OR firebase_uid=eq.<adminUid>
-        String url = SUPABASE_URL + "/rest/v1/notifications"
-                + "?select=*"
+        String url = SUPABASE_URL + "/rest/v1/admin_notifications"
+                + "?select=id,title,message,type,is_read,created_at"
                 + "&order=created_at.desc"
-                + "&limit=100";
+                + "&limit=200";
 
         Log.d(TAG, "loadNotifications → " + url);
 
@@ -169,11 +164,11 @@ public class AdminNotificationsActivity extends BaseActivity {
                     });
                 }
             } catch (Exception e) {
-                Log.e(TAG, "loadNotifications exception: " + e.getMessage(), e);
+                Log.e(TAG, "loadNotifications exception", e);
                 main.post(() -> {
                     setLoading(false);
                     if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
-                    Toast.makeText(this, "Network error", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Failed to load notifications", Toast.LENGTH_SHORT).show();
                     showEmptyState();
                 });
             }
@@ -194,11 +189,10 @@ public class AdminNotificationsActivity extends BaseActivity {
                 item.type       = o.optString("type", "general");
                 item.isRead     = o.optBoolean("is_read", false);
                 item.createdAt  = o.optString("created_at", "");
-                item.userId     = o.optString("user_id", "");
                 allItems.add(item);
             }
         } catch (Exception e) {
-            Log.e(TAG, "parseNotifications: " + e.getMessage(), e);
+            Log.e(TAG, "parseNotifications", e);
         }
         applyFilter();
     }
@@ -215,7 +209,9 @@ public class AdminNotificationsActivity extends BaseActivity {
             }
         }
 
-        long unreadCount = allItems.stream().filter(n -> !n.isRead).count();
+        int unreadCount = 0;
+        for (NotifItem n : allItems) if (!n.isRead) unreadCount++;
+
         if (tvNotifCount != null)
             tvNotifCount.setText(unreadCount + " unread · " + allItems.size() + " total");
 
@@ -227,30 +223,36 @@ public class AdminNotificationsActivity extends BaseActivity {
 
     // ── MARK READ ─────────────────────────────────────────────────────────
     private void markItemRead(NotifItem item) {
-        if (item.isRead) return;
+        if (item == null || item.isRead || item.id == null || item.id.isEmpty()) return;
+
         new Thread(() -> {
             try {
                 JSONObject body = new JSONObject();
                 body.put("is_read", true);
-                try (Response r = http.newCall(new Request.Builder()
-                        .url(SUPABASE_URL + "/rest/v1/notifications?id=eq." + item.id)
+                Request req = new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/admin_notifications?id=eq." + item.id)
                         .patch(RequestBody.create(body.toString(),
                                 okhttp3.MediaType.get("application/json")))
                         .addHeader("apikey",        ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
                         .addHeader("Content-Type",  "application/json")
                         .addHeader("Prefer",        "return=minimal")
-                        .build()).execute()) {
+                        .build();
+
+                try (Response r = http.newCall(req).execute()) {
+                    String rb = r.body() != null ? r.body().string() : "";
                     if (r.isSuccessful()) {
                         main.post(() -> {
                             item.isRead = true;
                             adapter.notifyDataSetChanged();
                             applyFilter();
                         });
+                    } else {
+                        Log.e(TAG, "markItemRead failed HTTP " + r.code() + ": " + rb);
                     }
                 }
             } catch (Exception e) {
-                Log.e(TAG, "markItemRead: " + e.getMessage());
+                Log.e(TAG, "markItemRead", e);
             }
         }).start();
     }
@@ -260,8 +262,8 @@ public class AdminNotificationsActivity extends BaseActivity {
             try {
                 JSONObject body = new JSONObject();
                 body.put("is_read", true);
-                String url = SUPABASE_URL + "/rest/v1/notifications?is_read=eq.false";
-                try (Response r = http.newCall(new Request.Builder()
+                String url = SUPABASE_URL + "/rest/v1/admin_notifications?is_read=eq.false";
+                Request req = new Request.Builder()
                         .url(url)
                         .patch(RequestBody.create(body.toString(),
                                 okhttp3.MediaType.get("application/json")))
@@ -269,18 +271,25 @@ public class AdminNotificationsActivity extends BaseActivity {
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
                         .addHeader("Content-Type",  "application/json")
                         .addHeader("Prefer",        "return=minimal")
-                        .build()).execute()) {
+                        .build();
+
+                try (Response r = http.newCall(req).execute()) {
+                    String rb = r.body() != null ? r.body().string() : "";
                     main.post(() -> {
                         if (r.isSuccessful()) {
                             for (NotifItem n : allItems) n.isRead = true;
                             adapter.notifyDataSetChanged();
                             applyFilter();
-                            Toast.makeText(this, "All marked as read ✓", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "All marked as read", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Log.e(TAG, "markAllRead failed HTTP " + r.code() + ": " + rb);
+                            Toast.makeText(this, "Could not update setting", Toast.LENGTH_SHORT).show();
                         }
                     });
                 }
             } catch (Exception e) {
-                Log.e(TAG, "markAllRead: " + e.getMessage());
+                Log.e(TAG, "markAllRead", e);
+                main.post(() -> Toast.makeText(this, "Could not update setting", Toast.LENGTH_SHORT).show());
             }
         }).start();
     }
@@ -302,7 +311,7 @@ public class AdminNotificationsActivity extends BaseActivity {
 
     // ── Data model ────────────────────────────────────────────────────────
     public static class NotifItem {
-        public String  id, title, message, type, createdAt, userId;
+        public String  id, title, message, type, createdAt;
         public boolean isRead;
     }
 

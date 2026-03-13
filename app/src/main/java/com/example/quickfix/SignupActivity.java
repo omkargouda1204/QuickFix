@@ -114,8 +114,46 @@ public class SignupActivity extends BaseActivity {
 
         isLoading = true;
         setButtonsEnabled(false);
-        showOverlay("Creating your account…");
+        showOverlay("Checking account eligibility…");
 
+        SupabaseClient.getAccountStatusByEmail(email,
+                new SupabaseClient.AccountStatusCallback() {
+                    @Override
+                    public void onSuccess(SupabaseClient.UserAccountStatus status) {
+                        if (isFinishing()) return;
+
+                        if (status != null && status.exists && !status.isDeleted()) {
+                            resetLoadingState();
+                            err(emailSignupLayout, "This email is already registered. Please log in.");
+                            return;
+                        }
+
+                        if (status != null && status.exists && status.isDeleted()
+                                && status.isDeletionCooldownActive()) {
+                            resetLoadingState();
+                            toast("You can create a new account after 24 hours of deletion. now u can use another email to creat account ");
+                            return;
+                        }
+
+                        boolean shouldRestoreDeleted = status != null && status.exists && status.isDeleted();
+                        createFirebaseUser(name, phone, email, pass, shouldRestoreDeleted);
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        if (isFinishing()) return;
+                        // If status check fails due network/schema, still allow auth creation.
+                        createFirebaseUser(name, phone, email, pass, false);
+                    }
+                });
+    }
+
+    private void createFirebaseUser(String name,
+                                    String phone,
+                                    String email,
+                                    String pass,
+                                    boolean restoreDeleted) {
+        updateOverlay("Creating your account…");
         mAuth.createUserWithEmailAndPassword(email, pass)
                 .addOnSuccessListener(this, authResult -> {
                     FirebaseUser user = mAuth.getCurrentUser();
@@ -126,24 +164,46 @@ public class SignupActivity extends BaseActivity {
                     }
                     Log.d(TAG, "Account created uid=" + user.getUid());
 
-                    // Set display name (non-blocking)
                     user.updateProfile(new UserProfileChangeRequest.Builder()
                             .setDisplayName(name).build())
                             .addOnCompleteListener(t ->
                                     Log.d(TAG, "displayName=" + (t.isSuccessful() ? "OK" : "failed")));
 
-                    // Save to Supabase then send verification email
+                    if (restoreDeleted) {
+                        updateOverlay("Restoring account profile…");
+                        SupabaseClient.restoreDeletedAccountByEmail(
+                                email, user.getUid(), name, phone,
+                                new SupabaseClient.Callback2() {
+                                    @Override
+                                    public void onSuccess() {
+                                        FcmNotificationHelper.notifyAdminUserRegistration(name, user.getUid());
+                                        updateOverlay("Sending verification email…");
+                                        sendVerificationEmail(user, email);
+                                    }
+
+                                    @Override
+                                    public void onError(String err) {
+                                        Log.w(TAG, "restoreDeletedAccountByEmail failed: " + err);
+                                        FcmNotificationHelper.notifyAdminUserRegistration(name, user.getUid());
+                                        updateOverlay("Sending verification email…");
+                                        sendVerificationEmail(user, email);
+                                    }
+                                });
+                        return;
+                    }
+
                     updateOverlay("Saving your profile…");
-                    SupabaseClient.upsertUser(
+                    SupabaseClient.insertUserAfterAuth(
                             user.getUid(), name, email, phone,
-                            true, false, false,
                             new SupabaseClient.Callback2() {
                                 @Override public void onSuccess() {
+                                    FcmNotificationHelper.notifyAdminUserRegistration(name, user.getUid());
                                     updateOverlay("Sending verification email…");
                                     sendVerificationEmail(user, email);
                                 }
                                 @Override public void onError(String err) {
-                                    Log.w(TAG, "Supabase upsert failed (non-fatal): " + err);
+                                    Log.w(TAG, "insertUserAfterAuth failed (non-fatal): " + err);
+                                    FcmNotificationHelper.notifyAdminUserRegistration(name, user.getUid());
                                     updateOverlay("Sending verification email…");
                                     sendVerificationEmail(user, email);
                                 }

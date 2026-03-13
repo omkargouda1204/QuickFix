@@ -11,6 +11,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.cardview.widget.CardView;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.quickfix.Booking;
@@ -96,19 +97,19 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
             switch (booking.status.toLowerCase()) {
                 case "pending":
                     tvStatus.setBackgroundResource(R.drawable.badge_pending);
-                    tvStatus.setTextColor(Color.parseColor("#F57C00"));
+                    tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_pending_text));
                     break;
                 case "accepted":
                     tvStatus.setBackgroundResource(R.drawable.badge_accepted);
-                    tvStatus.setTextColor(Color.parseColor("#1976D2"));
+                    tvStatus.setTextColor(ContextCompat.getColor(context, R.color.primary));
                     break;
                 case "completed":
                     tvStatus.setBackgroundResource(R.drawable.badge_completed);
-                    tvStatus.setTextColor(Color.parseColor("#388E3C"));
+                    tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_approved_text));
                     break;
                 case "cancelled":
                     tvStatus.setBackgroundResource(R.drawable.badge_cancelled);
-                    tvStatus.setTextColor(Color.parseColor("#D32F2F"));
+                    tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_rejected_text));
                     break;
             }
 

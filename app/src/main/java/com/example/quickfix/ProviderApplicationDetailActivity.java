@@ -1,7 +1,6 @@
 package com.example.quickfix;
 
 import android.content.Intent;
-import android.graphics.Color;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.View;
@@ -13,7 +12,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.appcompat.widget.Toolbar;
 
 import com.google.android.material.button.MaterialButton;
@@ -177,7 +176,7 @@ public class ProviderApplicationDetailActivity extends BaseActivity {
             tvBusinessImage.setOnClickListener(v -> openImage(app.businessImageUrl, "Business Image"));
         } else {
             tvBusinessImage.setText("No image uploaded");
-            tvBusinessImage.setTextColor(Color.parseColor("#9E9E9E"));
+            tvBusinessImage.setTextColor(getColorCompat(R.color.text_secondary));
         }
 
         // ID proof — signed URL (admin only, private bucket)
@@ -185,7 +184,7 @@ public class ProviderApplicationDetailActivity extends BaseActivity {
             tvIdProof.setOnClickListener(v -> openIdProofSecure());
         } else {
             tvIdProof.setText("No ID proof uploaded");
-            tvIdProof.setTextColor(Color.parseColor("#9E9E9E"));
+            tvIdProof.setTextColor(getColorCompat(R.color.text_secondary));
         }
 
         // Action buttons — only for pending
@@ -205,17 +204,17 @@ public class ProviderApplicationDetailActivity extends BaseActivity {
             case "approved":
                 tv.setText("APPROVED");
                 tv.setBackgroundResource(R.drawable.bg_status_approved);
-                tv.setTextColor(Color.parseColor("#1B5E20"));
+                tv.setTextColor(getColorCompat(R.color.status_approved_text));
                 break;
             case "rejected":
                 tv.setText("REJECTED");
                 tv.setBackgroundResource(R.drawable.bg_status_rejected);
-                tv.setTextColor(Color.parseColor("#B71C1C"));
+                tv.setTextColor(getColorCompat(R.color.status_rejected_text));
                 break;
             default:
                 tv.setText("PENDING");
                 tv.setBackgroundResource(R.drawable.bg_status_pending);
-                tv.setTextColor(Color.parseColor("#E65100"));
+                tv.setTextColor(getColorCompat(R.color.status_pending_text));
                 break;
         }
     }
@@ -232,7 +231,7 @@ public class ProviderApplicationDetailActivity extends BaseActivity {
     private void openIdProofSecure() {
         if (pbIdProof != null) pbIdProof.setVisibility(View.VISIBLE);
         tvIdProof.setText("Fetching secure link…");
-        tvIdProof.setTextColor(Color.parseColor("#9E9E9E"));
+        tvIdProof.setTextColor(getColorCompat(R.color.text_secondary));
 
         // Use the bucket name from BuildConfig (QuickFix bucket for ID proofs)
         String bucket = BuildConfig.SUPABASE_BUCKET_ID_PROOF;
@@ -242,7 +241,7 @@ public class ProviderApplicationDetailActivity extends BaseActivity {
                     public void onSuccess(String signedUrl) {
                         if (pbIdProof != null) pbIdProof.setVisibility(View.GONE);
                         tvIdProof.setText("Tap to view ID proof (secure)");
-                        tvIdProof.setTextColor(Color.parseColor("#D32F2F"));
+                        tvIdProof.setTextColor(getColorCompat(R.color.status_rejected_text));
                         openImage(signedUrl, "ID Proof");
                     }
 
@@ -250,7 +249,7 @@ public class ProviderApplicationDetailActivity extends BaseActivity {
                     public void onError(String message) {
                         if (pbIdProof != null) pbIdProof.setVisibility(View.GONE);
                         tvIdProof.setText("Tap to view ID proof (secure)");
-                        tvIdProof.setTextColor(Color.parseColor("#D32F2F"));
+                        tvIdProof.setTextColor(getColorCompat(R.color.status_rejected_text));
                         toast("Could not load ID proof: " + message);
                     }
                 });
@@ -290,7 +289,7 @@ public class ProviderApplicationDetailActivity extends BaseActivity {
         EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         input.setHint(getString(R.string.reject_reason_hint));
-        input.setTextColor(Color.BLACK);
+        input.setTextColor(getColorCompat(R.color.text_primary));
         input.setLines(3);
         input.setMaxLines(5);
         int p = dp(16);
@@ -374,8 +373,11 @@ public class ProviderApplicationDetailActivity extends BaseActivity {
         return Math.round(dp * getResources().getDisplayMetrics().density);
     }
 
+    private int getColorCompat(int colorRes) {
+        return ContextCompat.getColor(this, colorRes);
+    }
+
     private void toast(String msg) {
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
     }
 }
-

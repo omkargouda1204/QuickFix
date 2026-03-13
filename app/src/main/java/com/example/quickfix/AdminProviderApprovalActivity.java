@@ -21,6 +21,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -273,7 +274,7 @@ public class AdminProviderApprovalActivity extends BaseActivity
         EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         input.setHint(getString(R.string.reject_reason_hint));
-        input.setTextColor(Color.BLACK);
+        input.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
         input.setLines(3);
         input.setMaxLines(5);
         int p = dp(16);

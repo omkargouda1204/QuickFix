@@ -220,12 +220,12 @@ public class LoginActivity extends BaseActivity {
 
         if ("ERROR_USER_NOT_FOUND".equals(code)
                 || (msg != null && msg.contains("no user record"))) {
-            err(emailLayout, "No account found with this email.");
+            err(emailLayout, "Account not found. Please sign up first.");
 
         } else if ("ERROR_WRONG_PASSWORD".equals(code)
                 || (msg != null && (msg.contains("password is invalid")
                 || msg.contains("INVALID_LOGIN_CREDENTIALS")))) {
-            err(passwordLayout, "Incorrect password. Try Forgot Password.");
+            err(passwordLayout, "Invalid email or password");
 
         } else if ("ERROR_INVALID_EMAIL".equals(code)
                 || (msg != null && msg.contains("badly formatted"))) {
@@ -242,11 +242,10 @@ public class LoginActivity extends BaseActivity {
             if (!NetworkHelper.isOnline(this)) {
                 toast("No internet connection. Please enable WiFi or mobile data and try again.");
             } else {
-                toast("Unable to reach server. This may be a network provider (ISP) or DNS issue. "
-                        + "Please try switching to mobile data, using a VPN, or try again later.");
+                toast("Login failed. Please try again.");
             }
         } else {
-            toast("Login failed: " + (msg != null ? msg : "Unknown error"));
+            toast("Login failed. Please try again.");
         }
     }
 
@@ -312,8 +311,43 @@ public class LoginActivity extends BaseActivity {
                 toast("Google Sign-In failed: no account returned.");
                 return;
             }
-            updateOverlay("Verifying…");
-            firebaseWithGoogle(acct);
+
+            final String googleEmail = acct.getEmail() != null ? acct.getEmail().trim() : "";
+            if (googleEmail.isEmpty()) {
+                resetLoadingState();
+                toast("Google Sign-In failed: missing email.");
+                return;
+            }
+
+            updateOverlay("Checking account…");
+            SupabaseClient.getAccountStatusByEmail(googleEmail,
+                    new SupabaseClient.AccountStatusCallback() {
+                        @Override
+                        public void onSuccess(SupabaseClient.UserAccountStatus status) {
+                            if (isFinishing()) return;
+
+                            if (status == null || !status.exists) {
+                                onGoogleBlocked("Account not found. Please sign up first.");
+                                return;
+                            }
+
+                            if (status.isDeleted()) {
+                                onGoogleBlocked("This account was deleted. You can create a new account after 24 hours.");
+                                return;
+                            }
+
+                            updateOverlay("Verifying…");
+                            firebaseWithGoogle(acct);
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            if (isFinishing()) return;
+                            resetLoadingState();
+                            toast("Could not verify account. Please try again.");
+                        }
+                    });
+
         } catch (ApiException e) {
             resetLoadingState();
             Log.e(TAG, "Google ApiException code=" + e.getStatusCode());
@@ -337,43 +371,36 @@ public class LoginActivity extends BaseActivity {
                         return;
                     }
 
-                    boolean isNew = authResult.getAdditionalUserInfo() != null
-                            && Boolean.TRUE.equals(
-                                    authResult.getAdditionalUserInfo().isNewUser());
+                    String email = acct.getEmail() != null
+                            ? acct.getEmail().trim()
+                            : (user.getEmail() != null ? user.getEmail().trim() : "");
 
-                    String name  = acct.getDisplayName() != null ? acct.getDisplayName() : "";
-                    String email = acct.getEmail()        != null ? acct.getEmail()        : user.getEmail() != null ? user.getEmail() : "";
-
-                    Log.d(TAG, "Google auth OK uid=" + user.getUid()
-                            + " isNew=" + isNew + " email=" + email);
-
-                    if (isNew) {
-                        updateOverlay("Creating your profile…");
-                        SupabaseClient.upsertUser(
-                                user.getUid(), name, email, "",
-                                true, false, false,
-                                new SupabaseClient.Callback2() {
-                                    @Override public void onSuccess() {
-                                        updateOverlay("Almost done…");
-                                        checkRoleAndNavigate(user.getUid(), email);
-                                    }
-                                    @Override public void onError(String err) {
-                                        Log.w(TAG, "Supabase save failed (non-fatal): " + err);
-                                        updateOverlay("Almost done…");
-                                        // Still navigate — Firebase auth succeeded
-                                        checkRoleAndNavigate(user.getUid(), email);
-                                    }
-                                });
-                    } else {
-                        updateOverlay("Checking your account…");
-                        checkRoleAndNavigate(user.getUid(), email);
+                    if (email.isEmpty()) {
+                        onGoogleBlocked("Google Sign-In failed: missing account email.");
+                        return;
                     }
+
+                    updateOverlay("Checking your account…");
+                    checkRoleAndNavigate(user.getUid(), email);
                 })
                 .addOnFailureListener(this, e -> {
                     resetLoadingState();
                     Log.e(TAG, "Google Firebase auth failed: " + e.getMessage());
                     toast("Google Sign-In failed: " + e.getMessage());
                 });
+    }
+
+    private void onGoogleBlocked(String message) {
+        try {
+            FirebaseAuth.getInstance().signOut();
+            if (mGoogleClient != null) {
+                mGoogleClient.signOut();
+            }
+        } catch (Exception ignored) {
+            // best effort sign-out
+        }
+        resetLoadingState();
+        toast(message);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -409,79 +436,107 @@ public class LoginActivity extends BaseActivity {
         Log.d(TAG, "checkRoleAndNavigate uid=" + firebaseUid + " email=" + finalEmail);
         updateOverlay("Checking your account…");
 
+        if (!finalEmail.isEmpty()) {
+            SupabaseClient.getAccountStatusByEmail(finalEmail,
+                    new SupabaseClient.AccountStatusCallback() {
+                        @Override
+                        public void onSuccess(SupabaseClient.UserAccountStatus status) {
+                            if (isFinishing()) return;
+                            if (status != null && status.exists && status.isDeleted()) {
+                                try { mAuth.signOut(); } catch (Exception ignored) {}
+                                resetLoadingState();
+                                toast("This account was deleted. You can create a new account after 24 hours.");
+                                return;
+                            }
+                            resolveRoleAndNavigate(firebaseUid, finalEmail);
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            if (isFinishing()) return;
+                            // Do not block login only because status probe failed.
+                            resolveRoleAndNavigate(firebaseUid, finalEmail);
+                        }
+                    });
+            return;
+        }
+
+        resolveRoleAndNavigate(firebaseUid, finalEmail);
+    }
+
+    private void resolveRoleAndNavigate(String firebaseUid, String finalEmail) {
         SupabaseClient.getUserRoleWithEmail(firebaseUid, finalEmail,
                 new SupabaseClient.RoleInfoCallback() {
+                    @Override
+                    public void onSuccess(SupabaseClient.RoleInfo info) {
+                        if (isNavigating || isFinishing()) return;
+                        isNavigating = true;
+                        hideOverlay();
 
-            @Override
-            public void onSuccess(SupabaseClient.RoleInfo info) {
-                if (isNavigating || isFinishing()) return;
-                isNavigating = true;
-                hideOverlay();
+                        Log.d(TAG, "Role resolved → admin=" + info.isAdmin
+                                + " provider=" + info.isServiceProvider
+                                + " user=" + info.isUser
+                                + " | email=" + finalEmail);
 
-                Log.d(TAG, "Role resolved → admin=" + info.isAdmin
-                        + " provider=" + info.isServiceProvider
-                        + " user=" + info.isUser
-                        + " | email=" + finalEmail);
+                        AppSettings.setLastKnownAdminRole(LoginActivity.this, info.isAdmin);
 
-                AppSettings.setLastKnownAdminRole(LoginActivity.this, info.isAdmin);
+                        // ── Priority routing ──────────────────────────────────
+                        final Intent target;
+                        if (info.isAdmin) {
+                            Log.d(TAG, "→ AdminDashboardActivity");
+                            target = new Intent(LoginActivity.this, AdminDashboardActivity.class);
+                        } else if (info.isServiceProvider) {
+                            Log.d(TAG, "→ ProviderDashboardActivity");
+                            target = new Intent(LoginActivity.this, ProviderDashboardActivity.class);
+                        } else {
+                            Log.d(TAG, "→ MainActivity");
+                            target = new Intent(LoginActivity.this, MainActivity.class);
+                        }
+                        target.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                        startActivity(target);
+                        finish();
+                    }
 
-                // ── Priority routing ──────────────────────────────────
-                final Intent target;
-                if (info.isAdmin) {
-                    Log.d(TAG, "→ AdminDashboardActivity");
-                    target = new Intent(LoginActivity.this, AdminDashboardActivity.class);
-                } else if (info.isServiceProvider) {
-                    Log.d(TAG, "→ ProviderDashboardActivity");
-                    target = new Intent(LoginActivity.this, ProviderDashboardActivity.class);
-                } else {
-                    Log.d(TAG, "→ MainActivity");
-                    target = new Intent(LoginActivity.this, MainActivity.class);
-                }
-                target.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                startActivity(target);
-                finish();
-            }
+                    @Override
+                    public void onError(String message) {
+                        // Do NOT navigate anywhere on error — show the problem to the user
+                        if (isFinishing()) return;
+                        resetLoadingState();
+                        Log.e(TAG, "Role fetch failed: " + message);
 
-            @Override
-            public void onError(String message) {
-                // Do NOT navigate anywhere on error — show the problem to the user
-                if (isFinishing()) return;
-                resetLoadingState();
-                Log.e(TAG, "Role fetch failed: " + message);
-
-                if ("USER_NOT_FOUND".equals(message)) {
-                    // Account exists in Firebase but not in Supabase users table
-                    new AlertDialog.Builder(LoginActivity.this)
-                            .setTitle("Account Not Found")
-                            .setMessage("Your account was authenticated but your profile "
-                                    + "was not found in our database.\n\n"
-                                    + "Please sign up again or contact support.")
-                            .setPositiveButton("Sign Up", (d, w) -> {
-                                mAuth.signOut();
-                                startActivity(new Intent(LoginActivity.this, SignupActivity.class));
-                            })
-                            .setNegativeButton("Cancel", (d, w) -> mAuth.signOut())
-                            .setCancelable(false)
-                            .show();
-                } else {
-                    // Network error or unexpected failure
-                    new AlertDialog.Builder(LoginActivity.this)
-                            .setTitle("Connection Error")
-                            .setMessage("Could not load your account details.\n\n"
-                                    + "Please check your internet connection and try again.")
-                            .setPositiveButton("Retry", (d, w) -> {
-                                isNavigating = false;
-                                isLoading    = true;
-                                showOverlay("Retrying…");
-                                setButtonsEnabled(false);
-                                checkRoleAndNavigate(firebaseUid, finalEmail);
-                            })
-                            .setNegativeButton("Cancel", (d, w) -> mAuth.signOut())
-                            .setCancelable(false)
-                            .show();
-                }
-            }
-        });
+                        if ("USER_NOT_FOUND".equals(message)) {
+                            // Account exists in Firebase but not in Supabase users table
+                            new AlertDialog.Builder(LoginActivity.this)
+                                    .setTitle("Account Not Found")
+                                    .setMessage("Your account was authenticated but your profile "
+                                            + "was not found in our database.\n\n"
+                                            + "Please sign up again or contact support.")
+                                    .setPositiveButton("Sign Up", (d, w) -> {
+                                        mAuth.signOut();
+                                        startActivity(new Intent(LoginActivity.this, SignupActivity.class));
+                                    })
+                                    .setNegativeButton("Cancel", (d, w) -> mAuth.signOut())
+                                    .setCancelable(false)
+                                    .show();
+                        } else {
+                            // Network error or unexpected failure
+                            new AlertDialog.Builder(LoginActivity.this)
+                                    .setTitle("Connection Error")
+                                    .setMessage("Could not load your account details.\n\n"
+                                            + "Please check your internet connection and try again.")
+                                    .setPositiveButton("Retry", (d, w) -> {
+                                        isNavigating = false;
+                                        isLoading    = true;
+                                        showOverlay("Retrying…");
+                                        setButtonsEnabled(false);
+                                        checkRoleAndNavigate(firebaseUid, finalEmail);
+                                    })
+                                    .setNegativeButton("Cancel", (d, w) -> mAuth.signOut())
+                                    .setCancelable(false)
+                                    .show();
+                        }
+                    }
+                });
     }
 
     // ══════════════════════════════════════════════════════════════════════

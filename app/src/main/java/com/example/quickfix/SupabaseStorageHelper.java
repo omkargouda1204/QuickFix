@@ -6,6 +6,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+
 import java.io.InputStream;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -194,6 +197,81 @@ public class SupabaseStorageHelper {
                 MAIN.post(() -> callback.onError("Error: " + e.getMessage()));
             }
         }).start();
+    }
+
+    /**
+     * Uploads profile image to fixed path:
+     *   profile-images/profiles/{userId}/profile.jpg
+     * Blocks upload if there is no authenticated user session.
+     */
+    public static void uploadProfileImage(Context context,
+                                          Uri fileUri,
+                                          String userId,
+                                          UploadCallback callback) {
+        if (callback == null) return;
+
+        FirebaseUser current = FirebaseAuth.getInstance().getCurrentUser();
+        if (current == null) {
+            MAIN.post(() -> callback.onError("Please login again before uploading profile image."));
+            return;
+        }
+
+        String uid = userId != null && !userId.trim().isEmpty() ? userId.trim() : current.getUid();
+        if (uid == null || uid.isEmpty()) {
+            MAIN.post(() -> callback.onError("Invalid user session. Please login again."));
+            return;
+        }
+
+        if (!uid.equals(current.getUid())) {
+            MAIN.post(() -> callback.onError("Session mismatch. Please login and try again."));
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                String storagePath = "profiles/" + uid + "/profile.jpg";
+                UploadPayload payload = buildUploadPayloadForFixedPath(context, fileUri, storagePath);
+                ResponseResult result = uploadBytes(BUCKET_PROFILE_IMAGES,
+                        payload.storagePath, payload.fileBytes, payload.mimeType);
+
+                String publicUrl = SUPABASE_URL + "/storage/v1/object/public/"
+                        + BUCKET_PROFILE_IMAGES + "/" + payload.storagePath;
+
+                if (isUploadSuccess(result.httpCode, result.body)) {
+                    MAIN.post(() -> callback.onSuccess(publicUrl));
+                } else {
+                    String msg = formatUploadError(result.httpCode, result.body, BUCKET_PROFILE_IMAGES);
+                    Log.e(TAG, "uploadProfileImage failed HTTP " + result.httpCode + ": " + result.body);
+                    MAIN.post(() -> callback.onError(msg));
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "uploadProfileImage exception", e);
+                MAIN.post(() -> callback.onError("Upload error: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    private static UploadPayload buildUploadPayloadForFixedPath(Context context,
+                                                                Uri fileUri,
+                                                                String storagePath) throws Exception {
+        UploadPayload payload = new UploadPayload();
+        String mimeType = context.getContentResolver().getType(fileUri);
+        if (mimeType == null || mimeType.trim().isEmpty()) mimeType = "image/jpeg";
+        payload.mimeType = mimeType;
+        payload.storagePath = storagePath;
+
+        try (InputStream is = context.getContentResolver().openInputStream(fileUri)) {
+            if (is == null) throw new IllegalStateException("Cannot read file");
+            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+            byte[] chunk = new byte[8192];
+            int nRead;
+            while ((nRead = is.read(chunk, 0, chunk.length)) != -1) {
+                buffer.write(chunk, 0, nRead);
+            }
+            payload.fileBytes = buffer.toByteArray();
+        }
+
+        return payload;
     }
 
     private static boolean isAlreadyExistsConflict(int code, String body) {

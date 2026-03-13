@@ -66,7 +66,7 @@
                 android:layout_marginTop="4dp"
                 android:layout_marginStart="52dp"
                 android:text="Manage banners and offers"
-                android:textColor="#CCffffff"
+                android:textColor="@color/on_gradient_muted"
                 android:textSize="13sp" />
         </LinearLayout>
 
@@ -186,7 +186,7 @@
             android:focusable="true"
             app:cardCornerRadius="18dp"
             app:cardElevation="5dp"
-            app:cardBackgroundColor="@color/white">
+            app:cardBackgroundColor="@color/card_bg">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -207,7 +207,7 @@
                         android:layout_width="28dp"
                         android:layout_height="28dp"
                         android:src="@drawable/ic_content"
-                        app:tint="#FFFFFF"
+                        app:tint="@color/white"
                         android:contentDescription="Banner Icon" />
                 </LinearLayout>
 
@@ -270,7 +270,7 @@
             android:focusable="true"
             app:cardCornerRadius="18dp"
             app:cardElevation="5dp"
-            app:cardBackgroundColor="@color/white">
+            app:cardBackgroundColor="@color/card_bg">
 
             <LinearLayout
                 android:layout_width="match_parent"

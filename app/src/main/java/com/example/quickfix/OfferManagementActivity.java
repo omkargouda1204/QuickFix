@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import android.text.TextUtils;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -175,14 +176,38 @@ public class OfferManagementActivity extends BaseActivity {
                 offer.id               = o.optString("id");
                 offer.title            = o.optString("title");
                 offer.description      = o.optString("description");
-                offer.offerCode        = o.optString("offer_code");
-                offer.discountType     = o.optString("discount_type", "percentage");
-                offer.discountValue    = o.optDouble("discount_value", 0);
+
+                String coupon = o.optString("coupon_code", "");
+                if (TextUtils.isEmpty(coupon)) coupon = o.optString("offer_code", "");
+                offer.offerCode = coupon;
+
+                String dType = o.optString("discount_type", "percentage");
+                offer.discountType = dType;
+
+                double dVal = o.has("discount_percent")
+                        ? o.optDouble("discount_percent", 0)
+                        : o.optDouble("discount_value", 0);
+                offer.discountValue = dVal;
+
                 offer.minBookingAmount = o.optDouble("min_booking_amount", 0);
-                offer.expiryDate       = o.optString("expiry_date");
-                offer.createdAt        = o.optString("created_at");
-                offer.isActive         = o.optBoolean("is_active", true);
-                offer.status           = offer.isActive ? "active" : "inactive";
+
+                String endDate = o.optString("end_date", "");
+                if (TextUtils.isEmpty(endDate)) endDate = o.optString("expiry_date", "");
+                offer.expiryDate = endDate;
+
+                String status = o.optString("status", "");
+                if (!TextUtils.isEmpty(status)) {
+                    offer.isActive = "active".equalsIgnoreCase(status);
+                    offer.status = status;
+                } else if (o.has("active")) {
+                    offer.isActive = o.optBoolean("active", true);
+                    offer.status = offer.isActive ? "active" : "inactive";
+                } else {
+                    offer.isActive = o.optBoolean("is_active", true);
+                    offer.status = offer.isActive ? "active" : "inactive";
+                }
+
+                offer.createdAt = o.optString("created_at");
                 offers.add(offer);
             }
         } catch (Exception e) {
@@ -300,62 +325,71 @@ public class OfferManagementActivity extends BaseActivity {
                             AlertDialog dialog) {
         new Thread(() -> {
             try {
-                JSONObject body = new JSONObject();
-                body.put("title",              title);
-                body.put("description",        desc != null ? desc : "");
-                body.put("offer_code",         code);
-                body.put("discount_type",      discountType);
-                body.put("discount_value",     discountValue);
-                body.put("min_booking_amount", minAmount);
-                body.put("expiry_date",        (expiryDate == null || expiryDate.isEmpty())
-                        ? JSONObject.NULL : expiryDate);
-                body.put("is_active", isActive);
-
                 String url;
                 String method;
                 if (existingId != null && !existingId.isEmpty()) {
                     url    = SUPABASE_URL + "/rest/v1/offers?id=eq." + existingId;
                     method = "PATCH";
                 } else {
-                    body.put("id", UUID.randomUUID().toString());
                     url    = SUPABASE_URL + "/rest/v1/offers";
                     method = "POST";
                 }
 
-                Request req = new Request.Builder()
-                        .url(url)
-                        .method(method, RequestBody.create(body.toString(), JSON_MT))
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "return=minimal")
-                        .build();
+                // Try modern schema first
+                JSONObject modern = new JSONObject();
+                if (existingId == null || existingId.isEmpty()) modern.put("id", UUID.randomUUID().toString());
+                modern.put("title", title);
+                modern.put("description", desc != null ? desc : "");
+                modern.put("coupon_code", code);
+                modern.put("discount_type", discountType);
+                modern.put("discount_percent", discountValue);
+                modern.put("min_booking_amount", minAmount);
+                modern.put("end_date", (expiryDate == null || expiryDate.isEmpty()) ? JSONObject.NULL : expiryDate);
+                modern.put("active", isActive);
+                modern.put("status", isActive ? "active" : "inactive");
 
-                try (Response resp = http.newCall(req).execute()) {
-                    int    respCode = resp.code();
-                    String respBody = resp.body() != null ? resp.body().string() : "";
-                    Log.d(TAG, "saveOffer " + method + " HTTP " + respCode);
-                    main.post(() -> {
-                        if (respCode == 200 || respCode == 201 || respCode == 204) {
-                            dialog.dismiss();
-                            Toast.makeText(OfferManagementActivity.this,
-                                    existingId != null ? "Offer updated ✓" : "Offer created ✓",
-                                    Toast.LENGTH_SHORT).show();
-                            loadOffers(); // auto-refresh
-                            if (sendNotif) {
-                                String discStr = discountType.equals("percentage")
-                                        ? (int) discountValue + "% OFF"
-                                        : "₹" + (int) discountValue + " OFF";
-                                sendOfferNotification(title, code, discStr);
-                            }
-                        } else {
-                            Log.e(TAG, "saveOffer FAILED " + respCode + ": " + respBody);
-                            Toast.makeText(OfferManagementActivity.this,
-                                    "Save failed (HTTP " + respCode + "): " + respBody,
-                                    Toast.LENGTH_LONG).show();
-                        }
-                    });
+                SaveResult result = executeSave(url, method, modern);
+
+                if (!result.success) {
+                    // Fallback legacy schema
+                    JSONObject legacy = new JSONObject();
+                    if (existingId == null || existingId.isEmpty()) legacy.put("id", UUID.randomUUID().toString());
+                    legacy.put("title", title);
+                    legacy.put("description", desc != null ? desc : "");
+                    legacy.put("offer_code", code);
+                    legacy.put("discount_type", discountType);
+                    legacy.put("discount_value", discountValue);
+                    legacy.put("min_booking_amount", minAmount);
+                    legacy.put("expiry_date", (expiryDate == null || expiryDate.isEmpty()) ? JSONObject.NULL : expiryDate);
+                    legacy.put("is_active", isActive);
+
+                    result = executeSave(url, method, legacy);
                 }
+
+                final SaveResult finalResult = result;
+                main.post(() -> {
+                    if (finalResult.success) {
+                        dialog.dismiss();
+                        Toast.makeText(OfferManagementActivity.this,
+                                existingId != null ? "Offer updated" : "Offer created",
+                                Toast.LENGTH_SHORT).show();
+                        loadOffers();
+                        if (sendNotif) {
+                            String discStr = discountType.equals("percentage")
+                                    ? (int) discountValue + "% OFF"
+                                    : "₹" + (int) discountValue + " OFF";
+                            sendOfferNotification(title, code, discStr);
+                        }
+                        if (existingId == null || existingId.isEmpty()) {
+                            FcmNotificationHelper.notifyAdminOfferCreated(title, null);
+                        }
+                    } else {
+                        Log.e(TAG, "saveOffer FAILED " + finalResult.code + ": " + finalResult.body);
+                        Toast.makeText(OfferManagementActivity.this,
+                                "Save failed (HTTP " + finalResult.code + ")",
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
             } catch (Exception e) {
                 Log.e(TAG, "saveOffer exception: " + e.getMessage(), e);
                 main.post(() -> Toast.makeText(OfferManagementActivity.this,
@@ -368,14 +402,13 @@ public class OfferManagementActivity extends BaseActivity {
     private void sendOfferNotification(String offerTitle, String code, String discStr) {
         new Thread(() -> {
             try {
-                // 1. Store broadcast notification in `notifications` table (in-app)
+                // 1. Store broadcast notification in `notifications` table (in-app users)
                 JSONObject notif = new JSONObject();
                 notif.put("id",      UUID.randomUUID().toString());
                 notif.put("title",   "New Offer Available 🎉");
                 notif.put("message", "Get " + discStr + " on your booking. Use code " + code + " now!");
                 notif.put("type",    "offer");
                 notif.put("is_read", false);
-                // user_id = null → broadcast visible to all users and admin
 
                 try (Response r = http.newCall(new Request.Builder()
                         .url(SUPABASE_URL + "/rest/v1/notifications")
@@ -385,7 +418,26 @@ public class OfferManagementActivity extends BaseActivity {
                         .addHeader("Content-Type",  "application/json")
                         .addHeader("Prefer",        "return=minimal")
                         .build()).execute()) {
-                    Log.d(TAG, "sendOfferNotification store HTTP " + r.code());
+                    Log.d(TAG, "sendOfferNotification store user notifications HTTP " + r.code());
+                }
+
+                // 1b. Store admin notification row for Admin Notifications screen.
+                JSONObject adminNotif = new JSONObject();
+                adminNotif.put("title", "New Offer Published");
+                adminNotif.put("message", "Offer " + code + " is live. " + discStr);
+                adminNotif.put("type", "offer");
+                adminNotif.put("is_read", false);
+
+                try (Response ar = http.newCall(new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/admin_notifications")
+                        .post(RequestBody.create(adminNotif.toString(), JSON_MT))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
+                        .build()).execute()) {
+                    String ab = ar.body() != null ? ar.body().string() : "";
+                    Log.d(TAG, "sendOfferNotification store admin_notifications HTTP " + ar.code() + " | " + ab);
                 }
 
                 // 2. Fetch all user FCM tokens and trigger FCM push
@@ -425,33 +477,81 @@ public class OfferManagementActivity extends BaseActivity {
     private void toggleOfferActive(Offer offer, boolean newState) {
         new Thread(() -> {
             try {
-                JSONObject body = new JSONObject();
-                body.put("is_active", newState);
-                try (Response resp = http.newCall(new Request.Builder()
-                        .url(SUPABASE_URL + "/rest/v1/offers?id=eq." + offer.id)
-                        .patch(RequestBody.create(body.toString(), JSON_MT))
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "return=minimal")
-                        .build()).execute()) {
-                    main.post(() -> {
-                        if (resp.isSuccessful()) {
-                            offer.isActive = newState;
-                            offer.status   = newState ? "active" : "inactive";
-                            adapter.notifyDataSetChanged();
-                            updateStats();
-                            Toast.makeText(OfferManagementActivity.this,
-                                    newState ? "Offer enabled" : "Offer disabled",
-                                    Toast.LENGTH_SHORT).show();
-                        }
-                    });
+                JSONObject modern = new JSONObject();
+                modern.put("active", newState);
+                modern.put("status", newState ? "active" : "inactive");
+                SaveResult result = executePatch(SUPABASE_URL + "/rest/v1/offers?id=eq." + offer.id, modern);
+
+                if (!result.success) {
+                    JSONObject legacy = new JSONObject();
+                    legacy.put("is_active", newState);
+                    result = executePatch(SUPABASE_URL + "/rest/v1/offers?id=eq." + offer.id, legacy);
                 }
+
+                final SaveResult finalResult = result;
+                main.post(() -> {
+                    if (finalResult.success) {
+                        offer.isActive = newState;
+                        offer.status   = newState ? "active" : "inactive";
+                        adapter.notifyDataSetChanged();
+                        updateStats();
+                        Toast.makeText(OfferManagementActivity.this,
+                                newState ? "Offer enabled" : "Offer disabled",
+                                Toast.LENGTH_SHORT).show();
+                    } else {
+                        Log.e(TAG, "toggleOfferActive FAILED " + finalResult.code + ": " + finalResult.body);
+                        Toast.makeText(OfferManagementActivity.this,
+                                "Could not update setting", Toast.LENGTH_SHORT).show();
+                    }
+                });
             } catch (Exception e) {
+                Log.e(TAG, "toggleOfferActive exception", e);
                 main.post(() -> Toast.makeText(OfferManagementActivity.this,
-                        "Update failed", Toast.LENGTH_SHORT).show());
+                        "Could not update setting", Toast.LENGTH_SHORT).show());
             }
         }).start();
+    }
+
+    private static class SaveResult {
+        boolean success;
+        int code;
+        String body;
+    }
+
+    private SaveResult executeSave(String url, String method, JSONObject payload) throws Exception {
+        Request req = new Request.Builder()
+                .url(url)
+                .method(method, RequestBody.create(payload.toString(), JSON_MT))
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "return=minimal")
+                .build();
+        try (Response resp = http.newCall(req).execute()) {
+            SaveResult r = new SaveResult();
+            r.code = resp.code();
+            r.body = resp.body() != null ? resp.body().string() : "";
+            r.success = (r.code == 200 || r.code == 201 || r.code == 204);
+            return r;
+        }
+    }
+
+    private SaveResult executePatch(String url, JSONObject payload) throws Exception {
+        Request req = new Request.Builder()
+                .url(url)
+                .patch(RequestBody.create(payload.toString(), JSON_MT))
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "return=minimal")
+                .build();
+        try (Response resp = http.newCall(req).execute()) {
+            SaveResult r = new SaveResult();
+            r.code = resp.code();
+            r.body = resp.body() != null ? resp.body().string() : "";
+            r.success = resp.isSuccessful();
+            return r;
+        }
     }
 
     // ── DELETE (Thread-based) ─────────────────────────────────────────────

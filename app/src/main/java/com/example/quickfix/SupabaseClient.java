@@ -4,9 +4,16 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
@@ -109,6 +116,35 @@ public class SupabaseClient {
     public interface RoleInfoCallback {
         void onSuccess(RoleInfo info);
         void onError(String message);
+    }
+
+    // Account lifecycle
+    private static final long COOL_DOWN_MS_24H = 24L * 60L * 60L * 1000L;
+
+    public interface AccountStatusCallback {
+        void onSuccess(UserAccountStatus status);
+        void onError(String message);
+    }
+
+    public static class UserAccountStatus {
+        public boolean exists;
+        public String firebaseUid = "";
+        public String name = "";
+        public String email = "";
+        public String profileImagePath = "";
+        public String createdAtRaw = "";
+        public String deletedAtRaw = "";
+        public long createdAtMs;
+        public long deletedAtMs;
+
+        public boolean isDeleted() {
+            return deletedAtMs > 0L;
+        }
+
+        public boolean isDeletionCooldownActive() {
+            if (deletedAtMs <= 0L) return false;
+            return System.currentTimeMillis() - deletedAtMs < COOL_DOWN_MS_24H;
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -320,8 +356,9 @@ public class SupabaseClient {
     /** Queries by firebase_uid; returns null on empty result or HTTP error */
     private static RoleInfo queryRoleByUid(String firebaseUid) {
         try {
+            String encodedUid = java.net.URLEncoder.encode(firebaseUid, "UTF-8");
             String url = SUPABASE_URL + "/rest/v1/users"
-                    + "?firebase_uid=eq." + firebaseUid
+                    + "?or=(firebase_uid.eq." + encodedUid + ",id.eq." + encodedUid + ")"
                     + "&select=is_user,is_service_provider,is_admin"
                     + "&limit=1";
             Request req = new Request.Builder()
@@ -584,5 +621,370 @@ public class SupabaseClient {
         } catch (Exception e) {
             Log.w(TAG, "logAdminAction exception: " + e.getMessage());
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  ACCOUNT LIFECYCLE METHODS
+    // ══════════════════════════════════════════════════════════════════════
+
+    public static void getAccountStatusByEmail(String email, AccountStatusCallback callback) {
+        if (callback == null) return;
+        if (email == null || email.trim().isEmpty()) {
+            MAIN.post(() -> callback.onError("Email is required"));
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                String encoded = java.net.URLEncoder.encode(email.trim(), "UTF-8");
+                JSONObject row = fetchAccountRow("email=eq." + encoded + "&order=created_at.desc&limit=1");
+                UserAccountStatus status = new UserAccountStatus();
+                if (row != null) populateAccountStatus(status, row);
+                MAIN.post(() -> callback.onSuccess(status));
+            } catch (Exception e) {
+                MAIN.post(() -> callback.onError("NETWORK_ERROR: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    public static void getAccountStatusByUid(String firebaseUid, AccountStatusCallback callback) {
+        if (callback == null) return;
+        if (firebaseUid == null || firebaseUid.trim().isEmpty()) {
+            MAIN.post(() -> callback.onError("User uid is required"));
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                String encodedUid = java.net.URLEncoder.encode(firebaseUid.trim(), "UTF-8");
+                JSONObject row = fetchAccountRow("or=(firebase_uid.eq." + encodedUid + ",id.eq." + encodedUid + ")&limit=1");
+                UserAccountStatus status = new UserAccountStatus();
+                if (row != null) populateAccountStatus(status, row);
+                MAIN.post(() -> callback.onSuccess(status));
+            } catch (Exception e) {
+                MAIN.post(() -> callback.onError("NETWORK_ERROR: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    public static void getUserDisplayName(String firebaseUid, String email, StringCallback callback) {
+        if (callback == null) return;
+
+        getAccountStatusByUid(firebaseUid, new AccountStatusCallback() {
+            @Override
+            public void onSuccess(UserAccountStatus status) {
+                if (status != null && status.exists && status.name != null && !status.name.trim().isEmpty()) {
+                    callback.onSuccess(status.name.trim());
+                    return;
+                }
+                if (email == null || email.trim().isEmpty()) {
+                    callback.onError("Name not found");
+                    return;
+                }
+                getAccountStatusByEmail(email.trim(), new AccountStatusCallback() {
+                    @Override
+                    public void onSuccess(UserAccountStatus statusByEmail) {
+                        if (statusByEmail != null && statusByEmail.exists
+                                && statusByEmail.name != null
+                                && !statusByEmail.name.trim().isEmpty()) {
+                            callback.onSuccess(statusByEmail.name.trim());
+                        } else {
+                            callback.onError("Name not found");
+                        }
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        callback.onError(message);
+                    }
+                });
+            }
+
+            @Override
+            public void onError(String message) {
+                callback.onError(message);
+            }
+        });
+    }
+
+    public static void insertUserAfterAuth(String authUid,
+                                           String fullName,
+                                           String email,
+                                           String phone,
+                                           Callback2 callback) {
+        if (callback == null) return;
+        new Thread(() -> {
+            try {
+                JSONObject modern = new JSONObject();
+                modern.put("firebase_uid", authUid);
+                modern.put("name", fullName != null ? fullName.trim() : "");
+                modern.put("email", email != null ? email.trim() : "");
+                modern.put("phone", phone != null ? phone.trim() : "");
+                modern.put("is_user", true);
+                modern.put("is_service_provider", false);
+                modern.put("is_admin", false);
+
+                Response modernResp = postUsersInsert(modern);
+                int modernCode = modernResp.code();
+                String modernBody = modernResp.body() != null ? modernResp.body().string() : "";
+                modernResp.close();
+
+                if (modernCode == 200 || modernCode == 201 || modernCode == 204 || modernCode == 409) {
+                    MAIN.post(callback::onSuccess);
+                    return;
+                }
+
+                JSONObject legacy = new JSONObject();
+                legacy.put("id", authUid);
+                legacy.put("full_name", fullName != null ? fullName.trim() : "");
+                legacy.put("email", email != null ? email.trim() : "");
+                legacy.put("phone", phone != null ? phone.trim() : "");
+                legacy.put("created_at", isoNowUtc());
+
+                Response legacyResp = postUsersInsert(legacy);
+                int legacyCode = legacyResp.code();
+                String legacyBody = legacyResp.body() != null ? legacyResp.body().string() : "";
+                legacyResp.close();
+
+                if (legacyCode == 200 || legacyCode == 201 || legacyCode == 204 || legacyCode == 409) {
+                    MAIN.post(callback::onSuccess);
+                } else {
+                    MAIN.post(() -> callback.onError("HTTP " + legacyCode + " " + legacyBody));
+                }
+            } catch (Exception e) {
+                MAIN.post(() -> callback.onError(e.getMessage()));
+            }
+        }).start();
+    }
+
+    private static Response postUsersInsert(JSONObject body) throws IOException {
+        Request req = new Request.Builder()
+                .url(SUPABASE_URL + "/rest/v1/users")
+                .post(RequestBody.create(body.toString(), JSON_TYPE))
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "resolution=merge-duplicates,return=minimal")
+                .build();
+        return HTTP.newCall(req).execute();
+    }
+
+    public static void restoreDeletedAccountByEmail(String email,
+                                                    String firebaseUid,
+                                                    String name,
+                                                    String phone,
+                                                    Callback2 callback) {
+        if (callback == null) return;
+        new Thread(() -> {
+            try {
+                String encoded = java.net.URLEncoder.encode(email.trim(), "UTF-8");
+
+                JSONObject modern = new JSONObject();
+                modern.put("firebase_uid", firebaseUid);
+                modern.put("name", name != null ? name.trim() : "");
+                modern.put("phone", phone != null ? phone.trim() : "");
+                modern.put("deleted_at", JSONObject.NULL);
+                modern.put("is_user", true);
+                modern.put("is_service_provider", false);
+                modern.put("is_admin", false);
+
+                Request modernReq = new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/users?email=eq." + encoded)
+                        .patch(RequestBody.create(modern.toString(), JSON_TYPE))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
+                        .build();
+
+                try (Response r = HTTP.newCall(modernReq).execute()) {
+                    if (r.code() == 200 || r.code() == 204) {
+                        MAIN.post(callback::onSuccess);
+                        return;
+                    }
+                }
+
+                JSONObject legacy = new JSONObject();
+                legacy.put("id", firebaseUid);
+                legacy.put("full_name", name != null ? name.trim() : "");
+                legacy.put("phone", phone != null ? phone.trim() : "");
+                legacy.put("deleted_at", JSONObject.NULL);
+
+                Request legacyReq = new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/users?email=eq." + encoded)
+                        .patch(RequestBody.create(legacy.toString(), JSON_TYPE))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
+                        .build();
+
+                try (Response r2 = HTTP.newCall(legacyReq).execute()) {
+                    if (r2.code() == 200 || r2.code() == 204) {
+                        MAIN.post(callback::onSuccess);
+                    } else {
+                        MAIN.post(() -> callback.onError("HTTP " + r2.code()));
+                    }
+                }
+            } catch (Exception e) {
+                MAIN.post(() -> callback.onError(e.getMessage()));
+            }
+        }).start();
+    }
+
+    public static void softDeleteUser(String firebaseUid, Callback2 callback) {
+        if (callback == null) return;
+        new Thread(() -> {
+            try {
+                JSONObject modern = new JSONObject();
+                modern.put("deleted_at", isoNowUtc());
+                modern.put("name", JSONObject.NULL);
+                modern.put("phone", JSONObject.NULL);
+                modern.put("city", JSONObject.NULL);
+                modern.put("address", JSONObject.NULL);
+                modern.put("profile_image", JSONObject.NULL);
+                modern.put("fcm_token", JSONObject.NULL);
+                modern.put("is_user", false);
+                modern.put("is_service_provider", false);
+                modern.put("is_admin", false);
+
+                String encUid = java.net.URLEncoder.encode(firebaseUid, "UTF-8");
+                Request modernReq = new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/users?or=(firebase_uid.eq." + encUid + ",id.eq." + encUid + ")")
+                        .patch(RequestBody.create(modern.toString(), JSON_TYPE))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
+                        .build();
+
+                try (Response r = HTTP.newCall(modernReq).execute()) {
+                    if (r.code() == 200 || r.code() == 204) {
+                        MAIN.post(callback::onSuccess);
+                        return;
+                    }
+                }
+
+                JSONObject legacy = new JSONObject();
+                legacy.put("deleted_at", isoNowUtc());
+                legacy.put("full_name", JSONObject.NULL);
+                legacy.put("phone", JSONObject.NULL);
+
+                Request legacyReq = new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/users?id=eq." + encUid)
+                        .patch(RequestBody.create(legacy.toString(), JSON_TYPE))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
+                        .build();
+
+                try (Response r2 = HTTP.newCall(legacyReq).execute()) {
+                    if (r2.code() == 200 || r2.code() == 204) {
+                        MAIN.post(callback::onSuccess);
+                    } else {
+                        MAIN.post(() -> callback.onError("HTTP " + r2.code()));
+                    }
+                }
+            } catch (Exception e) {
+                MAIN.post(() -> callback.onError(e.getMessage()));
+            }
+        }).start();
+    }
+
+    private static JSONObject fetchAccountRow(String filterQuery) throws Exception {
+        String[] selects = new String[] {
+                "firebase_uid,name,email,created_at,deleted_at,profile_image,profile_image_url",
+                "id,full_name,email,created_at,deleted_at,profile_image,profile_image_url",
+                "*"
+        };
+
+        for (String select : selects) {
+            String url = SUPABASE_URL + "/rest/v1/users?" + filterQuery
+                    + "&select=" + java.net.URLEncoder.encode(select, "UTF-8");
+
+            Request req = new Request.Builder()
+                    .url(url)
+                    .get()
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response r = HTTP.newCall(req).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                if (r.code() == 200) {
+                    JSONArray arr = new JSONArray(body);
+                    if (arr.length() > 0) return arr.getJSONObject(0);
+                    return null;
+                }
+                if (r.code() != 400) {
+                    Log.w(TAG, "fetchAccountRow HTTP " + r.code() + " body=" + body);
+                }
+            }
+        }
+        return null;
+    }
+
+    private static void populateAccountStatus(UserAccountStatus status, JSONObject row) {
+        if (status == null || row == null) return;
+        status.exists = true;
+
+        String uid = row.optString("firebase_uid", "");
+        if (uid == null || uid.trim().isEmpty()) uid = row.optString("id", "");
+        status.firebaseUid = uid != null ? uid : "";
+
+        String name = row.optString("name", "");
+        if (name == null || name.trim().isEmpty()) name = row.optString("full_name", "");
+        status.name = name != null ? name : "";
+
+        status.email = row.optString("email", "");
+        status.createdAtRaw = row.optString("created_at", "");
+        status.deletedAtRaw = row.optString("deleted_at", "");
+
+        String p = row.optString("profile_image", "");
+        if (p == null || p.trim().isEmpty()) {
+            p = row.optString("profile_image_url", "");
+        }
+        status.profileImagePath = p != null ? p : "";
+        status.createdAtMs = parseIsoToMillis(status.createdAtRaw);
+        status.deletedAtMs = parseIsoToMillis(status.deletedAtRaw);
+    }
+
+    private static long parseIsoToMillis(String iso) {
+        if (iso == null || iso.trim().isEmpty() || "null".equalsIgnoreCase(iso.trim())) {
+            return 0L;
+        }
+
+        String normalized = iso.trim();
+        if (normalized.endsWith("Z")) {
+            normalized = normalized.substring(0, normalized.length() - 1) + "+0000";
+        }
+
+        String[] patterns = new String[] {
+                "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+                "yyyy-MM-dd'T'HH:mm:ssZ",
+                "yyyy-MM-dd HH:mm:ss"
+        };
+
+        for (String pattern : patterns) {
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat(pattern, Locale.US);
+                if ("yyyy-MM-dd HH:mm:ss".equals(pattern)) {
+                    sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+                }
+                Date date = sdf.parse(normalized);
+                if (date != null) return date.getTime();
+            } catch (ParseException ignored) {
+                // try next pattern
+            }
+        }
+        return 0L;
+    }
+
+    private static String isoNowUtc() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+        return sdf.format(new Date());
     }
 }

@@ -8,6 +8,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.quickfix.ProviderApplication;
@@ -117,17 +118,17 @@ public class ProviderApplicationAdapter
                     case "approved":
                         tvStatus.setText("Approved");
                         tvStatus.setBackgroundResource(R.drawable.bg_status_approved);
-                        tvStatus.setTextColor(Color.parseColor("#1B5E20"));
+                        tvStatus.setTextColor(ContextCompat.getColor(itemView.getContext(), R.color.status_approved_text));
                         break;
                     case "rejected":
                         tvStatus.setText("Rejected");
                         tvStatus.setBackgroundResource(R.drawable.bg_status_rejected);
-                        tvStatus.setTextColor(Color.parseColor("#B71C1C"));
+                        tvStatus.setTextColor(ContextCompat.getColor(itemView.getContext(), R.color.status_rejected_text));
                         break;
                     default:
                         tvStatus.setText("Pending");
                         tvStatus.setBackgroundResource(R.drawable.bg_status_pending);
-                        tvStatus.setTextColor(Color.parseColor("#E65100"));
+                        tvStatus.setTextColor(ContextCompat.getColor(itemView.getContext(), R.color.status_pending_text));
                         break;
                 }
             }
@@ -182,4 +183,3 @@ public class ProviderApplicationAdapter
         }
     }
 }
-

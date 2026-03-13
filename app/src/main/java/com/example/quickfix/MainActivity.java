@@ -266,13 +266,31 @@ public class MainActivity extends BaseActivity {
 
     // ── Load User Data ────────────────────────────────────────────────────
     private void loadUserData(FirebaseUser user) {
-        String displayName = user.getDisplayName();
-        if (displayName != null && !displayName.isEmpty()) {
-            welcomeMessage.setText("Hello, " + firstName(displayName) + "! 👋");
-        } else {
-            welcomeMessage.setText("Hello! 👋");
+        if (welcomeMessage != null) {
+            welcomeMessage.setText("Hello!");
         }
         if (userEmail != null) userEmail.setText(getString(R.string.find_services));
+
+        String email = user != null && user.getEmail() != null ? user.getEmail().trim() : "";
+        String uid = user != null ? user.getUid() : "";
+
+        SupabaseClient.getUserDisplayName(uid, email, new SupabaseClient.StringCallback() {
+            @Override
+            public void onSuccess(String value) {
+                if (isFinishing()) return;
+                if (welcomeMessage != null) {
+                    welcomeMessage.setText("Hello, " + firstName(value) + "!");
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                if (isFinishing()) return;
+                if (welcomeMessage != null) {
+                    welcomeMessage.setText("Hello!");
+                }
+            }
+        });
 
         if (notificationIcon != null) {
             notificationIcon.setOnClickListener(v -> {

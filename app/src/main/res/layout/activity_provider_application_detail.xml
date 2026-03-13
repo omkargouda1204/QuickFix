@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F2F6FF">
+    android:background="@color/screen_background">
 
     <!-- AppBar -->
     <com.google.android.material.appbar.AppBarLayout
@@ -55,7 +55,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Pending"
-                    android:textColor="#E65100"
+                    android:textColor="@color/status_pending_text"
                     android:background="@drawable/bg_status_pending"
                     android:textSize="11sp"
                     android:textStyle="bold"
@@ -68,7 +68,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Business Name"
-                android:textColor="#CCE3FF"
+                android:textColor="@color/on_gradient_muted"
                 android:textSize="13sp" />
         </LinearLayout>
     </com.google.android.material.appbar.AppBarLayout>
@@ -93,7 +93,7 @@
                 android:paddingTop="20dp"
                 android:paddingBottom="8dp"
                 android:text="User Information"
-                android:textColor="#5C6BC0"
+                android:textColor="@color/primary"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -104,7 +104,7 @@
                 app:cardCornerRadius="16dp"
                 app:cardElevation="3dp"
                 app:cardBackgroundColor="@color/card_bg"
-                app:strokeColor="#E8EAF0"
+                app:strokeColor="@color/divider"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -123,11 +123,11 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="Business Name" android:textColor="#9E9E9E"
+                                android:text="Business Name" android:textColor="@color/text_secondary"
                                 android:textSize="11sp" android:textStyle="bold" />
                             <TextView android:id="@+id/tvBusinessName"
                                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:textColor="#0D0D0D" android:textSize="15sp"
+                                android:textColor="@color/text_primary" android:textSize="15sp"
                                 android:layout_marginTop="2dp" android:text="-" />
                         </LinearLayout>
                     </LinearLayout>
@@ -142,11 +142,11 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="Owner Name" android:textColor="#9E9E9E"
+                                android:text="Owner Name" android:textColor="@color/text_secondary"
                                 android:textSize="11sp" android:textStyle="bold" />
                             <TextView android:id="@+id/tvOwnerName"
                                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:textColor="#0D0D0D" android:textSize="15sp"
+                                android:textColor="@color/text_primary" android:textSize="15sp"
                                 android:layout_marginTop="2dp" android:text="-" />
                         </LinearLayout>
                     </LinearLayout>
@@ -161,11 +161,11 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="Email" android:textColor="#9E9E9E"
+                                android:text="Email" android:textColor="@color/text_secondary"
                                 android:textSize="11sp" android:textStyle="bold" />
                             <TextView android:id="@+id/tvEmail"
                                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:textColor="#0D0D0D" android:textSize="15sp"
+                                android:textColor="@color/text_primary" android:textSize="15sp"
                                 android:layout_marginTop="2dp" android:text="-" />
                         </LinearLayout>
                     </LinearLayout>
@@ -179,11 +179,11 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="Phone" android:textColor="#9E9E9E"
+                                android:text="Phone" android:textColor="@color/text_secondary"
                                 android:textSize="11sp" android:textStyle="bold" />
                             <TextView android:id="@+id/tvPhone"
                                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:textColor="#0D0D0D" android:textSize="15sp"
+                                android:textColor="@color/text_primary" android:textSize="15sp"
                                 android:layout_marginTop="2dp" android:text="-" />
                         </LinearLayout>
                     </LinearLayout>
@@ -198,7 +198,7 @@
                 android:paddingTop="20dp"
                 android:paddingBottom="8dp"
                 android:text="Service Information"
-                android:textColor="#00897B"
+                android:textColor="@color/accent_teal"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -209,7 +209,7 @@
                 app:cardCornerRadius="16dp"
                 app:cardElevation="3dp"
                 app:cardBackgroundColor="@color/card_bg"
-                app:strokeColor="#E8EAF0"
+                app:strokeColor="@color/divider"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -228,11 +228,11 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="Category" android:textColor="#9E9E9E"
+                                android:text="Category" android:textColor="@color/text_secondary"
                                 android:textSize="11sp" android:textStyle="bold" />
                             <TextView android:id="@+id/tvCategory"
                                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:textColor="#0D0D0D" android:textSize="15sp"
+                                android:textColor="@color/text_primary" android:textSize="15sp"
                                 android:layout_marginTop="2dp" android:text="-" />
                         </LinearLayout>
                     </LinearLayout>
@@ -247,11 +247,11 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="City" android:textColor="#9E9E9E"
+                                android:text="City" android:textColor="@color/text_secondary"
                                 android:textSize="11sp" android:textStyle="bold" />
                             <TextView android:id="@+id/tvCity"
                                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:textColor="#0D0D0D" android:textSize="15sp"
+                                android:textColor="@color/text_primary" android:textSize="15sp"
                                 android:layout_marginTop="2dp" android:text="-" />
                         </LinearLayout>
                     </LinearLayout>
@@ -266,11 +266,11 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="Address" android:textColor="#9E9E9E"
+                                android:text="Address" android:textColor="@color/text_secondary"
                                 android:textSize="11sp" android:textStyle="bold" />
                             <TextView android:id="@+id/tvAddress"
                                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:textColor="#0D0D0D" android:textSize="15sp"
+                                android:textColor="@color/text_primary" android:textSize="15sp"
                                 android:layout_marginTop="2dp" android:text="-" />
                         </LinearLayout>
                     </LinearLayout>
@@ -285,11 +285,11 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="Experience" android:textColor="#9E9E9E"
+                                android:text="Experience" android:textColor="@color/text_secondary"
                                 android:textSize="11sp" android:textStyle="bold" />
                             <TextView android:id="@+id/tvExperience"
                                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:textColor="#0D0D0D" android:textSize="15sp"
+                                android:textColor="@color/text_primary" android:textSize="15sp"
                                 android:layout_marginTop="2dp" android:text="-" />
                         </LinearLayout>
                     </LinearLayout>
@@ -304,7 +304,7 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="Description" android:textColor="#9E9E9E"
+                                android:text="Description" android:textColor="@color/text_secondary"
                                 android:textSize="11sp" android:textStyle="bold" />
                             <TextView android:id="@+id/tvDescription"
                                 android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -325,7 +325,7 @@
                 android:paddingTop="20dp"
                 android:paddingBottom="8dp"
                 android:text="Application Info"
-                android:textColor="#7B1FA2"
+                android:textColor="@color/accent_purple"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -336,7 +336,7 @@
                 app:cardCornerRadius="16dp"
                 app:cardElevation="3dp"
                 app:cardBackgroundColor="@color/card_bg"
-                app:strokeColor="#E8EAF0"
+                app:strokeColor="@color/divider"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -355,11 +355,11 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="Date Applied" android:textColor="#9E9E9E"
+                                android:text="Date Applied" android:textColor="@color/text_secondary"
                                 android:textSize="11sp" android:textStyle="bold" />
                             <TextView android:id="@+id/tvDate"
                                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:textColor="#0D0D0D" android:textSize="15sp"
+                                android:textColor="@color/text_primary" android:textSize="15sp"
                                 android:layout_marginTop="2dp" android:text="-" />
                         </LinearLayout>
                     </LinearLayout>
@@ -378,11 +378,11 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="Rejection Reason" android:textColor="#D32F2F"
+                                android:text="Rejection Reason" android:textColor="@color/status_rejected_text"
                                 android:textSize="11sp" android:textStyle="bold" />
                             <TextView android:id="@+id/tvRejectionReason"
                                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:textColor="#B71C1C" android:textSize="14sp"
+                                android:textColor="@color/status_rejected_text" android:textSize="14sp"
                                 android:layout_marginTop="2dp" android:text="-" />
                         </LinearLayout>
                     </LinearLayout>
@@ -397,7 +397,7 @@
                 android:paddingTop="20dp"
                 android:paddingBottom="8dp"
                 android:text="Uploaded Files"
-                android:textColor="#E65100"
+                android:textColor="@color/accent_orange"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -408,7 +408,7 @@
                 app:cardCornerRadius="16dp"
                 app:cardElevation="3dp"
                 app:cardBackgroundColor="@color/card_bg"
-                app:strokeColor="#E8EAF0"
+                app:strokeColor="@color/divider"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -427,11 +427,11 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="Business Image" android:textColor="#9E9E9E"
+                                android:text="Business Image" android:textColor="@color/text_secondary"
                                 android:textSize="11sp" android:textStyle="bold" />
                             <TextView android:id="@+id/tvBusinessImage"
                                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:textColor="#1E88E5" android:textSize="14sp"
+                                android:textColor="@color/primary" android:textSize="14sp"
                                 android:layout_marginTop="2dp"
                                 android:text="Tap to view image"
                                 android:clickable="true"
@@ -449,7 +449,7 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="ID Proof (Admin Only)" android:textColor="#D32F2F"
+                                android:text="ID Proof (Admin Only)" android:textColor="@color/status_rejected_text"
                                 android:textSize="11sp" android:textStyle="bold" />
                             <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
                                 android:orientation="horizontal" android:gravity="center_vertical"
@@ -458,12 +458,12 @@
                                     android:id="@+id/pbIdProof"
                                     android:layout_width="16dp"
                                     android:layout_height="16dp"
-                                    android:indeterminateTint="#D32F2F"
+                                    android:indeterminateTint="@color/status_rejected_text"
                                     android:visibility="gone"
                                     android:layout_marginEnd="6dp" />
                                 <TextView android:id="@+id/tvIdProof"
                                     android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                    android:textColor="#D32F2F" android:textSize="14sp"
+                                    android:textColor="@color/status_rejected_text" android:textSize="14sp"
                                     android:text="Tap to view ID proof (secure)"
                                     android:clickable="true"
                                     android:focusable="true"
@@ -492,11 +492,11 @@
                     android:layout_weight="1"
                     android:layout_marginEnd="10dp"
                     android:text="Reject"
-                    android:textColor="#D32F2F"
+                    android:textColor="@color/status_rejected_text"
                     android:textSize="15sp"
                     android:textStyle="bold"
                     app:cornerRadius="12dp"
-                    app:strokeColor="#D32F2F"
+                    app:strokeColor="@color/status_rejected_text"
                     app:strokeWidth="1.5dp" />
 
                 <com.google.android.material.button.MaterialButton
@@ -509,7 +509,7 @@
                     android:textColor="@color/white"
                     android:textSize="15sp"
                     android:textStyle="bold"
-                    app:backgroundTint="#388E3C"
+                    app:backgroundTint="@color/success_green"
                     app:cornerRadius="12dp" />
             </LinearLayout>
 

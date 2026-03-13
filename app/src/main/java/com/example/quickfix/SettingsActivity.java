@@ -53,6 +53,9 @@ public class SettingsActivity extends BaseActivity {
     private static final String KEY_PUSH_NOTIF  = "notif_push";
     private static final String KEY_EMAIL_NOTIF = "notif_email";
     private static final String KEY_BOOKING_REM = "notif_booking_reminders";
+    private static final long DELETE_COOLDOWN_MS = 24L * 60L * 60L * 1000L;
+
+    private String pendingProfileImagePath = "";
 
     // ── Views ─────────────────────────────────────────────────────────────
     private SwitchMaterial switchPush, switchEmail, switchBookingRem;
@@ -173,52 +176,73 @@ public class SettingsActivity extends BaseActivity {
             return;
         }
 
-        showOverlay("Deleting account…");
+        showOverlay("Checking deletion eligibility…");
         String uid = user.getUid();
 
-        // Step A: delete Supabase row, then Step B: delete Firebase user
-        deleteSupabaseRow(uid, () -> deleteFirebaseUser(user));
+        SupabaseClient.getAccountStatusByUid(uid, new SupabaseClient.AccountStatusCallback() {
+            @Override
+            public void onSuccess(SupabaseClient.UserAccountStatus status) {
+                if (isFinishing() || isDestroyed()) return;
+
+                long createdAtMs = status != null ? status.createdAtMs : 0L;
+                long accountAgeMs = createdAtMs > 0L ? (System.currentTimeMillis() - createdAtMs) : -1L;
+
+                if (createdAtMs > 0L && accountAgeMs < DELETE_COOLDOWN_MS) {
+                    hideOverlay();
+                    showError("Account can be deleted only after 24 hours of creation.");
+                    return;
+                }
+
+                pendingProfileImagePath = status != null ? safe(status.profileImagePath) : "";
+                updateOverlay("Deleting profile image…");
+                deleteProfileImageIfPresent(() -> deleteFirebaseUser(user));
+            }
+
+            @Override
+            public void onError(String message) {
+                if (isFinishing() || isDestroyed()) return;
+                hideOverlay();
+                showError("Could not verify account creation time. Please try again.");
+            }
+        });
     }
 
-    // ═════════════════════════════════════════════════════════════════════
-    //  STEP A: DELETE row from Supabase public.users
-    // ═════════════════════════════════════════════════════════════════════
-    private void deleteSupabaseRow(String uid, Runnable onComplete) {
-        updateOverlay("Removing your data…");
+    private void deleteProfileImageIfPresent(Runnable onComplete) {
+        if (pendingProfileImagePath.isEmpty()) {
+            MAIN.post(onComplete);
+            return;
+        }
+
         new Thread(() -> {
             try {
-                String url = BuildConfig.SUPABASE_URL
-                        + "/rest/v1/users?firebase_uid=eq." + uid;
+                String path = extractBucketPath(pendingProfileImagePath, SupabaseStorageHelper.BUCKET_PROFILE_IMAGES);
+                if (path.isEmpty()) {
+                    Log.w(TAG, "Profile image path parse failed, continuing deletion.");
+                    MAIN.post(onComplete);
+                    return;
+                }
+
+                String url = BuildConfig.SUPABASE_URL + "/storage/v1/object/"
+                        + SupabaseStorageHelper.BUCKET_PROFILE_IMAGES + "/" + path;
 
                 Request req = new Request.Builder()
                         .url(url)
                         .delete()
-                        .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "return=minimal")
                         .build();
 
                 try (Response r = HTTP.newCall(req).execute()) {
-                    int code = r.code();
-                    Log.d(TAG, "Supabase DELETE HTTP " + code);
-                    // 200, 204 = success; anything else is logged but not fatal
-                    // (Firebase deletion is the authoritative step)
-                    if (code != 200 && code != 204) {
-                        String body = r.body() != null ? r.body().string() : "";
-                        Log.w(TAG, "Supabase DELETE non-success: " + code + " | " + body);
-                    }
+                    Log.d(TAG, "Profile image delete HTTP " + r.code());
                 }
             } catch (Exception e) {
-                // Non-fatal — log and continue to Firebase deletion
-                Log.e(TAG, "deleteSupabaseRow error (non-fatal): " + e.getMessage(), e);
+                Log.w(TAG, "deleteProfileImageIfPresent non-fatal: " + e.getMessage());
             }
-            // Always proceed to Firebase deletion regardless of Supabase result
             MAIN.post(onComplete);
         }).start();
     }
 
-    // ═════════════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════
     //  STEP B: DELETE user from Firebase Authentication
     // ═════════════════════════════════════════════════════════════════════
     private void deleteFirebaseUser(FirebaseUser user) {
@@ -226,7 +250,7 @@ public class SettingsActivity extends BaseActivity {
         user.delete()
                 .addOnSuccessListener(unused -> {
                     Log.d(TAG, "Firebase user deleted successfully");
-                    clearLocalDataAndRedirect();
+                    softDeleteSupabaseRow(user.getUid(), this::clearLocalDataAndRedirect);
                 })
                 .addOnFailureListener(e -> {
                     String msg = e.getMessage() != null ? e.getMessage() : "";
@@ -242,6 +266,23 @@ public class SettingsActivity extends BaseActivity {
                         showError("Failed to delete account. Please try again.\n\n" + msg);
                     }
                 });
+    }
+
+    private void softDeleteSupabaseRow(String uid, Runnable onComplete) {
+        updateOverlay("Finalizing account deletion…");
+        SupabaseClient.softDeleteUser(uid, new SupabaseClient.Callback2() {
+            @Override
+            public void onSuccess() {
+                if (onComplete != null) onComplete.run();
+            }
+
+            @Override
+            public void onError(String message) {
+                Log.w(TAG, "softDeleteSupabaseRow failed: " + message);
+                // Do not block sign-out after Firebase account is already deleted.
+                if (onComplete != null) onComplete.run();
+            }
+        });
     }
 
     // ═════════════════════════════════════════════════════════════════════
@@ -394,5 +435,34 @@ public class SettingsActivity extends BaseActivity {
                     .setPositiveButton(android.R.string.ok, null)
                     .show();
         });
+    }
+
+    private String extractBucketPath(String rawPath, String bucket) {
+        if (rawPath == null) return "";
+        String path = rawPath.trim();
+        if (path.isEmpty()) return "";
+
+        String markerPublic = "/object/public/" + bucket + "/";
+        int idxPublic = path.indexOf(markerPublic);
+        if (idxPublic >= 0) {
+            return path.substring(idxPublic + markerPublic.length());
+        }
+
+        String marker = "/object/" + bucket + "/";
+        int idx = path.indexOf(marker);
+        if (idx >= 0) {
+            return path.substring(idx + marker.length());
+        }
+
+        String prefix = bucket + "/";
+        if (path.startsWith(prefix)) {
+            return path.substring(prefix.length());
+        }
+
+        return path;
+    }
+
+    private String safe(String value) {
+        return value != null ? value.trim() : "";
     }
 }

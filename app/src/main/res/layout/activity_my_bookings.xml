@@ -14,7 +14,7 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="@color/primary"
-            app:titleTextColor="@android:color/white" />
+            app:titleTextColor="@color/white" />
     </com.google.android.material.appbar.AppBarLayout>
     <LinearLayout
         android:layout_width="match_parent"
@@ -25,7 +25,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:scrollbars="none"
-            android:background="@android:color/white"
+            android:background="@color/card_bg"
             android:elevation="2dp">
             <com.google.android.material.chip.ChipGroup
                 android:id="@+id/chipGroupFilters"
@@ -107,4 +107,3 @@
         </FrameLayout>
     </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
-

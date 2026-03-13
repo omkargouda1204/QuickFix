@@ -90,8 +90,10 @@ public class BannerAdapter extends RecyclerView.Adapter<BannerAdapter.VH> {
     public int getItemCount() { return items != null ? items.size() : 0; }
 
     public void setItems(List<Banner> newItems) {
+        List<Banner> copy = new ArrayList<>();
+        if (newItems != null) copy.addAll(newItems);
         items.clear();
-        if (newItems != null) items.addAll(newItems);
+        items.addAll(copy);
         notifyDataSetChanged();
     }
 

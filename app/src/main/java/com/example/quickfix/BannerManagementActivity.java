@@ -5,6 +5,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -157,8 +158,8 @@ public class BannerManagementActivity extends BaseActivity {
     // ── LOAD BANNERS ── uses Thread (same reliable pattern as MainActivity) ──
     private void loadBanners() {
         setLoading(true);
-        String url = SUPABASE_URL + "/rest/v1/banners?select=*&order=priority.asc,created_at.desc";
-        Log.d(TAG, "loadBanners → " + url);
+        String url = SUPABASE_URL + "/rest/v1/banners?select=*&order=created_at.desc";
+        Log.d(TAG, "loadBanners -> " + url);
 
         new Thread(() -> {
             try {
@@ -184,7 +185,7 @@ public class BannerManagementActivity extends BaseActivity {
                     });
                 }
             } catch (Exception e) {
-                Log.e(TAG, "loadBanners exception: " + e.getMessage(), e);
+                Log.e(TAG, "loadBanners exception", e);
                 main.post(() -> {
                     setLoading(false);
                     swipeRefresh.setRefreshing(false);
@@ -205,18 +206,35 @@ public class BannerManagementActivity extends BaseActivity {
                 b.id           = o.optString("id");
                 b.title        = o.optString("title");
                 b.imageUrl     = o.optString("image_url");
-                b.redirectType = o.optString("redirect_type");
-                b.redirectId   = o.optString("redirect_id");
-                b.startDate    = o.optString("start_date");
-                b.expiryDate   = o.optString("expiry_date");
+                b.redirectType = o.optString("redirect_type", "category");
+                String redirectVal = o.optString("redirect_value", "");
+                if (TextUtils.isEmpty(redirectVal)) redirectVal = o.optString("redirect_id", "");
+                b.redirectId = redirectVal;
+                b.startDate    = o.optString("start_date", "");
+
+                String endDate = o.optString("end_date", "");
+                if (TextUtils.isEmpty(endDate)) endDate = o.optString("expiry_date", "");
+                b.expiryDate = endDate;
+
+                String status = o.optString("status", "");
+                boolean hasStatus = !TextUtils.isEmpty(status);
+                if (hasStatus) {
+                    b.isActive = "active".equalsIgnoreCase(status);
+                    b.status = status;
+                } else if (o.has("active")) {
+                    b.isActive = o.optBoolean("active", true);
+                    b.status = b.isActive ? "active" : "inactive";
+                } else {
+                    b.isActive = o.optBoolean("is_active", true);
+                    b.status = b.isActive ? "active" : "inactive";
+                }
+
                 b.priority     = o.optInt("priority", 1);
                 b.createdAt    = o.optString("created_at");
-                b.isActive     = o.optBoolean("is_active", true);
-                b.status       = b.isActive ? "active" : "inactive";
                 banners.add(b);
             }
         } catch (Exception e) {
-            Log.e(TAG, "parseBanners exception: " + e.getMessage(), e);
+            Log.e(TAG, "parseBanners exception", e);
         }
         Log.d(TAG, "parseBanners: parsed " + banners.size() + " banners");
         adapter.setItems(banners);
@@ -241,7 +259,7 @@ public class BannerManagementActivity extends BaseActivity {
                 java.util.Locale.getDefault()).format(new java.util.Date());
         int total = banners.size(), active = 0, expired = 0;
         for (Banner b : banners) {
-            if (b.isActive) active++;
+            if (b.isEffectivelyActive()) active++;
             if (b.expiryDate != null && !b.expiryDate.isEmpty()
                     && b.expiryDate.compareTo(today) < 0) expired++;
         }
@@ -351,99 +369,145 @@ public class BannerManagementActivity extends BaseActivity {
                              int priority, String existingId, AlertDialog dialog) {
         new Thread(() -> {
             try {
-                JSONObject body = new JSONObject();
-                body.put("title",         title);
-                body.put("image_url",     imageUrl);
-                body.put("redirect_type", redirectType != null ? redirectType : "category");
-                body.put("redirect_id",   redirectId  != null ? redirectId  : "");
-                body.put("expiry_date",   (expiryDate == null || expiryDate.isEmpty())
-                        ? JSONObject.NULL : expiryDate);
-                body.put("is_active",     isActive);
-                body.put("priority",      priority);
+                String method = (existingId != null && !existingId.isEmpty()) ? "PATCH" : "POST";
+                String url = (existingId != null && !existingId.isEmpty())
+                        ? SUPABASE_URL + "/rest/v1/banners?id=eq." + existingId
+                        : SUPABASE_URL + "/rest/v1/banners";
 
-                String url;
-                String method; // "POST" or "PATCH"
+                // Try modern schema first (status/start_date/end_date)
+                JSONObject modern = new JSONObject();
+                if (existingId == null || existingId.isEmpty()) modern.put("id", UUID.randomUUID().toString());
+                modern.put("title", title);
+                modern.put("image_url", imageUrl);
+                modern.put("status", isActive ? "active" : "inactive");
+                modern.put("active", isActive);
+                modern.put("redirect_type", redirectType != null ? redirectType : "category");
+                modern.put("redirect_value", redirectId != null ? redirectId : "");
+                modern.put("start_date", new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                        .format(new java.util.Date()));
+                modern.put("end_date", (expiryDate == null || expiryDate.isEmpty()) ? JSONObject.NULL : expiryDate);
+                modern.put("expiry_date", (expiryDate == null || expiryDate.isEmpty()) ? JSONObject.NULL : expiryDate);
+                modern.put("priority", priority);
 
-                if (existingId != null && !existingId.isEmpty()) {
-                    // PATCH existing
-                    url    = SUPABASE_URL + "/rest/v1/banners?id=eq." + existingId;
-                    method = "PATCH";
-                } else {
-                    // INSERT new
-                    body.put("id", UUID.randomUUID().toString());
-                    url    = SUPABASE_URL + "/rest/v1/banners";
-                    method = "POST";
+                SaveResult result = executeSave(url, method, modern);
+
+                if (!result.success) {
+                    // Fallback legacy schema (is_active/expiry_date)
+                    JSONObject legacy = new JSONObject();
+                    if (existingId == null || existingId.isEmpty()) legacy.put("id", UUID.randomUUID().toString());
+                    legacy.put("title", title);
+                    legacy.put("image_url", imageUrl);
+                    legacy.put("redirect_type", redirectType != null ? redirectType : "category");
+                    legacy.put("redirect_id", redirectId != null ? redirectId : "");
+                    legacy.put("expiry_date", (expiryDate == null || expiryDate.isEmpty()) ? JSONObject.NULL : expiryDate);
+                    legacy.put("is_active", isActive);
+                    legacy.put("priority", priority);
+
+                    result = executeSave(url, method, legacy);
                 }
 
-                RequestBody rb = RequestBody.create(body.toString(), JSON_MT);
-                Request req = new Request.Builder()
-                        .url(url)
-                        .method(method, rb)
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "return=minimal")
-                        .build();
-
-                try (Response resp = http.newCall(req).execute()) {
-                    int    code  = resp.code();
-                    String rBody = resp.body() != null ? resp.body().string() : "";
-                    Log.d(TAG, "saveBanner " + method + " HTTP " + code);
-                    main.post(() -> {
-                        if (code == 200 || code == 201 || code == 204) {
-                            dialog.dismiss();
-                            Toast.makeText(BannerManagementActivity.this,
-                                    existingId != null ? "Banner updated ✓" : "Banner added ✓",
-                                    Toast.LENGTH_SHORT).show();
-                            loadBanners(); // auto-refresh
-                        } else {
-                            Log.e(TAG, "saveBanner FAILED " + code + ": " + rBody);
-                            Toast.makeText(BannerManagementActivity.this,
-                                    "Save failed (HTTP " + code + "): " + rBody,
-                                    Toast.LENGTH_LONG).show();
-                        }
-                    });
-                }
+                final SaveResult finalResult = result;
+                main.post(() -> {
+                    if (finalResult.success) {
+                        dialog.dismiss();
+                        Toast.makeText(BannerManagementActivity.this,
+                                existingId != null ? "Banner updated" : "Banner added",
+                                Toast.LENGTH_SHORT).show();
+                        loadBanners();
+                    } else {
+                        Log.e(TAG, "saveBanner failed: " + finalResult.body);
+                        Toast.makeText(BannerManagementActivity.this,
+                                "Save failed (HTTP " + finalResult.code + ")",
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
             } catch (Exception e) {
-                Log.e(TAG, "saveBanner exception: " + e.getMessage(), e);
+                Log.e(TAG, "saveBanner exception", e);
                 main.post(() -> Toast.makeText(BannerManagementActivity.this,
                         "Error: " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
         }).start();
     }
 
-    // ── TOGGLE ACTIVE ─────────────────────────────────────────────────────
     private void toggleBannerActive(Banner banner, boolean newState) {
         new Thread(() -> {
             try {
-                JSONObject body = new JSONObject();
-                body.put("is_active", newState);
-                Request req = new Request.Builder()
-                        .url(SUPABASE_URL + "/rest/v1/banners?id=eq." + banner.id)
-                        .patch(RequestBody.create(body.toString(), JSON_MT))
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "return=minimal")
-                        .build();
-                try (Response resp = http.newCall(req).execute()) {
-                    main.post(() -> {
-                        if (resp.isSuccessful()) {
-                            banner.isActive = newState;
-                            banner.status   = newState ? "active" : "inactive";
-                            adapter.notifyDataSetChanged();
-                            updateStats();
-                            Toast.makeText(BannerManagementActivity.this,
-                                    newState ? "Banner enabled" : "Banner disabled",
-                                    Toast.LENGTH_SHORT).show();
-                        }
-                    });
+                // Try modern status column first
+                JSONObject modern = new JSONObject();
+                modern.put("status", newState ? "active" : "inactive");
+                modern.put("active", newState);
+                SaveResult rs = executePatch(SUPABASE_URL + "/rest/v1/banners?id=eq." + banner.id, modern);
+
+                if (!rs.success) {
+                    JSONObject legacy = new JSONObject();
+                    legacy.put("is_active", newState);
+                    rs = executePatch(SUPABASE_URL + "/rest/v1/banners?id=eq." + banner.id, legacy);
                 }
+
+                final SaveResult finalRs = rs;
+                main.post(() -> {
+                    if (finalRs.success) {
+                        banner.isActive = newState;
+                        banner.status   = newState ? "active" : "inactive";
+                        adapter.notifyDataSetChanged();
+                        updateStats();
+                        Toast.makeText(BannerManagementActivity.this,
+                                newState ? "Banner enabled" : "Banner disabled",
+                                Toast.LENGTH_SHORT).show();
+                    } else {
+                        Log.e(TAG, "toggleBannerActive failed HTTP " + finalRs.code + ": " + finalRs.body);
+                        Toast.makeText(BannerManagementActivity.this,
+                                "Could not update setting", Toast.LENGTH_SHORT).show();
+                    }
+                });
             } catch (Exception e) {
+                Log.e(TAG, "toggleBannerActive exception", e);
                 main.post(() -> Toast.makeText(BannerManagementActivity.this,
-                        "Update failed", Toast.LENGTH_SHORT).show());
+                        "Could not update setting", Toast.LENGTH_SHORT).show());
             }
         }).start();
+    }
+
+    private static class SaveResult {
+        boolean success;
+        int code;
+        String body;
+    }
+
+    private SaveResult executeSave(String url, String method, JSONObject payload) throws Exception {
+        Request req = new Request.Builder()
+                .url(url)
+                .method(method, RequestBody.create(payload.toString(), JSON_MT))
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "return=minimal")
+                .build();
+        try (Response resp = http.newCall(req).execute()) {
+            SaveResult r = new SaveResult();
+            r.code = resp.code();
+            r.body = resp.body() != null ? resp.body().string() : "";
+            r.success = (r.code == 200 || r.code == 201 || r.code == 204);
+            return r;
+        }
+    }
+
+    private SaveResult executePatch(String url, JSONObject payload) throws Exception {
+        Request req = new Request.Builder()
+                .url(url)
+                .patch(RequestBody.create(payload.toString(), JSON_MT))
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "return=minimal")
+                .build();
+        try (Response resp = http.newCall(req).execute()) {
+            SaveResult r = new SaveResult();
+            r.code = resp.code();
+            r.body = resp.body() != null ? resp.body().string() : "";
+            r.success = resp.isSuccessful();
+            return r;
+        }
     }
 
     // ── DELETE ────────────────────────────────────────────────────────────

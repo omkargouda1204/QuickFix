@@ -98,8 +98,9 @@ public class FcmNotificationHelper {
                             "provider_application", null);
                 }
 
-                // 3. Save in-app notification for all admins (broadcast: userId=null)
+                // 3. Save in-app notification for all admins (legacy + admin table)
                 saveInAppNotification(null, title, body, "provider_application");
+                saveAdminNotification(title, body, "provider_application", null);
 
                 Log.d(TAG, "notifyAdminsNewApplication: sent to " + adminTokens.size() + " admins");
 
@@ -241,6 +242,7 @@ public class FcmNotificationHelper {
 
                 // Save in-app notification for the provider
                 saveInAppNotification(providerFirebaseUid, title, body, "booking_request");
+                saveAdminNotification("New Booking", body, "booking", providerFirebaseUid);
 
                 Log.d(TAG, "notifyProviderNewBooking: sent to uid=" + providerFirebaseUid);
 
@@ -258,6 +260,19 @@ public class FcmNotificationHelper {
      */
     public static void sendOfferFcm(String deviceToken, String title, String body) {
         new Thread(() -> sendViaEdgeFunction(deviceToken, title, body, "offer", null)).start();
+    }
+
+    /**
+     * System alert for admin panel timeline (e.g., maintenance mode changes).
+     */
+    public static void notifyAdminSystemAlert(String title, String message) {
+        new Thread(() -> {
+            try {
+                saveAdminNotification(title, message, "system_alert", null);
+            } catch (Exception e) {
+                Log.w(TAG, "notifyAdminSystemAlert failed: " + e.getMessage());
+            }
+        }).start();
     }
 
     // ── In-App Notification Storage ───────────────────────────────────────
@@ -297,6 +312,44 @@ public class FcmNotificationHelper {
                 Log.w(TAG, "saveInAppNotification failed (non-fatal): " + e.getMessage());
             }
         }).start();
+    }
+
+    private static void saveAdminNotification(String title, String message, String type) {
+        saveAdminNotification(title, message, type, null);
+    }
+
+    private static void saveAdminNotification(String title,
+                                              String message,
+                                              String type,
+                                              String referenceId) {
+        try {
+            JSONObject notif = new JSONObject();
+            notif.put("title", title != null ? title : "Notification");
+            notif.put("message", message != null ? message : "");
+            notif.put("type", type != null ? type : "general");
+            notif.put("is_read", false);
+            if (referenceId != null && !referenceId.trim().isEmpty()) {
+                notif.put("reference_id", referenceId.trim());
+            }
+
+            try (Response resp = HTTP.newCall(new Request.Builder()
+                    .url(SUPABASE_URL + "/rest/v1/admin_notifications")
+                    .post(RequestBody.create(notif.toString(), JSON_TYPE))
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "return=minimal")
+                    .build()).execute()) {
+                String rb = resp.body() != null ? resp.body().string() : "";
+                if (!resp.isSuccessful()) {
+                    Log.e(TAG, "saveAdminNotification failed HTTP " + resp.code() + ": " + rb);
+                } else {
+                    Log.d(TAG, "saveAdminNotification ok type=" + type + " ref=" + referenceId);
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "saveAdminNotification exception", e);
+        }
     }
 
     // ── Private Helpers ───────────────────────────────────────────────────
@@ -453,5 +506,25 @@ public class FcmNotificationHelper {
         } catch (Exception e) {
             Log.w(TAG, "sendViaEdgeFunction exception: " + e.getMessage());
         }
+    }
+
+    public static void notifyAdminUserRegistration(String userName, String userId) {
+        new Thread(() -> {
+            String title = "New User Registered";
+            String body = (userName != null && !userName.trim().isEmpty())
+                    ? userName + " created an account"
+                    : "A new user created an account";
+            saveAdminNotification(title, body, "user_registration", userId);
+        }).start();
+    }
+
+    public static void notifyAdminOfferCreated(String offerTitle, String offerId) {
+        new Thread(() -> {
+            String title = "New Offer Created";
+            String body = (offerTitle != null && !offerTitle.trim().isEmpty())
+                    ? "Offer created: " + offerTitle
+                    : "Admin created a new offer";
+            saveAdminNotification(title, body, "offer", offerId);
+        }).start();
     }
 }

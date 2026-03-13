@@ -80,8 +80,10 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
     public int getItemCount() { return items != null ? items.size() : 0; }
 
     public void setItems(List<Offer> newItems) {
+        List<Offer> copy = new ArrayList<>();
+        if (newItems != null) copy.addAll(newItems);
         items.clear();
-        if (newItems != null) items.addAll(newItems);
+        items.addAll(copy);
         notifyDataSetChanged();
     }
 

@@ -139,7 +139,7 @@ public final class AdminSettingsRepository {
                 MAIN.post(() -> callback.onSuccess(updated));
             } catch (Exception e) {
                 Log.e(TAG, "updateMaintenance failed", e);
-                MAIN.post(() -> callback.onError("Could not update maintenance mode"));
+                MAIN.post(() -> callback.onError("Could not update setting"));
             }
         }).start();
     }
@@ -151,16 +151,16 @@ public final class AdminSettingsRepository {
     }
 
     private static AppSettings.Snapshot fetchOrCreateSync(Context context) throws Exception {
-        JSONArray rows = fetchActiveRows();
+        JSONArray rows = fetchRows();
         AppSettings.Snapshot snapshot;
 
         if (rows.length() == 0) {
             snapshot = createDefaultRow();
         } else {
-            JSONObject active = rows.getJSONObject(0);
-            snapshot = parseSnapshot(active);
+            JSONObject first = rows.getJSONObject(0);
+            snapshot = parseSnapshot(first);
             if (rows.length() > 1) {
-                deactivateExtraRows(rows);
+                pruneExtraRows(rows);
             }
         }
 
@@ -168,11 +168,11 @@ public final class AdminSettingsRepository {
         return snapshot;
     }
 
-    private static JSONArray fetchActiveRows() throws Exception {
+    private static JSONArray fetchRows() throws Exception {
         String url = SUPABASE_URL + "/rest/v1/admin_settings"
-                + "?select=id,is_active,push_notifications,email_notifications,admin_alerts,dark_mode,"
+                + "?select=id,push_notifications,email_notifications,admin_alerts,dark_mode,"
                 + "auto_approve_providers,daily_email_digest,maintenance_mode,maintenance_message,maintenance_end_time"
-                + "&is_active=eq.true&order=id.asc&limit=10";
+                + "&order=id.asc&limit=10";
 
         Request req = new Request.Builder()
                 .url(url)
@@ -185,13 +185,12 @@ public final class AdminSettingsRepository {
         try (Response r = HTTP.newCall(req).execute()) {
             String body = r.body() != null ? r.body().string() : "[]";
             if (r.code() == 200) return new JSONArray(body);
-            throw new IllegalStateException("fetchActiveRows HTTP " + r.code() + ": " + body);
+            throw new IllegalStateException("fetchRows HTTP " + r.code() + ": " + body);
         }
     }
 
     private static AppSettings.Snapshot createDefaultRow() throws Exception {
         JSONObject body = new JSONObject();
-        body.put("is_active", true);
         body.put("push_notifications", AppSettings.DEFAULT_PUSH_NOTIFICATIONS);
         body.put("email_notifications", AppSettings.DEFAULT_EMAIL_NOTIFICATIONS);
         body.put("admin_alerts", AppSettings.DEFAULT_ADMIN_ALERTS);
@@ -221,7 +220,7 @@ public final class AdminSettingsRepository {
         }
     }
 
-    private static void deactivateExtraRows(JSONArray rows) {
+    private static void pruneExtraRows(JSONArray rows) {
         try {
             List<String> ids = new ArrayList<>();
             for (int i = 1; i < rows.length(); i++) {
@@ -231,30 +230,40 @@ public final class AdminSettingsRepository {
             if (ids.isEmpty()) return;
 
             String inFilter = String.join(",", ids);
-            JSONObject body = new JSONObject();
-            body.put("is_active", false);
-
             Request req = new Request.Builder()
                     .url(SUPABASE_URL + "/rest/v1/admin_settings?id=in.(" + inFilter + ")")
-                    .patch(RequestBody.create(body.toString(), JSON_TYPE))
+                    .delete()
                     .addHeader("apikey", ANON_KEY)
                     .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Content-Type", "application/json")
                     .addHeader("Prefer", "return=minimal")
                     .build();
 
             try (Response r = HTTP.newCall(req).execute()) {
-                Log.d(TAG, "deactivateExtraRows HTTP " + r.code());
+                Log.d(TAG, "pruneExtraRows HTTP " + r.code());
             }
         } catch (Exception e) {
-            Log.w(TAG, "deactivateExtraRows skipped: " + e.getMessage());
+            Log.w(TAG, "pruneExtraRows skipped: " + e.getMessage());
         }
     }
 
     private static AppSettings.Snapshot patchSettingsRow(long rowId, JSONObject patchBody) throws Exception {
         if (rowId <= 0) throw new IllegalArgumentException("Invalid admin_settings row id");
 
-        String url = SUPABASE_URL + "/rest/v1/admin_settings?id=eq." + rowId + "&is_active=eq.true";
+        try {
+            return patchSettingsRowInternal(rowId, patchBody);
+        } catch (Exception firstError) {
+            // Retry once with a fresh row id in case the cached row was deleted/changed.
+            Log.w(TAG, "patchSettingsRow retrying with fresh row: " + firstError.getMessage());
+            AppSettings.Snapshot fresh = fetchOrCreateSync(QuickFixApp.getInstance());
+            if (fresh != null && fresh.rowId > 0 && fresh.rowId != rowId) {
+                return patchSettingsRowInternal(fresh.rowId, patchBody);
+            }
+            throw firstError;
+        }
+    }
+
+    private static AppSettings.Snapshot patchSettingsRowInternal(long rowId, JSONObject patchBody) throws Exception {
+        String url = SUPABASE_URL + "/rest/v1/admin_settings?id=eq." + rowId;
         Request req = new Request.Builder()
                 .url(url)
                 .patch(RequestBody.create(patchBody.toString(), JSON_TYPE))
@@ -279,7 +288,7 @@ public final class AdminSettingsRepository {
 
     private static AppSettings.Snapshot fetchSingleRowById(long rowId) throws Exception {
         String url = SUPABASE_URL + "/rest/v1/admin_settings?id=eq." + rowId
-                + "&select=id,is_active,push_notifications,email_notifications,admin_alerts,dark_mode,"
+                + "&select=id,push_notifications,email_notifications,admin_alerts,dark_mode,"
                 + "auto_approve_providers,daily_email_digest,maintenance_mode,maintenance_message,maintenance_end_time"
                 + "&limit=1";
 
@@ -334,4 +343,3 @@ public final class AdminSettingsRepository {
         return trimmed.isEmpty() ? fallback : trimmed;
     }
 }
-

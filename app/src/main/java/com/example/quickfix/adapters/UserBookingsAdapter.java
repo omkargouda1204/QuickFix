@@ -8,6 +8,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.quickfix.Booking;
@@ -89,19 +90,19 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             switch (status) {
                 case "pending":
                     tvStatus.setBackgroundResource(R.drawable.badge_pending);
-                    tvStatus.setTextColor(Color.parseColor("#F57C00")); break;
+                    tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_pending_text)); break;
                 case "accepted": case "confirmed":
                     tvStatus.setBackgroundResource(R.drawable.badge_accepted);
-                    tvStatus.setTextColor(Color.parseColor("#1976D2")); break;
+                    tvStatus.setTextColor(ContextCompat.getColor(context, R.color.primary)); break;
                 case "completed":
                     tvStatus.setBackgroundResource(R.drawable.badge_completed);
-                    tvStatus.setTextColor(Color.parseColor("#388E3C")); break;
+                    tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_approved_text)); break;
                 case "cancelled":
                     tvStatus.setBackgroundResource(R.drawable.badge_cancelled);
-                    tvStatus.setTextColor(Color.parseColor("#D32F2F")); break;
+                    tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_rejected_text)); break;
                 default:
                     tvStatus.setBackgroundResource(R.drawable.badge_pending);
-                    tvStatus.setTextColor(Color.parseColor("#757575")); break;
+                    tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_neutral_text)); break;
             }
 
             // Cancel only for pending

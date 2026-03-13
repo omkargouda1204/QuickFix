@@ -224,11 +224,8 @@ public class AdminSettingsActivity extends BaseActivity {
                     @Override
                     public void onSuccess(AppSettings.Snapshot snapshot) {
                         if (isFinishing() || isDestroyed()) return;
-                        applySnapshotToUi(snapshot);
-                        setSwitchesEnabled(true);
-                        if ("dark_mode".equals(column)) {
-                            toast(snapshot.darkMode ? "Dark mode enabled" : "Light mode enabled");
-                        }
+                        loadSettingsFromDatabase();
+                        toast("Setting updated");
                     }
 
                     @Override
@@ -236,7 +233,7 @@ public class AdminSettingsActivity extends BaseActivity {
                         if (isFinishing() || isDestroyed()) return;
                         rollbackSwitch(sourceSwitch, previous);
                         setSwitchesEnabled(true);
-                        toast(message != null ? message : "Update failed");
+                        toast("Could not update setting");
                     }
                 });
     }
@@ -277,9 +274,21 @@ public class AdminSettingsActivity extends BaseActivity {
                         if (isFinishing() || isDestroyed()) return;
                         applySnapshotToUi(snapshot);
                         setSwitchesEnabled(true);
-                        toast(snapshot.maintenanceMode
-                                ? "Maintenance mode enabled"
-                                : "Maintenance mode disabled");
+
+                        if (snapshot.maintenanceMode) {
+                            FcmNotificationHelper.notifyAdminSystemAlert(
+                                    "Maintenance Mode Enabled",
+                                    snapshot.maintenanceMessage != null
+                                            ? snapshot.maintenanceMessage
+                                            : "Maintenance mode enabled by admin.");
+                        } else {
+                            FcmNotificationHelper.notifyAdminSystemAlert(
+                                    "Maintenance Mode Disabled",
+                                    "Maintenance mode was disabled. App access restored.");
+                        }
+
+                        loadSettingsFromDatabase();
+                        toast("Setting updated");
                     }
 
                     @Override
@@ -288,7 +297,7 @@ public class AdminSettingsActivity extends BaseActivity {
                         rollbackSwitch(switchMaintenance, expectedRollback);
                         updateMaintenanceSettingsVisibility(expectedRollback);
                         setSwitchesEnabled(true);
-                        toast(error != null ? error : "Could not update maintenance mode");
+                        toast("Could not update setting");
                     }
                 });
     }

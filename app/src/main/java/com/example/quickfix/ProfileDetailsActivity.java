@@ -312,13 +312,19 @@ public class ProfileDetailsActivity extends BaseActivity {
         isSaving = true;
         showLoading(true);
 
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null) {
+            showSnack("Session expired. Please login again.");
+            isSaving = false;
+            showLoading(false);
+            return;
+        }
+
         if (pendingAvatarUri != null) {
-            String prefix = "profile_" + firebaseUid;
-            SupabaseStorageHelper.uploadFile(
+            SupabaseStorageHelper.uploadProfileImage(
                     this,
                     pendingAvatarUri,
-                    SupabaseStorageHelper.BUCKET_PROFILE_IMAGES,
-                    prefix,
+                    currentUser.getUid(),
                     new SupabaseStorageHelper.UploadCallback() {
                         @Override
                         public void onSuccess(String publicUrl) {
@@ -328,7 +334,9 @@ public class ProfileDetailsActivity extends BaseActivity {
                         @Override
                         public void onError(String message) {
                             MAIN.post(() -> {
-                                showSnack(TextUtils.isEmpty(message) ? "Failed to upload image." : message);
+                                showSnack(TextUtils.isEmpty(message)
+                                        ? "Profile image upload failed."
+                                        : message);
                                 isSaving = false;
                                 showLoading(false);
                             });
