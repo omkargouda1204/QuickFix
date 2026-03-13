@@ -285,218 +285,106 @@ public class ProfileDetailsActivity extends BaseActivity {
         isEditMode = edit;
         if (cardViewMode != null) cardViewMode.setVisibility(edit ? View.GONE  : View.VISIBLE);
         if (cardEditMode != null) cardEditMode.setVisibility(edit ? View.VISIBLE : View.GONE);
-        // Scroll back to top so the header + card are visible
-        if (profileScrollView != null) profileScrollView.post(() -> profileScrollView.smoothScrollTo(0, 0));
+        if (profileScrollView != null) profileScrollView.scrollTo(0, 0);
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    //  VALIDATION + SAVE
+    //  SAVE CHANGES
     // ─────────────────────────────────────────────────────────────────────
 
     private void validateAndSave() {
         if (isSaving) return;
-        if (!validateFields()) return;
-
-        String newName    = getText(etEditName).trim();
-        String newPhone   = getText(etEditPhone).trim();
-        String newCity    = getText(etEditCity).trim();
-        String newAddress = getText(etEditAddress).trim();
-
-        if (pendingAvatarUri != null) {
-            uploadAvatarThenSave(newName, newPhone, newCity, newAddress);
-        } else {
-            saveToSupabase(newName, newPhone, newCity, newAddress, cachedProfileImagePath);
-        }
-    }
-
-    private void uploadAvatarThenSave(String name, String phone, String city, String address) {
-        showLoading(true);
-        setSaveButtonState(true, getString(R.string.pd_uploading_photo));
-        SupabaseStorageHelper.uploadPrivateFile(
-                this,
-                pendingAvatarUri,
-                SupabaseStorageHelper.BUCKET_PROFILE_IMAGES,
-                firebaseUid,
-                new SupabaseStorageHelper.PrivateUploadCallback() {
-                    @Override
-                    public void onSuccess(String storagePath) {
-                        saveToSupabase(name, phone, city, address, safeStr(storagePath));
-                    }
-
-                    @Override
-                    public void onError(String message) {
-                        MAIN.post(() -> {
-                            isSaving = false;
-                            showLoading(false);
-                            setSaveButtonState(false, getString(R.string.pd_btn_save));
-                            showSnack(TextUtils.isEmpty(message)
-                                    ? getString(R.string.pd_photo_upload_failed)
-                                    : message);
-                        });
-                    }
-                }
-        );
-    }
-
-    private boolean validateFields() {
         clearFieldErrors();
-        boolean valid = true;
 
         String name  = getText(etEditName).trim();
         String phone = getText(etEditPhone).trim();
         String city  = getText(etEditCity).trim();
+        String addr  = getText(etEditAddress).trim();
 
-        // Name — required, min 2 chars
-        if (TextUtils.isEmpty(name)) {
-            setError(tilEditName, getString(R.string.error_fullname_required));
-            valid = false;
-        } else if (name.length() < 2) {
-            setError(tilEditName, "Name must be at least 2 characters");
-            valid = false;
-        } else if (name.length() > 60) {
-            setError(tilEditName, "Name is too long (max 60 characters)");
-            valid = false;
-        }
+        boolean ok = true;
+        if (TextUtils.isEmpty(name)) { setError(tilEditName, "Name is required"); ok = false; }
+        if (!ok) return;
 
-        // Phone — optional, but must be valid if provided
-        if (!TextUtils.isEmpty(phone) && !phone.matches("^[+]?[0-9]{7,15}$")) {
-            setError(tilEditPhone, getString(R.string.error_phone_invalid));
-            valid = false;
-        }
-
-        // City — optional, length guard
-        if (!TextUtils.isEmpty(city) && city.length() > 80) {
-            setError(tilEditCity, "City name is too long (max 80 characters)");
-            valid = false;
-        }
-
-        return valid;
+        saveProfile(name, phone, city, addr);
     }
 
-    private void saveToSupabase(String name, String phone, String city, String address, String profileImagePath) {
+    private void saveProfile(String name, String phone, String city, String addr) {
         isSaving = true;
         showLoading(true);
-        setSaveButtonState(true, getString(R.string.pd_saving));
 
+        if (pendingAvatarUri != null) {
+            String prefix = "profile_" + firebaseUid;
+            SupabaseStorageHelper.uploadFile(
+                    this,
+                    pendingAvatarUri,
+                    SupabaseStorageHelper.BUCKET_PROFILE_IMAGES,
+                    prefix,
+                    new SupabaseStorageHelper.UploadCallback() {
+                        @Override
+                        public void onSuccess(String publicUrl) {
+                            persistProfileUpdate(name, phone, city, addr, publicUrl);
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            MAIN.post(() -> {
+                                showSnack(TextUtils.isEmpty(message) ? "Failed to upload image." : message);
+                                isSaving = false;
+                                showLoading(false);
+                            });
+                        }
+                    }
+            );
+            return;
+        }
+
+        persistProfileUpdate(name, phone, city, addr, cachedProfileImagePath);
+    }
+
+    private void persistProfileUpdate(String name, String phone, String city, String addr, String uploadedImagePath) {
         new Thread(() -> {
             try {
                 JSONObject body = new JSONObject();
-                body.put("name",    name);
-                body.put("phone",   phone);
-                body.put("city",    city);
-                body.put("address", address);
-                body.put("profile_image", safeStr(profileImagePath));
-                if (!TextUtils.isEmpty(cachedEmail)) body.put("email", cachedEmail);
+                body.put("name", name);
+                body.put("phone", phone);
+                body.put("city", city);
+                body.put("address", addr);
+                body.put("profile_image", uploadedImagePath);
 
-                String encodedUid = java.net.URLEncoder.encode(firebaseUid, java.nio.charset.StandardCharsets.UTF_8.name());
-                String patchUrl = BuildConfig.SUPABASE_URL
-                        + "/rest/v1/users?firebase_uid=eq." + encodedUid;
-
-                Request patchReq = new Request.Builder()
-                        .url(patchUrl)
-                        .patch(RequestBody.create(
-                                body.toString(),
-                                MediaType.get("application/json; charset=utf-8")))
-                        .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
+                Request req = new Request.Builder()
+                        .url(BuildConfig.SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + firebaseUid)
+                        .patch(RequestBody.create(body.toString(), MediaType.get("application/json; charset=utf-8")))
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "return=minimal")
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
                         .build();
 
-                try (Response r = HTTP.newCall(patchReq).execute()) {
-                    int code = r.code();
-                    String errBody = r.body() != null ? r.body().string() : "";
-                    Log.d(TAG, "PATCH /users HTTP " + code + " | " + errBody);
-
-                    if (code == 200 || code == 204 || (code == 406 &&
-                            (errBody.isEmpty() || errBody.equals("[]") || errBody.equals("{}")))) {
-                        MAIN.post(() -> onSaveSuccess(name, phone, city, address, profileImagePath,
-                                getString(R.string.pd_saved_ok)));
-                    } else if (code == 400 || code == 404 || code == 409 || errBody.isEmpty() || errBody.equals("[]")) {
-                        upsertSupabaseRow(name, phone, city, address, profileImagePath);
+                try (Response r = HTTP.newCall(req).execute()) {
+                    final int code = r.code();
+                    if (code == 200 || code == 204) {
+                        final String finalImg = uploadedImagePath;
+                        MAIN.post(() -> {
+                            applyProfile(name, cachedEmail, phone, city, addr, finalImg);
+                            showEditMode(false);
+                            showSnack("Profile updated.");
+                        });
                     } else {
-                        MAIN.post(() -> onSaveError(getString(R.string.pd_save_http_error, code)));
+                        MAIN.post(() -> showSnack("Save failed: " + code));
                     }
                 }
             } catch (Exception e) {
-                Log.e(TAG, "saveToSupabase exception: " + e.getMessage(), e);
-                MAIN.post(() -> onSaveError(getString(R.string.pd_network_error)));
+                Log.e(TAG, "Save error", e);
+                MAIN.post(() -> showSnack("Error: " + e.getMessage()));
+            } finally {
+                MAIN.post(() -> {
+                    isSaving = false;
+                    showLoading(false);
+                });
             }
         }).start();
     }
 
-    /** Upsert (INSERT or UPDATE) — used when PATCH found 0 matching rows. */
-    private void upsertSupabaseRow(String name, String phone, String city, String address, String profileImagePath) {
-        try {
-            JSONObject body = new JSONObject();
-            body.put("firebase_uid",        firebaseUid);
-            body.put("name",                name);
-            body.put("email",               TextUtils.isEmpty(cachedEmail) ? "" : cachedEmail);
-            body.put("phone",               phone);
-            body.put("city",                city);
-            body.put("address",             address);
-            body.put("profile_image",       safeStr(profileImagePath));
-            body.put("is_user",             true);
-            body.put("is_service_provider", false);
-            body.put("is_admin",            false);
-
-            Request req = new Request.Builder()
-                    .url(BuildConfig.SUPABASE_URL + "/rest/v1/users")
-                    .post(RequestBody.create(
-                            body.toString(),
-                            MediaType.get("application/json; charset=utf-8")))
-                    .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Content-Type",  "application/json")
-                    .addHeader("Prefer",        "resolution=merge-duplicates,return=minimal")
-                    .build();
-
-            try (Response r = HTTP.newCall(req).execute()) {
-                int code = r.code();
-                Log.d(TAG, "upsertSupabaseRow HTTP " + code);
-                if (code == 200 || code == 201 || code == 204) {
-                    MAIN.post(() -> onSaveSuccess(name, phone, city, address, profileImagePath,
-                            getString(R.string.pd_saved_ok)));
-                } else {
-                    String errBody = r.body() != null ? r.body().string() : "";
-                    Log.w(TAG, "upsert error HTTP " + code + " | " + errBody);
-                    MAIN.post(() -> onSaveError(getString(R.string.pd_save_http_error, code)));
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "upsertSupabaseRow exception: " + e.getMessage(), e);
-            MAIN.post(() -> onSaveError(getString(R.string.pd_network_error)));
-        }
-    }
-
-    private void onSaveSuccess(String name, String phone, String city, String address,
-                               String profileImagePath, String msg) {
-        isSaving = false;
-        showLoading(false);
-        setSaveButtonState(false, getString(R.string.pd_btn_save));
-        showEditMode(false);
-        pendingAvatarUri = null;
-        applyProfile(name, cachedEmail, phone, city, address, safeStr(profileImagePath));
-        showSnack(msg);
-        setResult(RESULT_OK);
-    }
-
-    private void onSaveError(String msg) {
-        isSaving = false;
-        showLoading(false);
-        setSaveButtonState(false, getString(R.string.pd_btn_save));
-        showSnack(msg);
-    }
-
-    private void setSaveButtonState(boolean loading, String text) {
-        if (btnSaveChanges == null) return;
-        btnSaveChanges.setEnabled(!loading);
-        btnSaveChanges.setText(text);
-        if (btnCancelEdit != null) btnCancelEdit.setEnabled(!loading);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────
-    //  LOAD FROM SUPABASE
     // ─────────────────────────────────────────────────────────────────────
 
     private void loadProfile(String fallbackName, String fallbackEmail, String fallbackPhone) {
@@ -511,7 +399,9 @@ public class ProfileDetailsActivity extends BaseActivity {
 
                 Log.d(TAG, "loadProfile HTTP " + fetch.httpCode + " | " + fetch.body);
 
-                if (fetch.httpCode == 200 && fetch.row != null) {
+                final int responseCode = fetch.httpCode;
+
+                if (responseCode == 200 && fetch.row != null) {
                     JSONObject o   = fetch.row;
                     String name    = nullSafe(o, "name");
                     String email   = nullSafe(o, "email");
@@ -528,12 +418,12 @@ public class ProfileDetailsActivity extends BaseActivity {
                     final String fName = name, fEmail = email, fPhone = phone,
                             fCity = city, fAddr = address, fImg = imagePath;
                     MAIN.post(() -> applyProfile(fName, fEmail, fPhone, fCity, fAddr, fImg));
-                } else if (fetch.httpCode == 200) {
+                } else if (responseCode == 200) {
                     Log.i(TAG, "No Supabase row — seeding.");
                     seedSupabaseRow(fallbackName, fallbackEmail, fallbackPhone, "", "", "");
                     MAIN.post(() -> applyProfile(fallbackName, fallbackEmail, fallbackPhone, "", "", ""));
                 } else {
-                    MAIN.post(() -> showSnack(getString(R.string.pd_load_http_error, fetch.httpCode)));
+                    MAIN.post(() -> showSnack(getString(R.string.pd_load_http_error, responseCode)));
                 }
             } catch (Exception e) {
                 Log.e(TAG, "loadProfile exception: " + e.getMessage(), e);
