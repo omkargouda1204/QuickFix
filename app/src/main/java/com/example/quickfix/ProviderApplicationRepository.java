@@ -124,23 +124,37 @@ public class ProviderApplicationRepository {
                 String timestamp = new SimpleDateFormat(
                         "yyyy-MM-dd'T'HH:mm:ss", Locale.US).format(new Date());
 
+                boolean autoApprove = false;
+                try {
+                    QuickFixApp app = QuickFixApp.getInstance();
+                    if (app != null) {
+                        autoApprove = AdminSettingsRepository.isAutoApproveProvidersEnabled(app);
+                    }
+                } catch (Exception ignored) {
+                    autoApprove = false;
+                }
+
                 JSONObject body = new JSONObject();
                 body.put("firebase_uid",        firebaseUid);
-                body.put("user_name",           name != null ? name.trim() : "");      // DB column: user_name
-                body.put("user_email",          email != null ? email.trim() : "");    // DB column: user_email
-                body.put("user_phone",          phone != null ? phone.trim() : "");    // DB column: user_phone
-                body.put("business_name",       businessName.trim());
-                body.put("category",            category.trim());
+                body.put("user_name",           name != null ? name.trim() : "");
+                body.put("user_email",          email != null ? email.trim() : "");
+                body.put("user_phone",          phone != null ? phone.trim() : "");
+                body.put("business_name",       businessName != null ? businessName.trim() : "");
+                body.put("category",            category != null ? category.trim() : "");
                 body.put("description",         description != null ? description.trim() : "");
                 body.put("address",             address != null ? address.trim() : "");
                 body.put("city",                city != null ? city.trim() : "");
-                // experience_yrs is integer in DB
                 int expYrs = 0;
                 try { expYrs = Integer.parseInt(experience != null ? experience.trim() : "0"); } catch (Exception ignored) {}
                 body.put("experience_yrs",      expYrs);
                 body.put("terms_accepted",      true);
-                body.put("status",              "pending");
+                body.put("status",              autoApprove ? "approved" : "pending");
                 body.put("submitted_at",        timestamp);
+                if (autoApprove) {
+                    body.put("approved_at", timestamp);
+                    body.put("reviewed_at", timestamp);
+                    body.put("reviewed_by_uid", "system_auto");
+                }
                 if (businessImageUrl != null && !businessImageUrl.isEmpty())
                     body.put("business_image_url", businessImageUrl);
                 if (idProofUrl != null && !idProofUrl.isEmpty())
@@ -152,16 +166,20 @@ public class ProviderApplicationRepository {
                         .addHeader("apikey",        ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
                         .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "return=minimal")
+                        .addHeader("Prefer",        "return=representation")
                         .build();
 
                 try (Response r = HTTP.newCall(insertReq).execute()) {
                     int code = r.code();
-                    String respBody = r.body() != null ? r.body().string() : "";
+                    String respBody = r.body() != null ? r.body().string() : "[]";
                     Log.d(TAG, "submitApplication HTTP " + code + " | " + respBody);
                     if (code == 200 || code == 201 || code == 204) {
-                        // ── Notify all admins about the new application ──────
-                        FcmNotificationHelper.notifyAdminsNewApplication(name, businessName, category);
+                        if (autoApprove) {
+                            // Auto-approve means role is promoted immediately.
+                            patchUserAsProviderSync(firebaseUid);
+                        } else {
+                            FcmNotificationHelper.notifyAdminsNewApplication(name, businessName, category);
+                        }
                         MAIN.post(callback::onSuccess);
                     } else {
                         MAIN.post(() -> callback.onError("HTTP " + code + ": " + respBody));
@@ -176,6 +194,29 @@ public class ProviderApplicationRepository {
                 MAIN.post(() -> callback.onError(e.getMessage()));
             }
         }).start();
+    }
+
+    private static void patchUserAsProviderSync(String firebaseUid) {
+        if (firebaseUid == null || firebaseUid.trim().isEmpty()) return;
+        try {
+            JSONObject patch = new JSONObject();
+            patch.put("is_service_provider", true);
+
+            Request req = new Request.Builder()
+                    .url(SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + firebaseUid)
+                    .patch(RequestBody.create(patch.toString(), JSON_TYPE))
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "return=minimal")
+                    .build();
+
+            try (Response response = HTTP.newCall(req).execute()) {
+                Log.d(TAG, "patchUserAsProviderSync HTTP " + response.code());
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "patchUserAsProviderSync non-fatal: " + e.getMessage());
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════

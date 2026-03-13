@@ -134,44 +134,12 @@ public class ThemeManager {
     }
 
     /**
-     * Fetch dark mode preference from Supabase and apply if different from local.
-     * Call this from MainActivity/SplashActivity after login to sync admin changes.
+     * Sync dark mode from admin_settings via AdminSettingsRepository.
+     * This keeps theme behavior aligned with the Admin Settings source of truth.
      */
     public static void fetchAndSync(Context ctx) {
-        new Thread(() -> {
-            try {
-                String url = BuildConfig.SUPABASE_URL
-                        + "/rest/v1/app_settings?key=eq.dark_mode&select=value&limit=1";
-                String anonKey = BuildConfig.SUPABASE_ANON_KEY;
-
-                Request req = new Request.Builder()
-                        .url(url)
-                        .get()
-                        .addHeader("apikey",        anonKey)
-                        .addHeader("Authorization", "Bearer " + anonKey)
-                        .addHeader("Accept",        "application/json")
-                        .build();
-
-                try (Response r = HTTP.newCall(req).execute()) {
-                    if (r.code() == 200 && r.body() != null) {
-                        String json = r.body().string();
-                        JSONArray arr = new JSONArray(json);
-                        if (arr.length() > 0) {
-                            String val    = arr.getJSONObject(0).optString("value", "false");
-                            boolean remote = Boolean.parseBoolean(val);
-                            boolean local  = isDarkMode(ctx);
-                            if (remote != local) {
-                                Log.d(TAG, "Syncing dark mode from Supabase: " + remote);
-                                save(ctx, remote);
-                                MAIN.post(() -> apply(remote));
-                            }
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "fetchAndSync error: " + e.getMessage());
-            }
-        }).start();
+        if (ctx == null) return;
+        AdminSettingsRepository.syncInBackground(ctx);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
@@ -181,4 +149,3 @@ public class ThemeManager {
                 .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
     }
 }
-

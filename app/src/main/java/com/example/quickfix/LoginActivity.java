@@ -423,6 +423,8 @@ public class LoginActivity extends BaseActivity {
                         + " user=" + info.isUser
                         + " | email=" + finalEmail);
 
+                AppSettings.setLastKnownAdminRole(LoginActivity.this, info.isAdmin);
+
                 // ── Priority routing ──────────────────────────────────
                 final Intent target;
                 if (info.isAdmin) {

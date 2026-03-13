@@ -103,7 +103,27 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         if (title == null || title.isEmpty()) title = getString(R.string.app_name);
         if (body  == null || body.isEmpty())  body  = "You have a new notification.";
 
+        // Enforce runtime notification settings before posting system notifications.
+        if (!shouldDisplayNotification(type)) {
+            Log.d(TAG, "Notification suppressed by admin settings. type=" + type);
+            return;
+        }
+
         showSystemNotification(title, body, type, data);
+    }
+
+    private boolean shouldDisplayNotification(String type) {
+        if (!AppSettings.isPushEnabled(this)) return false;
+
+        String safeType = type != null ? type : "general";
+        boolean isAdminEvent = "provider_application".equals(safeType)
+                || "admin_alert".equals(safeType)
+                || "system_alert".equals(safeType);
+
+        if (isAdminEvent && !AppSettings.isAdminAlertsEnabled(this)) {
+            return false;
+        }
+        return true;
     }
 
     // ── System notification builder ───────────────────────────────────────
