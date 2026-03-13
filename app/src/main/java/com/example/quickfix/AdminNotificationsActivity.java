@@ -84,6 +84,12 @@ public class AdminNotificationsActivity extends BaseActivity {
         loadNotifications();
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadNotifications();
+    }
+
     private void bindViews() {
         rvNotifications = findViewById(R.id.rvNotifications);
         swipeRefresh    = findViewById(R.id.swipeRefresh);

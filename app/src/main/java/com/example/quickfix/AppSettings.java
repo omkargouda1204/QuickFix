@@ -11,7 +11,7 @@ public class AppSettings {
 
     private static final String PREFS_NAME = "admin_settings_prefs";
 
-    public static final String KEY_ROW_ID = "admin_settings_row_id";
+    public static final String KEY_ROW_ID = "admin_settings_row_id_str";
     public static final String KEY_PUSH_NOTIF = "push_notifications";
     public static final String KEY_EMAIL_NOTIF = "email_notifications";
     public static final String KEY_ADMIN_ALERTS = "admin_alerts";
@@ -35,7 +35,7 @@ public class AppSettings {
     public static final String DEFAULT_MAINTENANCE_END_TIME = "";
 
     public static class Snapshot {
-        public long rowId = -1L;
+        public String rowId = null;  // UUID string from Supabase
         public boolean pushNotifications = DEFAULT_PUSH_NOTIFICATIONS;
         public boolean emailNotifications = DEFAULT_EMAIL_NOTIFICATIONS;
         public boolean adminAlerts = DEFAULT_ADMIN_ALERTS;
@@ -45,6 +45,11 @@ public class AppSettings {
         public boolean maintenanceMode = DEFAULT_MAINTENANCE_MODE;
         public String maintenanceMessage = DEFAULT_MAINTENANCE_MESSAGE;
         public String maintenanceEndTime = DEFAULT_MAINTENANCE_END_TIME;
+
+        /** Returns true if this snapshot has a valid Supabase row id. */
+        public boolean hasValidRowId() {
+            return rowId != null && !rowId.trim().isEmpty();
+        }
     }
 
     private static SharedPreferences prefs(Context ctx) {
@@ -54,7 +59,7 @@ public class AppSettings {
     public static void saveSnapshot(Context ctx, Snapshot snapshot) {
         if (ctx == null || snapshot == null) return;
         prefs(ctx).edit()
-                .putLong(KEY_ROW_ID, snapshot.rowId)
+                .putString(KEY_ROW_ID, snapshot.rowId != null ? snapshot.rowId : "")
                 .putBoolean(KEY_PUSH_NOTIF, snapshot.pushNotifications)
                 .putBoolean(KEY_EMAIL_NOTIF, snapshot.emailNotifications)
                 .putBoolean(KEY_ADMIN_ALERTS, snapshot.adminAlerts)
@@ -71,7 +76,8 @@ public class AppSettings {
         Snapshot s = new Snapshot();
         if (ctx == null) return s;
         SharedPreferences p = prefs(ctx);
-        s.rowId = p.getLong(KEY_ROW_ID, -1L);
+        String id = p.getString(KEY_ROW_ID, "");
+        s.rowId = (id != null && !id.isEmpty()) ? id : null;
         s.pushNotifications = p.getBoolean(KEY_PUSH_NOTIF, DEFAULT_PUSH_NOTIFICATIONS);
         s.emailNotifications = p.getBoolean(KEY_EMAIL_NOTIF, DEFAULT_EMAIL_NOTIFICATIONS);
         s.adminAlerts = p.getBoolean(KEY_ADMIN_ALERTS, DEFAULT_ADMIN_ALERTS);
@@ -113,8 +119,10 @@ public class AppSettings {
         prefs(ctx).edit().putString(key, value).apply();
     }
 
-    public static long getAdminSettingsRowId(Context ctx) {
-        return ctx != null ? prefs(ctx).getLong(KEY_ROW_ID, -1L) : -1L;
+    /** @deprecated Use getSnapshot(ctx).rowId instead */
+    @Deprecated
+    public static String getAdminSettingsRowId(Context ctx) {
+        return ctx != null ? prefs(ctx).getString(KEY_ROW_ID, "") : "";
     }
 
     public static boolean isPushEnabled(Context ctx) {
