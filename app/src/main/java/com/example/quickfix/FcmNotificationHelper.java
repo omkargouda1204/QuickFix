@@ -1,5 +1,6 @@
 package com.example.quickfix;
 
+import android.content.Context;
 import android.util.Log;
 
 import org.json.JSONArray;
@@ -68,6 +69,14 @@ public class FcmNotificationHelper {
 
         new Thread(() -> {
             try {
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null) {
+                    if (!AppSettings.isPushEnabled(appCtx) || !AppSettings.isAdminAlertsEnabled(appCtx)) {
+                        Log.d(TAG, "notifyAdminsNewApplication suppressed by admin settings");
+                        return;
+                    }
+                }
+
                 // 1. Fetch all admin FCM tokens from Supabase
                 List<String> adminTokens = fetchAdminFcmTokens();
                 if (adminTokens.isEmpty()) {
@@ -112,6 +121,12 @@ public class FcmNotificationHelper {
 
         new Thread(() -> {
             try {
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    Log.d(TAG, "notifyProviderApproved suppressed by push_notifications=false");
+                    return;
+                }
+
                 String token = fetchUserFcmToken(providerFirebaseUid);
                 if (token == null || token.isEmpty()) {
                     Log.d(TAG, "notifyProviderApproved: no token for uid=" + providerFirebaseUid);
@@ -151,6 +166,12 @@ public class FcmNotificationHelper {
 
         new Thread(() -> {
             try {
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    Log.d(TAG, "notifyProviderRejected suppressed by push_notifications=false");
+                    return;
+                }
+
                 String token = fetchUserFcmToken(providerFirebaseUid);
                 if (token == null || token.isEmpty()) {
                     Log.d(TAG, "notifyProviderRejected: no token for uid=" + providerFirebaseUid);
@@ -192,6 +213,12 @@ public class FcmNotificationHelper {
 
         new Thread(() -> {
             try {
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    Log.d(TAG, "notifyProviderNewBooking suppressed by push_notifications=false");
+                    return;
+                }
+
                 String token = fetchUserFcmToken(providerFirebaseUid);
                 if (token == null || token.isEmpty()) {
                     Log.d(TAG, "notifyProviderNewBooking: no token for uid=" + providerFirebaseUid);
@@ -428,4 +455,3 @@ public class FcmNotificationHelper {
         }
     }
 }
-

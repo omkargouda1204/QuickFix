@@ -533,7 +533,8 @@ public class ProfileDetailsActivity extends BaseActivity {
                     seedSupabaseRow(fallbackName, fallbackEmail, fallbackPhone, "", "", "");
                     MAIN.post(() -> applyProfile(fallbackName, fallbackEmail, fallbackPhone, "", "", ""));
                 } else {
-                    MAIN.post(() -> showSnack(getString(R.string.pd_load_http_error, fetch.httpCode)));
+                    final int failedHttpCode = fetch.httpCode;
+                    MAIN.post(() -> showSnack(getString(R.string.pd_load_http_error, failedHttpCode)));
                 }
             } catch (Exception e) {
                 Log.e(TAG, "loadProfile exception: " + e.getMessage(), e);

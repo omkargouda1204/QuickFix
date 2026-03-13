@@ -26,8 +26,6 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.widget.NestedScrollView;
 
@@ -38,14 +36,9 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
-import org.json.JSONObject;
-
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.TimeUnit;
 
-import okhttp3.Call;
-import okhttp3.Callback;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -279,7 +272,7 @@ public class ProviderOnboardingActivity extends BaseActivity {
                 if (phone.length() == 10 && phone.matches("\\d{10}")) {
                     tilPhone.setError(null);
                     tilPhone.setHelperText("✓ Valid phone number");
-                } else if (phone.length() > 0 && phone.length() < 10) {
+                } else if (!phone.isEmpty() && phone.length() < 10) {
                     tilPhone.setHelperText("Enter " + (10 - phone.length()) + " more digit(s)");
                     tilPhone.setError(null);
                 } else if (phone.length() == 10 && !phone.matches("\\d{10}")) {
@@ -612,7 +605,7 @@ public class ProviderOnboardingActivity extends BaseActivity {
         }).start();
     }
 
-    // ── Submit form data — column names MATCH Supabase provider_applications table ──
+    // ── Submit form data — use shared repository path so admin auto-approve is honored ──
     private void submitFormData(String firebaseUid, String idProofUrl, String bizImgUrl) {
 
         // ── 1. Collect & validate all required fields before sending ──────
@@ -621,18 +614,33 @@ public class ProviderOnboardingActivity extends BaseActivity {
         String businessName = text(etBusinessName);
         String category     = text(actvServiceCategory);
         String phone        = text(etPhone);
-        String address      = text(etAddress);
         String city         = text(etCity);
+        String address      = text(etAddress);
         String description  = text(etDescription);
-        int    experienceYrs = safeInt(text(etExperience));
 
-        // Hard guard — these are the required DB columns
+        int experienceYrs;
+        try { experienceYrs = Integer.parseInt(text(etExperience)); }
+        catch (Exception e) { experienceYrs = -1; }
+
         if (TextUtils.isEmpty(firebaseUid)) {
             showLoading(false);
-            Toast.makeText(this, "Session error — please log in again.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Session expired. Please login again.", Toast.LENGTH_LONG).show();
             return;
         }
-        // Validate all required fields top-to-bottom matching form layout
+        if (TextUtils.isEmpty(userName)) {
+            showLoading(false);
+            tilOwnerName.setError("Owner name is required");
+            tilOwnerName.requestFocus();
+            return;
+        } else { tilOwnerName.setError(null); }
+
+        if (TextUtils.isEmpty(userEmail) || !Patterns.EMAIL_ADDRESS.matcher(userEmail).matches()) {
+            showLoading(false);
+            tilEmail.setError("Valid email is required");
+            tilEmail.requestFocus();
+            return;
+        } else { tilEmail.setError(null); }
+
         if (TextUtils.isEmpty(businessName)) {
             showLoading(false);
             tilBusinessName.setError("Business name is required");
@@ -640,37 +648,22 @@ public class ProviderOnboardingActivity extends BaseActivity {
             return;
         } else { tilBusinessName.setError(null); }
 
-        if (TextUtils.isEmpty(userName)) {
+        if (TextUtils.isEmpty(category) || category.equalsIgnoreCase("Select Category")) {
             showLoading(false);
-            tilOwnerName.setError("Owner full name is required");
-            tilOwnerName.requestFocus();
+            Toast.makeText(this, "Please select a service category", Toast.LENGTH_SHORT).show();
             return;
-        } else { tilOwnerName.setError(null); }
+        }
 
-        if (TextUtils.isEmpty(phone) || !phone.matches("\\d{10}")) {
+        if (TextUtils.isEmpty(phone) || phone.length() < 10) {
             showLoading(false);
-            tilPhone.setError(TextUtils.isEmpty(phone)
-                    ? "Phone number is required"
-                    : "Enter a valid 10 digit mobile number");
+            tilPhone.setError("Valid phone number is required");
             tilPhone.requestFocus();
             return;
         } else { tilPhone.setError(null); }
 
-        if (TextUtils.isEmpty(userEmail)) {
+        if (experienceYrs < 0 || experienceYrs > 60) {
             showLoading(false);
-            Toast.makeText(this, "Email not found. Please log in again.", Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        if (TextUtils.isEmpty(category)) {
-            showLoading(false);
-            tilServiceCategory.setError("Please select a service category");
-            return;
-        } else { tilServiceCategory.setError(null); }
-
-        if (experienceYrs <= 0) {
-            showLoading(false);
-            tilExperience.setError("Enter years of experience (1–99)");
+            tilExperience.setError("Enter valid experience (0–60 years)");
             tilExperience.requestFocus();
             return;
         } else { tilExperience.setError(null); }
@@ -702,133 +695,45 @@ public class ProviderOnboardingActivity extends BaseActivity {
             return;
         }
 
-        // ── 2. Build JSON payload with exact DB column names ──────────────
-        try {
-            JSONObject payload = new JSONObject();
-
-            // firebase_uid — always required
-            payload.put("firebase_uid",   firebaseUid);
-
-            // Exact DB column names: user_name, user_email
-            payload.put("user_name",      userName);
-            payload.put("user_email",     userEmail);
-
-            payload.put("business_name",  businessName);
-            payload.put("category",       category);
-            payload.put("terms_accepted", true);
-
-            // Exact column names from provider_applications table
-            payload.put("user_phone",     phone);
-            payload.put("experience_yrs", experienceYrs);        // integer column
-            payload.put("address",        address);
-            payload.put("city",           city);
-            payload.put("description",    description);
-            payload.put("status",         "pending");
-            payload.put("id_proof_url",   idProofUrl != null ? idProofUrl : "");
-            if (bizImgUrl != null) payload.put("business_image_url", bizImgUrl);
-
-            Log.d(TAG, "Submitting payload → " + payload.toString(2));
-
-            // ── 3. Send to Supabase REST API ──────────────────────────────
-            String endpoint = SUPABASE_URL + "/rest/v1/provider_applications";
-            Log.d(TAG, "POST → " + endpoint);
-
-            Request request = new Request.Builder()
-                    .url(endpoint)
-                    .post(RequestBody.create(
-                            payload.toString(),
-                            MediaType.parse("application/json; charset=utf-8")))
-                    .addHeader("apikey",        SUPABASE_KEY)
-                    .addHeader("Authorization", "Bearer " + SUPABASE_KEY)
-                    .addHeader("Content-Type",  "application/json")
-                    .addHeader("Prefer",        "return=minimal")
-                    .build();
-
-            // ── 4. Handle response ────────────────────────────────────────
-            http.newCall(request).enqueue(new Callback() {
-
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    Log.e(TAG, "Network failure submitting application: " + e.getMessage(), e);
-                    runOnUiThread(() -> {
-                        showLoading(false);
-                        Toast.makeText(ProviderOnboardingActivity.this,
-                                "Network error: " + e.getMessage()
-                                        + "\nCheck your internet connection and try again.",
-                                Toast.LENGTH_LONG).show();
-                        if (checkboxTerms.isChecked()) startPulseAnimation();
-                    });
-                }
-
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response)
-                        throws IOException {
-                    int    code     = response.code();
-                    String respBody = response.body() != null ? response.body().string() : "(empty)";
-                    response.close();
-
-                    // Always log the full server response for debugging
-                    Log.d(TAG, "DB submit → HTTP " + code);
-                    Log.d(TAG, "DB response body → " + respBody);
-
-                    runOnUiThread(() -> {
-                        showLoading(false);
-                        if (code == 200 || code == 201) {
-                            // ── 5. Success ────────────────────────────────
-                            Log.d(TAG, "Application submitted successfully.");
+        ProviderApplicationRepository.submitApplication(
+                firebaseUid,
+                userName,
+                userEmail,
+                phone,
+                businessName,
+                category,
+                description,
+                address,
+                city,
+                String.valueOf(experienceYrs),
+                bizImgUrl,
+                idProofUrl,
+                new ProviderApplicationRepository.Callback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            showLoading(false);
                             showSuccess();
-                        } else {
-                            // ── 6. Error — show descriptive message ───────
-                            String userMsg = buildErrorMessage(code, respBody);
-                            Log.e(TAG, "Submission error: " + userMsg);
-                            Toast.makeText(ProviderOnboardingActivity.this,
-                                    userMsg, Toast.LENGTH_LONG).show();
+                        });
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        runOnUiThread(() -> {
+                            showLoading(false);
+                            String userMsg;
+                            if ("DUPLICATE".equals(message)) {
+                                userMsg = "You already have a pending or approved provider application.";
+                            } else if ("NETWORK_ERROR".equals(message)) {
+                                userMsg = "Network error. Please check your internet and try again.";
+                            } else {
+                                userMsg = "Submission failed: " + (message != null ? message : "Unknown error");
+                            }
+                            Toast.makeText(ProviderOnboardingActivity.this, userMsg, Toast.LENGTH_LONG).show();
                             if (checkboxTerms.isChecked()) startPulseAnimation();
-                        }
-                    });
-                }
-            });
-
-        } catch (Exception e) {
-            Log.e(TAG, "JSON build / submit error: " + e.getMessage(), e);
-            showLoading(false);
-            Toast.makeText(this,
-                    "Unexpected error building request. Please try again.",
-                    Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    /** Turns an HTTP error code + raw Supabase body into a user-friendly message. */
-    private String buildErrorMessage(int code, String rawBody) {
-        // Try to extract Supabase "message" field from JSON error body
-        String serverMsg = "";
-        try {
-            JSONObject err = new JSONObject(rawBody);
-            if (err.has("message"))   serverMsg = err.getString("message");
-            else if (err.has("hint")) serverMsg = err.getString("hint");
-            else if (err.has("details")) serverMsg = err.getString("details");
-        } catch (Exception ignored) {
-            serverMsg = rawBody;
-        }
-
-        switch (code) {
-            case 400:
-                return "Bad request (400). Check all fields match DB columns.\n" + serverMsg;
-            case 401:
-                return "Unauthorised (401). Invalid API key.\n" + serverMsg;
-            case 403:
-                return "Forbidden (403). Check Supabase RLS policies.\n" + serverMsg;
-            case 404:
-                return "Table not found (404). Check table name 'provider_applications'.\n" + serverMsg;
-            case 409:
-                return "Conflict (409). Application may already exist.\n" + serverMsg;
-            case 422:
-                return "Validation error (422).\n" + serverMsg;
-            case 500:
-                return "Server error (500). Please try again later.\n" + serverMsg;
-            default:
-                return "Submission failed (HTTP " + code + ").\n" + serverMsg;
-        }
+                        });
+                    }
+                });
     }
 
     // ── Success Screen ────────────────────────────────────────────────────
