@@ -233,48 +233,55 @@
             android:background="@color/divider" />
     </LinearLayout>
 
-    <!-- Popular Cities label -->
+    <!-- Nearby/search label -->
     <TextView
-        android:id="@+id/tvPopularCitiesLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Popular Cities"
+        android:text="Nearby &amp; Search Results"
         android:textColor="@color/text_primary"
         android:textSize="14sp"
         android:textStyle="bold"
         android:paddingHorizontal="20dp"
-        android:paddingBottom="10dp" />
+        android:paddingBottom="8dp" />
 
-    <!-- Popular cities grid (2 per row) -->
-    <LinearLayout
-        android:id="@+id/popularCitiesGrid"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:paddingHorizontal="16dp" />
-
-    <!-- Search results label (shown when typing) -->
-    <TextView
-        android:id="@+id/tvSearchResultsLabel"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Search Results"
-        android:textColor="@color/text_primary"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:paddingHorizontal="20dp"
-        android:paddingBottom="8dp"
+    <ProgressBar
+        android:id="@+id/locationResultsProgress"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="8dp"
         android:visibility="gone" />
 
-    <!-- Search results list -->
+    <TextView
+        android:id="@+id/tvLocationEmpty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="20dp"
+        android:paddingVertical="14dp"
+        android:text="No locations found."
+        android:textAlignment="center"
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tvLocationError"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="20dp"
+        android:paddingBottom="8dp"
+        android:textAlignment="center"
+        android:textColor="@color/emergency_red"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvLocationResults"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="260dp"
+        android:clipToPadding="false"
         android:nestedScrollingEnabled="false"
-        android:maxHeight="200dp"
-        android:paddingHorizontal="16dp"
-        android:visibility="gone" />
+        android:paddingHorizontal="10dp"
+        android:paddingBottom="8dp" />
 
 </LinearLayout>
-

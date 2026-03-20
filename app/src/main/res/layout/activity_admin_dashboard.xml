@@ -159,6 +159,36 @@
                     android:text="Here's what's happening today"
                     android:textColor="#BFDBFE"
                     android:textSize="13sp" />
+
+                <!-- Compact location selector row -->
+                <LinearLayout
+                    android:id="@+id/adminLocationSelector"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:layout_marginTop="10dp"
+                    android:paddingHorizontal="12dp"
+                    android:background="@drawable/bg_city_chip"
+                    android:gravity="center_vertical"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:src="@drawable/ic_location"
+                        app:tint="#1565C0"
+                        android:contentDescription="Location" />
+
+                    <TextView
+                        android:id="@+id/tvAdminSelectedLocation"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="All Cities"
+                        android:textColor="#1565C0"
+                        android:textStyle="bold"
+                        android:textSize="12sp" />
+                </LinearLayout>
             </LinearLayout>
 
             <!-- ── QUICK STATS CARDS (overlapping the header) ── -->

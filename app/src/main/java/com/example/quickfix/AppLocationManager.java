@@ -71,9 +71,29 @@ public class AppLocationManager {
         prefs.edit().putString(KEY_CITY, city).apply();
     }
 
-    /** Clears saved location. */
-    public void clearCity() {
-        prefs.edit().remove(KEY_CITY).remove(KEY_LAT).remove(KEY_LNG).apply();
+    /** Saves city with coordinates. */
+    public void saveLocation(String city, double lat, double lng) {
+        prefs.edit()
+                .putString(KEY_CITY, city == null ? "" : city)
+                .putString(KEY_LAT, String.valueOf(lat))
+                .putString(KEY_LNG, String.valueOf(lng))
+                .apply();
+    }
+
+    public double getSavedLat() {
+        try {
+            return Double.parseDouble(prefs.getString(KEY_LAT, "NaN"));
+        } catch (Exception ignored) {
+            return Double.NaN;
+        }
+    }
+
+    public double getSavedLng() {
+        try {
+            return Double.parseDouble(prefs.getString(KEY_LNG, "NaN"));
+        } catch (Exception ignored) {
+            return Double.NaN;
+        }
     }
 
     public interface LiveLocationCallback {
@@ -150,5 +170,13 @@ public class AppLocationManager {
             }
         }).start();
     }
-}
 
+    /** Clears saved location. */
+    public void clearCity() {
+        prefs.edit()
+                .remove(KEY_CITY)
+                .remove(KEY_LAT)
+                .remove(KEY_LNG)
+                .apply();
+    }
+}

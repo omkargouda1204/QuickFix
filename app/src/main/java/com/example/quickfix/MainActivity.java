@@ -339,173 +339,41 @@ public class MainActivity extends BaseActivity {
 
     // ── Beautiful Bottom Sheet Location Picker ────────────────────────────
     private void showLocationBottomSheet() {
-        BottomSheetDialog sheet = new BottomSheetDialog(this, R.style.Theme_QuickFix_BottomSheet);
-        View sv = LayoutInflater.from(this).inflate(R.layout.bottom_sheet_location_picker, null);
-        sheet.setContentView(sv);
-
-        EditText     etSearch    = sv.findViewById(R.id.etLocationSearch);
-        ImageView    btnClear    = sv.findViewById(R.id.btnClearLocationSearch);
-        LinearLayout btnLive     = sv.findViewById(R.id.btnUseLiveLocation);
-        LinearLayout btnClearLoc = sv.findViewById(R.id.btnClearLocation);
-        TextView     tvLiveSub   = sv.findViewById(R.id.tvLiveLocationSub);
-        ProgressBar  progress    = sv.findViewById(R.id.locationProgress);
-        LinearLayout citiesGrid  = sv.findViewById(R.id.popularCitiesGrid);
-        TextView     tvResLabel  = sv.findViewById(R.id.tvSearchResultsLabel);
-        RecyclerView rvResults   = sv.findViewById(R.id.rvLocationResults);
-        ImageView    btnClose    = sv.findViewById(R.id.btnCloseLocationSheet);
-        TextView     tvPopLabel  = sv.findViewById(R.id.tvPopularCitiesLabel);
-
-        // Show saved city as subtitle on GPS button
-        String saved = locationManager.getSavedCity();
-        if (tvLiveSub != null && saved != null && !saved.isEmpty())
-            tvLiveSub.setText("Current: " + saved);
-
-        // Show "Clear Location" button only if a city is already selected
-        if (btnClearLoc != null) {
-            btnClearLoc.setVisibility(
-                    (saved != null && !saved.isEmpty()) ? View.VISIBLE : View.GONE);
-            btnClearLoc.setOnClickListener(x -> {
-                locationManager.clearCity();
-                updateLocationDisplay("Select Location", false);
-                Toast.makeText(this, "Location cleared — showing all providers", Toast.LENGTH_SHORT).show();
-                sheet.dismiss();
-            });
-        }
-
-        if (btnClose != null) btnClose.setOnClickListener(x -> sheet.dismiss());
-
-        // Popular cities grid
-        buildPopularCitiesGrid(citiesGrid, sheet);
-
-        // City search results adapter
-        List<String> allCities = new ArrayList<>(Arrays.asList(AppLocationManager.CITY_LIST));
-        java.util.Collections.sort(allCities);
-        CityResultAdapter cityAdapter = new CityResultAdapter(new ArrayList<>(), city -> {
-            locationManager.saveCity(city);
-            updateLocationDisplay(city, true);
-            Toast.makeText(this, "📍 " + city, Toast.LENGTH_SHORT).show();
-            sheet.dismiss();
-        });
-        if (rvResults != null) {
-            rvResults.setLayoutManager(new LinearLayoutManager(this));
-            rvResults.setAdapter(cityAdapter);
-        }
-
-        if (etSearch != null) {
-            etSearch.addTextChangedListener(new TextWatcher() {
-                @Override public void beforeTextChanged(CharSequence s, int i, int i1, int i2) {}
-                @Override public void afterTextChanged(Editable s) {}
-                @Override public void onTextChanged(CharSequence s, int i, int b, int count) {
-                    String q = s.toString().trim().toLowerCase(Locale.getDefault());
-                    if (btnClear != null)
-                        btnClear.setVisibility(q.isEmpty() ? View.GONE : View.VISIBLE);
-                    if (q.isEmpty()) {
-                        if (citiesGrid != null) citiesGrid.setVisibility(View.VISIBLE);
-                        if (tvPopLabel  != null) tvPopLabel.setVisibility(View.VISIBLE);
-                        if (tvResLabel  != null) tvResLabel.setVisibility(View.GONE);
-                        if (rvResults   != null) rvResults.setVisibility(View.GONE);
-                    } else {
-                        List<String> filtered = new ArrayList<>();
-                        for (String cityName : allCities) {
-                            if (cityName.toLowerCase(Locale.getDefault()).contains(q)) filtered.add(cityName);
-                        }
-                        cityAdapter.update(filtered);
-                        if (citiesGrid != null) citiesGrid.setVisibility(View.GONE);
-                        if (tvPopLabel  != null) tvPopLabel.setVisibility(View.GONE);
-                        if (tvResLabel  != null) tvResLabel.setVisibility(View.VISIBLE);
-                        if (rvResults   != null)
-                            rvResults.setVisibility(filtered.isEmpty() ? View.GONE : View.VISIBLE);
+        LocationSearchBottomSheet.show(
+                this,
+                locationManager,
+                new LocationSearchBottomSheet.PermissionDelegate() {
+                    @Override
+                    public boolean hasLocationPermission() {
+                        return ContextCompat.checkSelfPermission(MainActivity.this,
+                                Manifest.permission.ACCESS_FINE_LOCATION)
+                                == PackageManager.PERMISSION_GRANTED;
                     }
-                }
-            });
-        }
-        if (btnClear != null) btnClear.setOnClickListener(x -> { if (etSearch != null) etSearch.setText(""); });
 
-        // Live location button — always overrides any existing manual selection
-        if (btnLive != null) {
-            btnLive.setOnClickListener(x -> {
-                if (progress != null) progress.setVisibility(View.VISIBLE);
-                if (tvLiveSub != null) tvLiveSub.setText("Detecting location…");
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                        != PackageManager.PERMISSION_GRANTED) {
-                    if (progress != null) progress.setVisibility(View.GONE);
-                    ActivityCompat.requestPermissions(this,
-                            new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION},
-                            LOCATION_PERMISSION_REQ);
-                    sheet.dismiss();
-                    return;
-                }
-                // clearCity() first so GPS always wins over any previously saved manual city
-                locationManager.clearCity();
-                locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
-                    @Override public void onSuccess(String city, double lat, double lng) {
-                        if (progress != null) progress.setVisibility(View.GONE);
-                        // fetchLiveLocation already saved city to prefs
-                        String d = (city == null || city.isEmpty()) ? "Location detected" : city;
-                        updateLocationDisplay(d, true);
-                        Toast.makeText(MainActivity.this, "📍 " + d, Toast.LENGTH_SHORT).show();
-                        sheet.dismiss();
+                    @Override
+                    public void requestLocationPermission() {
+                        ActivityCompat.requestPermissions(MainActivity.this,
+                                new String[]{
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                },
+                                LOCATION_PERMISSION_REQ);
                     }
-                    @Override public void onFailure(String reason) {
-                        if (progress != null) progress.setVisibility(View.GONE);
-                        if (tvLiveSub != null) tvLiveSub.setText("Could not detect. Try again.");
+                },
+                suggestion -> {
+                    if (suggestion == null || suggestion.city == null || suggestion.city.trim().isEmpty()) {
+                        updateLocationDisplay("Select Location", false);
+                        Toast.makeText(MainActivity.this,
+                                "Location cleared - showing all providers", Toast.LENGTH_SHORT).show();
+                        return;
                     }
+                    String label = suggestion.state.isEmpty()
+                            ? suggestion.city
+                            : suggestion.city + ", " + suggestion.state;
+                    updateLocationDisplay(label, true);
+                    Toast.makeText(MainActivity.this, "Location set: " + label,
+                            Toast.LENGTH_SHORT).show();
                 });
-            });
-        }
-        sheet.show();
-    }
-
-    /** Builds 3-column popular city chips inside bottom sheet */
-    private void buildPopularCitiesGrid(LinearLayout container, BottomSheetDialog sheet) {
-        if (container == null) return;
-        container.removeAllViews();
-        String[] popular = {
-            "Mumbai","Delhi","Bangalore","Hyderabad",
-            "Chennai","Pune","Kolkata","Ahmedabad",
-            "Surat","Jaipur","Lucknow","Chandigarh"
-        };
-        String current = locationManager.getSavedCity();
-        float dp = getResources().getDisplayMetrics().density;
-
-        for (int row = 0; row < popular.length; row += 3) {
-            LinearLayout rowLayout = new LinearLayout(this);
-            rowLayout.setOrientation(LinearLayout.HORIZONTAL);
-            LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT);
-            rp.bottomMargin = (int)(8 * dp);
-            rowLayout.setLayoutParams(rp);
-            for (int col = 0; col < 3 && (row + col) < popular.length; col++) {
-                final String city = popular[row + col];
-                boolean sel = city.equalsIgnoreCase(current);
-                TextView chip = new TextView(this);
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                        0, (int)(44 * dp), 1f);
-                lp.setMargins((int)(4*dp), 0, (int)(4*dp), 0);
-                chip.setLayoutParams(lp);
-                chip.setText(city);
-                chip.setTextSize(12f);
-                chip.setGravity(android.view.Gravity.CENTER);
-                chip.setSingleLine(true);
-                chip.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                chip.setPadding((int)(8*dp),(int)(8*dp),(int)(8*dp),(int)(8*dp));
-                chip.setBackground(ContextCompat.getDrawable(this,
-                        sel ? R.drawable.bg_city_chip_selected : R.drawable.bg_city_chip));
-                chip.setTextColor(ContextCompat.getColor(this,
-                        sel ? R.color.primary : R.color.text_primary));
-                chip.setClickable(true); chip.setFocusable(true);
-                chip.setOnClickListener(x -> {
-                    locationManager.saveCity(city);
-                    updateLocationDisplay(city, true);
-                    Toast.makeText(this, "📍 " + city, Toast.LENGTH_SHORT).show();
-                    sheet.dismiss();
-                });
-                rowLayout.addView(chip);
-            }
-            container.addView(rowLayout);
-        }
     }
 
     private void fetchLiveLocationNow() {
@@ -521,34 +389,6 @@ public class MainActivity extends BaseActivity {
         });
     }
 
-    // ── Inline city adapter for bottom sheet search ───────────────────────
-    private static class CityResultAdapter extends RecyclerView.Adapter<CityResultAdapter.VH> {
-        interface Listener { void pick(String city); }
-        private final List<String> items; private final Listener cb;
-        CityResultAdapter(List<String> items, Listener cb) { this.items = items; this.cb = cb; }
-        void update(List<String> n) { items.clear(); items.addAll(n); notifyDataSetChanged(); }
-        @NonNull @Override
-        public VH onCreateViewHolder(@NonNull android.view.ViewGroup p, int t) {
-            TextView tv = new TextView(p.getContext());
-            int pad = (int)(14 * p.getContext().getResources().getDisplayMetrics().density);
-            tv.setPadding(pad, pad, pad, pad); tv.setTextSize(14f);
-            tv.setTextColor(ContextCompat.getColor(p.getContext(), R.color.text_primary));
-            tv.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_location, 0, 0, 0);
-            tv.setCompoundDrawablePadding(pad / 2);
-            tv.setLayoutParams(new RecyclerView.LayoutParams(
-                    RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT));
-            return new VH(tv);
-        }
-        @Override public void onBindViewHolder(@NonNull VH h, int pos) {
-            String city = items.get(pos);
-            h.tv.setText(city);
-            h.tv.setOnClickListener(v -> { if (cb != null) cb.pick(city); });
-        }
-        @Override public int getItemCount() { return items.size(); }
-        static class VH extends RecyclerView.ViewHolder {
-            final TextView tv; VH(TextView tv) { super(tv); this.tv = tv; }
-        }
-    }
 
     @Override
     public void onRequestPermissionsResult(int req, @NonNull String[] permissions,

@@ -1,6 +1,8 @@
 package com.example.quickfix;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -12,7 +14,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
@@ -40,6 +45,7 @@ import okhttp3.OkHttpClient;
 public class AdminDashboardActivity extends BaseActivity {
 
     private static final String TAG = "AdminDashboard";
+    private static final int LOCATION_PERMISSION_REQ = 2101;
 
     // ── Header views ─────────────────────────────────────────────────────
     private TextView  welcomeText, avatarInitial;
@@ -75,6 +81,11 @@ public class AdminDashboardActivity extends BaseActivity {
     private String adminName  = "Admin";
     private String adminEmail = "";
 
+    // ── Admin location selector ───────────────────────────────────────────
+    private LinearLayout adminLocationSelector;
+    private TextView tvAdminSelectedLocation;
+    private AppLocationManager locationManager;
+
     // ═════════════════════════════════════════════════════════════════════
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,11 +93,13 @@ public class AdminDashboardActivity extends BaseActivity {
         setContentView(R.layout.activity_admin_dashboard);
 
         mAuth = FirebaseAuth.getInstance();
+        locationManager = new AppLocationManager(this);
 
         bindViews();
         setupHeaderFromIntent();
         setupClickListeners();
         setupBottomNavigation();
+        setupLocationSelector();
         loadAdminNameFromSupabase();
         loadQuickStats();
 
@@ -130,6 +143,52 @@ public class AdminDashboardActivity extends BaseActivity {
         btnViewReports         = findViewById(R.id.btnViewReports);
 
         bottomNav = findViewById(R.id.adminBottomNav);
+
+        adminLocationSelector = findViewById(R.id.adminLocationSelector);
+        tvAdminSelectedLocation = findViewById(R.id.tvAdminSelectedLocation);
+    }
+
+    private void setupLocationSelector() {
+        if (tvAdminSelectedLocation != null) {
+            String saved = locationManager.getSavedCity();
+            tvAdminSelectedLocation.setText(saved == null || saved.isEmpty() ? "All Cities" : saved);
+        }
+        if (adminLocationSelector != null) {
+            adminLocationSelector.setOnClickListener(v -> LocationSearchBottomSheet.show(
+                    this,
+                    locationManager,
+                    new LocationSearchBottomSheet.PermissionDelegate() {
+                        @Override
+                        public boolean hasLocationPermission() {
+                            return ContextCompat.checkSelfPermission(AdminDashboardActivity.this,
+                                    Manifest.permission.ACCESS_FINE_LOCATION)
+                                    == PackageManager.PERMISSION_GRANTED;
+                        }
+
+                        @Override
+                        public void requestLocationPermission() {
+                            ActivityCompat.requestPermissions(AdminDashboardActivity.this,
+                                    new String[]{
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                    },
+                                    LOCATION_PERMISSION_REQ);
+                        }
+                    },
+                    suggestion -> {
+                        if (tvAdminSelectedLocation == null) {
+                            return;
+                        }
+                        if (suggestion == null || suggestion.city == null || suggestion.city.trim().isEmpty()) {
+                            tvAdminSelectedLocation.setText("All Cities");
+                            Toast.makeText(this, "Admin filter cleared", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        tvAdminSelectedLocation.setText(suggestion.displayTitle());
+                        Toast.makeText(this, "Admin filter: " + suggestion.displayTitle(),
+                                Toast.LENGTH_SHORT).show();
+                    }));
+        }
     }
 
     // ── Populate header immediately from Intent extras ───────────────────
@@ -391,6 +450,20 @@ public class AdminDashboardActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         loadQuickStats();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION_REQ) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Location permission granted. Tap location again.",
+                        Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Location permission denied.", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     // ── Navigation helper ─────────────────────────────────────────────────
