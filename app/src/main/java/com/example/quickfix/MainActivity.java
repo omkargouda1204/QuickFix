@@ -307,9 +307,9 @@ public class MainActivity extends BaseActivity {
 
     // ── Location Selector ─────────────────────────────────────────────────
     private void setupLocationSelector() {
-        String saved = locationManager.getSavedCity();
-        if (saved != null && !saved.isEmpty()) {
-            updateLocationDisplay(saved, true);
+        String savedLabel = locationManager.getSavedLocationLabel();
+        if (savedLabel != null && !savedLabel.isEmpty()) {
+            updateLocationDisplay(savedLabel, true);
         } else {
             updateLocationDisplay("Select Location", false);
             // Auto-detect on first launch if permission already granted
@@ -367,9 +367,7 @@ public class MainActivity extends BaseActivity {
                                 "Location cleared - showing all providers", Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    String label = suggestion.state.isEmpty()
-                            ? suggestion.city
-                            : suggestion.city + ", " + suggestion.state;
+                    String label = AppLocationManager.composeLocationLabel(suggestion.city, suggestion.area);
                     updateLocationDisplay(label, true);
                     Toast.makeText(MainActivity.this, "Location set: " + label,
                             Toast.LENGTH_SHORT).show();
@@ -377,11 +375,11 @@ public class MainActivity extends BaseActivity {
     }
 
     private void fetchLiveLocationNow() {
-        updateLocationDisplay("Detecting…", false);
+        updateLocationDisplay("Detecting...", false);
         locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
-            @Override public void onSuccess(String city, double lat, double lng) {
-                String d = (city == null || city.isEmpty()) ? "Location detected" : city;
-                updateLocationDisplay(d, true);
+            @Override public void onSuccess(String city, String area, double lat, double lng) {
+                String label = AppLocationManager.composeLocationLabel(city, area);
+                updateLocationDisplay(label.isEmpty() ? "Location detected" : label, true);
             }
             @Override public void onFailure(String reason) {
                 updateLocationDisplay("Select Location", false);

@@ -47,8 +47,8 @@ public class LocationSuggestionAdapter extends RecyclerView.Adapter<LocationSugg
     @Override
     public void onBindViewHolder(@NonNull VH h, int position) {
         LocationSuggestion item = items.get(position);
-        h.tvCity.setText(item.city);
-        h.tvState.setText(item.state.isEmpty() ? "State unavailable" : item.state);
+        h.tvCity.setText(item.displayTitle());
+        h.tvState.setText(item.displaySubtitle());
         h.tvNearby.setVisibility(item.nearby ? View.VISIBLE : View.GONE);
         if (item.nearby && item.distanceKm > 0f) {
             h.tvDistance.setVisibility(View.VISIBLE);
@@ -83,4 +83,3 @@ public class LocationSuggestionAdapter extends RecyclerView.Adapter<LocationSugg
         }
     }
 }
-

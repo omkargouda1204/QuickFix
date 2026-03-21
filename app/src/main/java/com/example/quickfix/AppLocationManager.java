@@ -29,6 +29,7 @@ public class AppLocationManager {
     private static final String TAG          = "AppLocationManager";
     public  static final String PREFS_NAME   = "quickfix_prefs";
     public  static final String KEY_CITY     = "selected_city";
+    public  static final String KEY_AREA     = "selected_area";
     public  static final String KEY_LAT      = "selected_lat";
     public  static final String KEY_LNG      = "selected_lng";
 
@@ -66,15 +67,36 @@ public class AppLocationManager {
         return prefs.getString(KEY_CITY, "");
     }
 
+    /** Returns currently saved area (or empty string). */
+    public String getSavedArea() {
+        return prefs.getString(KEY_AREA, "");
+    }
+
+    /** Returns a UI-ready location label like "City, Area". */
+    public String getSavedLocationLabel() {
+        return composeLocationLabel(getSavedCity(), getSavedArea());
+    }
+
     /** Saves city manually. */
     public void saveCity(String city) {
-        prefs.edit().putString(KEY_CITY, city).apply();
+        prefs.edit()
+                .putString(KEY_CITY, normalize(city))
+                .remove(KEY_AREA)
+                .remove(KEY_LAT)
+                .remove(KEY_LNG)
+                .apply();
     }
 
     /** Saves city with coordinates. */
     public void saveLocation(String city, double lat, double lng) {
+        saveLocation(city, "", lat, lng);
+    }
+
+    /** Saves city + area with coordinates. */
+    public void saveLocation(String city, String area, double lat, double lng) {
         prefs.edit()
-                .putString(KEY_CITY, city == null ? "" : city)
+                .putString(KEY_CITY, normalize(city))
+                .putString(KEY_AREA, normalize(area))
                 .putString(KEY_LAT, String.valueOf(lat))
                 .putString(KEY_LNG, String.valueOf(lng))
                 .apply();
@@ -97,7 +119,7 @@ public class AppLocationManager {
     }
 
     public interface LiveLocationCallback {
-        void onSuccess(String city, double lat, double lng);
+        void onSuccess(String city, String area, double lat, double lng);
         void onFailure(String reason);
     }
 
@@ -143,30 +165,33 @@ public class AppLocationManager {
             try {
                 Geocoder geocoder = new Geocoder(ctx, Locale.getDefault());
                 List<Address> addresses = geocoder.getFromLocation(lat, lng, 1);
+
                 String city = "";
+                String area = "";
                 if (addresses != null && !addresses.isEmpty()) {
                     Address addr = addresses.get(0);
-                    // Try city → subAdminArea → adminArea
-                    city = addr.getLocality();
-                    if (city == null || city.isEmpty()) city = addr.getSubAdminArea();
-                    if (city == null || city.isEmpty()) city = addr.getAdminArea();
-                    if (city == null) city = "";
+                    city = pickCity(addr);
+                    area = pickArea(addr);
                 }
-                final String finalCity = city;
+
+                final String finalCity = normalize(city);
+                final String finalArea = normalize(area);
                 prefs.edit()
-                    .putString(KEY_CITY, finalCity)
-                    .putString(KEY_LAT,  String.valueOf(lat))
-                    .putString(KEY_LNG,  String.valueOf(lng))
-                    .apply();
-                mainHandler.post(() -> callback.onSuccess(finalCity, lat, lng));
+                        .putString(KEY_CITY, finalCity)
+                        .putString(KEY_AREA, finalArea)
+                        .putString(KEY_LAT, String.valueOf(lat))
+                        .putString(KEY_LNG, String.valueOf(lng))
+                        .apply();
+                mainHandler.post(() -> callback.onSuccess(finalCity, finalArea, lat, lng));
             } catch (Exception e) {
                 Log.e(TAG, "Geocoder failed: " + e.getMessage());
-                // Still save coordinates even if geocoder fails
                 prefs.edit()
-                    .putString(KEY_LAT, String.valueOf(lat))
-                    .putString(KEY_LNG, String.valueOf(lng))
-                    .apply();
-                mainHandler.post(() -> callback.onSuccess("", lat, lng));
+                        .putString(KEY_CITY, "")
+                        .putString(KEY_AREA, "")
+                        .putString(KEY_LAT, String.valueOf(lat))
+                        .putString(KEY_LNG, String.valueOf(lng))
+                        .apply();
+                mainHandler.post(() -> callback.onSuccess("", "", lat, lng));
             }
         }).start();
     }
@@ -175,8 +200,34 @@ public class AppLocationManager {
     public void clearCity() {
         prefs.edit()
                 .remove(KEY_CITY)
+                .remove(KEY_AREA)
                 .remove(KEY_LAT)
                 .remove(KEY_LNG)
                 .apply();
+    }
+
+    private static String pickCity(Address addr) {
+        String city = normalize(addr.getLocality());
+        if (city.isEmpty()) city = normalize(addr.getSubAdminArea());
+        if (city.isEmpty()) city = normalize(addr.getAdminArea());
+        return city;
+    }
+
+    private static String pickArea(Address addr) {
+        String area = normalize(addr.getSubLocality());
+        if (area.isEmpty()) area = normalize(addr.getFeatureName());
+        if (area.isEmpty()) area = normalize(addr.getThoroughfare());
+        return area;
+    }
+
+    public static String composeLocationLabel(String city, String area) {
+        String c = normalize(city);
+        String a = normalize(area);
+        if (!c.isEmpty() && !a.isEmpty()) return c + ", " + a;
+        return c.isEmpty() ? a : c;
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.trim();
     }
 }

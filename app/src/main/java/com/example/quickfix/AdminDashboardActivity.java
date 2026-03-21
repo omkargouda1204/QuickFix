@@ -150,8 +150,8 @@ public class AdminDashboardActivity extends BaseActivity {
 
     private void setupLocationSelector() {
         if (tvAdminSelectedLocation != null) {
-            String saved = locationManager.getSavedCity();
-            tvAdminSelectedLocation.setText(saved == null || saved.isEmpty() ? "All Cities" : saved);
+            String savedLabel = locationManager.getSavedLocationLabel();
+            tvAdminSelectedLocation.setText(savedLabel.isEmpty() ? "All Cities" : savedLabel);
         }
         if (adminLocationSelector != null) {
             adminLocationSelector.setOnClickListener(v -> LocationSearchBottomSheet.show(
@@ -184,8 +184,9 @@ public class AdminDashboardActivity extends BaseActivity {
                             Toast.makeText(this, "Admin filter cleared", Toast.LENGTH_SHORT).show();
                             return;
                         }
-                        tvAdminSelectedLocation.setText(suggestion.displayTitle());
-                        Toast.makeText(this, "Admin filter: " + suggestion.displayTitle(),
+                        String label = AppLocationManager.composeLocationLabel(suggestion.city, suggestion.area);
+                        tvAdminSelectedLocation.setText(label);
+                        Toast.makeText(this, "Admin filter: " + label,
                                 Toast.LENGTH_SHORT).show();
                     }));
         }
@@ -450,6 +451,10 @@ public class AdminDashboardActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         loadQuickStats();
+        if (tvAdminSelectedLocation != null) {
+            String savedLabel = locationManager.getSavedLocationLabel();
+            tvAdminSelectedLocation.setText(savedLabel.isEmpty() ? "All Cities" : savedLabel);
+        }
     }
 
     @Override

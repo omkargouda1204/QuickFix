@@ -42,6 +42,7 @@ public class LocationSearchBottomSheet {
     }
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
+    private static final long SEARCH_DEBOUNCE_MS = 220L;
 
     public static void show(Activity activity,
                             AppLocationManager locationManager,
@@ -66,28 +67,29 @@ public class LocationSearchBottomSheet {
         Handler main = new Handler(Looper.getMainLooper());
         List<LocationSuggestion> nearbyCache = new ArrayList<>();
         final double[] origin = new double[]{Double.NaN, Double.NaN};
+        final int[] requestToken = new int[]{0};
+        final Runnable[] pendingSearch = new Runnable[]{null};
 
-        String savedCity = locationManager.getSavedCity();
-        if (tvLiveSub != null && savedCity != null && !savedCity.isEmpty()) {
-            tvLiveSub.setText("Current: " + savedCity);
+        String savedLabel = locationManager.getSavedLocationLabel();
+        if (tvLiveSub != null && !savedLabel.isEmpty()) {
+            tvLiveSub.setText("Current: " + savedLabel);
         }
         if (btnClearLocation != null) {
-            btnClearLocation.setVisibility(savedCity == null || savedCity.isEmpty()
-                    ? View.GONE : View.VISIBLE);
+            btnClearLocation.setVisibility(savedLabel.isEmpty() ? View.GONE : View.VISIBLE);
             btnClearLocation.setOnClickListener(v -> {
                 locationManager.clearCity();
                 if (tvLiveSub != null) {
                     tvLiveSub.setText("Detect via GPS automatically");
                 }
                 if (listener != null) {
-                    listener.onLocationPicked(new LocationSuggestion("", "", 0d, 0d, false, 0f));
+                    listener.onLocationPicked(new LocationSuggestion("", "", "", 0d, 0d, false, 0f));
                 }
                 sheet.dismiss();
             });
         }
 
         LocationSuggestionAdapter adapter = new LocationSuggestionAdapter(item -> {
-            locationManager.saveLocation(item.city, item.lat, item.lng);
+            locationManager.saveLocation(item.city, item.area, item.lat, item.lng);
             if (listener != null) {
                 listener.onLocationPicked(item);
             }
@@ -99,7 +101,7 @@ public class LocationSearchBottomSheet {
         Runnable showNearbyOnly = () -> {
             adapter.submit(nearbyCache);
             renderState(resultsProgress, tvEmpty, tvError, false,
-                    nearbyCache.isEmpty(), "No nearby cities found yet.");
+                    nearbyCache.isEmpty(), "No nearby places found yet.");
         };
 
         Runnable loadNearby = () -> {
@@ -113,16 +115,17 @@ public class LocationSearchBottomSheet {
                 liveProgress.setVisibility(View.VISIBLE);
             }
             if (tvLiveSub != null) {
-                tvLiveSub.setText("Detecting your current city...");
+                tvLiveSub.setText("Detecting your current location...");
             }
 
             locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
                 @Override
-                public void onSuccess(String city, double lat, double lng) {
+                public void onSuccess(String city, String area, double lat, double lng) {
                     origin[0] = lat;
                     origin[1] = lng;
                     if (tvLiveSub != null) {
-                        tvLiveSub.setText(city.isEmpty() ? "GPS location detected" : "Current: " + city);
+                        String label = AppLocationManager.composeLocationLabel(city, area);
+                        tvLiveSub.setText(label.isEmpty() ? "GPS location detected" : "Current: " + label);
                     }
                     EXECUTOR.execute(() -> {
                         List<LocationSuggestion> nearby = buildNearbySuggestions(activity, lat, lng);
@@ -168,24 +171,39 @@ public class LocationSearchBottomSheet {
 
                 @Override
                 public void onTextChanged(CharSequence s, int start, int before, int count) {
-                    String query = s.toString().trim();
+                    String query = s == null ? "" : s.toString().trim();
                     if (btnClearSearch != null) {
                         btnClearSearch.setVisibility(query.isEmpty() ? View.GONE : View.VISIBLE);
                     }
+
+                    if (pendingSearch[0] != null) {
+                        main.removeCallbacks(pendingSearch[0]);
+                        pendingSearch[0] = null;
+                    }
+
                     if (query.isEmpty()) {
+                        requestToken[0]++;
                         showNearbyOnly.run();
                         return;
                     }
-                    renderState(resultsProgress, tvEmpty, tvError, true, false, null);
-                    EXECUTOR.execute(() -> {
-                        List<LocationSuggestion> result = searchLocations(activity, query, nearbyCache,
-                                origin[0], origin[1]);
-                        main.post(() -> {
-                            adapter.submit(result);
-                            renderState(resultsProgress, tvEmpty, tvError, false,
-                                    result.isEmpty(), "No cities match your search.");
+
+                    int thisRequest = ++requestToken[0];
+                    pendingSearch[0] = () -> {
+                        renderState(resultsProgress, tvEmpty, tvError, true, false, null);
+                        EXECUTOR.execute(() -> {
+                            List<LocationSuggestion> result = searchLocations(activity, query, nearbyCache,
+                                    origin[0], origin[1]);
+                            main.post(() -> {
+                                if (thisRequest != requestToken[0]) {
+                                    return;
+                                }
+                                adapter.submit(result);
+                                renderState(resultsProgress, tvEmpty, tvError, false,
+                                        result.isEmpty(), "No locations match your search.");
+                            });
                         });
-                    });
+                    };
+                    main.postDelayed(pendingSearch[0], SEARCH_DEBOUNCE_MS);
                 }
 
                 @Override
@@ -241,10 +259,25 @@ public class LocationSearchBottomSheet {
         Set<String> seen = new HashSet<>();
 
         for (LocationSuggestion item : nearby) {
-            if (item.displayTitle().toLowerCase(Locale.getDefault()).contains(q)) {
+            if (item.searchableText().contains(q)) {
                 output.add(item);
-                seen.add(item.city.toLowerCase(Locale.getDefault()) + "|"
-                        + item.state.toLowerCase(Locale.getDefault()));
+                seen.add(uniqueKey(item.city, item.area, item.state));
+            }
+        }
+
+        for (String city : AppLocationManager.CITY_LIST) {
+            String safeCity = safe(city);
+            if (!safeCity.toLowerCase(Locale.getDefault()).contains(q)) {
+                continue;
+            }
+            String key = uniqueKey(safeCity, "", "");
+            if (seen.contains(key)) {
+                continue;
+            }
+            output.add(new LocationSuggestion(safeCity, "", "", 0d, 0d, false, 0f));
+            seen.add(key);
+            if (output.size() >= 20) {
+                return output;
             }
         }
 
@@ -254,32 +287,35 @@ public class LocationSearchBottomSheet {
 
         try {
             Geocoder geocoder = new Geocoder(activity, Locale.getDefault());
-            List<Address> addresses = geocoder.getFromLocationName(query + ", India", 16);
+            List<Address> addresses = geocoder.getFromLocationName(query + ", India", 20);
             if (addresses == null) {
                 return output;
             }
             for (Address a : addresses) {
                 String city = bestCity(a);
+                String area = bestArea(a);
                 String state = safe(a.getAdminArea());
-                if (city.isEmpty()) {
+                if (city.isEmpty() && area.isEmpty()) {
                     continue;
                 }
-                String key = city.toLowerCase(Locale.getDefault()) + "|"
-                        + state.toLowerCase(Locale.getDefault());
+                String key = uniqueKey(city, area, state);
                 if (seen.contains(key)) {
                     continue;
                 }
                 float distance = 0f;
-                if (!Double.isNaN(originLat) && !Double.isNaN(originLng)) {
+                if (!Double.isNaN(originLat) && !Double.isNaN(originLng)
+                        && a.hasLatitude() && a.hasLongitude()) {
                     float[] d = new float[1];
                     Location.distanceBetween(originLat, originLng,
                             a.getLatitude(), a.getLongitude(), d);
                     distance = d[0] / 1000f;
                 }
-                output.add(new LocationSuggestion(city, state,
-                        a.getLatitude(), a.getLongitude(), false, distance));
+                output.add(new LocationSuggestion(city, area, state,
+                        a.hasLatitude() ? a.getLatitude() : 0d,
+                        a.hasLongitude() ? a.getLongitude() : 0d,
+                        false, distance));
                 seen.add(key);
-                if (output.size() >= 18) {
+                if (output.size() >= 20) {
                     break;
                 }
             }
@@ -323,18 +359,18 @@ public class LocationSearchBottomSheet {
                 }
                 Address a = addresses.get(0);
                 String city = bestCity(a);
+                String area = bestArea(a);
                 String state = safe(a.getAdminArea());
-                if (city.isEmpty()) {
+                if (city.isEmpty() && area.isEmpty()) {
                     continue;
                 }
-                String key = city.toLowerCase(Locale.getDefault()) + "|"
-                        + state.toLowerCase(Locale.getDefault());
+                String key = uniqueKey(city, area, state);
                 if (seen.contains(key)) {
                     continue;
                 }
                 float[] d = new float[1];
                 Location.distanceBetween(lat, lng, a.getLatitude(), a.getLongitude(), d);
-                list.add(new LocationSuggestion(city, state,
+                list.add(new LocationSuggestion(city, area, state,
                         a.getLatitude(), a.getLongitude(), true, d[0] / 1000f));
                 seen.add(key);
             } catch (Exception ignored) {
@@ -354,6 +390,23 @@ public class LocationSearchBottomSheet {
             city = safe(a.getAdminArea());
         }
         return city;
+    }
+
+    private static String bestArea(Address a) {
+        String area = safe(a.getSubLocality());
+        if (area.isEmpty()) {
+            area = safe(a.getFeatureName());
+        }
+        if (area.isEmpty()) {
+            area = safe(a.getThoroughfare());
+        }
+        return area;
+    }
+
+    private static String uniqueKey(String city, String area, String state) {
+        return safe(city).toLowerCase(Locale.getDefault()) + "|"
+                + safe(area).toLowerCase(Locale.getDefault()) + "|"
+                + safe(state).toLowerCase(Locale.getDefault());
     }
 
     private static String safe(String value) {
