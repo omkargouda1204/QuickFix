@@ -8,9 +8,15 @@ public class LocationSuggestion {
     public final double lng;
     public final boolean nearby;
     public final float distanceKm;
+    public final int servicesCount;
 
     public LocationSuggestion(String city, String area, String state, double lat, double lng,
                               boolean nearby, float distanceKm) {
+        this(city, area, state, lat, lng, nearby, distanceKm, 0);
+    }
+
+    public LocationSuggestion(String city, String area, String state, double lat, double lng,
+                              boolean nearby, float distanceKm, int servicesCount) {
         this.city = normalize(city);
         this.area = normalize(area);
         this.state = normalize(state);
@@ -18,6 +24,7 @@ public class LocationSuggestion {
         this.lng = lng;
         this.nearby = nearby;
         this.distanceKm = distanceKm;
+        this.servicesCount = Math.max(0, servicesCount);
     }
 
     public String displayTitle() {

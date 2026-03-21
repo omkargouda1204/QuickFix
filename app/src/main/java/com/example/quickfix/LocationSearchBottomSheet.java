@@ -43,6 +43,8 @@ public class LocationSearchBottomSheet {
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
     private static final long SEARCH_DEBOUNCE_MS = 220L;
+    private static final float NEARBY_RADIUS_KM = 60f;
+    private static final String NEARBY_ME_QUERY = "nearby me";
 
     public static void show(Activity activity,
                             AppLocationManager locationManager,
@@ -69,6 +71,8 @@ public class LocationSearchBottomSheet {
         final double[] origin = new double[]{Double.NaN, Double.NaN};
         final int[] requestToken = new int[]{0};
         final Runnable[] pendingSearch = new Runnable[]{null};
+
+        final NearbyLocationRepository nearbyRepository = new NearbyLocationRepository();
 
         String savedLabel = locationManager.getSavedLocationLabel();
         if (tvLiveSub != null && !savedLabel.isEmpty()) {
@@ -101,14 +105,14 @@ public class LocationSearchBottomSheet {
         Runnable showNearbyOnly = () -> {
             adapter.submit(nearbyCache);
             renderState(resultsProgress, tvEmpty, tvError, false,
-                    nearbyCache.isEmpty(), "No nearby places found yet.");
+                    nearbyCache.isEmpty(), "No nearby cities or towns found.");
         };
 
         Runnable loadNearby = () -> {
             renderState(resultsProgress, tvEmpty, tvError, true, false, null);
             if (!permissionDelegate.hasLocationPermission()) {
                 renderState(resultsProgress, tvEmpty, tvError, false, false,
-                        "Enable location permission to see nearby places.");
+                        "Enable location permission to see nearby cities.");
                 return;
             }
             if (liveProgress != null) {
@@ -127,17 +131,46 @@ public class LocationSearchBottomSheet {
                         String label = AppLocationManager.composeLocationLabel(city, area);
                         tvLiveSub.setText(label.isEmpty() ? "GPS location detected" : "Current: " + label);
                     }
-                    EXECUTOR.execute(() -> {
-                        List<LocationSuggestion> nearby = buildNearbySuggestions(activity, lat, lng);
-                        main.post(() -> {
-                            if (liveProgress != null) {
-                                liveProgress.setVisibility(View.GONE);
-                            }
-                            nearbyCache.clear();
-                            nearbyCache.addAll(nearby);
-                            showNearbyOnly.run();
-                        });
-                    });
+
+                    nearbyRepository.fetchNearbyCities(lat, lng, NEARBY_RADIUS_KM,
+                            new NearbyLocationRepository.Callback() {
+                                @Override
+                                public void onSuccess(List<LocationSuggestion> nearby) {
+                                    if ((nearby == null || nearby.isEmpty()) && Geocoder.isPresent()) {
+                                        EXECUTOR.execute(() -> {
+                                            List<LocationSuggestion> fallback = buildNearbySuggestions(activity, lat, lng);
+                                            main.post(() -> applyNearbyResults(nearbyCache, fallback, liveProgress,
+                                                    showNearbyOnly));
+                                        });
+                                        return;
+                                    }
+                                    applyNearbyResults(nearbyCache, nearby, liveProgress, showNearbyOnly);
+                                }
+
+                                @Override
+                                public void onError(String reason) {
+                                    if (Geocoder.isPresent()) {
+                                        EXECUTOR.execute(() -> {
+                                            List<LocationSuggestion> fallback = buildNearbySuggestions(activity, lat, lng);
+                                            main.post(() -> {
+                                                applyNearbyResults(nearbyCache, fallback, liveProgress, showNearbyOnly);
+                                                if ((fallback == null || fallback.isEmpty()) && reason != null && !reason.isEmpty()) {
+                                                    renderState(resultsProgress, tvEmpty, tvError, false, false, reason);
+                                                }
+                                            });
+                                        });
+                                        return;
+                                    }
+
+                                    if (liveProgress != null) {
+                                        liveProgress.setVisibility(View.GONE);
+                                    }
+                                    renderState(resultsProgress, tvEmpty, tvError, false, false,
+                                            reason == null || reason.isEmpty()
+                                                    ? "Unable to load nearby places."
+                                                    : reason);
+                                }
+                            });
                 }
 
                 @Override
@@ -228,6 +261,20 @@ public class LocationSearchBottomSheet {
         sheet.show();
     }
 
+    private static void applyNearbyResults(List<LocationSuggestion> nearbyCache,
+                                           List<LocationSuggestion> nearby,
+                                           ProgressBar liveProgress,
+                                           Runnable showNearbyOnly) {
+        if (liveProgress != null) {
+            liveProgress.setVisibility(View.GONE);
+        }
+        nearbyCache.clear();
+        if (nearby != null) {
+            nearbyCache.addAll(nearby);
+        }
+        showNearbyOnly.run();
+    }
+
     private static void renderState(ProgressBar loading,
                                     TextView empty,
                                     TextView error,
@@ -254,7 +301,16 @@ public class LocationSearchBottomSheet {
                                                             List<LocationSuggestion> nearby,
                                                             double originLat,
                                                             double originLng) {
-        String q = query.toLowerCase(Locale.getDefault());
+        String q = query.toLowerCase(Locale.getDefault()).trim();
+        if (q.isEmpty()) {
+            return new ArrayList<>(nearby);
+        }
+        if (q.contains(NEARBY_ME_QUERY)) {
+            List<LocationSuggestion> onlyNearby = new ArrayList<>(nearby);
+            java.util.Collections.sort(onlyNearby, (a, b) -> Float.compare(a.distanceKm, b.distanceKm));
+            return onlyNearby;
+        }
+
         List<LocationSuggestion> output = new ArrayList<>();
         Set<String> seen = new HashSet<>();
 
@@ -413,4 +469,3 @@ public class LocationSearchBottomSheet {
         return value == null ? "" : value.trim();
     }
 }
-

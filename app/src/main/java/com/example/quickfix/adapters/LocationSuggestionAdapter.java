@@ -49,6 +49,16 @@ public class LocationSuggestionAdapter extends RecyclerView.Adapter<LocationSugg
         LocationSuggestion item = items.get(position);
         h.tvCity.setText(item.displayTitle());
         h.tvState.setText(item.displaySubtitle());
+
+        if (item.servicesCount > 0) {
+            h.tvServicesCount.setVisibility(View.VISIBLE);
+            h.tvServicesCount.setText(item.servicesCount + (item.servicesCount == 1
+                    ? " provider"
+                    : " providers"));
+        } else {
+            h.tvServicesCount.setVisibility(View.GONE);
+        }
+
         h.tvNearby.setVisibility(item.nearby ? View.VISIBLE : View.GONE);
         if (item.nearby && item.distanceKm > 0f) {
             h.tvDistance.setVisibility(View.VISIBLE);
@@ -71,6 +81,7 @@ public class LocationSuggestionAdapter extends RecyclerView.Adapter<LocationSugg
     static class VH extends RecyclerView.ViewHolder {
         TextView tvCity;
         TextView tvState;
+        TextView tvServicesCount;
         TextView tvNearby;
         TextView tvDistance;
 
@@ -78,6 +89,7 @@ public class LocationSuggestionAdapter extends RecyclerView.Adapter<LocationSugg
             super(itemView);
             tvCity = itemView.findViewById(R.id.tvRowCity);
             tvState = itemView.findViewById(R.id.tvRowState);
+            tvServicesCount = itemView.findViewById(R.id.tvRowServicesCount);
             tvNearby = itemView.findViewById(R.id.tvNearbyBadge);
             tvDistance = itemView.findViewById(R.id.tvRowDistance);
         }

@@ -85,7 +85,7 @@
             android:layout_marginStart="10dp"
             android:layout_weight="1"
             android:background="@android:color/transparent"
-            android:hint="Search city or area..."
+            android:hint="Search city/area or type nearby me"
             android:textColor="@color/text_primary"
             android:textColorHint="@color/text_secondary"
             android:textSize="14sp"
