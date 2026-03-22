@@ -10,13 +10,29 @@ public class SearchResult {
     public String subtitle;   // category for service, business name for provider
     public String city;
     public String type;       // TYPE_PROVIDER or TYPE_SERVICE
+    public float  rating;
+    public float  distanceKm;
+    public String availabilityStatus;
 
     public SearchResult(String id, String name, String subtitle, String city, String type) {
-        this.id       = id;
-        this.name     = name;
+        this(id, name, subtitle, city, type, 0f, -1f, "");
+    }
+
+    public SearchResult(String id,
+                        String name,
+                        String subtitle,
+                        String city,
+                        String type,
+                        float rating,
+                        float distanceKm,
+                        String availabilityStatus) {
+        this.id = id;
+        this.name = name;
         this.subtitle = subtitle;
-        this.city     = city;
-        this.type     = type;
+        this.city = city;
+        this.type = type;
+        this.rating = Math.max(0f, rating);
+        this.distanceKm = distanceKm;
+        this.availabilityStatus = availabilityStatus == null ? "" : availabilityStatus.trim();
     }
 }
-

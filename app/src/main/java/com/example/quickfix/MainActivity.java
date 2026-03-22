@@ -548,6 +548,8 @@ public class MainActivity extends BaseActivity {
         Intent intent = new Intent(this, SearchResultsActivity.class);
         intent.putExtra(SearchResultsActivity.EXTRA_QUERY, query);
         intent.putExtra(SearchResultsActivity.EXTRA_CITY, locationManager.getSavedCity());
+        intent.putExtra(SearchResultsActivity.EXTRA_LAT, locationManager.getSavedLat());
+        intent.putExtra(SearchResultsActivity.EXTRA_LNG, locationManager.getSavedLng());
         startActivity(intent);
         overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
     }

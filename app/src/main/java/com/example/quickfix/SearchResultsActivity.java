@@ -17,12 +17,16 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AppCompatActivity;
+import android.Manifest;
+import android.content.pm.PackageManager;
+
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.quickfix.adapters.SearchResultsAdapter;
-import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 
 import org.json.JSONArray;
@@ -30,7 +34,11 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -46,19 +54,27 @@ public class SearchResultsActivity extends BaseActivity
 
     public static final String EXTRA_QUERY = "query";
     public static final String EXTRA_CITY  = "city";
+    public static final String EXTRA_LAT   = "lat";
+    public static final String EXTRA_LNG   = "lng";
 
     private static final String TAG      = "SearchResults";
     private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
     private static final String BASE_URL = BuildConfig.SUPABASE_URL;
+    private static final int LOCATION_PERMISSION_REQ = 1014;
+    private static final float NEARBY_RADIUS_KM = 25f;
+
+    // ...existing fields...
+    private AppLocationManager locationManager;
+    private double userLat = Double.NaN;
+    private double userLng = Double.NaN;
 
     private EditText    etSearch;
     private ImageView   btnBack, btnClear;
     private ProgressBar progressBar;
     private LinearLayout emptyState;
     private RecyclerView rvResults;
-    private TextView    tvSearchLocation, tvResultCount;
+    private TextView    tvSearchLocation, tvResultCount, tvEmptyTitle, tvEmptySubtitle;
     private ChipGroup   chipGroup;
-    private Chip        chipAll, chipServices, chipProviders;
 
     private SearchResultsAdapter adapter;
     private List<SearchResult> allResults    = new ArrayList<>();
@@ -88,6 +104,10 @@ public class SearchResultsActivity extends BaseActivity
         if (queryText  == null) queryText  = "";
         if (cityFilter == null) cityFilter = "";
 
+        locationManager = new AppLocationManager(this);
+        userLat = getIntent().getDoubleExtra(EXTRA_LAT, locationManager.getSavedLat());
+        userLng = getIntent().getDoubleExtra(EXTRA_LNG, locationManager.getSavedLng());
+
         bindViews();
         setupRecycler();
         setupListeners();
@@ -109,10 +129,9 @@ public class SearchResultsActivity extends BaseActivity
         rvResults        = findViewById(R.id.rvResults);
         tvSearchLocation = findViewById(R.id.tvSearchLocation);
         tvResultCount    = findViewById(R.id.tvResultCount);
+        tvEmptyTitle     = findViewById(R.id.tvEmptyTitle);
+        tvEmptySubtitle  = findViewById(R.id.tvEmptySubtitle);
         chipGroup        = findViewById(R.id.chipGroupFilter);
-        chipAll          = findViewById(R.id.chipAll);
-        chipServices     = findViewById(R.id.chipServices);
-        chipProviders    = findViewById(R.id.chipProviders);
     }
 
     private void setupRecycler() {
@@ -160,24 +179,72 @@ public class SearchResultsActivity extends BaseActivity
     }
 
     private void updateLocationLabel() {
-        if (cityFilter.isEmpty()) {
-            tvSearchLocation.setText("All locations");
+        String base = cityFilter.isEmpty() ? "All locations" : "📍 " + cityFilter;
+        if (!Double.isNaN(userLat) && !Double.isNaN(userLng)) {
+            tvSearchLocation.setText(base + " • " + (int) NEARBY_RADIUS_KM + "km radius");
         } else {
-            tvSearchLocation.setText("📍 " + cityFilter);
+            tvSearchLocation.setText(base);
         }
     }
 
     // ── Search ─────────────────────────────────────────────────────────────
 
     private void performSearch(String query) {
-        queryText = query;
+        queryText = query == null ? "" : query.trim();
         showLoading(true);
         allResults.clear();
         filtered.clear();
 
+        if (queryText.isEmpty()) {
+            showLoading(false);
+            applyFilter();
+            return;
+        }
+
+        ensureLocationThenSearch(queryText);
+    }
+
+    private void ensureLocationThenSearch(String query) {
+        if (!Double.isNaN(userLat) && !Double.isNaN(userLng)) {
+            executeSearch(query);
+            return;
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
+                @Override
+                public void onSuccess(String city, String area, double lat, double lng) {
+                    userLat = lat;
+                    userLng = lng;
+                    if (cityFilter == null || cityFilter.trim().isEmpty()) {
+                        cityFilter = city == null ? "" : city.trim();
+                    }
+                    updateLocationLabel();
+                    executeSearch(query);
+                }
+
+                @Override
+                public void onFailure(String reason) {
+                    Log.d(TAG, "Location unavailable, fallback search: " + reason);
+                    executeSearch(query);
+                }
+            });
+            return;
+        }
+
+        ActivityCompat.requestPermissions(this,
+                new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
+                LOCATION_PERMISSION_REQ);
+        executeSearch(query);
+    }
+
+    private void executeSearch(String query) {
         new Thread(() -> {
             List<SearchResult> results = new ArrayList<>();
-            results.addAll(searchProviders(query));
+            results.addAll(searchProviders(query, userLat, userLng, NEARBY_RADIUS_KM));
             results.addAll(searchServices(query));
             MAIN.post(() -> {
                 allResults = results;
@@ -188,35 +255,121 @@ public class SearchResultsActivity extends BaseActivity
     }
 
     /**
-     * Query provider_profiles (active approved providers) first.
-     * Falls back to provider_applications (approved) if profiles returns nothing.
-     * City filter is skipped when cityFilter is empty → shows all providers.
+     * Query nearby providers by service keyword and distance when coordinates are available.
+     * Falls back to text + city-only search when coordinates are unavailable.
      */
-    private List<SearchResult> searchProviders(String query) {
+    private List<SearchResult> searchProviders(String query,
+                                               double originLat,
+                                               double originLng,
+                                               float radiusKm) {
         List<SearchResult> list = new ArrayList<>();
         if (query.isEmpty()) return list;
+
         try {
             String enc = java.net.URLEncoder.encode(query, "UTF-8");
+            Set<String> seenIds = new HashSet<>();
 
-            // ── 1st try: provider_profiles ────────────────────────────────
+            if (!Double.isNaN(originLat) && !Double.isNaN(originLng)) {
+                list.addAll(fetchNearbyFromProfiles(enc, "latitude", "longitude",
+                        originLat, originLng, radiusKm, seenIds));
+                if (list.isEmpty()) {
+                    list.addAll(fetchNearbyFromProfiles(enc, "lat", "lng",
+                            originLat, originLng, radiusKm, seenIds));
+                }
+                if (!list.isEmpty()) {
+                    Collections.sort(list, (a, b) -> Float.compare(a.distanceKm, b.distanceKm));
+                    return list;
+                }
+            }
+
+            list.addAll(fetchTextProviders(enc, seenIds));
+        } catch (Exception e) {
+            Log.e(TAG, "searchProviders: " + e.getMessage());
+        }
+        return list;
+    }
+
+    private List<SearchResult> fetchNearbyFromProfiles(String encQuery,
+                                                        String latKey,
+                                                        String lngKey,
+                                                        double originLat,
+                                                        double originLng,
+                                                        float radiusKm,
+                                                        Set<String> seenIds) {
+        List<SearchResult> nearby = new ArrayList<>();
+        try {
             StringBuilder url = new StringBuilder(BASE_URL)
                     .append("/rest/v1/provider_profiles")
                     .append("?status=eq.active")
-                    .append("&or=(business_name.ilike.*").append(enc)
-                    .append("*,category.ilike.*").append(enc)
-                    .append("*,owner_name.ilike.*").append(enc).append("*)")
-                    .append("&select=id,business_name,category,city,owner_name")
+                    .append("&or=(business_name.ilike.*").append(encQuery)
+                    .append("*,category.ilike.*").append(encQuery)
+                    .append("*,description.ilike.*").append(encQuery).append("*)")
+                    .append("&select=id,business_name,category,city,area,owner_name,rating,status,availability_status,is_available,")
+                    .append(latKey).append(",").append(lngKey)
+                    .append("&limit=220");
+
+            Request req = new Request.Builder().url(url.toString())
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response r = HTTP.newCall(req).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                if (r.code() != 200) return nearby;
+
+                JSONArray arr = new JSONArray(body);
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject o = arr.getJSONObject(i);
+                    String id = o.optString("id", "").trim();
+                    if (id.isEmpty() || seenIds.contains(id)) continue;
+
+                    double lat = optDoubleFlexible(o, latKey);
+                    double lng = optDoubleFlexible(o, lngKey);
+                    if (Double.isNaN(lat) || Double.isNaN(lng)) continue;
+
+                    float distanceKm = (float) haversineKm(originLat, originLng, lat, lng);
+                    if (distanceKm > radiusKm) continue;
+
+                    seenIds.add(id);
+                    nearby.add(new SearchResult(
+                            id,
+                            o.optString("business_name", "-"),
+                            o.optString("category", ""),
+                            composeCityArea(o.optString("city", ""), o.optString("area", "")),
+                            SearchResult.TYPE_PROVIDER,
+                            (float) o.optDouble("rating", 0d),
+                            distanceKm,
+                            resolveAvailability(o)
+                    ));
+                }
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "fetchNearbyFromProfiles(" + latKey + "): " + e.getMessage());
+        }
+        return nearby;
+    }
+
+    private List<SearchResult> fetchTextProviders(String encQuery, Set<String> seenIds) {
+        List<SearchResult> list = new ArrayList<>();
+        try {
+            StringBuilder url = new StringBuilder(BASE_URL)
+                    .append("/rest/v1/provider_profiles")
+                    .append("?status=eq.active")
+                    .append("&or=(business_name.ilike.*").append(encQuery)
+                    .append("*,category.ilike.*").append(encQuery)
+                    .append("*,owner_name.ilike.*").append(encQuery).append("*)")
+                    .append("&select=id,business_name,category,city,area,owner_name,rating,status,availability_status,is_available")
                     .append("&limit=30");
-            // Only add city filter when a location is actually selected
             if (!cityFilter.isEmpty()) {
                 url.append("&city=ilike.*")
                    .append(java.net.URLEncoder.encode(cityFilter, "UTF-8")).append("*");
             }
 
             Request req = new Request.Builder().url(url.toString())
-                    .addHeader("apikey",        ANON_KEY)
+                    .addHeader("apikey", ANON_KEY)
                     .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Accept",        "application/json")
+                    .addHeader("Accept", "application/json")
                     .build();
 
             try (Response r = HTTP.newCall(req).execute()) {
@@ -225,35 +378,40 @@ public class SearchResultsActivity extends BaseActivity
                     JSONArray arr = new JSONArray(body);
                     for (int i = 0; i < arr.length(); i++) {
                         JSONObject o = arr.getJSONObject(i);
-                        String name  = o.optString("business_name", "—");
-                        String sub   = o.optString("category", "");
-                        String owner = o.optString("owner_name", "");
-                        if (!owner.isEmpty()) sub = sub + " • " + owner;
+                        String id = o.optString("id", "").trim();
+                        if (id.isEmpty() || seenIds.contains(id)) continue;
+                        seenIds.add(id);
                         list.add(new SearchResult(
-                            o.optString("id"), name, sub,
-                            o.optString("city", ""), SearchResult.TYPE_PROVIDER));
+                                id,
+                                o.optString("business_name", "-"),
+                                o.optString("category", ""),
+                                composeCityArea(o.optString("city", ""), o.optString("area", "")),
+                                SearchResult.TYPE_PROVIDER,
+                                (float) o.optDouble("rating", 0d),
+                                -1f,
+                                resolveAvailability(o)
+                        ));
                     }
                 }
             }
 
-            // ── 2nd try: provider_applications fallback ───────────────────
             if (list.isEmpty()) {
                 StringBuilder url2 = new StringBuilder(BASE_URL)
                         .append("/rest/v1/provider_applications")
                         .append("?status=eq.approved")
-                        .append("&or=(business_name.ilike.*").append(enc)
-                        .append("*,category.ilike.*").append(enc)
-                        .append("*,user_name.ilike.*").append(enc).append("*)")
+                        .append("&or=(business_name.ilike.*").append(encQuery)
+                        .append("*,category.ilike.*").append(encQuery)
+                        .append("*,user_name.ilike.*").append(encQuery).append("*)")
                         .append("&select=id,business_name,category,city,user_name")
                         .append("&limit=30");
                 if (!cityFilter.isEmpty()) {
                     url2.append("&city=ilike.*")
-                        .append(java.net.URLEncoder.encode(cityFilter, "UTF-8")).append("*");
+                            .append(java.net.URLEncoder.encode(cityFilter, "UTF-8")).append("*");
                 }
                 Request req2 = new Request.Builder().url(url2.toString())
-                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept",        "application/json")
+                        .addHeader("Accept", "application/json")
                         .build();
                 try (Response r2 = HTTP.newCall(req2).execute()) {
                     String body2 = r2.body() != null ? r2.body().string() : "[]";
@@ -261,21 +419,76 @@ public class SearchResultsActivity extends BaseActivity
                         JSONArray arr = new JSONArray(body2);
                         for (int i = 0; i < arr.length(); i++) {
                             JSONObject o = arr.getJSONObject(i);
-                            String name  = o.optString("business_name", "—");
-                            String sub   = o.optString("category", "");
-                            String owner = o.optString("user_name", "");
-                            if (!owner.isEmpty()) sub = sub + " • " + owner;
+                            String id = o.optString("id", "").trim();
+                            if (id.isEmpty() || seenIds.contains(id)) continue;
+                            seenIds.add(id);
                             list.add(new SearchResult(
-                                o.optString("id"), name, sub,
-                                o.optString("city", ""), SearchResult.TYPE_PROVIDER));
+                                    id,
+                                    o.optString("business_name", "-"),
+                                    o.optString("category", ""),
+                                    o.optString("city", ""),
+                                    SearchResult.TYPE_PROVIDER,
+                                    0f,
+                                    -1f,
+                                    "Available"
+                            ));
                         }
                     }
                 }
             }
-
-        } catch (Exception e) { Log.e(TAG, "searchProviders: " + e.getMessage()); }
+        } catch (Exception e) {
+            Log.d(TAG, "fetchTextProviders: " + e.getMessage());
+        }
         return list;
     }
+
+    private static String composeCityArea(String city, String area) {
+        String c = city == null ? "" : city.trim();
+        String a = area == null ? "" : area.trim();
+        if (!c.isEmpty() && !a.isEmpty()) return c + ", " + a;
+        return c.isEmpty() ? a : c;
+    }
+
+    private static String resolveAvailability(JSONObject o) {
+        String availability = o.optString("availability_status", "").trim();
+        if (!availability.isEmpty()) return availability;
+
+        String status = o.optString("status", "").trim();
+        if (!status.isEmpty()) {
+            if ("active".equalsIgnoreCase(status)) return "Available";
+            return status.substring(0, 1).toUpperCase(Locale.getDefault())
+                    + status.substring(1).toLowerCase(Locale.getDefault());
+        }
+
+        if (o.has("is_available") && !o.optBoolean("is_available", true)) {
+            return "Busy";
+        }
+        return "Available";
+    }
+
+    private static double optDoubleFlexible(JSONObject obj, String key) {
+        try {
+            if (!obj.has(key) || obj.isNull(key)) return Double.NaN;
+            Object raw = obj.get(key);
+            if (raw instanceof Number) return ((Number) raw).doubleValue();
+            return Double.parseDouble(String.valueOf(raw));
+        } catch (Exception ignored) {
+            return Double.NaN;
+        }
+    }
+
+    private static double haversineKm(double lat1, double lon1, double lat2, double lon2) {
+        final double r = 6371.0d;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1))
+                * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return r * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    }
+
+    // (searchProviders(String query) replaced by new GPS-aware searchProviders above)
 
     /**
      * Query services table — gracefully skipped if table doesn't exist.
@@ -335,6 +548,16 @@ public class SearchResultsActivity extends BaseActivity
         tvResultCount.setText(count + " result" + (count != 1 ? "s" : ""));
 
         boolean isEmpty = filtered.isEmpty() && !queryText.isEmpty();
+        if (isEmpty) {
+            if (SearchResult.TYPE_PROVIDER.equals(currentFilter) || "All".equals(currentFilter)) {
+                tvEmptyTitle.setText("No nearby providers found");
+                tvEmptySubtitle.setText("Try a larger radius, different service, or location.");
+            } else {
+                tvEmptyTitle.setText("No results found");
+                tvEmptySubtitle.setText("Try a different keyword or location");
+            }
+        }
+
         emptyState.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
         rvResults.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
     }
@@ -451,6 +674,29 @@ public class SearchResultsActivity extends BaseActivity
         intent.putExtra(ProviderDetailActivity.EXTRA_RATING, (float) o.optDouble("rating", 0));
         startActivity(intent);
         overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION_REQ) {
+            boolean granted = false;
+            for (int result : grantResults) {
+                if (result == PackageManager.PERMISSION_GRANTED) {
+                    granted = true;
+                    break;
+                }
+            }
+            if (granted && !queryText.isEmpty()) {
+                performSearch(queryText);
+            } else if (!granted) {
+                Toast.makeText(this,
+                        "Location permission denied. Showing non-distance results.",
+                        Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 }
 
