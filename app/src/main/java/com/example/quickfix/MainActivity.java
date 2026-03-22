@@ -811,7 +811,9 @@ public class MainActivity extends BaseActivity {
                             Banner b = new Banner();
                             b.id           = o.optString("id");
                             b.title        = o.optString("title");
-                            b.imageUrl     = o.optString("image_url");
+                            b.imageUrl     = SupabaseStorageHelper.getPublicObjectUrl(
+                                    "banner-images",
+                                    o.optString("image_url"));
                             b.redirectType = o.optString("redirect_type");
                             b.redirectId   = o.optString("redirect_id");
                             b.expiryDate   = o.optString("expiry_date");

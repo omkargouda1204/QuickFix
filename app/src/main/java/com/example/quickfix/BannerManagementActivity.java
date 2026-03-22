@@ -205,7 +205,9 @@ public class BannerManagementActivity extends BaseActivity {
                 Banner b       = new Banner();
                 b.id           = o.optString("id");
                 b.title        = o.optString("title");
-                b.imageUrl     = o.optString("image_url", "");
+                b.imageUrl     = SupabaseStorageHelper.getPublicObjectUrl(
+                        BUCKET_BANNERS,
+                        o.optString("image_url", ""));
                 b.redirectType = o.optString("redirect_type", "category");
 
                 // DB column is redirect_value (user spec) — fall back to redirect_id if missing
@@ -295,11 +297,11 @@ public class BannerManagementActivity extends BaseActivity {
             etPriority.setText(String.valueOf(existing.priority));
             etExpiry.setText(existing.expiryDate);
             swActive.setChecked(existing.isActive);
-            uploadedImageUrl = existing.imageUrl;
-            if (existing.imageUrl != null && !existing.imageUrl.isEmpty()) {
+            uploadedImageUrl = SupabaseStorageHelper.getPublicObjectUrl(BUCKET_BANNERS, existing.imageUrl);
+            if (uploadedImageUrl != null && !uploadedImageUrl.isEmpty()) {
                 dialogImagePreview.setVisibility(View.VISIBLE);
                 dialogUploadPlaceholder.setVisibility(View.GONE);
-                Glide.with(this).load(existing.imageUrl).centerCrop().into(dialogImagePreview);
+                Glide.with(this).load(uploadedImageUrl).centerCrop().into(dialogImagePreview);
             }
         }
 
@@ -322,12 +324,17 @@ public class BannerManagementActivity extends BaseActivity {
                 setFieldError(dialogView.findViewById(R.id.tilBannerTitle), "Title is required");
                 return;
             }
-            if (selectedImageUri != null && uploadedImageUrl == null) {
+            if (!isEdit && selectedImageUri == null && (uploadedImageUrl == null || uploadedImageUrl.isEmpty())) {
+                Toast.makeText(this, "Banner image is required", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (selectedImageUri != null) {
                 uploadBannerImage(selectedImageUri, title, redir, redirId, expiry,
                         active, priority, isEdit ? existing.id : null, dialog);
             } else {
                 String imgUrl = uploadedImageUrl != null ? uploadedImageUrl
-                        : (isEdit ? existing.imageUrl : "");
+                        : (isEdit ? SupabaseStorageHelper.getPublicObjectUrl(BUCKET_BANNERS, existing.imageUrl) : "");
                 saveBanner(title, imgUrl != null ? imgUrl : "", redir, redirId,
                         expiry, active, priority, isEdit ? existing.id : null, dialog);
             }
@@ -340,13 +347,10 @@ public class BannerManagementActivity extends BaseActivity {
                                     String bannerId, AlertDialog dialog) {
         if (dialogUploadProgress != null) {
             dialogUploadProgress.setVisibility(View.VISIBLE);
-            dialogUploadProgress.setText("Uploading image…");
+            dialogUploadProgress.setText("Compressing and uploading image...");
         }
-        // Use "banners" as prefix → path: banner-images/banners/<uuid>.jpg
-        // This gives a clean, predictable storage path per spec.
-        String prefix = "banners";
-        Log.d(TAG, "uploadBannerImage to bucket=" + BUCKET_BANNERS + " prefix=" + prefix);
-        SupabaseStorageHelper.uploadFile(this, uri, BUCKET_BANNERS, prefix,
+
+        SupabaseStorageHelper.uploadBannerImage(this, uri,
                 new SupabaseStorageHelper.UploadCallback() {
                     @Override
                     public void onSuccess(String url) {
@@ -355,16 +359,14 @@ public class BannerManagementActivity extends BaseActivity {
                         if (dialogUploadProgress != null) dialogUploadProgress.setVisibility(View.GONE);
                         saveBanner(title, url, redirect, redirId, expiry, active, priority, bannerId, dialog);
                     }
+
                     @Override
                     public void onError(String msg) {
                         Log.e(TAG, "uploadBannerImage FAILED: " + msg);
                         if (dialogUploadProgress != null) dialogUploadProgress.setVisibility(View.GONE);
-                        // Show error but still allow save without image
                         Toast.makeText(BannerManagementActivity.this,
-                                "Image upload failed: " + msg, Toast.LENGTH_LONG).show();
-                        // Save banner without image so data isn't lost
-                        String fallbackImg = (bannerId != null) ? "" : "";
-                        saveBanner(title, fallbackImg, redirect, redirId, expiry, active, priority, bannerId, dialog);
+                                "Image upload failed: " + msg,
+                                Toast.LENGTH_LONG).show();
                     }
                 });
     }

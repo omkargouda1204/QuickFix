@@ -1,6 +1,8 @@
 package com.example.quickfix;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -65,6 +67,9 @@ public class SupabaseStorageHelper {
     public static final String BUCKET_PROFILE_IMAGES  = "profile-images";
     public static final String BUCKET_QUICKFIX        = "Quickfix";
 
+    private static final int BANNER_MAX_SOURCE_BYTES = 10 * 1024 * 1024; // 10 MB
+    private static final int BANNER_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;  // 2 MB
+
     /**
      * Upload a file from a Uri to a Supabase Storage bucket.
      *
@@ -82,8 +87,7 @@ public class SupabaseStorageHelper {
                 ResponseResult result = uploadBytes(bucket, payload.storagePath, payload.fileBytes, payload.mimeType);
                 Log.d(TAG, "uploadFile HTTP " + result.httpCode + " | " + result.body);
 
-                String publicUrl = SUPABASE_URL + "/storage/v1/object/public/"
-                        + bucket + "/" + payload.storagePath;
+                String publicUrl = getPublicObjectUrl(bucket, payload.storagePath);
 
                 if (isUploadSuccess(result.httpCode, result.body)) {
                     MAIN.post(() -> callback.onSuccess(publicUrl));
@@ -234,8 +238,7 @@ public class SupabaseStorageHelper {
                 ResponseResult result = uploadBytes(BUCKET_PROFILE_IMAGES,
                         payload.storagePath, payload.fileBytes, payload.mimeType);
 
-                String publicUrl = SUPABASE_URL + "/storage/v1/object/public/"
-                        + BUCKET_PROFILE_IMAGES + "/" + payload.storagePath;
+                String publicUrl = getPublicObjectUrl(BUCKET_PROFILE_IMAGES, payload.storagePath);
 
                 if (isUploadSuccess(result.httpCode, result.body)) {
                     MAIN.post(() -> callback.onSuccess(publicUrl));
@@ -251,6 +254,73 @@ public class SupabaseStorageHelper {
         }).start();
     }
 
+    /**
+     * Banner upload helper: validates image file, compresses it and uploads to banner-images/banners/.
+     * Returns a public URL (never raw bytes/path).
+     */
+    public static void uploadBannerImage(Context context, Uri fileUri, UploadCallback callback) {
+        if (callback == null) return;
+        if (context == null || fileUri == null) {
+            MAIN.post(() -> callback.onError("Invalid image selection."));
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                String mimeType = context.getContentResolver().getType(fileUri);
+                if (mimeType == null || mimeType.trim().isEmpty()) mimeType = "image/jpeg";
+                if (!mimeType.startsWith("image/")) {
+                    String finalMimeType = mimeType;
+                    MAIN.post(() -> callback.onError("Unsupported file type: " + finalMimeType));
+                    return;
+                }
+
+                byte[] sourceBytes = readUriBytes(context, fileUri, BANNER_MAX_SOURCE_BYTES);
+                if (sourceBytes.length == 0) {
+                    MAIN.post(() -> callback.onError("Selected image is empty."));
+                    return;
+                }
+
+                byte[] optimized = compressBannerBytes(sourceBytes, BANNER_MAX_UPLOAD_BYTES);
+                String storagePath = "banners/" + UUID.randomUUID().toString().replace("-", "") + ".jpg";
+                ResponseResult result = uploadBytes("banner-images", storagePath, optimized, "image/jpeg");
+
+                if (isUploadSuccess(result.httpCode, result.body)) {
+                    String publicUrl = getPublicObjectUrl("banner-images", storagePath);
+                    MAIN.post(() -> callback.onSuccess(publicUrl));
+                } else {
+                    String message = formatUploadError(result.httpCode, result.body, "banner-images");
+                    MAIN.post(() -> callback.onError(message));
+                }
+            } catch (IllegalStateException tooLarge) {
+                MAIN.post(() -> callback.onError(tooLarge.getMessage()));
+            } catch (Exception e) {
+                Log.e(TAG, "uploadBannerImage exception", e);
+                MAIN.post(() -> callback.onError("Image upload failed: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    /**
+     * Converts either a storage path or existing URL into a canonical public object URL.
+     */
+    public static String getPublicObjectUrl(String bucket, String pathOrUrl) {
+        String b = bucket == null ? "" : bucket.trim();
+        String raw = pathOrUrl == null ? "" : pathOrUrl.trim();
+        if (b.isEmpty() || raw.isEmpty()) return "";
+        if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+
+        String marker = "/storage/v1/object/public/" + b + "/";
+        int markerIndex = raw.indexOf(marker);
+        if (markerIndex >= 0) {
+            String path = raw.substring(markerIndex + marker.length());
+            return SUPABASE_URL + marker + Uri.encode(path, "/");
+        }
+
+        String normalizedPath = raw.startsWith("/") ? raw.substring(1) : raw;
+        return SUPABASE_URL + "/storage/v1/object/public/" + b + "/" + Uri.encode(normalizedPath, "/");
+    }
+
     private static UploadPayload buildUploadPayloadForFixedPath(Context context,
                                                                 Uri fileUri,
                                                                 String storagePath) throws Exception {
@@ -262,16 +332,84 @@ public class SupabaseStorageHelper {
 
         try (InputStream is = context.getContentResolver().openInputStream(fileUri)) {
             if (is == null) throw new IllegalStateException("Cannot read file");
-            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
-            byte[] chunk = new byte[8192];
-            int nRead;
-            while ((nRead = is.read(chunk, 0, chunk.length)) != -1) {
-                buffer.write(chunk, 0, nRead);
-            }
-            payload.fileBytes = buffer.toByteArray();
+            payload.fileBytes = readAllBytes(is);
         }
 
         return payload;
+    }
+
+    private static byte[] readUriBytes(Context context, Uri fileUri, int maxBytes) throws Exception {
+        try (InputStream is = context.getContentResolver().openInputStream(fileUri)) {
+            if (is == null) throw new IllegalStateException("Cannot read selected file");
+            return readAllBytes(is, maxBytes);
+        }
+    }
+
+    private static byte[] readAllBytes(InputStream is) throws Exception {
+        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int nRead;
+        while ((nRead = is.read(chunk)) != -1) {
+            buffer.write(chunk, 0, nRead);
+        }
+        return buffer.toByteArray();
+    }
+
+    private static byte[] readAllBytes(InputStream is, int maxBytes) throws Exception {
+        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int nRead;
+        int total = 0;
+        while ((nRead = is.read(chunk)) != -1) {
+            total += nRead;
+            if (total > maxBytes) {
+                throw new IllegalStateException("Image is too large. Please select an image under 10 MB.");
+            }
+            buffer.write(chunk, 0, nRead);
+        }
+        return buffer.toByteArray();
+    }
+
+    private static byte[] compressBannerBytes(byte[] source, int maxBytes) throws Exception {
+        Bitmap bitmap = BitmapFactory.decodeByteArray(source, 0, source.length);
+        if (bitmap == null) {
+            throw new IllegalStateException("Unsupported or corrupted image file.");
+        }
+
+        Bitmap current = bitmap;
+        try {
+            int quality = 90;
+            for (int iteration = 0; iteration < 6; iteration++) {
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                current.compress(Bitmap.CompressFormat.JPEG, quality, out);
+                byte[] result = out.toByteArray();
+                if (result.length <= maxBytes) return result;
+
+                quality -= 10;
+                if (quality < 55) {
+                    quality = 85;
+                    int w = Math.max(480, (int) (current.getWidth() * 0.82f));
+                    int h = Math.max(320, (int) (current.getHeight() * 0.82f));
+                    if (w == current.getWidth() && h == current.getHeight()) {
+                        break;
+                    }
+                    Bitmap scaled = Bitmap.createScaledBitmap(current, w, h, true);
+                    if (current != bitmap && !current.isRecycled()) current.recycle();
+                    current = scaled;
+                }
+            }
+
+            java.io.ByteArrayOutputStream fallback = new java.io.ByteArrayOutputStream();
+            current.compress(Bitmap.CompressFormat.JPEG, 70, fallback);
+            byte[] finalBytes = fallback.toByteArray();
+            if (finalBytes.length > maxBytes) {
+                throw new IllegalStateException("Compressed image is still too large. Please choose a smaller image.");
+            }
+            return finalBytes;
+        } finally {
+            if (current != null && !current.isRecycled()) current.recycle();
+            if (bitmap != null && bitmap != current && !bitmap.isRecycled()) bitmap.recycle();
+        }
     }
 
     private static boolean isAlreadyExistsConflict(int code, String body) {
@@ -350,13 +488,7 @@ public class SupabaseStorageHelper {
 
         try (InputStream is = context.getContentResolver().openInputStream(fileUri)) {
             if (is == null) throw new IllegalStateException("Cannot read file");
-            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
-            byte[] chunk = new byte[8192];
-            int nRead;
-            while ((nRead = is.read(chunk, 0, chunk.length)) != -1) {
-                buffer.write(chunk, 0, nRead);
-            }
-            payload.fileBytes = buffer.toByteArray();
+            payload.fileBytes = readAllBytes(is);
         }
 
         return payload;
