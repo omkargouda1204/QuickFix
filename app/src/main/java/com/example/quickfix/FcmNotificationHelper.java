@@ -7,7 +7,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
@@ -67,47 +69,17 @@ public class FcmNotificationHelper {
             String businessName,
             String category) {
 
-        new Thread(() -> {
-            try {
-                Context appCtx = QuickFixApp.getInstance();
-                if (appCtx != null) {
-                    if (!AppSettings.isPushEnabled(appCtx) || !AppSettings.isAdminAlertsEnabled(appCtx)) {
-                        Log.d(TAG, "notifyAdminsNewApplication suppressed by admin settings");
-                        return;
-                    }
-                }
+        String safeApplicant = trimToEmpty(applicantName);
+        String safeBusiness = trimToEmpty(businessName);
+        String safeCategory = trimToEmpty(category);
 
-                // 1. Fetch all admin FCM tokens from Supabase
-                List<String> adminTokens = fetchAdminFcmTokens();
-                if (adminTokens.isEmpty()) {
-                    Log.d(TAG, "notifyAdminsNewApplication: no admin tokens found");
-                    return;
-                }
+        String body = (safeApplicant.isEmpty() ? "A provider" : safeApplicant)
+                + " submitted an application"
+                + (safeBusiness.isEmpty() ? "" : " for " + safeBusiness)
+                + (safeCategory.isEmpty() ? "" : " (" + safeCategory + ")")
+                + ".";
 
-                // 2. Send notification to each admin token
-                String title = "New Provider Application";
-                String body  = (applicantName != null && !applicantName.isEmpty()
-                        ? applicantName : "A provider")
-                        + " submitted an application"
-                        + (businessName != null && !businessName.isEmpty()
-                        ? " for " + businessName : "")
-                        + ".";
-
-                for (String token : adminTokens) {
-                    sendViaEdgeFunction(token, title, body,
-                            "provider_application", null);
-                }
-
-                // 3. Save in-app notification for all admins (legacy + admin table)
-                saveInAppNotification(null, title, body, "provider_application");
-                saveAdminNotification(title, body, "provider_application", null);
-
-                Log.d(TAG, "notifyAdminsNewApplication: sent to " + adminTokens.size() + " admins");
-
-            } catch (Exception e) {
-                Log.w(TAG, "notifyAdminsNewApplication failed (non-fatal): " + e.getMessage());
-            }
-        }).start();
+        notifyAdminsEvent("New Provider Application", body, "provider_application", null);
     }
 
     /**
@@ -342,14 +314,58 @@ public class FcmNotificationHelper {
                     .build()).execute()) {
                 String rb = resp.body() != null ? resp.body().string() : "";
                 if (!resp.isSuccessful()) {
-                    Log.e(TAG, "saveAdminNotification failed HTTP " + resp.code() + ": " + rb);
+                    if (resp.code() == 404 || rb.contains("admin_notifications")) {
+                        Log.w(TAG, "admin_notifications table not available, skipping persistence");
+                        return;
+                    }
+                    Log.w(TAG, "saveAdminNotification failed HTTP " + resp.code() + ": " + rb);
                 } else {
                     Log.d(TAG, "saveAdminNotification ok type=" + type + " ref=" + referenceId);
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "saveAdminNotification exception", e);
+            Log.w(TAG, "saveAdminNotification exception: " + e.getMessage());
         }
+    }
+
+    private static void notifyAdminsEvent(String title,
+                                          String body,
+                                          String type,
+                                          String referenceId) {
+        new Thread(() -> {
+            try {
+                Context appCtx = QuickFixApp.getInstance();
+                boolean pushAllowed = appCtx == null
+                        || (AppSettings.isPushEnabled(appCtx) && AppSettings.isAdminAlertsEnabled(appCtx));
+
+                if (pushAllowed) {
+                    List<String> adminTokens = fetchAdminFcmTokens();
+                    Set<String> uniqueTokens = new LinkedHashSet<>();
+                    for (String token : adminTokens) {
+                        String t = trimToEmpty(token);
+                        if (!t.isEmpty()) uniqueTokens.add(t);
+                    }
+
+                    for (String token : uniqueTokens) {
+                        sendViaEdgeFunction(token, title, body, type, referenceId);
+                    }
+
+                    Log.d(TAG, "notifyAdminsEvent push sent to " + uniqueTokens.size() + " admins");
+                } else {
+                    Log.d(TAG, "notifyAdminsEvent push suppressed by admin settings");
+                }
+
+                saveInAppNotification(null, title, body, type);
+                saveAdminNotification(title, body, type, referenceId);
+
+            } catch (Exception e) {
+                Log.w(TAG, "notifyAdminsEvent failed (non-fatal): " + e.getMessage());
+            }
+        }).start();
+    }
+
+    private static String trimToEmpty(String value) {
+        return value == null ? "" : value.trim();
     }
 
     // ── Private Helpers ───────────────────────────────────────────────────
@@ -509,13 +525,11 @@ public class FcmNotificationHelper {
     }
 
     public static void notifyAdminUserRegistration(String userName, String userId) {
-        new Thread(() -> {
-            String title = "New User Registered";
-            String body = (userName != null && !userName.trim().isEmpty())
-                    ? userName + " created an account"
-                    : "A new user created an account";
-            saveAdminNotification(title, body, "user_registration", userId);
-        }).start();
+        String safeName = trimToEmpty(userName);
+        String body = safeName.isEmpty()
+                ? "A new user created an account"
+                : safeName + " created an account";
+        notifyAdminsEvent("New User Registered", body, "user_registration", userId);
     }
 
     public static void notifyAdminOfferCreated(String offerTitle, String offerId) {

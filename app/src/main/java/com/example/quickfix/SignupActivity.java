@@ -170,41 +170,39 @@ public class SignupActivity extends BaseActivity {
                                     Log.d(TAG, "displayName=" + (t.isSuccessful() ? "OK" : "failed")));
 
                     if (restoreDeleted) {
-                        updateOverlay("Restoring account profile…");
+                        updateOverlay("Restoring account profile...");
                         SupabaseClient.restoreDeletedAccountByEmail(
                                 email, user.getUid(), name, phone,
                                 new SupabaseClient.Callback2() {
                                     @Override
                                     public void onSuccess() {
                                         FcmNotificationHelper.notifyAdminUserRegistration(name, user.getUid());
-                                        updateOverlay("Sending verification email…");
+                                        updateOverlay("Sending verification email...");
                                         sendVerificationEmail(user, email);
                                     }
 
                                     @Override
                                     public void onError(String err) {
                                         Log.w(TAG, "restoreDeletedAccountByEmail failed: " + err);
-                                        FcmNotificationHelper.notifyAdminUserRegistration(name, user.getUid());
-                                        updateOverlay("Sending verification email…");
+                                        updateOverlay("Sending verification email...");
                                         sendVerificationEmail(user, email);
                                     }
                                 });
                         return;
                     }
 
-                    updateOverlay("Saving your profile…");
+                    updateOverlay("Saving your profile...");
                     SupabaseClient.insertUserAfterAuth(
                             user.getUid(), name, email, phone,
                             new SupabaseClient.Callback2() {
                                 @Override public void onSuccess() {
                                     FcmNotificationHelper.notifyAdminUserRegistration(name, user.getUid());
-                                    updateOverlay("Sending verification email…");
+                                    updateOverlay("Sending verification email...");
                                     sendVerificationEmail(user, email);
                                 }
                                 @Override public void onError(String err) {
                                     Log.w(TAG, "insertUserAfterAuth failed (non-fatal): " + err);
-                                    FcmNotificationHelper.notifyAdminUserRegistration(name, user.getUid());
-                                    updateOverlay("Sending verification email…");
+                                    updateOverlay("Sending verification email...");
                                     sendVerificationEmail(user, email);
                                 }
                             });

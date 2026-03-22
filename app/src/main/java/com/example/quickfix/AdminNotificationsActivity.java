@@ -129,6 +129,7 @@ public class AdminNotificationsActivity extends BaseActivity {
             if      (id == R.id.chipAll)      currentFilter = "all";
             else if (id == R.id.chipUnread)   currentFilter = "unread";
             else if (id == R.id.chipProvider) currentFilter = "provider_application";
+            else if (id == R.id.chipUsers)    currentFilter = "user_registration";
             else if (id == R.id.chipOffers)   currentFilter = "offer";
             applyFilter();
         });
@@ -388,38 +389,39 @@ public class AdminNotificationsActivity extends BaseActivity {
         private String formatTime(String iso) {
             if (iso == null || iso.isEmpty()) return "";
             try {
-                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US);
-                Date d = sdf.parse(iso.substring(0, Math.min(iso.length(), 19)));
-                if (d == null) return iso.substring(0, Math.min(10, iso.length()));
+                String clean = iso.replace("T", " ").replace("Z", "");
+                if (clean.length() >= 19) clean = clean.substring(0, 19);
+                SimpleDateFormat in = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+                Date d = in.parse(clean);
+                if (d == null) return iso;
                 long diff = System.currentTimeMillis() - d.getTime();
-                long mins  = diff / 60000;
-                long hours = mins / 60;
-                long days  = hours / 24;
-                if (mins  < 1)  return "Just now";
-                if (mins  < 60) return mins + "m ago";
-                if (hours < 24) return hours + "h ago";
-                return days + "d ago";
-            } catch (Exception e) {
-                return iso.length() >= 10 ? iso.substring(0, 10) : iso;
+                long mins = diff / (60 * 1000);
+                if (mins < 1) return "Just now";
+                if (mins < 60) return mins + "m ago";
+                long hrs = mins / 60;
+                if (hrs < 24) return hrs + "h ago";
+                long days = hrs / 24;
+                if (days < 7) return days + "d ago";
+                return new SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(d);
+            } catch (Exception ignored) {
+                return iso;
             }
         }
 
         static class VH extends RecyclerView.ViewHolder {
-            TextView    tvTitle, tvMessage, tvTime;
-            View        unreadDot;
-            ImageView   ivIcon;
+            ImageView ivIcon, unreadDot;
+            TextView tvTitle, tvMessage, tvTime;
             ImageButton btnMarkRead;
 
             VH(View v) {
                 super(v);
+                ivIcon      = v.findViewById(R.id.ivNotifIcon);
+                unreadDot   = v.findViewById(R.id.unreadDot);
                 tvTitle     = v.findViewById(R.id.tvNotifTitle);
                 tvMessage   = v.findViewById(R.id.tvNotifMessage);
                 tvTime      = v.findViewById(R.id.tvNotifTime);
-                unreadDot   = v.findViewById(R.id.unreadDot);
-                ivIcon      = v.findViewById(R.id.ivNotifIcon);
                 btnMarkRead = v.findViewById(R.id.btnMarkRead);
             }
         }
     }
 }
-
