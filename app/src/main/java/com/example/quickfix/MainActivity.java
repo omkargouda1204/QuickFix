@@ -188,7 +188,8 @@ public class MainActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         try {
-            refreshHomeContent(false);
+            loadBanners();
+            loadOffers();
         } catch (Exception e) {
             Log.e(CRASH_TAG, "Home content refresh failed", e);
             Log.e(TAG, "Home content refresh failed", e);
@@ -339,8 +340,38 @@ public class MainActivity extends BaseActivity {
         } else {
             updateLocationDisplay("Select City", false);
         }
+
         if (locationSelector != null) {
-            locationSelector.setOnClickListener(v -> showLocationActionDialog());
+            locationSelector.setOnClickListener(v -> LocationSearchBottomSheet.show(
+                    this,
+                    locationManager,
+                    new LocationSearchBottomSheet.PermissionDelegate() {
+                        @Override
+                        public boolean hasLocationPermission() {
+                            return ContextCompat.checkSelfPermission(MainActivity.this,
+                                    Manifest.permission.ACCESS_FINE_LOCATION)
+                                    == PackageManager.PERMISSION_GRANTED;
+                        }
+
+                        @Override
+                        public void requestLocationPermission() {
+                            ActivityCompat.requestPermissions(MainActivity.this,
+                                    new String[]{
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                    },
+                                    LOCATION_PERMISSION_REQ);
+                        }
+                    },
+                    suggestion -> {
+                        if (suggestion == null || suggestion.city == null || suggestion.city.trim().isEmpty()) {
+                            updateLocationDisplay("Select City", false);
+                            return;
+                        }
+                        String label = AppLocationManager.composeLocationLabel(suggestion.city, suggestion.area);
+                        updateLocationDisplay(label.isEmpty() ? suggestion.city : label, suggestion.nearby);
+                    }
+            ));
         }
     }
 
@@ -359,91 +390,13 @@ public class MainActivity extends BaseActivity {
         }
     }
 
-    private void showLocationActionDialog() {
-        String[] options = new String[]{"Select City", "Use Current Location"};
-        new AlertDialog.Builder(this)
-                .setTitle("Choose Location")
-                .setItems(options, (dialog, which) -> {
-                    if (which == 0) {
-                        showManualCityDialog();
-                    } else {
-                        requestAndFetchCurrentLocation();
-                    }
-                })
-                .show();
-    }
-
-    private void showManualCityDialog() {
-        String[] cities = AppLocationManager.CITY_LIST;
-        new AlertDialog.Builder(this)
-                .setTitle("Select City")
-                .setItems(cities, (dialog, which) -> {
-                    if (which < 0 || which >= cities.length) return;
-                    String selectedCity = cities[which];
-                    locationManager.saveCity(selectedCity);
-                    updateLocationDisplay(selectedCity, false);
-                    Toast.makeText(this, "City selected: " + selectedCity, Toast.LENGTH_SHORT).show();
-                })
-                .setNeutralButton("Clear", (dialog, which) -> {
-                    locationManager.clearCity();
-                    updateLocationDisplay("Select City", false);
-                    Toast.makeText(this, "Location cleared", Toast.LENGTH_SHORT).show();
-                })
-                .show();
-    }
-
-    private void requestAndFetchCurrentLocation() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED
-                && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-            Log.e(CRASH_TAG, "Location permission missing before GPS request");
-            ActivityCompat.requestPermissions(this,
-                    new String[]{
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                    },
-                    LOCATION_PERMISSION_REQ);
-            return;
-        }
-        fetchLiveLocationNow();
-    }
-
-    private void fetchLiveLocationNow() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED
-                && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-            Log.e(CRASH_TAG, "fetchLiveLocationNow aborted: location permission not granted");
-            return;
-        }
-
-        updateLocationDisplay("Detecting...", false);
-        locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
-            @Override public void onSuccess(String city, String area, double lat, double lng) {
-                String label = AppLocationManager.composeLocationLabel(city, area);
-                updateLocationDisplay(label.isEmpty() ? "Select City" : label, true);
-            }
-            @Override public void onFailure(String reason) {
-                Log.e(CRASH_TAG, "Live location failed: " + reason);
-                Log.e(TAG, "Live location failed: " + reason);
-                updateLocationDisplay(locationManager.getSavedLocationLabel(), false);
-                Toast.makeText(MainActivity.this,
-                        reason == null || reason.isEmpty() ? "Unable to detect location" : reason,
-                        Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
-
-
     @Override
     public void onRequestPermissionsResult(int req, @NonNull String[] permissions,
                                            @NonNull int[] results) {
         super.onRequestPermissionsResult(req, permissions, results);
         if (req == LOCATION_PERMISSION_REQ) {
-            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
-                fetchLiveLocationNow();
-            } else {
+            boolean granted = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
+            if (!granted) {
                 Toast.makeText(this, "Location permission denied", Toast.LENGTH_SHORT).show();
             }
         } else if (req == NOTIFICATION_PERMISSION_REQ) {
@@ -594,11 +547,8 @@ public class MainActivity extends BaseActivity {
 
     private void openSearchResults(String query) {
         hideSuggestions();
-        Intent intent = new Intent(this, SearchResultsActivity.class);
-        intent.putExtra(SearchResultsActivity.EXTRA_QUERY, query);
-        intent.putExtra(SearchResultsActivity.EXTRA_CITY, locationManager.getSavedCity());
-        intent.putExtra(SearchResultsActivity.EXTRA_LAT, locationManager.getSavedLat());
-        intent.putExtra(SearchResultsActivity.EXTRA_LNG, locationManager.getSavedLng());
+        Intent intent = new Intent(this, ProviderListActivity.class);
+        intent.putExtra(ProviderListActivity.EXTRA_QUERY, query);
         startActivity(intent);
         overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
     }
@@ -638,9 +588,8 @@ public class MainActivity extends BaseActivity {
     }
 
     private void openProvidersList(String category) {
-        Intent intent = new Intent(this, ServiceProvidersActivity.class);
-        intent.putExtra(ServiceProvidersActivity.EXTRA_CATEGORY, category);
-        intent.putExtra(ServiceProvidersActivity.EXTRA_CITY, locationManager.getSavedCity());
+        Intent intent = new Intent(this, ProviderListActivity.class);
+        intent.putExtra(ProviderListActivity.EXTRA_CATEGORY, category);
         startActivity(intent);
         overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
     }
@@ -863,57 +812,61 @@ public class MainActivity extends BaseActivity {
 
         new Thread(() -> {
             try {
-                String url = BuildConfig.SUPABASE_URL
-                        + "/rest/v1/banners?select=*&is_active=eq.true&order=priority.asc,created_at.desc";
-                Request req = new Request.Builder()
-                        .url(url)
-                        .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Accept",        "application/json")
-                        .build();
+                String[] urls = new String[] {
+                        BuildConfig.SUPABASE_URL + "/rest/v1/banners?select=*&active=eq.true&order=priority.asc,created_at.desc",
+                        BuildConfig.SUPABASE_URL + "/rest/v1/banners?select=*&is_active=eq.true&order=priority.asc,created_at.desc",
+                        BuildConfig.SUPABASE_URL + "/rest/v1/banners?select=*&order=priority.asc,created_at.desc"
+                };
 
-                try (Response resp = HTTP.newCall(req).execute()) {
-                    if (resp == null) {
-                        Log.e(CRASH_TAG, "API response null: banners");
-                        MAIN.post(() -> showBannersOnHome(new ArrayList<>()));
-                        return;
-                    }
-                    String body = resp.body() != null ? resp.body().string() : "[]";
-                    Log.d(TAG, "loadBanners HTTP " + resp.code() + " body=" + body);
-                    if (resp.isSuccessful()) {
-                        org.json.JSONArray arr = new org.json.JSONArray(body);
-                        List<Banner> list = new ArrayList<>();
-                        for (int i = 0; i < arr.length(); i++) {
-                            org.json.JSONObject o = arr.getJSONObject(i);
-                            Banner b = new Banner();
-                            b.id           = o.optString("id");
-                            b.title        = o.optString("title");
-                            b.imageUrl     = SupabaseStorageHelper.getPublicObjectUrl(
-                                    "banner-images",
-                                    o.optString("image_url"));
-                            b.redirectType = o.optString("redirect_type");
-                            b.redirectId   = o.optString("redirect_id");
-                            b.expiryDate   = o.optString("expiry_date");
-                            b.priority     = o.optInt("priority", 1);
-                            b.isActive     = o.optBoolean("is_active", true);
-                            b.status       = b.isActive ? "active" : "inactive";
-
-                            boolean notExpired = b.expiryDate == null || b.expiryDate.isEmpty()
-                                    || b.expiryDate.compareTo(today) >= 0;
-                            if (b.isActive && notExpired) {
-                                list.add(b);
-                            }
+                String body = "[]";
+                int code = 0;
+                boolean ok = false;
+                for (String url : urls) {
+                    Request req = new Request.Builder()
+                            .url(url)
+                            .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                            .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                            .addHeader("Accept", "application/json")
+                            .build();
+                    try (Response resp = HTTP.newCall(req).execute()) {
+                        code = resp.code();
+                        body = resp.body() != null ? resp.body().string() : "[]";
+                        if (resp.isSuccessful()) {
+                            ok = true;
+                            break;
                         }
-                        MAIN.post(() -> showBannersOnHome(list));
-                    } else {
-                        Log.e(CRASH_TAG, "loadBanners failed HTTP " + resp.code());
-                        Log.e(TAG, "loadBanners FAILED HTTP " + resp.code() + ": " + body);
-                        MAIN.post(() -> showBannersOnHome(new ArrayList<>()));
                     }
+                }
+
+                Log.e("BANNERS", body);
+                if (ok) {
+                    org.json.JSONArray arr = new org.json.JSONArray(body);
+                    List<Banner> list = new ArrayList<>();
+                    for (int i = 0; i < arr.length(); i++) {
+                        org.json.JSONObject o = arr.getJSONObject(i);
+                        Banner b = new Banner();
+                        b.id = o.optString("id");
+                        b.title = o.optString("title");
+                        b.imageUrl = SupabaseStorageHelper.getPublicObjectUrl("banner-images", o.optString("image_url"));
+                        b.redirectType = o.optString("redirect_type");
+                        b.redirectId = o.optString("redirect_id");
+                        b.expiryDate = o.optString("expiry_date");
+                        b.priority = o.optInt("priority", 1);
+                        b.isActive = o.optBoolean("active", o.optBoolean("is_active", true));
+                        b.status = b.isActive ? "active" : "inactive";
+
+                        boolean notExpired = b.expiryDate.isEmpty() || b.expiryDate.compareTo(today) >= 0;
+                        if (b.isActive && notExpired) {
+                            list.add(b);
+                        }
+                    }
+                    MAIN.post(() -> showBannersOnHome(list));
+                } else {
+                    Log.e(CRASH_TAG, "loadBanners failed HTTP " + code);
+                    MAIN.post(() -> showBannersOnHome(new ArrayList<>()));
                 }
             } catch (Exception e) {
                 Log.e(CRASH_TAG, "loadBanners exception", e);
-                Log.e(TAG, "loadBanners exception", e);
                 MAIN.post(() -> showBannersOnHome(new ArrayList<>()));
             } finally {
                 MAIN.post(this::markHomeSectionLoaded);
@@ -927,56 +880,62 @@ public class MainActivity extends BaseActivity {
 
         new Thread(() -> {
             try {
-                String url = BuildConfig.SUPABASE_URL
-                        + "/rest/v1/offers?select=*&is_active=eq.true&order=created_at.desc";
-                Request req = new Request.Builder()
-                        .url(url)
-                        .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Accept",        "application/json")
-                        .build();
+                String[] urls = new String[] {
+                        BuildConfig.SUPABASE_URL + "/rest/v1/offers?select=*&active=eq.true&order=created_at.desc",
+                        BuildConfig.SUPABASE_URL + "/rest/v1/offers?select=*&is_active=eq.true&order=created_at.desc",
+                        BuildConfig.SUPABASE_URL + "/rest/v1/offers?select=*&order=created_at.desc"
+                };
 
-                try (Response resp = HTTP.newCall(req).execute()) {
-                    if (resp == null) {
-                        Log.e(CRASH_TAG, "API response null: offers");
-                        MAIN.post(() -> showOffersOnHome(new ArrayList<>()));
-                        return;
-                    }
-                    String body = resp.body() != null ? resp.body().string() : "[]";
-                    Log.d(TAG, "loadOffers HTTP " + resp.code() + " body=" + body);
-                    if (resp.isSuccessful()) {
-                        org.json.JSONArray arr = new org.json.JSONArray(body);
-                        List<Offer> list = new ArrayList<>();
-                        for (int i = 0; i < arr.length(); i++) {
-                            org.json.JSONObject o = arr.getJSONObject(i);
-                            Offer offer = new Offer();
-                            offer.id               = o.optString("id");
-                            offer.title            = o.optString("title");
-                            offer.description      = o.optString("description");
-                            offer.offerCode        = o.optString("offer_code");
-                            offer.discountType     = o.optString("discount_type", "percentage");
-                            offer.discountValue    = o.optDouble("discount_value", 0);
-                            offer.minBookingAmount = o.optDouble("min_booking_amount", 0);
-                            offer.expiryDate       = o.optString("expiry_date");
-                            offer.isActive         = o.optBoolean("is_active", true);
-                            offer.status           = offer.isActive ? "active" : "inactive";
-
-                            boolean notExpired = offer.expiryDate == null || offer.expiryDate.isEmpty()
-                                    || offer.expiryDate.compareTo(today) >= 0;
-                            if (offer.isActive && notExpired) {
-                                list.add(offer);
-                            }
+                String body = "[]";
+                int code = 0;
+                boolean ok = false;
+                for (String url : urls) {
+                    Request req = new Request.Builder()
+                            .url(url)
+                            .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                            .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                            .addHeader("Accept", "application/json")
+                            .build();
+                    try (Response resp = HTTP.newCall(req).execute()) {
+                        code = resp.code();
+                        body = resp.body() != null ? resp.body().string() : "[]";
+                        if (resp.isSuccessful()) {
+                            ok = true;
+                            break;
                         }
-                        MAIN.post(() -> showOffersOnHome(list));
-                    } else {
-                        Log.e(CRASH_TAG, "loadOffers failed HTTP " + resp.code());
-                        Log.e(TAG, "loadOffers FAILED HTTP " + resp.code() + ": " + body);
-                        MAIN.post(() -> showOffersOnHome(new ArrayList<>()));
                     }
+                }
+
+                Log.e("OFFERS", body);
+                if (ok) {
+                    org.json.JSONArray arr = new org.json.JSONArray(body);
+                    List<Offer> list = new ArrayList<>();
+                    for (int i = 0; i < arr.length(); i++) {
+                        org.json.JSONObject o = arr.getJSONObject(i);
+                        Offer offer = new Offer();
+                        offer.id = o.optString("id");
+                        offer.title = o.optString("title");
+                        offer.description = o.optString("description");
+                        offer.offerCode = o.optString("offer_code", o.optString("coupon_code"));
+                        offer.discountType = o.optString("discount_type", "percentage");
+                        offer.discountValue = o.optDouble("discount_value", o.optDouble("discount_percent", 0));
+                        offer.minBookingAmount = o.optDouble("min_booking_amount", 0);
+                        offer.expiryDate = o.optString("expiry_date");
+                        offer.isActive = o.optBoolean("active", o.optBoolean("is_active", true));
+                        offer.status = offer.isActive ? "active" : "inactive";
+
+                        boolean notExpired = offer.expiryDate.isEmpty() || offer.expiryDate.compareTo(today) >= 0;
+                        if (offer.isActive && notExpired) {
+                            list.add(offer);
+                        }
+                    }
+                    MAIN.post(() -> showOffersOnHome(list));
+                } else {
+                    Log.e(CRASH_TAG, "loadOffers failed HTTP " + code);
+                    MAIN.post(() -> showOffersOnHome(new ArrayList<>()));
                 }
             } catch (Exception e) {
                 Log.e(CRASH_TAG, "loadOffers exception", e);
-                Log.e(TAG, "loadOffers exception", e);
                 MAIN.post(() -> showOffersOnHome(new ArrayList<>()));
             } finally {
                 MAIN.post(this::markHomeSectionLoaded);

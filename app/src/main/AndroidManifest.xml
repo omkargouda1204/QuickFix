@@ -299,7 +299,21 @@
             android:parentActivityName=".MainActivity"
             android:windowSoftInputMode="adjustResize" />
 
-        <!-- Service Providers Activity — canonical listing screen for category/location filtered providers -->
+        <!-- Provider List Activity — single provider listing screen -->
+        <activity
+            android:name=".ProviderListActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Providers Activity — single category-based providers screen -->
+        <activity
+            android:name=".ProvidersActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Service Providers Activity — compatibility route -->
         <activity
             android:name=".ServiceProvidersActivity"
             android:exported="false"
@@ -317,7 +331,7 @@
         <activity
             android:name=".ProviderDetailActivity"
             android:exported="false"
-            android:parentActivityName=".ProvidersListActivity"
+            android:parentActivityName=".ProviderListActivity"
             android:windowSoftInputMode="adjustResize" />
 
         <!-- Categories Activity — full grid of all service categories -->

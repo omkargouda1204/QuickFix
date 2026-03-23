@@ -20,6 +20,9 @@ public class ProviderProfile {
     public int     reviewCount;
     public String  status;
 
+    public double  lat = Double.NaN;
+    public double  lng = Double.NaN;
+
     public ProviderProfile() {}
 }
 

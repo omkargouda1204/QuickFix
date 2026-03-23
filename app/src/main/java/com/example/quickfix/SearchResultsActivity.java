@@ -591,10 +591,9 @@ public class SearchResultsActivity extends BaseActivity
             // Fetch full provider profile from Supabase, then open detail
             fetchProviderAndOpenDetail(result.id);
         } else if (SearchResult.TYPE_SERVICE.equals(result.type)) {
-            // Open providers list filtered by service category
-            Intent intent = new Intent(this, ServiceProvidersActivity.class);
-            intent.putExtra(ServiceProvidersActivity.EXTRA_CATEGORY, result.subtitle); // category
-            intent.putExtra(ServiceProvidersActivity.EXTRA_CITY, cityFilter);
+            Intent intent = new Intent(this, ProviderListActivity.class);
+            intent.putExtra(ProviderListActivity.EXTRA_CATEGORY, result.subtitle);
+            intent.putExtra(ProviderListActivity.EXTRA_QUERY, result.name);
             startActivity(intent);
         }
     }

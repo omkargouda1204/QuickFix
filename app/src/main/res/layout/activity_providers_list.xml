@@ -64,14 +64,16 @@
 
         </LinearLayout>
 
-        <!-- Location row with change button -->
+        <!-- Location row hidden: providers page is category-only now -->
         <LinearLayout
+            android:id="@+id/providerLocationRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:layout_marginStart="44dp"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:visibility="gone">
 
             <ImageView
                 android:layout_width="13dp"
@@ -90,7 +92,6 @@
                 android:textColor="#CCFFFFFF"
                 android:textSize="12sp" />
 
-            <!-- Change location button -->
             <TextView
                 android:id="@+id/btnChangeLocation"
                 android:layout_width="wrap_content"
@@ -104,9 +105,10 @@
                 android:paddingEnd="10dp"
                 android:paddingTop="4dp"
                 android:paddingBottom="4dp"
-                android:clickable="true"
-                android:focusable="true"
-                android:layout_marginEnd="4dp" />
+                android:clickable="false"
+                android:focusable="false"
+                android:layout_marginEnd="4dp"
+                android:visibility="gone" />
 
         </LinearLayout>
 

@@ -2,6 +2,7 @@ package com.example.quickfix;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -13,6 +14,7 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -47,14 +49,13 @@ public class ProvidersListActivity extends BaseActivity
         implements ProvidersAdapter.OnProviderActionListener {
 
     public static final String EXTRA_CATEGORY = "category";
-    public static final String EXTRA_CITY     = "city";
+    public static final String EXTRA_QUERY = "query";
 
     private static final String TAG = "ProvidersListActivity";
 
     // ── Views ─────────────────────────────────────────────────────────────
     private TextView          tvCategoryTitle, tvResultSubtitle, tvLocationLabel, tvEmptySubtitle;
     private ImageView         btnBack;
-    private View              btnChangeLocation;
     private RecyclerView      rvProviders;
     private SwipeRefreshLayout swipeRefresh;
     private LinearLayout      loadingState, emptyState, errorState;
@@ -67,9 +68,10 @@ public class ProvidersListActivity extends BaseActivity
     private ProvidersAdapter      adapter;
     private List<ProviderProfile> allProviders  = new ArrayList<>();
     private String                category      = "";
-    private String                cityFilter    = "";
+    private String                cityFilter    = "Bangalore";
     private String                currentChip   = "All";
     private String                searchQuery   = "";
+    private AppLocationManager    locationManager;
 
     private final OkHttpClient HTTP = new OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -83,17 +85,19 @@ public class ProvidersListActivity extends BaseActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_providers_list);
 
-        category   = getIntent().getStringExtra(EXTRA_CATEGORY);
-        cityFilter = getIntent().getStringExtra(EXTRA_CITY);
-        if (category   == null) category   = "";
-        if (cityFilter == null) cityFilter = "";
+        category = getIntent().getStringExtra(EXTRA_CATEGORY);
+        if (category == null) category = "";
 
-        // Fall back to SharedPreferences city if not passed
-        if (cityFilter.isEmpty()) {
-            SharedPreferences prefs = getSharedPreferences(
-                    AppLocationManager.PREFS_NAME, MODE_PRIVATE);
-            cityFilter = prefs.getString(AppLocationManager.KEY_CITY, "");
+        locationManager = new AppLocationManager(this);
+        SharedPreferences prefs = getSharedPreferences(AppLocationManager.PREFS_NAME, MODE_PRIVATE);
+        cityFilter = prefs.getString(AppLocationManager.KEY_CITY_LEGACY,
+                prefs.getString(AppLocationManager.KEY_CITY, "Bangalore"));
+        if (cityFilter == null || cityFilter.trim().isEmpty()) {
+            cityFilter = "Bangalore";
         }
+
+        searchQuery = getIntent().getStringExtra(EXTRA_QUERY);
+        if (searchQuery == null) searchQuery = "";
 
         bindViews();
         setupRecycler();
@@ -102,6 +106,11 @@ public class ProvidersListActivity extends BaseActivity
         setupSearch();
         updateHeader();
         loadProviders();
+
+        if (!searchQuery.isEmpty() && etSearch != null) {
+            etSearch.setText(searchQuery);
+            etSearch.setSelection(searchQuery.length());
+        }
     }
 
     // ── Bind ─────────────────────────────────────────────────────────────
@@ -111,7 +120,6 @@ public class ProvidersListActivity extends BaseActivity
         tvLocationLabel  = findViewById(R.id.tvLocationLabel);
         tvEmptySubtitle  = findViewById(R.id.tvEmptySubtitle);
         btnBack          = findViewById(R.id.btnBack);
-        btnChangeLocation= findViewById(R.id.btnChangeLocation);
         rvProviders      = findViewById(R.id.rvProviders);
         swipeRefresh     = findViewById(R.id.swipeRefresh);
         loadingState     = findViewById(R.id.loadingState);
@@ -124,8 +132,12 @@ public class ProvidersListActivity extends BaseActivity
 
         btnBack.setOnClickListener(v -> finish());
 
+        if (tvLocationLabel != null) {
+            tvLocationLabel.setVisibility(View.GONE);
+        }
+        View btnChangeLocation = findViewById(R.id.btnChangeLocation);
         if (btnChangeLocation != null) {
-            btnChangeLocation.setOnClickListener(v -> showLocationPicker());
+            btnChangeLocation.setVisibility(View.GONE);
         }
 
         View btnRetry = findViewById(R.id.btnRetry);
@@ -183,33 +195,9 @@ public class ProvidersListActivity extends BaseActivity
     private void updateHeader() {
         String title = category.isEmpty() ? "Service Providers" : category + " Providers";
         if (tvCategoryTitle != null) tvCategoryTitle.setText(title);
-        if (tvLocationLabel != null)
-            tvLocationLabel.setText(cityFilter.isEmpty() ? "All locations" : "📍 " + cityFilter);
-    }
-
-    // ── Show location picker bottom sheet ────────────────────────────────
-    private void showLocationPicker() {
-        // Reuse the existing location bottom-sheet from AppLocationManager if available,
-        // otherwise show a simple dialog with common cities.
-        AppLocationManager locMgr = new AppLocationManager(this);
-        String[] cities = AppLocationManager.CITY_LIST;
-        CharSequence[] cityNames = new CharSequence[cities.length + 1];
-        cityNames[0] = "All Locations";
-        for (int i = 0; i < cities.length; i++) cityNames[i + 1] = cities[i];
-
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Select Location")
-                .setItems(cityNames, (dialog, which) -> {
-                    if (which == 0) {
-                        cityFilter = "";
-                    } else {
-                        cityFilter = cities[which - 1];
-                        locMgr.saveCity(cityFilter);
-                    }
-                    updateHeader();
-                    loadProviders();
-                })
-                .show();
+        if (tvResultSubtitle != null) {
+            tvResultSubtitle.setText("City: " + cityFilter);
+        }
     }
 
     // ── Load providers from Supabase ─────────────────────────────────────
@@ -259,25 +247,22 @@ public class ProvidersListActivity extends BaseActivity
                     .append("/rest/v1/provider_profiles?select=*");
 
             if (withStatusFilter) {
-                // Support both status conventions used in existing data.
-                url.append("&or=(status.eq.approved,status.eq.active)");
+                url.append("&or=(approved.eq.true,status.eq.approved,status.eq.active)");
             }
 
-            // Filter by category (case-insensitive partial match)
             if (!category.isEmpty()) {
                 url.append("&category=ilike.*")
-                   .append(java.net.URLEncoder.encode(category, "UTF-8"))
-                   .append("*");
+                        .append(java.net.URLEncoder.encode(category, "UTF-8"))
+                        .append("*");
             }
 
-            // Filter by city (case-insensitive partial match)
             if (!cityFilter.isEmpty()) {
                 url.append("&city=ilike.*")
-                   .append(java.net.URLEncoder.encode(cityFilter, "UTF-8"))
-                   .append("*");
+                        .append(java.net.URLEncoder.encode(cityFilter, "UTF-8"))
+                        .append("*");
             }
 
-            url.append("&order=created_at.desc&limit=100");
+            url.append("&order=created_at.desc&limit=150");
 
             Log.d(TAG, "fetchProviders URL: " + url);
 
@@ -290,9 +275,6 @@ public class ProvidersListActivity extends BaseActivity
 
             try (Response r = HTTP.newCall(req).execute()) {
                 String body = r.body() != null ? r.body().string() : "[]";
-                Log.d(TAG, "fetchProviders HTTP " + r.code() + " len=" + body.length()
-                        + " statusFilter=" + withStatusFilter);
-
                 if (!r.isSuccessful()) return null;
 
                 JSONArray arr = new JSONArray(body);
@@ -332,8 +314,14 @@ public class ProvidersListActivity extends BaseActivity
                     : status;
 
             // rating (optional column)
-            p.rating           = (float) o.optDouble("rating", 0.0);
-            p.reviewCount      = o.optInt("review_count", 0);
+            p.rating = (float) o.optDouble("rating", 0.0);
+            p.reviewCount = o.optInt("review_count", 0);
+
+            // Support either lat/lng or latitude/longitude columns.
+            p.lat = optDoubleFlexible(o, "lat");
+            if (Double.isNaN(p.lat)) p.lat = optDoubleFlexible(o, "latitude");
+            p.lng = optDoubleFlexible(o, "lng");
+            if (Double.isNaN(p.lng)) p.lng = optDoubleFlexible(o, "longitude");
             return p;
         } catch (Exception e) {
             Log.e(TAG, "parseProvider: " + e.getMessage());
@@ -341,13 +329,28 @@ public class ProvidersListActivity extends BaseActivity
         }
     }
 
+    private double optDoubleFlexible(JSONObject obj, String key) {
+        try {
+            if (!obj.has(key) || obj.isNull(key)) return Double.NaN;
+            Object raw = obj.get(key);
+            if (raw instanceof Number) return ((Number) raw).doubleValue();
+            return Double.parseDouble(String.valueOf(raw));
+        } catch (Exception ignored) {
+            return Double.NaN;
+        }
+    }
+
     // ── Filter + Search ───────────────────────────────────────────────────
     private void applyFilterAndSearch() {
         String q = searchQuery.toLowerCase(Locale.getDefault()).trim();
 
+        if (q.contains("nearby")) {
+            applyNearbyFilterFromGps(q.replace("nearby", "").replace("near me", "").trim());
+            return;
+        }
+
         List<ProviderProfile> filtered = new ArrayList<>();
         for (ProviderProfile p : allProviders) {
-            // 1. Chip filter
             boolean passChip = true;
             switch (currentChip) {
                 case "Verified":
@@ -357,24 +360,19 @@ public class ProvidersListActivity extends BaseActivity
                     passChip = p.rating >= 4.0f;
                     break;
                 default:
-                    break; // "All" — no filter
+                    break;
             }
             if (!passChip) continue;
 
-            // 2. Search query filter
             if (!q.isEmpty()) {
                 boolean matchBusiness = p.businessName != null
                         && p.businessName.toLowerCase(Locale.getDefault()).contains(q);
                 boolean matchCategory = p.category != null
                         && p.category.toLowerCase(Locale.getDefault()).contains(q);
-                boolean matchOwner    = p.ownerName != null
+                boolean matchOwner = p.ownerName != null
                         && p.ownerName.toLowerCase(Locale.getDefault()).contains(q);
-                boolean matchCity     = p.city != null
-                        && p.city.toLowerCase(Locale.getDefault()).contains(q);
-
-                if (!(matchBusiness || matchCategory || matchOwner || matchCity)) continue;
+                if (!(matchBusiness || matchCategory || matchOwner)) continue;
             }
-
             filtered.add(p);
         }
 
@@ -382,20 +380,61 @@ public class ProvidersListActivity extends BaseActivity
             filtered.sort((a, b) -> Float.compare(b.rating, a.rating));
         }
 
+        renderProviderList(filtered);
+    }
+
+    private void applyNearbyFilterFromGps(String cleanedQuery) {
+        if (locationManager == null) {
+            renderProviderList(new ArrayList<>());
+            return;
+        }
+
+        locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
+            @Override
+            public void onSuccess(String city, String area, double lat, double lng) {
+                List<ProviderProfile> filtered = new ArrayList<>();
+                for (ProviderProfile p : allProviders) {
+                    if (Double.isNaN(p.lat) || Double.isNaN(p.lng)) continue;
+                    float[] result = new float[1];
+                    Location.distanceBetween(lat, lng, p.lat, p.lng, result);
+                    if (result[0] > 10000f) continue;
+
+                    if (!cleanedQuery.isEmpty()) {
+                        String q = cleanedQuery.toLowerCase(Locale.getDefault());
+                        boolean matchBusiness = p.businessName != null
+                                && p.businessName.toLowerCase(Locale.getDefault()).contains(q);
+                        boolean matchCategory = p.category != null
+                                && p.category.toLowerCase(Locale.getDefault()).contains(q);
+                        boolean matchOwner = p.ownerName != null
+                                && p.ownerName.toLowerCase(Locale.getDefault()).contains(q);
+                        if (!(matchBusiness || matchCategory || matchOwner)) continue;
+                    }
+                    filtered.add(p);
+                }
+                runOnUiThread(() -> renderProviderList(filtered));
+            }
+
+            @Override
+            public void onFailure(String reason) {
+                runOnUiThread(() -> {
+                    Toast.makeText(ProvidersListActivity.this,
+                            "Unable to get current location. Showing city results.",
+                            Toast.LENGTH_SHORT).show();
+                    searchQuery = cleanedQuery;
+                    applyFilterAndSearch();
+                });
+            }
+        });
+    }
+
+    private void renderProviderList(List<ProviderProfile> filtered) {
         adapter.setProviders(filtered);
 
         if (filtered.isEmpty()) {
             rvProviders.setVisibility(View.GONE);
             errorState.setVisibility(View.GONE);
             emptyState.setVisibility(View.VISIBLE);
-            if (cityFilter.isEmpty()) {
-                tvEmptySubtitle.setText("No " + (category.isEmpty() ? "" : category + " ")
-                        + "providers found. Check category/status data in DB (approved/active). ");
-            } else {
-                tvEmptySubtitle.setText("No " + (category.isEmpty() ? "" : category + " ")
-                        + "providers in " + cityFilter
-                        + ". Verify exact city/category values or clear location.");
-            }
+            tvEmptySubtitle.setText("No providers found for selected city/category.");
         } else {
             emptyState.setVisibility(View.GONE);
             errorState.setVisibility(View.GONE);

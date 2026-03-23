@@ -5,6 +5,5 @@ package com.example.quickfix;
  */
 public class ServiceProvidersActivity extends ProvidersListActivity {
     public static final String EXTRA_CATEGORY = ProvidersListActivity.EXTRA_CATEGORY;
-    public static final String EXTRA_CITY = ProvidersListActivity.EXTRA_CITY;
 }
 
