@@ -547,8 +547,17 @@ public class MainActivity extends BaseActivity {
 
     private void openSearchResults(String query) {
         hideSuggestions();
-        Intent intent = new Intent(this, ProviderListActivity.class);
-        intent.putExtra(ProviderListActivity.EXTRA_QUERY, query);
+
+        Intent intent = new Intent(this, SearchResultsActivity.class);
+        intent.putExtra(SearchResultsActivity.EXTRA_QUERY, query == null ? "" : query.trim());
+        intent.putExtra(SearchResultsActivity.EXTRA_CITY, locationManager != null
+                ? locationManager.getSavedCity()
+                : "");
+        if (locationManager != null) {
+            intent.putExtra(SearchResultsActivity.EXTRA_LAT, locationManager.getSavedLat());
+            intent.putExtra(SearchResultsActivity.EXTRA_LNG, locationManager.getSavedLng());
+        }
+
         startActivity(intent);
         overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
     }

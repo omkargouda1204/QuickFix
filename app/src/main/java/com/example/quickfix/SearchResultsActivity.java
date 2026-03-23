@@ -67,6 +67,7 @@ public class SearchResultsActivity extends BaseActivity
     private AppLocationManager locationManager;
     private double userLat = Double.NaN;
     private double userLng = Double.NaN;
+    private boolean lastSearchUsedNearby = false;
 
     private EditText    etSearch;
     private ImageView   btnBack, btnClear;
@@ -201,7 +202,9 @@ public class SearchResultsActivity extends BaseActivity
             return;
         }
 
-        if (isNearbyQuery(queryText)) {
+        boolean useNearby = isNearbyQuery(queryText);
+        lastSearchUsedNearby = useNearby;
+        if (useNearby) {
             ensureLocationThenSearch(queryText);
         } else {
             executeSearch(queryText, false);
@@ -223,12 +226,17 @@ public class SearchResultsActivity extends BaseActivity
                 public void onSuccess(String city, String area, double lat, double lng) {
                     userLat = lat;
                     userLng = lng;
+                    if (cityFilter == null || cityFilter.trim().isEmpty()) {
+                        cityFilter = city == null ? "" : city.trim();
+                    }
+                    updateLocationLabel();
                     executeSearch(query, true);
                 }
 
                 @Override
                 public void onFailure(String reason) {
                     Log.d(TAG, "Location unavailable for nearby search: " + reason);
+                    updateLocationLabel();
                     executeSearch(query, false);
                 }
             });
@@ -238,14 +246,15 @@ public class SearchResultsActivity extends BaseActivity
         ActivityCompat.requestPermissions(this,
                 new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
                 LOCATION_PERMISSION_REQ);
-        executeSearch(query, false);
     }
 
     private void executeSearch(String query, boolean useNearby) {
         new Thread(() -> {
             List<SearchResult> results = new ArrayList<>();
             results.addAll(searchProviders(query, userLat, userLng, NEARBY_RADIUS_KM, useNearby));
-            results.addAll(searchServices(query));
+            if (!useNearby) {
+                results.addAll(searchServices(query));
+            }
             MAIN.post(() -> {
                 allResults = results;
                 applyFilter();
@@ -262,11 +271,10 @@ public class SearchResultsActivity extends BaseActivity
 
     private String sanitizeProviderQuery(String query) {
         if (query == null) return "";
-        String cleaned = query.toLowerCase(Locale.getDefault())
+        return query.toLowerCase(Locale.getDefault())
                 .replace("nearby", "")
                 .replace("near me", "")
                 .trim();
-        return cleaned.isEmpty() ? "service" : cleaned;
     }
 
     /**
@@ -564,7 +572,10 @@ public class SearchResultsActivity extends BaseActivity
 
         boolean isEmpty = filtered.isEmpty() && !queryText.isEmpty();
         if (isEmpty) {
-            if (SearchResult.TYPE_PROVIDER.equals(currentFilter) || "All".equals(currentFilter)) {
+            if (lastSearchUsedNearby) {
+                tvEmptyTitle.setText("No nearby providers found");
+                tvEmptySubtitle.setText("Try another service keyword or search without near me.");
+            } else if (SearchResult.TYPE_PROVIDER.equals(currentFilter) || "All".equals(currentFilter)) {
                 tvEmptyTitle.setText("No nearby providers found");
                 tvEmptySubtitle.setText("Try a larger radius, different service, or location.");
             } else {
@@ -705,10 +716,11 @@ public class SearchResultsActivity extends BaseActivity
             }
             if (granted && !queryText.isEmpty()) {
                 performSearch(queryText);
-            } else if (!granted) {
+            } else if (!granted && !queryText.isEmpty()) {
                 Toast.makeText(this,
                         "Location permission denied. Showing non-distance results.",
                         Toast.LENGTH_SHORT).show();
+                executeSearch(queryText, false);
             }
         }
     }
