@@ -219,10 +219,7 @@ public class ProvidersListActivity extends BaseActivity
 
         new Thread(() -> {
             try {
-                // Strategy: try with status=eq.active filter first (most reliable).
-                // If that returns 0 results OR fails (e.g. column missing),
-                // fall back to fetching ALL rows from provider_profiles
-                // (so provider cards always show).
+                // Strategy: fetch approved/active profiles first; fallback to broad query if needed.
                 List<ProviderProfile> list = fetchProviders(true);
 
                 if (list == null) {
@@ -262,7 +259,8 @@ public class ProvidersListActivity extends BaseActivity
                     .append("/rest/v1/provider_profiles?select=*");
 
             if (withStatusFilter) {
-                url.append("&status=eq.active");
+                // Support both status conventions used in existing data.
+                url.append("&or=(status.eq.approved,status.eq.active)");
             }
 
             // Filter by category (case-insensitive partial match)
@@ -379,20 +377,24 @@ public class ProvidersListActivity extends BaseActivity
 
             filtered.add(p);
         }
+
+        if ("TopRated".equals(currentChip)) {
+            filtered.sort((a, b) -> Float.compare(b.rating, a.rating));
+        }
+
         adapter.setProviders(filtered);
 
         if (filtered.isEmpty()) {
             rvProviders.setVisibility(View.GONE);
             errorState.setVisibility(View.GONE);
             emptyState.setVisibility(View.VISIBLE);
-            // Helpful empty message
             if (cityFilter.isEmpty()) {
                 tvEmptySubtitle.setText("No " + (category.isEmpty() ? "" : category + " ")
-                        + "providers available yet. Check back soon!");
+                        + "providers found. Check category/status data in DB (approved/active). ");
             } else {
                 tvEmptySubtitle.setText("No " + (category.isEmpty() ? "" : category + " ")
-                        + "providers found in " + cityFilter
-                        + ".\nTry clearing the location filter.");
+                        + "providers in " + cityFilter
+                        + ". Verify exact city/category values or clear location.");
             }
         } else {
             emptyState.setVisibility(View.GONE);

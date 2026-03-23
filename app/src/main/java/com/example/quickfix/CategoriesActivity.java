@@ -85,9 +85,9 @@ public class CategoriesActivity extends BaseActivity {
     }
 
     private void openProviders(String category) {
-        Intent intent = new Intent(this, ProvidersListActivity.class);
-        intent.putExtra(ProvidersListActivity.EXTRA_CATEGORY, category);
-        intent.putExtra(ProvidersListActivity.EXTRA_CITY, cityFilter);
+        Intent intent = new Intent(this, ServiceProvidersActivity.class);
+        intent.putExtra(ServiceProvidersActivity.EXTRA_CATEGORY, category);
+        intent.putExtra(ServiceProvidersActivity.EXTRA_CITY, cityFilter);
         startActivity(intent);
         overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
     }

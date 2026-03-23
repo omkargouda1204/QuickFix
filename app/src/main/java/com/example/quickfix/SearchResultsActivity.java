@@ -61,7 +61,7 @@ public class SearchResultsActivity extends BaseActivity
     private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
     private static final String BASE_URL = BuildConfig.SUPABASE_URL;
     private static final int LOCATION_PERMISSION_REQ = 1014;
-    private static final float NEARBY_RADIUS_KM = 25f;
+    private static final float NEARBY_RADIUS_KM = 10f;
 
     // ...existing fields...
     private AppLocationManager locationManager;
@@ -201,12 +201,16 @@ public class SearchResultsActivity extends BaseActivity
             return;
         }
 
-        ensureLocationThenSearch(queryText);
+        if (isNearbyQuery(queryText)) {
+            ensureLocationThenSearch(queryText);
+        } else {
+            executeSearch(queryText, false);
+        }
     }
 
     private void ensureLocationThenSearch(String query) {
         if (!Double.isNaN(userLat) && !Double.isNaN(userLng)) {
-            executeSearch(query);
+            executeSearch(query, true);
             return;
         }
 
@@ -219,17 +223,13 @@ public class SearchResultsActivity extends BaseActivity
                 public void onSuccess(String city, String area, double lat, double lng) {
                     userLat = lat;
                     userLng = lng;
-                    if (cityFilter == null || cityFilter.trim().isEmpty()) {
-                        cityFilter = city == null ? "" : city.trim();
-                    }
-                    updateLocationLabel();
-                    executeSearch(query);
+                    executeSearch(query, true);
                 }
 
                 @Override
                 public void onFailure(String reason) {
-                    Log.d(TAG, "Location unavailable, fallback search: " + reason);
-                    executeSearch(query);
+                    Log.d(TAG, "Location unavailable for nearby search: " + reason);
+                    executeSearch(query, false);
                 }
             });
             return;
@@ -238,13 +238,13 @@ public class SearchResultsActivity extends BaseActivity
         ActivityCompat.requestPermissions(this,
                 new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
                 LOCATION_PERMISSION_REQ);
-        executeSearch(query);
+        executeSearch(query, false);
     }
 
-    private void executeSearch(String query) {
+    private void executeSearch(String query, boolean useNearby) {
         new Thread(() -> {
             List<SearchResult> results = new ArrayList<>();
-            results.addAll(searchProviders(query, userLat, userLng, NEARBY_RADIUS_KM));
+            results.addAll(searchProviders(query, userLat, userLng, NEARBY_RADIUS_KM, useNearby));
             results.addAll(searchServices(query));
             MAIN.post(() -> {
                 allResults = results;
@@ -254,32 +254,47 @@ public class SearchResultsActivity extends BaseActivity
         }).start();
     }
 
+    private boolean isNearbyQuery(String query) {
+        if (query == null) return false;
+        String q = query.toLowerCase(Locale.getDefault());
+        return q.contains("nearby") || q.contains("near me");
+    }
+
+    private String sanitizeProviderQuery(String query) {
+        if (query == null) return "";
+        String cleaned = query.toLowerCase(Locale.getDefault())
+                .replace("nearby", "")
+                .replace("near me", "")
+                .trim();
+        return cleaned.isEmpty() ? "service" : cleaned;
+    }
+
     /**
-     * Query nearby providers by service keyword and distance when coordinates are available.
-     * Falls back to text + city-only search when coordinates are unavailable.
+     * Query nearby providers only when user explicitly searched by nearby keyword.
+     * Otherwise use normal city-based search.
      */
     private List<SearchResult> searchProviders(String query,
                                                double originLat,
                                                double originLng,
-                                               float radiusKm) {
+                                               float radiusKm,
+                                               boolean useNearby) {
         List<SearchResult> list = new ArrayList<>();
         if (query.isEmpty()) return list;
 
         try {
-            String enc = java.net.URLEncoder.encode(query, "UTF-8");
+            String cleanedQuery = sanitizeProviderQuery(query);
+            String enc = java.net.URLEncoder.encode(cleanedQuery, "UTF-8");
             Set<String> seenIds = new HashSet<>();
 
-            if (!Double.isNaN(originLat) && !Double.isNaN(originLng)) {
+            if (useNearby && !Double.isNaN(originLat) && !Double.isNaN(originLng)) {
                 list.addAll(fetchNearbyFromProfiles(enc, "latitude", "longitude",
                         originLat, originLng, radiusKm, seenIds));
                 if (list.isEmpty()) {
                     list.addAll(fetchNearbyFromProfiles(enc, "lat", "lng",
                             originLat, originLng, radiusKm, seenIds));
                 }
-                if (!list.isEmpty()) {
-                    Collections.sort(list, (a, b) -> Float.compare(a.distanceKm, b.distanceKm));
-                    return list;
-                }
+                list.sort((a, b) -> Float.compare(a.distanceKm, b.distanceKm));
+                return list;
             }
 
             list.addAll(fetchTextProviders(enc, seenIds));
@@ -577,9 +592,9 @@ public class SearchResultsActivity extends BaseActivity
             fetchProviderAndOpenDetail(result.id);
         } else if (SearchResult.TYPE_SERVICE.equals(result.type)) {
             // Open providers list filtered by service category
-            Intent intent = new Intent(this, ProvidersListActivity.class);
-            intent.putExtra(ProvidersListActivity.EXTRA_CATEGORY, result.subtitle); // category
-            intent.putExtra(ProvidersListActivity.EXTRA_CITY, cityFilter);
+            Intent intent = new Intent(this, ServiceProvidersActivity.class);
+            intent.putExtra(ServiceProvidersActivity.EXTRA_CATEGORY, result.subtitle); // category
+            intent.putExtra(ServiceProvidersActivity.EXTRA_CITY, cityFilter);
             startActivity(intent);
         }
     }

@@ -235,22 +235,28 @@
                 android:paddingTop="20dp"
                 android:visibility="gone">
 
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/rvBannersCarousel"
+                <androidx.viewpager2.widget.ViewPager2
+                    android:id="@+id/vpBannersCarousel"
                     android:layout_width="match_parent"
                     android:layout_height="160dp"
                     android:clipToPadding="false"
                     android:paddingStart="20dp"
                     android:paddingEnd="20dp"
-                    android:scrollbars="none" />
+                    android:overScrollMode="never" />
 
-                <LinearLayout
+                <com.google.android.material.tabs.TabLayout
                     android:id="@+id/bannerDotsLayout"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_horizontal"
                     android:layout_marginTop="8dp"
-                    android:orientation="horizontal" />
+                    app:tabBackground="@drawable/bg_banner_dot_selector"
+                    app:tabIndicator="@null"
+                    app:tabRippleColor="@android:color/transparent"
+                    app:tabIndicatorFullWidth="false"
+                    app:tabMinWidth="0dp"
+                    app:tabPaddingStart="4dp"
+                    app:tabPaddingEnd="4dp" />
 
             </LinearLayout>
 

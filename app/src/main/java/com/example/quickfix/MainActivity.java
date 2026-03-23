@@ -30,12 +30,15 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager2.widget.ViewPager2;
 
 import com.example.quickfix.adapters.SearchSuggestionsAdapter;
 import com.example.quickfix.adapters.HomeBannerAdapter;
 import com.example.quickfix.adapters.HomeOfferAdapter;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.tabs.TabLayout;
+import com.google.android.material.tabs.TabLayoutMediator;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.messaging.FirebaseMessaging;
@@ -56,6 +59,7 @@ import okhttp3.Response;
 public class MainActivity extends BaseActivity {
 
     private static final String TAG                      = "MainActivity";
+    private static final String CRASH_TAG                = "CRASH_ERROR";
     private static final int    LOCATION_PERMISSION_REQ  = 1001;
     private static final int    NOTIFICATION_PERMISSION_REQ = 1002;
 
@@ -103,12 +107,18 @@ public class MainActivity extends BaseActivity {
 
     // ── Banners & Offers (home screen) ────────────────────────────────────
     private LinearLayout       bannersSection, offersSection;
-    private RecyclerView       rvBannersCarousel, rvOffersStrip;
-    private LinearLayout       bannerDotsLayout;
+    private ViewPager2         vpBannersCarousel;
+    private RecyclerView       rvOffersStrip;
+    private TabLayout          bannerDotsLayout;
     private HomeBannerAdapter  homeBannerAdapter;
     private HomeOfferAdapter   homeOfferAdapter;
     private final List<Banner> homeBanners = new java.util.ArrayList<>();
     private final List<Offer>  homeOffers  = new java.util.ArrayList<>();
+    private TabLayoutMediator  bannerDotsMediator;
+    private ViewPager2.OnPageChangeCallback bannerPageCallback;
+    private final Handler bannerAutoSlideHandler = new Handler(Looper.getMainLooper());
+    private Runnable bannerAutoSlideRunnable;
+    private int pendingHomeLoads = 0;
 
 
     // ── Pull-to-Refresh ───────────────────────────────────────────────────
@@ -149,7 +159,12 @@ public class MainActivity extends BaseActivity {
         setupBottomNav();
         setupListBusinessCard(currentUser);
 
-        loadBannersAndOffers();
+        try {
+            refreshHomeContent(false);
+        } catch (Exception e) {
+            Log.e(CRASH_TAG, "Home content init failed", e);
+            Log.e(TAG, "Home content init failed", e);
+        }
 
         // Sync dark mode setting from Supabase (admin may have changed it)
         ThemeManager.fetchAndSync(this);
@@ -167,6 +182,24 @@ public class MainActivity extends BaseActivity {
 
         // Request POST_NOTIFICATIONS permission on Android 13+ (API 33+)
         requestNotificationPermission();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        try {
+            refreshHomeContent(false);
+        } catch (Exception e) {
+            Log.e(CRASH_TAG, "Home content refresh failed", e);
+            Log.e(TAG, "Home content refresh failed", e);
+        }
+        startBannerAutoSlide();
+    }
+
+    @Override
+    protected void onPause() {
+        stopBannerAutoSlide();
+        super.onPause();
     }
 
     // ── Init Views ────────────────────────────────────────────────────────
@@ -222,7 +255,7 @@ public class MainActivity extends BaseActivity {
         // Banners & Offers
         bannersSection    = findViewById(R.id.bannersSection);
         offersSection     = findViewById(R.id.offersSection);
-        rvBannersCarousel = findViewById(R.id.rvBannersCarousel);
+        vpBannersCarousel = findViewById(R.id.vpBannersCarousel);
         rvOffersStrip     = findViewById(R.id.rvOffersStrip);
         bannerDotsLayout  = findViewById(R.id.bannerDotsLayout);
 
@@ -250,17 +283,10 @@ public class MainActivity extends BaseActivity {
         homeSwipeRefresh = findViewById(R.id.homeSwipeRefresh);
         if (homeSwipeRefresh != null) {
             homeSwipeRefresh.setColorSchemeResources(R.color.primary);
-            // Make the circle indicator invisible so it feels like a background refresh
             homeSwipeRefresh.setProgressBackgroundColorSchemeColor(
                     android.graphics.Color.TRANSPARENT);
             homeSwipeRefresh.setProgressViewOffset(false, 0, 0);
-            homeSwipeRefresh.setOnRefreshListener(() -> {
-                loadBannersAndOffers();
-                // Dismiss spinner after a short delay
-                MAIN.postDelayed(() -> {
-                    if (homeSwipeRefresh != null) homeSwipeRefresh.setRefreshing(false);
-                }, 1500);
-            });
+            homeSwipeRefresh.setOnRefreshListener(() -> refreshHomeContent(true));
         }
     }
 
@@ -311,20 +337,16 @@ public class MainActivity extends BaseActivity {
         if (savedLabel != null && !savedLabel.isEmpty()) {
             updateLocationDisplay(savedLabel, true);
         } else {
-            updateLocationDisplay("Select Location", false);
-            // Auto-detect on first launch if permission already granted
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED) {
-                fetchLiveLocationNow();
-            }
+            updateLocationDisplay("Select City", false);
         }
-        if (locationSelector != null)
-            locationSelector.setOnClickListener(v -> showLocationBottomSheet());
+        if (locationSelector != null) {
+            locationSelector.setOnClickListener(v -> showLocationActionDialog());
+        }
     }
 
     private void updateLocationDisplay(String city, boolean isDetected) {
         if (tvSelectedLocation != null)
-            tvSelectedLocation.setText((city == null || city.isEmpty()) ? "Select Location" : city);
+            tvSelectedLocation.setText((city == null || city.isEmpty()) ? "Select City" : city);
         if (locationAccuracyDot != null)
             locationAccuracyDot.setVisibility(isDetected ? View.VISIBLE : View.GONE);
         if (ivLocationPulse != null) {
@@ -337,52 +359,78 @@ public class MainActivity extends BaseActivity {
         }
     }
 
-    // ── Beautiful Bottom Sheet Location Picker ────────────────────────────
-    private void showLocationBottomSheet() {
-        LocationSearchBottomSheet.show(
-                this,
-                locationManager,
-                new LocationSearchBottomSheet.PermissionDelegate() {
-                    @Override
-                    public boolean hasLocationPermission() {
-                        return ContextCompat.checkSelfPermission(MainActivity.this,
-                                Manifest.permission.ACCESS_FINE_LOCATION)
-                                == PackageManager.PERMISSION_GRANTED;
+    private void showLocationActionDialog() {
+        String[] options = new String[]{"Select City", "Use Current Location"};
+        new AlertDialog.Builder(this)
+                .setTitle("Choose Location")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        showManualCityDialog();
+                    } else {
+                        requestAndFetchCurrentLocation();
                     }
+                })
+                .show();
+    }
 
-                    @Override
-                    public void requestLocationPermission() {
-                        ActivityCompat.requestPermissions(MainActivity.this,
-                                new String[]{
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                },
-                                LOCATION_PERMISSION_REQ);
-                    }
-                },
-                suggestion -> {
-                    if (suggestion == null || suggestion.city == null || suggestion.city.trim().isEmpty()) {
-                        updateLocationDisplay("Select Location", false);
-                        Toast.makeText(MainActivity.this,
-                                "Location cleared - showing all providers", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    String label = AppLocationManager.composeLocationLabel(suggestion.city, suggestion.area);
-                    updateLocationDisplay(label, true);
-                    Toast.makeText(MainActivity.this, "Location set: " + label,
-                            Toast.LENGTH_SHORT).show();
-                });
+    private void showManualCityDialog() {
+        String[] cities = AppLocationManager.CITY_LIST;
+        new AlertDialog.Builder(this)
+                .setTitle("Select City")
+                .setItems(cities, (dialog, which) -> {
+                    if (which < 0 || which >= cities.length) return;
+                    String selectedCity = cities[which];
+                    locationManager.saveCity(selectedCity);
+                    updateLocationDisplay(selectedCity, false);
+                    Toast.makeText(this, "City selected: " + selectedCity, Toast.LENGTH_SHORT).show();
+                })
+                .setNeutralButton("Clear", (dialog, which) -> {
+                    locationManager.clearCity();
+                    updateLocationDisplay("Select City", false);
+                    Toast.makeText(this, "Location cleared", Toast.LENGTH_SHORT).show();
+                })
+                .show();
+    }
+
+    private void requestAndFetchCurrentLocation() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.e(CRASH_TAG, "Location permission missing before GPS request");
+            ActivityCompat.requestPermissions(this,
+                    new String[]{
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                    },
+                    LOCATION_PERMISSION_REQ);
+            return;
+        }
+        fetchLiveLocationNow();
     }
 
     private void fetchLiveLocationNow() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.e(CRASH_TAG, "fetchLiveLocationNow aborted: location permission not granted");
+            return;
+        }
+
         updateLocationDisplay("Detecting...", false);
         locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
             @Override public void onSuccess(String city, String area, double lat, double lng) {
                 String label = AppLocationManager.composeLocationLabel(city, area);
-                updateLocationDisplay(label.isEmpty() ? "Location detected" : label, true);
+                updateLocationDisplay(label.isEmpty() ? "Select City" : label, true);
             }
             @Override public void onFailure(String reason) {
-                updateLocationDisplay("Select Location", false);
+                Log.e(CRASH_TAG, "Live location failed: " + reason);
+                Log.e(TAG, "Live location failed: " + reason);
+                updateLocationDisplay(locationManager.getSavedLocationLabel(), false);
+                Toast.makeText(MainActivity.this,
+                        reason == null || reason.isEmpty() ? "Unable to detect location" : reason,
+                        Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -393,10 +441,11 @@ public class MainActivity extends BaseActivity {
                                            @NonNull int[] results) {
         super.onRequestPermissionsResult(req, permissions, results);
         if (req == LOCATION_PERMISSION_REQ) {
-            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED)
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
                 fetchLiveLocationNow();
-            else
+            } else {
                 Toast.makeText(this, "Location permission denied", Toast.LENGTH_SHORT).show();
+            }
         } else if (req == NOTIFICATION_PERMISSION_REQ) {
             boolean granted = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
             Log.d(TAG, "POST_NOTIFICATIONS permission " + (granted ? "GRANTED" : "DENIED"));
@@ -589,9 +638,9 @@ public class MainActivity extends BaseActivity {
     }
 
     private void openProvidersList(String category) {
-        Intent intent = new Intent(this, ProvidersListActivity.class);
-        intent.putExtra(ProvidersListActivity.EXTRA_CATEGORY, category);
-        intent.putExtra(ProvidersListActivity.EXTRA_CITY, locationManager.getSavedCity());
+        Intent intent = new Intent(this, ServiceProvidersActivity.class);
+        intent.putExtra(ServiceProvidersActivity.EXTRA_CATEGORY, category);
+        intent.putExtra(ServiceProvidersActivity.EXTRA_CITY, locationManager.getSavedCity());
         startActivity(intent);
         overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
     }
@@ -784,23 +833,51 @@ public class MainActivity extends BaseActivity {
     //   offers:  id, title, description, offer_code, discount_type,
     //            discount_value(numeric), min_booking_amount, expiry_date,
     //            is_active(boolean), created_at
-    private void loadBannersAndOffers() {
+    private void refreshHomeContent(boolean fromSwipe) {
+        try {
+            if (fromSwipe && homeSwipeRefresh != null) {
+                homeSwipeRefresh.setRefreshing(true);
+                pendingHomeLoads = 2;
+            }
+            loadBanners();
+            loadOffers();
+        } catch (Exception e) {
+            Log.e(CRASH_TAG, "refreshHomeContent failed", e);
+            Log.e(TAG, "refreshHomeContent failed", e);
+            if (homeSwipeRefresh != null) {
+                homeSwipeRefresh.setRefreshing(false);
+            }
+        }
+    }
+
+    private void markHomeSectionLoaded() {
+        pendingHomeLoads = Math.max(0, pendingHomeLoads - 1);
+        if (pendingHomeLoads == 0 && homeSwipeRefresh != null) {
+            homeSwipeRefresh.setRefreshing(false);
+        }
+    }
+
+    private void loadBanners() {
         final String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
                 Locale.getDefault()).format(new java.util.Date());
 
-        // ── Banners ────────────────────────────────────────────────────────
         new Thread(() -> {
             try {
-                // Fetch ALL rows — no server-side is_active filter to avoid missing rows
                 String url = BuildConfig.SUPABASE_URL
-                        + "/rest/v1/banners?select=*&order=priority.asc,created_at.desc";
+                        + "/rest/v1/banners?select=*&is_active=eq.true&order=priority.asc,created_at.desc";
                 Request req = new Request.Builder()
                         .url(url)
                         .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Accept",        "application/json")
                         .build();
+
                 try (Response resp = HTTP.newCall(req).execute()) {
+                    if (resp == null) {
+                        Log.e(CRASH_TAG, "API response null: banners");
+                        MAIN.post(() -> showBannersOnHome(new ArrayList<>()));
+                        return;
+                    }
                     String body = resp.body() != null ? resp.body().string() : "[]";
                     Log.d(TAG, "loadBanners HTTP " + resp.code() + " body=" + body);
                     if (resp.isSuccessful()) {
@@ -818,40 +895,53 @@ public class MainActivity extends BaseActivity {
                             b.redirectId   = o.optString("redirect_id");
                             b.expiryDate   = o.optString("expiry_date");
                             b.priority     = o.optInt("priority", 1);
-                            b.isActive     = o.optBoolean("is_active", true); // exact DB column
+                            b.isActive     = o.optBoolean("is_active", true);
                             b.status       = b.isActive ? "active" : "inactive";
-                            // Show only active banners whose expiry hasn't passed
+
                             boolean notExpired = b.expiryDate == null || b.expiryDate.isEmpty()
                                     || b.expiryDate.compareTo(today) >= 0;
                             if (b.isActive && notExpired) {
                                 list.add(b);
                             }
                         }
-                        Log.d(TAG, "loadBanners: " + arr.length()
-                                + " total, " + list.size() + " active/valid");
                         MAIN.post(() -> showBannersOnHome(list));
                     } else {
+                        Log.e(CRASH_TAG, "loadBanners failed HTTP " + resp.code());
                         Log.e(TAG, "loadBanners FAILED HTTP " + resp.code() + ": " + body);
+                        MAIN.post(() -> showBannersOnHome(new ArrayList<>()));
                     }
                 }
             } catch (Exception e) {
-                Log.e(TAG, "loadBanners exception: " + e.getMessage());
+                Log.e(CRASH_TAG, "loadBanners exception", e);
+                Log.e(TAG, "loadBanners exception", e);
+                MAIN.post(() -> showBannersOnHome(new ArrayList<>()));
+            } finally {
+                MAIN.post(this::markHomeSectionLoaded);
             }
         }).start();
+    }
 
-        // ── Offers ─────────────────────────────────────────────────────────
+    private void loadOffers() {
+        final String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
+                Locale.getDefault()).format(new java.util.Date());
+
         new Thread(() -> {
             try {
-                // Fetch ALL rows — no server-side filter
                 String url = BuildConfig.SUPABASE_URL
-                        + "/rest/v1/offers?select=*&order=created_at.desc";
+                        + "/rest/v1/offers?select=*&is_active=eq.true&order=created_at.desc";
                 Request req = new Request.Builder()
                         .url(url)
                         .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Accept",        "application/json")
                         .build();
+
                 try (Response resp = HTTP.newCall(req).execute()) {
+                    if (resp == null) {
+                        Log.e(CRASH_TAG, "API response null: offers");
+                        MAIN.post(() -> showOffersOnHome(new ArrayList<>()));
+                        return;
+                    }
                     String body = resp.body() != null ? resp.body().string() : "[]";
                     Log.d(TAG, "loadOffers HTTP " + resp.code() + " body=" + body);
                     if (resp.isSuccessful()) {
@@ -863,107 +953,177 @@ public class MainActivity extends BaseActivity {
                             offer.id               = o.optString("id");
                             offer.title            = o.optString("title");
                             offer.description      = o.optString("description");
-                            offer.offerCode        = o.optString("offer_code"); // exact DB column
+                            offer.offerCode        = o.optString("offer_code");
                             offer.discountType     = o.optString("discount_type", "percentage");
-                            offer.discountValue    = o.optDouble("discount_value", 0); // exact DB column
+                            offer.discountValue    = o.optDouble("discount_value", 0);
                             offer.minBookingAmount = o.optDouble("min_booking_amount", 0);
                             offer.expiryDate       = o.optString("expiry_date");
-                            offer.isActive         = o.optBoolean("is_active", true); // exact DB column
+                            offer.isActive         = o.optBoolean("is_active", true);
                             offer.status           = offer.isActive ? "active" : "inactive";
-                            // Show only active offers whose expiry hasn't passed
+
                             boolean notExpired = offer.expiryDate == null || offer.expiryDate.isEmpty()
                                     || offer.expiryDate.compareTo(today) >= 0;
                             if (offer.isActive && notExpired) {
                                 list.add(offer);
                             }
                         }
-                        Log.d(TAG, "loadOffers: " + arr.length()
-                                + " total, " + list.size() + " active/valid");
                         MAIN.post(() -> showOffersOnHome(list));
                     } else {
+                        Log.e(CRASH_TAG, "loadOffers failed HTTP " + resp.code());
                         Log.e(TAG, "loadOffers FAILED HTTP " + resp.code() + ": " + body);
+                        MAIN.post(() -> showOffersOnHome(new ArrayList<>()));
                     }
                 }
             } catch (Exception e) {
-                Log.e(TAG, "loadOffers exception: " + e.getMessage());
+                Log.e(CRASH_TAG, "loadOffers exception", e);
+                Log.e(TAG, "loadOffers exception", e);
+                MAIN.post(() -> showOffersOnHome(new ArrayList<>()));
+            } finally {
+                MAIN.post(this::markHomeSectionLoaded);
             }
         }).start();
     }
 
     private void showBannersOnHome(List<Banner> list) {
-        if (bannersSection == null || rvBannersCarousel == null) return;
-        if (list.isEmpty()) {
-            bannersSection.setVisibility(View.GONE);
+        if (bannersSection == null || vpBannersCarousel == null || bannerDotsLayout == null) {
+            Log.e(CRASH_TAG, "Banner views are null; skipping render");
             return;
         }
+
+        if (list != null && list.size() > 0) {
+            homeBanners.clear();
+            homeBanners.addAll(list);
+        } else {
+            Log.e("DATA", "Empty or null list: banners");
+            homeBanners.clear();
+        }
+
+        if (homeBanners.isEmpty()) {
+            bannersSection.setVisibility(View.GONE);
+            stopBannerAutoSlide();
+            if (bannerDotsMediator != null) {
+                bannerDotsMediator.detach();
+                bannerDotsMediator = null;
+            }
+            return;
+        }
+
         bannersSection.setVisibility(View.VISIBLE);
-        homeBanners.clear();
-        homeBanners.addAll(list);
 
         if (homeBannerAdapter == null) {
             homeBannerAdapter = new HomeBannerAdapter(this, homeBanners, banner -> {
-                // Handle banner click by redirect type
                 if ("category".equals(banner.redirectType) && banner.redirectId != null) {
                     openProvidersList(banner.redirectId);
                 } else if ("service".equals(banner.redirectType) && banner.redirectId != null) {
                     openProvidersList(banner.redirectId);
                 }
-                // "external" — could open browser, skipped for safety
             });
-            LinearLayoutManager lm = new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false);
-            rvBannersCarousel.setLayoutManager(lm);
-            rvBannersCarousel.setAdapter(homeBannerAdapter);
-            // Add pager-snap behavior for smooth carousel
-            rvBannersCarousel.addItemDecoration(new androidx.recyclerview.widget.RecyclerView.ItemDecoration() {});
-            androidx.recyclerview.widget.PagerSnapHelper snap = new androidx.recyclerview.widget.PagerSnapHelper();
-            snap.attachToRecyclerView(rvBannersCarousel);
-        } else {
-            homeBannerAdapter.setItems(homeBanners);
         }
 
-        // Build dot indicators
-        buildBannerDots(list.size());
+        if (homeBanners != null && homeBanners.size() > 0) {
+            if (vpBannersCarousel.getAdapter() == null) {
+                vpBannersCarousel.setAdapter(homeBannerAdapter);
+            }
+            homeBannerAdapter.setItems(homeBanners);
+            homeBannerAdapter.notifyDataSetChanged();
+        } else {
+            vpBannersCarousel.setVisibility(View.GONE);
+            Log.e("DATA", "Empty or null list: banner adapter source");
+            return;
+        }
+
+        if (bannerPageCallback == null) {
+            bannerPageCallback = new ViewPager2.OnPageChangeCallback() {
+                @Override
+                public void onPageSelected(int position) {
+                    super.onPageSelected(position);
+                    if (bannerDotsLayout.getTabCount() == 0) return;
+                    TabLayout.Tab tab = bannerDotsLayout.getTabAt(position);
+                    if (tab != null) {
+                        bannerDotsLayout.selectTab(tab);
+                    }
+                }
+            };
+            vpBannersCarousel.registerOnPageChangeCallback(bannerPageCallback);
+        }
+
+        if (bannerDotsMediator != null) {
+            bannerDotsMediator.detach();
+        }
+        bannerDotsMediator = new TabLayoutMediator(bannerDotsLayout, vpBannersCarousel,
+                (tab, position) -> { });
+        bannerDotsMediator.attach();
+
+        startBannerAutoSlide();
     }
 
-    private void buildBannerDots(int count) {
-        if (bannerDotsLayout == null) return;
-        bannerDotsLayout.removeAllViews();
-        if (count <= 1) return;
-        for (int i = 0; i < count; i++) {
-            android.widget.ImageView dot = new android.widget.ImageView(this);
-            int sz = (int) (8 * getResources().getDisplayMetrics().density);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(sz, sz);
-            lp.setMargins(4, 0, 4, 0);
-            dot.setLayoutParams(lp);
-            dot.setImageResource(i == 0 ? R.drawable.bg_green_dot : R.drawable.bg_shimmer_block);
-            bannerDotsLayout.addView(dot);
+    private void startBannerAutoSlide() {
+        stopBannerAutoSlide();
+        if (vpBannersCarousel == null || homeBanners.size() <= 1) return;
+
+        bannerAutoSlideRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (homeBanners.isEmpty()) return;
+                int next = (vpBannersCarousel.getCurrentItem() + 1) % homeBanners.size();
+                vpBannersCarousel.setCurrentItem(next, true);
+                bannerAutoSlideHandler.postDelayed(this, 3000);
+            }
+        };
+        bannerAutoSlideHandler.postDelayed(bannerAutoSlideRunnable, 3000);
+    }
+
+    private void stopBannerAutoSlide() {
+        if (bannerAutoSlideRunnable != null) {
+            bannerAutoSlideHandler.removeCallbacks(bannerAutoSlideRunnable);
+            bannerAutoSlideRunnable = null;
         }
     }
 
     private void showOffersOnHome(List<Offer> list) {
-        if (offersSection == null || rvOffersStrip == null) return;
-        if (list.isEmpty()) {
-            offersSection.setVisibility(View.GONE);
+        if (offersSection == null || rvOffersStrip == null) {
+            Log.e(CRASH_TAG, "Offer views are null; skipping render");
             return;
         }
+
+        if (list != null && list.size() > 0) {
+            homeOffers.clear();
+            homeOffers.addAll(list);
+        } else {
+            Log.e("DATA", "Empty or null list: offers");
+            homeOffers.clear();
+        }
+
+        if (homeOffers.isEmpty()) {
+            offersSection.setVisibility(View.GONE);
+            if (homeOfferAdapter != null) {
+                homeOfferAdapter.notifyDataSetChanged();
+            }
+            return;
+        }
+
         offersSection.setVisibility(View.VISIBLE);
-        homeOffers.clear();
-        homeOffers.addAll(list);
 
         if (homeOfferAdapter == null) {
             homeOfferAdapter = new HomeOfferAdapter(this, homeOffers, offer ->
-                Toast.makeText(this,
-                        "Use code: " + offer.offerCode + " for "
-                        + (offer.discountType.equals("percentage")
-                                ? (int) offer.discountValue + "% OFF"
-                                : "₹" + (int) offer.discountValue + " OFF"),
-                        Toast.LENGTH_LONG).show()
+                    Toast.makeText(this,
+                            "Use code: " + offer.offerCode + " for "
+                                    + (offer.discountType.equals("percentage")
+                                    ? (int) offer.discountValue + "% OFF"
+                                    : "₹" + (int) offer.discountValue + " OFF"),
+                            Toast.LENGTH_LONG).show()
             );
             LinearLayoutManager lm = new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false);
             rvOffersStrip.setLayoutManager(lm);
             rvOffersStrip.setAdapter(homeOfferAdapter);
         } else {
             homeOfferAdapter.setItems(homeOffers);
+        }
+
+        if (homeOffers != null && homeOffers.size() > 0) {
+            homeOfferAdapter.notifyDataSetChanged();
+        } else {
+            Log.e("DATA", "Empty or null list: offer adapter source");
         }
     }
 
@@ -986,6 +1146,6 @@ public class MainActivity extends BaseActivity {
         Intent i = new Intent(this, LoginActivity.class);
         i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(i);
-        finish();
+        // Keep activity alive to avoid sudden app close perception on startup errors.
     }
 }

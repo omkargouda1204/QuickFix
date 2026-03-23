@@ -29,6 +29,7 @@ public class AppLocationManager {
     private static final String TAG          = "AppLocationManager";
     public  static final String PREFS_NAME   = "quickfix_prefs";
     public  static final String KEY_CITY     = "selected_city";
+    public  static final String KEY_CITY_LEGACY = "city";
     public  static final String KEY_AREA     = "selected_area";
     public  static final String KEY_LAT      = "selected_lat";
     public  static final String KEY_LNG      = "selected_lng";
@@ -64,7 +65,11 @@ public class AppLocationManager {
 
     /** Returns currently saved city (or empty string). */
     public String getSavedCity() {
-        return prefs.getString(KEY_CITY, "");
+        String city = prefs.getString(KEY_CITY, "");
+        if (city == null || city.trim().isEmpty()) {
+            city = prefs.getString(KEY_CITY_LEGACY, "");
+        }
+        return city == null ? "" : city.trim();
     }
 
     /** Returns currently saved area (or empty string). */
@@ -79,8 +84,10 @@ public class AppLocationManager {
 
     /** Saves city manually. */
     public void saveCity(String city) {
+        String normalized = normalize(city);
         prefs.edit()
-                .putString(KEY_CITY, normalize(city))
+                .putString(KEY_CITY, normalized)
+                .putString(KEY_CITY_LEGACY, normalized)
                 .remove(KEY_AREA)
                 .remove(KEY_LAT)
                 .remove(KEY_LNG)
@@ -94,9 +101,12 @@ public class AppLocationManager {
 
     /** Saves city + area with coordinates. */
     public void saveLocation(String city, String area, double lat, double lng) {
+        String normalizedCity = normalize(city);
+        String normalizedArea = normalize(area);
         prefs.edit()
-                .putString(KEY_CITY, normalize(city))
-                .putString(KEY_AREA, normalize(area))
+                .putString(KEY_CITY, normalizedCity)
+                .putString(KEY_CITY_LEGACY, normalizedCity)
+                .putString(KEY_AREA, normalizedArea)
                 .putString(KEY_LAT, String.valueOf(lat))
                 .putString(KEY_LNG, String.valueOf(lng))
                 .apply();
@@ -178,6 +188,7 @@ public class AppLocationManager {
                 final String finalArea = normalize(area);
                 prefs.edit()
                         .putString(KEY_CITY, finalCity)
+                        .putString(KEY_CITY_LEGACY, finalCity)
                         .putString(KEY_AREA, finalArea)
                         .putString(KEY_LAT, String.valueOf(lat))
                         .putString(KEY_LNG, String.valueOf(lng))
@@ -187,6 +198,7 @@ public class AppLocationManager {
                 Log.e(TAG, "Geocoder failed: " + e.getMessage());
                 prefs.edit()
                         .putString(KEY_CITY, "")
+                        .putString(KEY_CITY_LEGACY, "")
                         .putString(KEY_AREA, "")
                         .putString(KEY_LAT, String.valueOf(lat))
                         .putString(KEY_LNG, String.valueOf(lng))
@@ -200,6 +212,7 @@ public class AppLocationManager {
     public void clearCity() {
         prefs.edit()
                 .remove(KEY_CITY)
+                .remove(KEY_CITY_LEGACY)
                 .remove(KEY_AREA)
                 .remove(KEY_LAT)
                 .remove(KEY_LNG)
