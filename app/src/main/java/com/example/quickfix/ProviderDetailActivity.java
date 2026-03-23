@@ -51,6 +51,7 @@ public class ProviderDetailActivity extends BaseActivity {
     private static final String TAG = "ProviderDetail";
 
     public static final String EXTRA_PROVIDER_ID  = "provider_id";
+    public static final String EXTRA_CUSTOMER_ID  = "customer_id";
     public static final String EXTRA_FIREBASE_UID = "firebase_uid";
     public static final String EXTRA_BUSINESS_NAME= "business_name";
     public static final String EXTRA_OWNER_NAME   = "owner_name";
@@ -321,6 +322,9 @@ public class ProviderDetailActivity extends BaseActivity {
             // Create booking JSON — only columns that exist in the bookings table
             try {
                 JSONObject bookingBody = new JSONObject();
+                // Required for RLS checks and provider dashboard queries
+                bookingBody.put("customer_id", customerId);
+                bookingBody.put("firebase_uid", providerFirebaseUid != null ? providerFirebaseUid : "");
                 bookingBody.put("customer_name", customerName.isEmpty() ? "Customer" : customerName);
                 bookingBody.put("customer_phone", customerPhone);
                 bookingBody.put("provider_name", providerName);
@@ -344,7 +348,7 @@ public class ProviderDetailActivity extends BaseActivity {
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
                         .addHeader("Content-Type", "application/json")
-                        .addHeader("Prefer", "return=representation")
+                        .addHeader("Prefer", "return=minimal")
                         .build();
 
                 final String custName = customerName.isEmpty() ? "Customer" : customerName;
@@ -380,14 +384,10 @@ public class ProviderDetailActivity extends BaseActivity {
                                 }
                             } else {
                                 Log.e(TAG, "Booking failed: HTTP " + code + " | " + resp);
-                                String errMsg;
-                                if (code == 401 || code == 403) {
-                                    errMsg = "Permission denied. Please check Supabase RLS policies for bookings table.";
-                                } else {
-                                    errMsg = "Booking failed: HTTP " + code;
-                                }
+                                String shortMsg = (resp != null && !resp.trim().isEmpty()) ? resp : ("HTTP " + code);
                                 Toast.makeText(ProviderDetailActivity.this,
-                                        errMsg, Toast.LENGTH_LONG).show();
+                                        "Booking failed: " + shortMsg,
+                                        Toast.LENGTH_LONG).show();
                             }
                         });
                     }

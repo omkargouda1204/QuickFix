@@ -49,6 +49,7 @@ public class ProvidersListActivity extends BaseActivity
         implements ProvidersAdapter.OnProviderActionListener {
 
     public static final String EXTRA_CATEGORY = "category";
+    public static final String EXTRA_CITY = "city";
     public static final String EXTRA_QUERY = "query";
 
     private static final String TAG = "ProvidersListActivity";
@@ -504,7 +505,13 @@ public class ProvidersListActivity extends BaseActivity
         intent.putExtra(ProviderDetailActivity.EXTRA_IS_VERIFIED,   provider.isVerified);
         intent.putExtra(ProviderDetailActivity.EXTRA_RATING,        provider.rating);
         intent.putExtra(ProviderDetailActivity.EXTRA_OPEN_BOOKING,  true);
+        intent.putExtra(ProviderDetailActivity.EXTRA_CUSTOMER_ID,   getCurrentUserId());
         startActivity(intent);
         overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+    }
+
+    private String getCurrentUserId() {
+        SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
+        return prefs.getString("firebase_uid", "");
     }
 }

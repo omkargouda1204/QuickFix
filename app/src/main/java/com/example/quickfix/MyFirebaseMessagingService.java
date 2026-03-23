@@ -103,28 +103,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         if (title == null || title.isEmpty()) title = getString(R.string.app_name);
         if (body  == null || body.isEmpty())  body  = "You have a new notification.";
 
-        // Enforce runtime notification settings before posting system notifications.
-        if (!shouldDisplayNotification(type)) {
-            Log.d(TAG, "Notification suppressed by admin settings. type=" + type);
-            return;
-        }
-
         showSystemNotification(title, body, type, data);
-    }
-
-    private boolean shouldDisplayNotification(String type) {
-        if (!AppSettings.isPushEnabled(this)) return false;
-
-        String safeType = type != null ? type : "general";
-        boolean isAdminEvent = "provider_application".equals(safeType)
-                || "user_registration".equals(safeType)
-                || "admin_alert".equals(safeType)
-                || "system_alert".equals(safeType);
-
-        if (isAdminEvent && !AppSettings.isAdminAlertsEnabled(this)) {
-            return false;
-        }
-        return true;
     }
 
     // ── System notification builder ───────────────────────────────────────
@@ -145,23 +124,18 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 
         switch (type != null ? type : "") {
             case "provider_application":
-                // Admin receives this -> open provider approval page
+                // Admin receives this → open provider approval page
                 channelId      = CHANNEL_PROVIDER;
                 targetActivity = AdminProviderApprovalActivity.class;
                 break;
-            case "user_registration":
-                // Admin receives this -> open user management
-                channelId      = CHANNEL_GENERAL;
-                targetActivity = UserManagementActivity.class;
-                break;
             case "provider_approved":
             case "provider_rejected":
-                // Provider receives this -> open application status page
+                // Provider receives this → open application status page
                 channelId      = CHANNEL_PROVIDER;
                 targetActivity = ApplicationStatusActivity.class;
                 break;
             case "booking_request":
-                // Provider receives this -> open My Bookings page
+                // Provider receives this → open My Bookings page
                 channelId      = CHANNEL_BOOKINGS;
                 targetActivity = MyBookingsActivity.class;
                 break;
