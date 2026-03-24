@@ -1,6 +1,7 @@
 package com.example.quickfix;
 
 import android.app.DatePickerDialog;
+import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -14,6 +15,7 @@ import android.widget.AutoCompleteTextView;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -56,6 +58,7 @@ import okhttp3.Response;
 public class BannerManagementActivity extends BaseActivity {
 
     private static final String TAG            = "BannerMgmt";
+    private static final long   MAX_BANNER_PICK_BYTES = 10L * 1024L * 1024L;
     private static final String SUPABASE_URL   = BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY       = BuildConfig.SUPABASE_ANON_KEY;
     private static final String BUCKET_BANNERS = "banner-images";
@@ -84,6 +87,9 @@ public class BannerManagementActivity extends BaseActivity {
     private ImageView         dialogImagePreview = null;
     private View              dialogUploadPlaceholder = null;
     private TextView          dialogUploadProgress    = null;
+    private ProgressBar      dialogUploadSpinner      = null;
+    private View             dialogSaveButton         = null;
+    private View             dialogCancelButton       = null;
     private String            uploadedImageUrl        = null;
 
     private ActivityResultLauncher<String> imagePicker;
@@ -108,14 +114,15 @@ public class BannerManagementActivity extends BaseActivity {
         imagePicker = registerForActivityResult(
                 new ActivityResultContracts.GetContent(),
                 uri -> {
-                    if (uri != null) {
-                        selectedImageUri = uri;
-                        if (dialogImagePreview != null) {
-                            dialogImagePreview.setVisibility(View.VISIBLE);
-                            if (dialogUploadPlaceholder != null)
-                                dialogUploadPlaceholder.setVisibility(View.GONE);
-                            Glide.with(this).load(uri).centerCrop().into(dialogImagePreview);
-                        }
+                    if (uri == null) return;
+                    if (!validatePickedImage(uri)) return;
+
+                    selectedImageUri = uri;
+                    if (dialogImagePreview != null) {
+                        dialogImagePreview.setVisibility(View.VISIBLE);
+                        if (dialogUploadPlaceholder != null)
+                            dialogUploadPlaceholder.setVisibility(View.GONE);
+                        Glide.with(this).load(uri).centerCrop().into(dialogImagePreview);
                     }
                 });
     }
@@ -204,7 +211,10 @@ public class BannerManagementActivity extends BaseActivity {
                 JSONObject o = arr.getJSONObject(i);
                 Banner b       = new Banner();
                 b.id           = o.optString("id");
-                b.title        = o.optString("title");
+                b.title        = o.optString("title", "Banner");
+                if (TextUtils.isEmpty(b.id)) {
+                    b.id = "banner-" + i;
+                }
                 b.imageUrl     = SupabaseStorageHelper.getPublicObjectUrl(
                         BUCKET_BANNERS,
                         o.optString("image_url", ""));
@@ -281,6 +291,7 @@ public class BannerManagementActivity extends BaseActivity {
         dialogImagePreview      = dialogView.findViewById(R.id.ivBannerImagePreview);
         dialogUploadPlaceholder = dialogView.findViewById(R.id.layoutUploadPlaceholder);
         dialogUploadProgress    = dialogView.findViewById(R.id.tvUploadProgress);
+        dialogUploadSpinner      = dialogView.findViewById(R.id.pbUploadProgress);
 
         String[] types = {"service", "category", "external"};
         actvRedir.setAdapter(new ArrayAdapter<>(this,
@@ -310,8 +321,11 @@ public class BannerManagementActivity extends BaseActivity {
         etExpiry.setOnFocusChangeListener((v, f) -> { if (f) showDatePicker(etExpiry); });
 
         AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(dialogView).create();
-        dialogView.findViewById(R.id.btnCancel).setOnClickListener(v -> dialog.dismiss());
-        dialogView.findViewById(R.id.btnSave).setOnClickListener(v -> {
+        dialogCancelButton = dialogView.findViewById(R.id.btnCancel);
+        dialogSaveButton   = dialogView.findViewById(R.id.btnSave);
+
+        dialogCancelButton.setOnClickListener(v -> dialog.dismiss());
+        dialogSaveButton.setOnClickListener(v -> {
             String title   = getET(etTitle);
             String redir   = actvRedir.getText().toString().trim();
             String redirId = getET(etRedirId);
@@ -329,6 +343,10 @@ public class BannerManagementActivity extends BaseActivity {
                 return;
             }
 
+            setDialogLoading(true, selectedImageUri != null
+                    ? "Uploading banner image..."
+                    : "Saving banner...");
+
             if (selectedImageUri != null) {
                 uploadBannerImage(selectedImageUri, title, redir, redirId, expiry,
                         active, priority, isEdit ? existing.id : null, dialog);
@@ -342,13 +360,47 @@ public class BannerManagementActivity extends BaseActivity {
         dialog.show();
     }
 
+    private boolean validatePickedImage(Uri uri) {
+        try {
+            String mime = getContentResolver().getType(uri);
+            if (mime == null || mime.trim().isEmpty() || !mime.startsWith("image/")) {
+                Toast.makeText(this, "Please select a valid image file.", Toast.LENGTH_LONG).show();
+                return false;
+            }
+
+            try (AssetFileDescriptor afd = getContentResolver().openAssetFileDescriptor(uri, "r")) {
+                long length = afd != null ? afd.getLength() : -1L;
+                if (length > MAX_BANNER_PICK_BYTES) {
+                    Toast.makeText(this,
+                            "Image is too large. Please choose an image under 10 MB.",
+                            Toast.LENGTH_LONG).show();
+                    return false;
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "validatePickedImage failed: " + e.getMessage());
+            Toast.makeText(this, "Unable to validate selected image.", Toast.LENGTH_LONG).show();
+            return false;
+        }
+        return true;
+    }
+
+    private void setDialogLoading(boolean loading, String message) {
+        if (dialogUploadProgress != null) {
+            dialogUploadProgress.setVisibility(loading ? View.VISIBLE : View.GONE);
+            if (loading && message != null) dialogUploadProgress.setText(message);
+        }
+        if (dialogUploadSpinner != null) {
+            dialogUploadSpinner.setVisibility(loading ? View.VISIBLE : View.GONE);
+        }
+        if (dialogSaveButton != null) dialogSaveButton.setEnabled(!loading);
+        if (dialogCancelButton != null) dialogCancelButton.setEnabled(!loading);
+    }
+
     private void uploadBannerImage(Uri uri, String title, String redirect, String redirId,
                                     String expiry, boolean active, int priority,
                                     String bannerId, AlertDialog dialog) {
-        if (dialogUploadProgress != null) {
-            dialogUploadProgress.setVisibility(View.VISIBLE);
-            dialogUploadProgress.setText("Compressing and uploading image...");
-        }
+        setDialogLoading(true, "Compressing and uploading image...");
 
         SupabaseStorageHelper.uploadBannerImage(this, uri,
                 new SupabaseStorageHelper.UploadCallback() {
@@ -356,14 +408,13 @@ public class BannerManagementActivity extends BaseActivity {
                     public void onSuccess(String url) {
                         Log.d(TAG, "uploadBannerImage SUCCESS url=" + url);
                         uploadedImageUrl = url;
-                        if (dialogUploadProgress != null) dialogUploadProgress.setVisibility(View.GONE);
                         saveBanner(title, url, redirect, redirId, expiry, active, priority, bannerId, dialog);
                     }
 
                     @Override
                     public void onError(String msg) {
                         Log.e(TAG, "uploadBannerImage FAILED: " + msg);
-                        if (dialogUploadProgress != null) dialogUploadProgress.setVisibility(View.GONE);
+                        setDialogLoading(false, null);
                         Toast.makeText(BannerManagementActivity.this,
                                 "Image upload failed: " + msg,
                                 Toast.LENGTH_LONG).show();
@@ -383,8 +434,6 @@ public class BannerManagementActivity extends BaseActivity {
                         ? SUPABASE_URL + "/rest/v1/banners?id=eq." + existingId
                         : SUPABASE_URL + "/rest/v1/banners";
 
-                // Use DB column names per spec:
-                //   active (bool), redirect_value, expiry_date, image_url, title, priority
                 JSONObject payload = new JSONObject();
                 if (!isEdit) payload.put("id", UUID.randomUUID().toString());
                 payload.put("title",          title);
@@ -403,30 +452,44 @@ public class BannerManagementActivity extends BaseActivity {
                     payload.put("expiry_date", JSONObject.NULL);
                 }
 
-                Log.d(TAG, "saveBanner " + method + " payload=" + payload);
                 SaveResult result = executeSave(url, method, payload);
-                Log.d(TAG, "saveBanner response HTTP " + result.code + ": " + result.body);
+                if (!result.success && isMissingColumnError(result.body)) {
+                    JSONObject minimalPayload = new JSONObject();
+                    if (!isEdit) minimalPayload.put("id", UUID.randomUUID().toString());
+                    minimalPayload.put("image_url", imageUrl != null ? imageUrl : "");
+                    result = executeSave(url, method, minimalPayload);
+                }
 
+                SaveResult finalResult = result;
                 main.post(() -> {
-                    if (result.success) {
+                    setDialogLoading(false, null);
+                    if (finalResult.success) {
                         dialog.dismiss();
                         Toast.makeText(BannerManagementActivity.this,
-                                isEdit ? "Banner updated" : "Banner added",
+                                isEdit ? "Banner updated successfully" : "Banner uploaded successfully",
                                 Toast.LENGTH_SHORT).show();
                         loadBanners();
                     } else {
-                        Log.e(TAG, "saveBanner FAILED HTTP " + result.code + ": " + result.body);
+                        Log.e(TAG, "saveBanner FAILED HTTP " + finalResult.code + ": " + finalResult.body);
                         Toast.makeText(BannerManagementActivity.this,
-                                "Save failed (" + result.code + "): " + result.body,
+                                "Save failed (" + finalResult.code + "): " + finalResult.body,
                                 Toast.LENGTH_LONG).show();
                     }
                 });
             } catch (Exception e) {
                 Log.e(TAG, "saveBanner exception", e);
-                main.post(() -> Toast.makeText(BannerManagementActivity.this,
-                        "Error: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                main.post(() -> {
+                    setDialogLoading(false, null);
+                    Toast.makeText(BannerManagementActivity.this,
+                            "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
             }
         }).start();
+    }
+
+    private boolean isMissingColumnError(String responseBody) {
+        String safe = responseBody == null ? "" : responseBody.toLowerCase();
+        return safe.contains("column") && safe.contains("does not exist");
     }
 
     private void toggleBannerActive(Banner banner, boolean newState) {
@@ -578,4 +641,3 @@ public class BannerManagementActivity extends BaseActivity {
         if (til != null) til.setError(msg);
     }
 }
-

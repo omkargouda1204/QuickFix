@@ -269,9 +269,10 @@ public class SupabaseStorageHelper {
             try {
                 String mimeType = context.getContentResolver().getType(fileUri);
                 if (mimeType == null || mimeType.trim().isEmpty()) mimeType = "image/jpeg";
-                if (!mimeType.startsWith("image/")) {
+                if (!isSupportedBannerMime(mimeType)) {
                     String finalMimeType = mimeType;
-                    MAIN.post(() -> callback.onError("Unsupported file type: " + finalMimeType));
+                    MAIN.post(() -> callback.onError("Unsupported image type: " + finalMimeType
+                            + ". Use JPG, PNG, WEBP, or HEIC."));
                     return;
                 }
 
@@ -299,6 +300,17 @@ public class SupabaseStorageHelper {
                 MAIN.post(() -> callback.onError("Image upload failed: " + e.getMessage()));
             }
         }).start();
+    }
+
+    private static boolean isSupportedBannerMime(String mimeType) {
+        if (mimeType == null) return false;
+        String safe = mimeType.trim().toLowerCase();
+        return "image/jpeg".equals(safe)
+                || "image/jpg".equals(safe)
+                || "image/png".equals(safe)
+                || "image/webp".equals(safe)
+                || "image/heic".equals(safe)
+                || "image/heif".equals(safe);
     }
 
     /**
