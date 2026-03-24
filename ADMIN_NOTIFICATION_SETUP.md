@@ -58,6 +58,25 @@ create index if not exists idx_admin_notifications_is_read
 
 If this table is missing, app push still works and persistence is skipped safely.
 
+## No-duplicate delivery (recommended)
+
+Add a small event-ledger table so repeated retries do not send duplicate admin pushes:
+
+```sql
+create table if not exists public.admin_notification_events (
+  id uuid primary key default gen_random_uuid(),
+  event_type text not null,
+  event_key text not null,
+  created_at timestamptz not null default now(),
+  unique (event_type, event_key)
+);
+```
+
+- `event_type=user_registration`, `event_key=<firebase_uid>`
+- `event_type=provider_application`, `event_key=<provider_application.id>`
+
+The app also keeps local dedupe protection, but this DB table gives cross-device idempotency.
+
 ## Edge Function contract
 
 The app calls `SUPABASE_NOTIFY_FN_URL` with:
@@ -65,12 +84,20 @@ The app calls `SUPABASE_NOTIFY_FN_URL` with:
 ```json
 {
   "token": "<device_fcm_token>",
-  "title": "New User Registered",
+  "title": "New user registered",
   "body": "Alice created an account",
   "data": {
     "type": "user_registration",
     "uid": "optional-reference-id"
   }
+}
+```
+
+Provider application notifications use title:
+
+```json
+{
+  "title": "New provider application received"
 }
 ```
 
@@ -90,4 +117,3 @@ If you want notifications even when mobile client logic is bypassed, add Supabas
 - `provider_applications` insert -> `provider_application`
 
 Current implementation is app-driven and non-blocking (main insert success does not depend on notification send success).
-
