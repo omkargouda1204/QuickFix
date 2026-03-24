@@ -209,24 +209,13 @@ public class BannerManagementActivity extends BaseActivity {
                         BUCKET_BANNERS,
                         o.optString("image_url", ""));
                 b.redirectType = o.optString("redirect_type", "category");
-
-                // DB column is redirect_value (user spec) — fall back to redirect_id if missing
-                String rv = o.optString("redirect_value", "");
-                if (rv.isEmpty()) rv = o.optString("redirect_id", "");
-                b.redirectId = rv;
-
-                b.startDate  = o.optString("start_date", "");
-                b.expiryDate = o.optString("expiry_date", "");
-
-                // DB column is "active" (bool) per user spec — fall back to is_active
-                if (o.has("active") && !o.isNull("active")) {
-                    b.isActive = o.optBoolean("active", true);
-                } else {
-                    b.isActive = o.optBoolean("is_active", true);
-                }
-                b.status    = b.isActive ? "active" : "inactive";
-                b.priority  = o.optInt("priority", 1);
-                b.createdAt = o.optString("created_at");
+                b.redirectId   = o.optString("redirect_id", "");
+                b.startDate    = o.optString("start_date", "");
+                b.expiryDate   = o.optString("expiry_date", "");
+                b.isActive     = o.optBoolean("is_active", true);
+                b.status       = b.isActive ? "active" : "inactive";
+                b.priority     = o.optInt("priority", 1);
+                b.createdAt    = o.optString("created_at");
                 banners.add(b);
             }
         } catch (Exception e) {
@@ -383,29 +372,31 @@ public class BannerManagementActivity extends BaseActivity {
                         ? SUPABASE_URL + "/rest/v1/banners?id=eq." + existingId
                         : SUPABASE_URL + "/rest/v1/banners";
 
-                // Use DB column names per spec:
-                //   active (bool), redirect_value, expiry_date, image_url, title, priority
+                // ✓ Use correct DB column names
                 JSONObject payload = new JSONObject();
                 if (!isEdit) payload.put("id", UUID.randomUUID().toString());
                 payload.put("title",          title);
                 payload.put("image_url",      imageUrl != null ? imageUrl : "");
                 payload.put("redirect_type",  redirectType != null ? redirectType : "category");
-                payload.put("redirect_value", redirectId  != null ? redirectId  : "");
-                payload.put("active",         isActive);
+                payload.put("redirect_id",    redirectId  != null ? redirectId  : "");
+                payload.put("is_active",      isActive);
                 payload.put("priority",       priority);
+
                 if (!isEdit) {
                     payload.put("start_date", new java.text.SimpleDateFormat("yyyy-MM-dd",
                             java.util.Locale.US).format(new java.util.Date()));
                 }
+
                 if (expiryDate != null && !expiryDate.isEmpty()) {
                     payload.put("expiry_date", expiryDate);
                 } else {
                     payload.put("expiry_date", JSONObject.NULL);
                 }
 
-                Log.d(TAG, "saveBanner " + method + " payload=" + payload);
+                Log.d(TAG, "saveBanner " + method + " url=" + url);
+                Log.d(TAG, "saveBanner payload=" + payload);
                 SaveResult result = executeSave(url, method, payload);
-                Log.d(TAG, "saveBanner response HTTP " + result.code + ": " + result.body);
+                Log.d(TAG, "saveBanner response HTTP " + result.code + " | body=" + result.body);
 
                 main.post(() -> {
                     if (result.success) {
@@ -432,13 +423,14 @@ public class BannerManagementActivity extends BaseActivity {
     private void toggleBannerActive(Banner banner, boolean newState) {
         new Thread(() -> {
             try {
-                // DB column is "active" per spec
+                // ✓ Use correct DB column "is_active"
                 JSONObject payload = new JSONObject();
-                payload.put("active", newState);
+                payload.put("is_active", newState);
                 String patchUrl = SUPABASE_URL + "/rest/v1/banners?id=eq." + banner.id;
-                Log.d(TAG, "toggleBannerActive PATCH " + patchUrl + " active=" + newState);
+                Log.d(TAG, "toggleBannerActive PATCH " + patchUrl + " is_active=" + newState);
+                Log.d(TAG, "toggleBannerActive payload=" + payload);
                 SaveResult rs = executePatch(patchUrl, payload);
-                Log.d(TAG, "toggleBannerActive HTTP " + rs.code + ": " + rs.body);
+                Log.d(TAG, "toggleBannerActive HTTP " + rs.code + " | body=" + rs.body);
 
                 main.post(() -> {
                     if (rs.success) {
@@ -529,19 +521,17 @@ public class BannerManagementActivity extends BaseActivity {
                         .build();
                 try (Response resp = http.newCall(req).execute()) {
                     String body = resp.body() != null ? resp.body().string() : "";
-                    Log.d(TAG, "deleteBanner HTTP " + resp.code() + ": " + body);
+                    Log.d(TAG, "deleteBanner HTTP " + resp.code() + " | body_len=" + body.length());
                     main.post(() -> {
                         if (resp.isSuccessful()) {
-                            banners.remove(banner);
-                            adapter.notifyDataSetChanged();
-                            updateStats();
-                            showListOrEmpty();
                             Toast.makeText(BannerManagementActivity.this,
                                     "Banner deleted", Toast.LENGTH_SHORT).show();
+                            // ✓ Reload from database to ensure data consistency
+                            loadBanners();
                         } else {
                             Log.e(TAG, "deleteBanner FAILED HTTP " + resp.code() + ": " + body);
                             Toast.makeText(BannerManagementActivity.this,
-                                    "Delete failed (" + resp.code() + "): " + body,
+                                    "Delete failed (" + resp.code() + ")",
                                     Toast.LENGTH_LONG).show();
                         }
                     });

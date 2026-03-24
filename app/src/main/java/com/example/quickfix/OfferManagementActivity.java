@@ -129,56 +129,35 @@ public class OfferManagementActivity extends BaseActivity {
         setLoading(true);
         String today = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
                 .format(new java.util.Date());
-        String primaryUrl = SUPABASE_URL + "/rest/v1/offers?select=*"
-                + "&is_active=eq.true"
-                + "&or=(expiry_date.is.null,expiry_date.gte.now())"
-                + "&order=created_at.desc";
-        String fallbackUrl = SUPABASE_URL + "/rest/v1/offers?select=*"
-                + "&is_active=eq.true"
-                + "&or=(expiry_date.is.null,expiry_date.gte." + today + ")"
-                + "&order=created_at.desc";
-        Log.d(TAG, "loadOffers -> " + primaryUrl);
+
+        // ✓ Fetch ALL offers (admin needs to see all to manage them)
+        String url = SUPABASE_URL + "/rest/v1/offers?select=*&order=created_at.desc";
+        Log.d(TAG, "loadOffers -> " + url);
 
         new Thread(() -> {
             try {
-                String[] urls = new String[]{primaryUrl, fallbackUrl};
-                int code = 0;
-                String body = "[]";
-                boolean success = false;
+                Request req = new Request.Builder()
+                        .url(url)
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+                try (Response resp = http.newCall(req).execute()) {
+                    int code = resp.code();
+                    String body = resp.body() != null ? resp.body().string() : "[]";
+                    Log.d(TAG, "loadOffers HTTP " + code + " | rows_body_len=" + body.length());
 
-                for (String url : urls) {
-                    Request req = new Request.Builder()
-                            .url(url)
-                            .addHeader("apikey", ANON_KEY)
-                            .addHeader("Authorization", "Bearer " + ANON_KEY)
-                            .addHeader("Accept", "application/json")
-                            .build();
-                    try (Response resp = http.newCall(req).execute()) {
-                        code = resp.code();
-                        body = resp.body() != null ? resp.body().string() : "[]";
+                    main.post(() -> {
+                        setLoading(false);
+                        swipeRefresh.setRefreshing(false);
+
                         if (resp.isSuccessful()) {
-                            success = true;
-                            break;
+                            parseOffers(body);
+                            updateStats();
+                        } else {
+                            Log.e(TAG, "loadOffers FAILED " + code + ": " + body);
+                            showError("Failed to load offers (HTTP " + code + ")");
                         }
-                    }
-                }
-
-                final int finalCode = code;
-                final String finalBody = body;
-                if (success) {
-                    main.post(() -> {
-                        setLoading(false);
-                        swipeRefresh.setRefreshing(false);
-                        parseOffers(finalBody);
-                        updateStats();
-                    });
-                } else {
-                    Log.e("ERROR", finalBody);
-                    Log.e("RESPONSE", finalBody);
-                    main.post(() -> {
-                        setLoading(false);
-                        swipeRefresh.setRefreshing(false);
-                        showError("Failed to load offers (HTTP " + finalCode + ")");
                     });
                 }
             } catch (Exception e) {
@@ -335,7 +314,7 @@ public class OfferManagementActivity extends BaseActivity {
                         : SUPABASE_URL + "/rest/v1/offers";
                 String method = isEdit ? "PATCH" : "POST";
 
-                // Exact DB columns: offer_code, discount_value, min_booking_amount, is_active
+                // ✓ Use exact DB column names
                 JSONObject payload = new JSONObject();
                 if (!isEdit) payload.put("id", UUID.randomUUID().toString());
                 payload.put("title", title);
@@ -345,20 +324,17 @@ public class OfferManagementActivity extends BaseActivity {
                 payload.put("discount_value", discountValue);
                 payload.put("min_booking_amount", minAmount);
                 payload.put("is_active", isActive);
+
                 if (expiryDate != null && !expiryDate.isEmpty()) {
                     payload.put("expiry_date", expiryDate);
                 } else {
                     payload.put("expiry_date", JSONObject.NULL);
                 }
 
-                Log.d(TAG, "saveOffer " + method + " payload=" + payload);
-                if (isEdit) {
-                    Log.e("UPDATE_BODY", payload.toString());
-                }
-                Log.e("REQUEST", payload.toString());
+                Log.d(TAG, "saveOffer " + method + " url=" + url);
+                Log.d(TAG, "saveOffer payload=" + payload);
                 SaveResult result = executeSave(url, method, payload);
-                Log.d(TAG, "saveOffer response HTTP " + result.code + ": " + result.body);
-                Log.e("RESPONSE", result.body != null ? result.body : "");
+                Log.d(TAG, "saveOffer response HTTP " + result.code + " | body_len=" + result.body.length());
 
                 main.post(() -> {
                     if (result.success) {
@@ -367,20 +343,21 @@ public class OfferManagementActivity extends BaseActivity {
                                 isEdit ? "Offer updated" : "Offer created",
                                 Toast.LENGTH_SHORT).show();
                         loadOffers();
+
                         if (sendNotif) {
                             String discStr = discountType.equals("percentage")
                                     ? (int) discountValue + "% OFF"
                                     : "₹" + (int) discountValue + " OFF";
                             sendOfferNotification(title, code, discStr);
                         }
+
                         if (!isEdit) {
                             FcmNotificationHelper.notifyAdminOfferCreated(title, null);
                         }
                     } else {
-                        Log.e("ERROR", result.body);
-                        Log.e(TAG, "saveOffer FAILED " + result.code + ": " + result.body);
+                        Log.e(TAG, "saveOffer FAILED HTTP " + result.code + ": " + result.body);
                         Toast.makeText(OfferManagementActivity.this,
-                                "Save failed (" + result.code + "): " + result.body,
+                                "Save failed (" + result.code + ")",
                                 Toast.LENGTH_LONG).show();
                     }
                 });
@@ -454,10 +431,11 @@ public class OfferManagementActivity extends BaseActivity {
             try {
                 JSONObject payload = new JSONObject();
                 payload.put("is_active", newState);
-                Log.e("REQUEST", payload.toString());
                 String patchUrl = SUPABASE_URL + "/rest/v1/offers?id=eq." + offer.id;
                 Log.d(TAG, "toggleOfferActive PATCH " + patchUrl + " is_active=" + newState);
+                Log.d(TAG, "toggleOfferActive payload=" + payload);
                 SaveResult result = executePatch(patchUrl, payload);
+                Log.d(TAG, "toggleOfferActive HTTP " + result.code + " | body_len=" + result.body.length());
 
                 main.post(() -> {
                     if (result.success) {
@@ -469,7 +447,6 @@ public class OfferManagementActivity extends BaseActivity {
                                 newState ? "Offer enabled" : "Offer disabled",
                                 Toast.LENGTH_SHORT).show();
                     } else {
-                        Log.e("ERROR", result.body);
                         Log.e(TAG, "toggleOfferActive FAILED HTTP " + result.code + ": " + result.body);
                         Toast.makeText(OfferManagementActivity.this,
                                 "Could not update offer (" + result.code + ")",
@@ -540,34 +517,28 @@ public class OfferManagementActivity extends BaseActivity {
         new Thread(() -> {
             try {
                 String deleteUrl = SUPABASE_URL + "/rest/v1/offers?id=eq." + offer.id;
-                Log.e("DELETE_URL", deleteUrl);
                 Log.d(TAG, "deleteOffer DELETE " + deleteUrl);
                 try (Response resp = http.newCall(new Request.Builder()
                         .url(deleteUrl)
                         .delete()
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type", "application/json")
                         .addHeader("Prefer", "return=minimal")
                         .build()).execute()) {
 
                     String body = resp.body() != null ? resp.body().string() : "";
-                    Log.d(TAG, "deleteOffer HTTP " + resp.code() + ": " + body);
-                    Log.e("RESPONSE", body);
+                    Log.d(TAG, "deleteOffer HTTP " + resp.code() + " | body_len=" + body.length());
 
                     main.post(() -> {
                         if (resp.isSuccessful()) {
-                            offers.remove(offer);
-                            adapter.notifyDataSetChanged();
-                            showListOrEmpty();
-                            loadOffers();
                             Toast.makeText(OfferManagementActivity.this,
                                     "Offer deleted", Toast.LENGTH_SHORT).show();
+                            // ✓ Reload from database to ensure data consistency
+                            loadOffers();
                         } else {
-                            Log.e("ERROR", body);
                             Log.e(TAG, "deleteOffer FAILED HTTP " + resp.code() + ": " + body);
                             Toast.makeText(OfferManagementActivity.this,
-                                    "Delete failed (" + resp.code() + "): " + body,
+                                    "Delete failed (" + resp.code() + ")",
                                     Toast.LENGTH_LONG).show();
                         }
                     });
