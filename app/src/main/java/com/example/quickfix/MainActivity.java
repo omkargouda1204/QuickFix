@@ -188,8 +188,8 @@ public class MainActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         try {
-            loadBanners();
-            loadOffers();
+            loadHomeBanners();
+            loadHomeOffers();
         } catch (Exception e) {
             Log.e(CRASH_TAG, "Home content refresh failed", e);
             Log.e(TAG, "Home content refresh failed", e);
@@ -797,8 +797,8 @@ public class MainActivity extends BaseActivity {
                 homeSwipeRefresh.setRefreshing(true);
                 pendingHomeLoads = 2;
             }
-            loadBanners();
-            loadOffers();
+            loadHomeBanners();
+            loadHomeOffers();
         } catch (Exception e) {
             Log.e(CRASH_TAG, "refreshHomeContent failed", e);
             Log.e(TAG, "refreshHomeContent failed", e);
@@ -815,6 +815,14 @@ public class MainActivity extends BaseActivity {
         }
     }
 
+    private void loadHomeBanners() {
+        loadBanners();
+    }
+
+    private void loadHomeOffers() {
+        loadOffers();
+    }
+
     private void loadBanners() {
         final String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
                 Locale.getDefault()).format(new java.util.Date());
@@ -822,9 +830,8 @@ public class MainActivity extends BaseActivity {
         new Thread(() -> {
             try {
                 String[] urls = new String[] {
-                        BuildConfig.SUPABASE_URL + "/rest/v1/banners?select=*&active=eq.true&order=priority.asc,created_at.desc",
-                        BuildConfig.SUPABASE_URL + "/rest/v1/banners?select=*&is_active=eq.true&order=priority.asc,created_at.desc",
-                        BuildConfig.SUPABASE_URL + "/rest/v1/banners?select=*&order=priority.asc,created_at.desc"
+                        BuildConfig.SUPABASE_URL + "/rest/v1/banners?select=*&is_active=eq.true&or=(expiry_date.is.null,expiry_date.gte.now())&order=priority.asc,created_at.desc",
+                        BuildConfig.SUPABASE_URL + "/rest/v1/banners?select=*&is_active=eq.true&or=(expiry_date.is.null,expiry_date.gte." + today + ")&order=priority.asc,created_at.desc"
                 };
 
                 String body = "[]";
@@ -847,7 +854,7 @@ public class MainActivity extends BaseActivity {
                     }
                 }
 
-                Log.e("BANNERS", body);
+                Log.e("RESPONSE", body);
                 if (ok) {
                     org.json.JSONArray arr = new org.json.JSONArray(body);
                     List<Banner> list = new ArrayList<>();
@@ -861,7 +868,7 @@ public class MainActivity extends BaseActivity {
                         b.redirectId = o.optString("redirect_id");
                         b.expiryDate = o.optString("expiry_date");
                         b.priority = o.optInt("priority", 1);
-                        b.isActive = o.optBoolean("active", o.optBoolean("is_active", true));
+                        b.isActive = o.optBoolean("is_active", true);
                         b.status = b.isActive ? "active" : "inactive";
 
                         boolean notExpired = b.expiryDate.isEmpty() || b.expiryDate.compareTo(today) >= 0;
@@ -872,6 +879,7 @@ public class MainActivity extends BaseActivity {
                     MAIN.post(() -> showBannersOnHome(list));
                 } else {
                     Log.e(CRASH_TAG, "loadBanners failed HTTP " + code);
+                    Log.e("ERROR", body);
                     MAIN.post(() -> showBannersOnHome(new ArrayList<>()));
                 }
             } catch (Exception e) {
@@ -890,9 +898,8 @@ public class MainActivity extends BaseActivity {
         new Thread(() -> {
             try {
                 String[] urls = new String[] {
-                        BuildConfig.SUPABASE_URL + "/rest/v1/offers?select=*&active=eq.true&order=created_at.desc",
-                        BuildConfig.SUPABASE_URL + "/rest/v1/offers?select=*&is_active=eq.true&order=created_at.desc",
-                        BuildConfig.SUPABASE_URL + "/rest/v1/offers?select=*&order=created_at.desc"
+                        BuildConfig.SUPABASE_URL + "/rest/v1/offers?select=*&is_active=eq.true&or=(expiry_date.is.null,expiry_date.gte.now())&order=created_at.desc",
+                        BuildConfig.SUPABASE_URL + "/rest/v1/offers?select=*&is_active=eq.true&or=(expiry_date.is.null,expiry_date.gte." + today + ")&order=created_at.desc"
                 };
 
                 String body = "[]";
@@ -915,7 +922,7 @@ public class MainActivity extends BaseActivity {
                     }
                 }
 
-                Log.e("OFFERS", body);
+                Log.e("RESPONSE", body);
                 if (ok) {
                     org.json.JSONArray arr = new org.json.JSONArray(body);
                     List<Offer> list = new ArrayList<>();
@@ -924,13 +931,13 @@ public class MainActivity extends BaseActivity {
                         Offer offer = new Offer();
                         offer.id = o.optString("id");
                         offer.title = o.optString("title");
-                        offer.description = o.optString("description");
-                        offer.offerCode = o.optString("offer_code", o.optString("coupon_code"));
+                        offer.description = o.optString("description", "");
+                        offer.offerCode = o.optString("offer_code", "");
                         offer.discountType = o.optString("discount_type", "percentage");
-                        offer.discountValue = o.optDouble("discount_value", o.optDouble("discount_percent", 0));
+                        offer.discountValue = o.optDouble("discount_value", 0);
                         offer.minBookingAmount = o.optDouble("min_booking_amount", 0);
-                        offer.expiryDate = o.optString("expiry_date");
-                        offer.isActive = o.optBoolean("active", o.optBoolean("is_active", true));
+                        offer.expiryDate = o.optString("expiry_date", "");
+                        offer.isActive = o.optBoolean("is_active", true);
                         offer.status = offer.isActive ? "active" : "inactive";
 
                         boolean notExpired = offer.expiryDate.isEmpty() || offer.expiryDate.compareTo(today) >= 0;
@@ -941,6 +948,7 @@ public class MainActivity extends BaseActivity {
                     MAIN.post(() -> showOffersOnHome(list));
                 } else {
                     Log.e(CRASH_TAG, "loadOffers failed HTTP " + code);
+                    Log.e("ERROR", body);
                     MAIN.post(() -> showOffersOnHome(new ArrayList<>()));
                 }
             } catch (Exception e) {
