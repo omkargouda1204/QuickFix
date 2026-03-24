@@ -43,6 +43,8 @@ import okhttp3.Response;
 public class FcmNotificationHelper {
 
     private static final String TAG = "FcmNotificationHelper";
+    private static final String ADMIN_EVENT_PREFS = "quickfix_admin_event_dedupe";
+    private static final String ADMIN_EVENT_PREF_PREFIX = "sent::";
 
     // Credentials injected from supabase.properties — never hardcoded
     private static final String SUPABASE_URL   = BuildConfig.SUPABASE_URL;
@@ -68,6 +70,14 @@ public class FcmNotificationHelper {
             String applicantName,
             String businessName,
             String category) {
+        notifyAdminsNewApplication(applicantName, businessName, category, null);
+    }
+
+    public static void notifyAdminsNewApplication(
+            String applicantName,
+            String businessName,
+            String category,
+            String applicationId) {
 
         String safeApplicant = trimToEmpty(applicantName);
         String safeBusiness = trimToEmpty(businessName);
@@ -79,7 +89,8 @@ public class FcmNotificationHelper {
                 + (safeCategory.isEmpty() ? "" : " (" + safeCategory + ")")
                 + ".";
 
-        notifyAdminsEvent("New Provider Application", body, "provider_application", null);
+        notifyAdminsEvent("New provider application received", body,
+                "provider_application", applicationId);
     }
 
     /**
@@ -334,6 +345,17 @@ public class FcmNotificationHelper {
                                           String referenceId) {
         new Thread(() -> {
             try {
+                String normalizedType = trimToEmpty(type);
+                String normalizedRef = trimToEmpty(referenceId);
+                if (!normalizedType.isEmpty() && !normalizedRef.isEmpty()) {
+                    boolean reserved = reserveAdminEvent(normalizedType, normalizedRef);
+                    if (!reserved) {
+                        Log.d(TAG, "notifyAdminsEvent deduped type=" + normalizedType
+                                + " referenceId=" + normalizedRef);
+                        return;
+                    }
+                }
+
                 Context appCtx = QuickFixApp.getInstance();
                 boolean pushAllowed = appCtx == null
                         || (AppSettings.isPushEnabled(appCtx) && AppSettings.isAdminAlertsEnabled(appCtx));
@@ -364,8 +386,90 @@ public class FcmNotificationHelper {
         }).start();
     }
 
-    private static String trimToEmpty(String value) {
-        return value == null ? "" : value.trim();
+    private static boolean reserveAdminEvent(String type, String referenceId) {
+        Context appCtx = QuickFixApp.getInstance();
+        if (appCtx != null && !reserveLocalAdminEvent(appCtx, type, referenceId)) {
+            return false;
+        }
+
+        try {
+            if (isRemoteAdminEventPresent(type, referenceId)) {
+                return false;
+            }
+            insertRemoteAdminEvent(type, referenceId);
+        } catch (Exception e) {
+            Log.w(TAG, "reserveAdminEvent remote check skipped: " + e.getMessage());
+        }
+        return true;
+    }
+
+    private static boolean reserveLocalAdminEvent(Context context, String type, String referenceId) {
+        String key = ADMIN_EVENT_PREF_PREFIX + type + "::" + referenceId;
+        android.content.SharedPreferences prefs =
+                context.getSharedPreferences(ADMIN_EVENT_PREFS, Context.MODE_PRIVATE);
+        if (prefs.getBoolean(key, false)) {
+            return false;
+        }
+        prefs.edit().putBoolean(key, true).apply();
+        return true;
+    }
+
+    private static boolean isRemoteAdminEventPresent(String type, String referenceId) throws Exception {
+        String typeEnc = java.net.URLEncoder.encode(type, "UTF-8");
+        String refEnc = java.net.URLEncoder.encode(referenceId, "UTF-8");
+
+        String url = SUPABASE_URL
+                + "/rest/v1/admin_notification_events"
+                + "?event_type=eq." + typeEnc
+                + "&event_key=eq." + refEnc
+                + "&select=id&limit=1";
+
+        Request req = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .build();
+
+        try (Response resp = HTTP.newCall(req).execute()) {
+            int code = resp.code();
+            String respBody = resp.body() != null ? resp.body().string() : "[]";
+            if (code == 404 || respBody.contains("admin_notification_events")) {
+                return false;
+            }
+            if (code != 200) {
+                throw new IOException("HTTP " + code + " " + respBody);
+            }
+            JSONArray arr = new JSONArray(respBody);
+            return arr.length() > 0;
+        }
+    }
+
+    private static void insertRemoteAdminEvent(String type, String referenceId) throws Exception {
+        JSONObject row = new JSONObject();
+        row.put("event_type", type);
+        row.put("event_key", referenceId);
+
+        Request req = new Request.Builder()
+                .url(SUPABASE_URL + "/rest/v1/admin_notification_events")
+                .post(RequestBody.create(row.toString(), JSON_TYPE))
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "resolution=ignore-duplicates,return=minimal")
+                .build();
+
+        try (Response resp = HTTP.newCall(req).execute()) {
+            int code = resp.code();
+            String respBody = resp.body() != null ? resp.body().string() : "";
+            if (code == 404 || respBody.contains("admin_notification_events")) {
+                return;
+            }
+            if (!(code == 200 || code == 201 || code == 204 || code == 409)) {
+                throw new IOException("HTTP " + code + " " + respBody);
+            }
+        }
     }
 
     // ── Private Helpers ───────────────────────────────────────────────────
@@ -529,7 +633,8 @@ public class FcmNotificationHelper {
         String body = safeName.isEmpty()
                 ? "A new user created an account"
                 : safeName + " created an account";
-        notifyAdminsEvent("New User Registered", body, "user_registration", userId);
+        String eventKey = trimToEmpty(userId);
+        notifyAdminsEvent("New user registered", body, "user_registration", eventKey);
     }
 
     public static void notifyAdminOfferCreated(String offerTitle, String offerId) {
@@ -540,5 +645,9 @@ public class FcmNotificationHelper {
                     : "Admin created a new offer";
             saveAdminNotification(title, body, "offer", offerId);
         }).start();
+    }
+
+    private static String trimToEmpty(String value) {
+        return value == null ? "" : value.trim();
     }
 }
