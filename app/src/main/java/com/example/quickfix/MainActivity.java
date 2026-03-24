@@ -1,6 +1,7 @@
 package com.example.quickfix;
 
 import android.Manifest;
+import android.animation.ObjectAnimator;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
@@ -48,8 +49,10 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -107,6 +110,9 @@ public class MainActivity extends BaseActivity {
 
     // ── Banners & Offers (home screen) ────────────────────────────────────
     private LinearLayout       bannersSection, offersSection;
+    private View               bannerContentContainer, bannerLoadingState, bannerEmptyState, bannerErrorState;
+    private TextView           tvBannerErrorMessage;
+    private MaterialButton     btnRetryBannerLoad;
     private ViewPager2         vpBannersCarousel;
     private RecyclerView       rvOffersStrip;
     private TabLayout          bannerDotsLayout;
@@ -118,7 +124,12 @@ public class MainActivity extends BaseActivity {
     private ViewPager2.OnPageChangeCallback bannerPageCallback;
     private final Handler bannerAutoSlideHandler = new Handler(Looper.getMainLooper());
     private Runnable bannerAutoSlideRunnable;
+    private final List<ObjectAnimator> skeletonAnimators = new ArrayList<>();
     private int pendingHomeLoads = 0;
+
+    private View               offersContentContainer, offersLoadingState, offersEmptyState, offersErrorState;
+    private TextView           tvOffersErrorMessage;
+    private MaterialButton     btnRetryOffersLoad;
 
 
     // ── Pull-to-Refresh ───────────────────────────────────────────────────
@@ -188,8 +199,7 @@ public class MainActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         try {
-            loadHomeBanners();
-            loadHomeOffers();
+            refreshHomeContent(false);
         } catch (Exception e) {
             Log.e(CRASH_TAG, "Home content refresh failed", e);
             Log.e(TAG, "Home content refresh failed", e);
@@ -201,6 +211,17 @@ public class MainActivity extends BaseActivity {
     protected void onPause() {
         stopBannerAutoSlide();
         super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        for (ObjectAnimator animator : skeletonAnimators) {
+            if (animator != null) {
+                animator.cancel();
+            }
+        }
+        skeletonAnimators.clear();
+        super.onDestroy();
     }
 
     // ── Init Views ────────────────────────────────────────────────────────
@@ -256,9 +277,34 @@ public class MainActivity extends BaseActivity {
         // Banners & Offers
         bannersSection    = findViewById(R.id.bannersSection);
         offersSection     = findViewById(R.id.offersSection);
+        bannerContentContainer = findViewById(R.id.bannerContentContainer);
+        bannerLoadingState = findViewById(R.id.bannerLoadingState);
+        bannerEmptyState = findViewById(R.id.bannerEmptyState);
+        bannerErrorState = findViewById(R.id.bannerErrorState);
+        tvBannerErrorMessage = findViewById(R.id.tvBannerErrorMessage);
+        btnRetryBannerLoad = findViewById(R.id.btnRetryBannerLoad);
         vpBannersCarousel = findViewById(R.id.vpBannersCarousel);
         rvOffersStrip     = findViewById(R.id.rvOffersStrip);
         bannerDotsLayout  = findViewById(R.id.bannerDotsLayout);
+        offersContentContainer = findViewById(R.id.offersContentContainer);
+        offersLoadingState = findViewById(R.id.offersLoadingState);
+        offersEmptyState = findViewById(R.id.offersEmptyState);
+        offersErrorState = findViewById(R.id.offersErrorState);
+        tvOffersErrorMessage = findViewById(R.id.tvOffersErrorMessage);
+        btnRetryOffersLoad = findViewById(R.id.btnRetryOffersLoad);
+
+        if (btnRetryBannerLoad != null) {
+            btnRetryBannerLoad.setOnClickListener(v -> {
+                setBannerLoadingState();
+                loadHomeBanners();
+            });
+        }
+        if (btnRetryOffersLoad != null) {
+            btnRetryOffersLoad.setOnClickListener(v -> {
+                setOffersLoadingState();
+                loadHomeOffers();
+            });
+        }
 
         View tvSeeAllOffers = findViewById(R.id.tvSeeAllOffers);
         if (tvSeeAllOffers != null) tvSeeAllOffers.setOnClickListener(v ->
@@ -289,6 +335,9 @@ public class MainActivity extends BaseActivity {
             homeSwipeRefresh.setProgressViewOffset(false, 0, 0);
             homeSwipeRefresh.setOnRefreshListener(() -> refreshHomeContent(true));
         }
+
+        startSkeletonPulse(bannerLoadingState);
+        startSkeletonPulse(offersLoadingState);
     }
 
     // ── Load User Data ────────────────────────────────────────────────────
@@ -793,9 +842,11 @@ public class MainActivity extends BaseActivity {
     //            is_active(boolean), created_at
     private void refreshHomeContent(boolean fromSwipe) {
         try {
+            pendingHomeLoads = 2;
+            setBannerLoadingState();
+            setOffersLoadingState();
             if (fromSwipe && homeSwipeRefresh != null) {
                 homeSwipeRefresh.setRefreshing(true);
-                pendingHomeLoads = 2;
             }
             loadHomeBanners();
             loadHomeOffers();
@@ -858,21 +909,26 @@ public class MainActivity extends BaseActivity {
                 if (ok) {
                     org.json.JSONArray arr = new org.json.JSONArray(body);
                     List<Banner> list = new ArrayList<>();
+                    Set<String> seen = new HashSet<>();
                     for (int i = 0; i < arr.length(); i++) {
                         org.json.JSONObject o = arr.getJSONObject(i);
                         Banner b = new Banner();
-                        b.id = o.optString("id");
+                        b.id = o.optString("id", "");
                         b.title = o.optString("title");
-                        b.imageUrl = SupabaseStorageHelper.getPublicObjectUrl("banner-images", o.optString("image_url"));
+                        String rawImageUrl = o.optString("image_url", "");
+                        b.imageUrl = resolveBannerImageUrl(rawImageUrl);
                         b.redirectType = o.optString("redirect_type");
                         b.redirectId = o.optString("redirect_id");
                         b.expiryDate = o.optString("expiry_date");
                         b.priority = o.optInt("priority", 1);
-                        b.isActive = o.optBoolean("is_active", true);
+                        b.isActive = o.has("is_active")
+                                ? o.optBoolean("is_active", true)
+                                : o.optBoolean("active", true);
                         b.status = b.isActive ? "active" : "inactive";
 
                         boolean notExpired = b.expiryDate.isEmpty() || b.expiryDate.compareTo(today) >= 0;
-                        if (b.isActive && notExpired) {
+                        String dedupeKey = !b.id.isEmpty() ? b.id : (rawImageUrl + "|" + b.title);
+                        if (b.isActive && notExpired && seen.add(dedupeKey)) {
                             list.add(b);
                         }
                     }
@@ -880,11 +936,11 @@ public class MainActivity extends BaseActivity {
                 } else {
                     Log.e(CRASH_TAG, "loadBanners failed HTTP " + code);
                     Log.e("ERROR", body);
-                    MAIN.post(() -> showBannersOnHome(new ArrayList<>()));
+                    MAIN.post(() -> showBannerErrorState(getString(R.string.home_banner_error_message)));
                 }
             } catch (Exception e) {
                 Log.e(CRASH_TAG, "loadBanners exception", e);
-                MAIN.post(() -> showBannersOnHome(new ArrayList<>()));
+                MAIN.post(() -> showBannerErrorState(getString(R.string.home_banner_error_message)));
             } finally {
                 MAIN.post(this::markHomeSectionLoaded);
             }
@@ -926,6 +982,7 @@ public class MainActivity extends BaseActivity {
                 if (ok) {
                     org.json.JSONArray arr = new org.json.JSONArray(body);
                     List<Offer> list = new ArrayList<>();
+                    Set<String> seenCodes = new HashSet<>();
                     for (int i = 0; i < arr.length(); i++) {
                         org.json.JSONObject o = arr.getJSONObject(i);
                         Offer offer = new Offer();
@@ -933,6 +990,7 @@ public class MainActivity extends BaseActivity {
                         offer.title = o.optString("title");
                         offer.description = o.optString("description", "");
                         offer.offerCode = o.optString("offer_code", "");
+                        offer.imageUrl = o.optString("image_url", "");
                         offer.discountType = o.optString("discount_type", "percentage");
                         offer.discountValue = o.optDouble("discount_value", 0);
                         offer.minBookingAmount = o.optDouble("min_booking_amount", 0);
@@ -941,7 +999,10 @@ public class MainActivity extends BaseActivity {
                         offer.status = offer.isActive ? "active" : "inactive";
 
                         boolean notExpired = offer.expiryDate.isEmpty() || offer.expiryDate.compareTo(today) >= 0;
-                        if (offer.isActive && notExpired) {
+                        String dedupeKey = offer.offerCode != null && !offer.offerCode.trim().isEmpty()
+                                ? offer.offerCode.trim().toUpperCase(Locale.US)
+                                : offer.id;
+                        if (offer.isActive && notExpired && seenCodes.add(dedupeKey)) {
                             list.add(offer);
                         }
                     }
@@ -949,11 +1010,11 @@ public class MainActivity extends BaseActivity {
                 } else {
                     Log.e(CRASH_TAG, "loadOffers failed HTTP " + code);
                     Log.e("ERROR", body);
-                    MAIN.post(() -> showOffersOnHome(new ArrayList<>()));
+                    MAIN.post(() -> showOffersErrorState(getString(R.string.home_offers_error_message)));
                 }
             } catch (Exception e) {
                 Log.e(CRASH_TAG, "loadOffers exception", e);
-                MAIN.post(() -> showOffersOnHome(new ArrayList<>()));
+                MAIN.post(() -> showOffersErrorState(getString(R.string.home_offers_error_message)));
             } finally {
                 MAIN.post(this::markHomeSectionLoaded);
             }
@@ -975,7 +1036,11 @@ public class MainActivity extends BaseActivity {
         }
 
         if (homeBanners.isEmpty()) {
-            bannersSection.setVisibility(View.GONE);
+            bannersSection.setVisibility(View.VISIBLE);
+            if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE);
+            if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE);
+            if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE);
+            if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.VISIBLE);
             stopBannerAutoSlide();
             if (bannerDotsMediator != null) {
                 bannerDotsMediator.detach();
@@ -985,6 +1050,11 @@ public class MainActivity extends BaseActivity {
         }
 
         bannersSection.setVisibility(View.VISIBLE);
+        if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE);
+        if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE);
+        if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE);
+        if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.VISIBLE);
+        vpBannersCarousel.setVisibility(View.VISIBLE);
 
         if (homeBannerAdapter == null) {
             homeBannerAdapter = new HomeBannerAdapter(this, homeBanners, banner -> {
@@ -1071,7 +1141,11 @@ public class MainActivity extends BaseActivity {
         }
 
         if (homeOffers.isEmpty()) {
-            offersSection.setVisibility(View.GONE);
+            offersSection.setVisibility(View.VISIBLE);
+            if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE);
+            if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE);
+            if (offersErrorState != null) offersErrorState.setVisibility(View.GONE);
+            if (offersEmptyState != null) offersEmptyState.setVisibility(View.VISIBLE);
             if (homeOfferAdapter != null) {
                 homeOfferAdapter.notifyDataSetChanged();
             }
@@ -1079,12 +1153,16 @@ public class MainActivity extends BaseActivity {
         }
 
         offersSection.setVisibility(View.VISIBLE);
+        if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE);
+        if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE);
+        if (offersErrorState != null) offersErrorState.setVisibility(View.GONE);
+        if (offersContentContainer != null) offersContentContainer.setVisibility(View.VISIBLE);
 
         if (homeOfferAdapter == null) {
             homeOfferAdapter = new HomeOfferAdapter(this, homeOffers, offer ->
                     Toast.makeText(this,
                             "Use code: " + offer.offerCode + " for "
-                                    + (offer.discountType.equals("percentage")
+                                    + ("percentage".equalsIgnoreCase(offer.discountType)
                                     ? (int) offer.discountValue + "% OFF"
                                     : "₹" + (int) offer.discountValue + " OFF"),
                             Toast.LENGTH_LONG).show()
@@ -1114,6 +1192,67 @@ public class MainActivity extends BaseActivity {
                         NOTIFICATION_PERMISSION_REQ);
             }
         }
+    }
+
+    private void setBannerLoadingState() {
+        if (bannersSection != null) bannersSection.setVisibility(View.VISIBLE);
+        if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE);
+        if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE);
+        if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE);
+        if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.VISIBLE);
+    }
+
+    private void showBannerErrorState(String message) {
+        if (bannersSection != null) bannersSection.setVisibility(View.VISIBLE);
+        if (tvBannerErrorMessage != null) {
+            tvBannerErrorMessage.setText(message == null || message.trim().isEmpty()
+                    ? getString(R.string.home_banner_error_message)
+                    : message);
+        }
+        if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE);
+        if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE);
+        if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE);
+        if (bannerErrorState != null) bannerErrorState.setVisibility(View.VISIBLE);
+        stopBannerAutoSlide();
+    }
+
+    private void setOffersLoadingState() {
+        if (offersSection != null) offersSection.setVisibility(View.VISIBLE);
+        if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE);
+        if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE);
+        if (offersErrorState != null) offersErrorState.setVisibility(View.GONE);
+        if (offersLoadingState != null) offersLoadingState.setVisibility(View.VISIBLE);
+    }
+
+    private void showOffersErrorState(String message) {
+        if (offersSection != null) offersSection.setVisibility(View.VISIBLE);
+        if (tvOffersErrorMessage != null) {
+            tvOffersErrorMessage.setText(message == null || message.trim().isEmpty()
+                    ? getString(R.string.home_offers_error_message)
+                    : message);
+        }
+        if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE);
+        if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE);
+        if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE);
+        if (offersErrorState != null) offersErrorState.setVisibility(View.VISIBLE);
+    }
+
+    private void startSkeletonPulse(View target) {
+        if (target == null) return;
+        ObjectAnimator animator = ObjectAnimator.ofFloat(target, View.ALPHA, 0.55f, 1f);
+        animator.setDuration(700);
+        animator.setRepeatMode(ObjectAnimator.REVERSE);
+        animator.setRepeatCount(ObjectAnimator.INFINITE);
+        animator.start();
+        skeletonAnimators.add(animator);
+    }
+
+    private String resolveBannerImageUrl(String rawImageValue) {
+        if (rawImageValue == null) return "";
+        String value = rawImageValue.trim();
+        if (value.isEmpty()) return "";
+        if (value.startsWith("http://") || value.startsWith("https://")) return value;
+        return SupabaseStorageHelper.getPublicObjectUrl("banner-images", value);
     }
 
 
