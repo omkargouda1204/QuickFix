@@ -127,9 +127,6 @@ public class OfferManagementActivity extends BaseActivity {
     // ── LOAD OFFERS ── Thread-based (same pattern as MainActivity) ─────────
     private void loadOffers() {
         setLoading(true);
-        String today = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                .format(new java.util.Date());
-
         // ✓ Fetch ALL offers (admin needs to see all to manage them)
         String url = SUPABASE_URL + "/rest/v1/offers?select=*&order=created_at.desc";
         Log.d(TAG, "loadOffers -> " + url);
@@ -182,6 +179,7 @@ public class OfferManagementActivity extends BaseActivity {
                 offer.id               = o.optString("id");
                 offer.title            = o.optString("title");
                 offer.description      = o.optString("description", "");
+                offer.imageUrl         = o.optString("image_url", "");
                 offer.offerCode        = o.optString("offer_code", "");
                 offer.discountType     = o.optString("discount_type", "percentage");
                 offer.discountValue    = o.optDouble("discount_value", 0);
@@ -268,6 +266,15 @@ public class OfferManagementActivity extends BaseActivity {
         AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(dv).create();
         dv.findViewById(R.id.btnCancel).setOnClickListener(v -> dialog.dismiss());
         dv.findViewById(R.id.btnSave).setOnClickListener(v -> {
+            TextInputLayout tilTitle = dv.findViewById(R.id.tilOfferTitle);
+            TextInputLayout tilCode = dv.findViewById(R.id.tilOfferCode);
+            TextInputLayout tilValue = dv.findViewById(R.id.tilDiscountValue);
+            TextInputLayout tilMinAmount = dv.findViewById(R.id.tilMinAmount);
+            if (tilTitle != null) tilTitle.setError(null);
+            if (tilCode != null) tilCode.setError(null);
+            if (tilValue != null) tilValue.setError(null);
+            if (tilMinAmount != null) tilMinAmount.setError(null);
+
             String  title      = getET(etTitle);
             String  desc       = getET(etDesc);
             String  code       = getET(etCode).toUpperCase();
@@ -290,10 +297,35 @@ public class OfferManagementActivity extends BaseActivity {
             if (valStr.isEmpty()) {
                 setFieldError(dv.findViewById(R.id.tilDiscountValue), "Value is required"); return;
             }
+            if (!"percentage".equals(type) && !"fixed".equals(type)) {
+                Toast.makeText(this, "Invalid discount type", Toast.LENGTH_SHORT).show(); return;
+            }
 
             double value  = 0, minAmt = 0;
-            try { value  = Double.parseDouble(valStr); } catch (Exception ignored) {}
-            try { minAmt = Double.parseDouble(minStr);  } catch (Exception ignored) {}
+            try {
+                value = Double.parseDouble(valStr);
+            } catch (Exception ignored) {
+                setFieldError(dv.findViewById(R.id.tilDiscountValue), "Enter a valid discount value");
+                return;
+            }
+            try {
+                if (!minStr.isEmpty()) minAmt = Double.parseDouble(minStr);
+            } catch (Exception ignored) {
+                setFieldError(dv.findViewById(R.id.tilMinAmount), "Enter a valid minimum amount");
+                return;
+            }
+            if ("percentage".equals(type) && (value <= 0 || value > 100)) {
+                setFieldError(dv.findViewById(R.id.tilDiscountValue), "Percentage must be between 1 and 100");
+                return;
+            }
+            if ("fixed".equals(type) && value <= 0) {
+                setFieldError(dv.findViewById(R.id.tilDiscountValue), "Fixed discount must be greater than 0");
+                return;
+            }
+            if (minAmt < 0) {
+                setFieldError(dv.findViewById(R.id.tilMinAmount), "Minimum amount cannot be negative");
+                return;
+            }
 
             saveOffer(title, desc, code, type, value, minAmt, expiry, active,
                     isEdit ? existing.id : null, sendNotif, dialog);
@@ -302,12 +334,39 @@ public class OfferManagementActivity extends BaseActivity {
     }
 
     // ── SAVE OFFER (Thread-based) ─────────────────────────────────────────
+    /**
+     * Save offer to Supabase. Performs INSERT (POST) for new offers or UPDATE (PATCH) for existing.
+     * 
+     * Supabase Query (INSERT):
+     *   INSERT INTO offers (id, title, description, offer_code, discount_type, 
+     *     discount_value, min_booking_amount, is_active, expiry_date, status, created_at)
+     *   VALUES (...) RETURNING *
+     * 
+     * Supabase Query (UPDATE):
+     *   UPDATE offers SET title = ?, description = ?, offer_code = ?, discount_type = ?, 
+     *     discount_value = ?, min_booking_amount = ?, is_active = ?, expiry_date = ?, 
+     *     status = ?, updated_at = NOW() WHERE id = ? RETURNING *
+     */
     private void saveOffer(String title, String desc, String code, String discountType,
                             double discountValue, double minAmount, String expiryDate,
                             boolean isActive, String existingId, boolean sendNotif,
                             AlertDialog dialog) {
         new Thread(() -> {
             try {
+                // Validation
+                if (title == null || title.trim().isEmpty()) {
+                    main.post(() -> showErrorDialog("Validation Error", "Title is required"));
+                    return;
+                }
+                if (code == null || code.trim().isEmpty()) {
+                    main.post(() -> showErrorDialog("Validation Error", "Offer code is required"));
+                    return;
+                }
+                if (discountValue <= 0) {
+                    main.post(() -> showErrorDialog("Validation Error", "Discount value must be greater than 0"));
+                    return;
+                }
+
                 boolean isEdit = (existingId != null && !existingId.isEmpty());
                 String url = isEdit
                         ? SUPABASE_URL + "/rest/v1/offers?id=eq." + existingId
@@ -316,13 +375,15 @@ public class OfferManagementActivity extends BaseActivity {
 
                 // ✓ Use exact DB column names
                 JSONObject payload = new JSONObject();
-                if (!isEdit) payload.put("id", UUID.randomUUID().toString());
-                payload.put("title", title);
+                if (!isEdit) {
+                    payload.put("id", UUID.randomUUID().toString());
+                }
+                payload.put("title", title != null ? title : "");
                 payload.put("description", desc != null ? desc : "");
-                payload.put("offer_code", code);
-                payload.put("discount_type", discountType);
+                payload.put("offer_code", code.toUpperCase());
+                payload.put("discount_type", discountType != null ? discountType : "percentage");
                 payload.put("discount_value", discountValue);
-                payload.put("min_booking_amount", minAmount);
+                payload.put("min_booking_amount", minAmount >= 0 ? minAmount : 0);
                 payload.put("is_active", isActive);
 
                 if (expiryDate != null && !expiryDate.isEmpty()) {
@@ -340,12 +401,12 @@ public class OfferManagementActivity extends BaseActivity {
                     if (result.success) {
                         dialog.dismiss();
                         Toast.makeText(OfferManagementActivity.this,
-                                isEdit ? "Offer updated" : "Offer created",
+                                isEdit ? "✓ Offer updated" : "✓ Offer created",
                                 Toast.LENGTH_SHORT).show();
                         loadOffers();
 
                         if (sendNotif) {
-                            String discStr = discountType.equals("percentage")
+                            String discStr = "percentage".equals(discountType)
                                     ? (int) discountValue + "% OFF"
                                     : "₹" + (int) discountValue + " OFF";
                             sendOfferNotification(title, code, discStr);
@@ -356,15 +417,16 @@ public class OfferManagementActivity extends BaseActivity {
                         }
                     } else {
                         Log.e(TAG, "saveOffer FAILED HTTP " + result.code + ": " + result.body);
-                        Toast.makeText(OfferManagementActivity.this,
-                                "Save failed (" + result.code + ")",
-                                Toast.LENGTH_LONG).show();
+                        showErrorDialog("Save Failed",
+                                "Error (HTTP " + result.code + "): " + result.body);
                     }
                 });
             } catch (Exception e) {
                 Log.e(TAG, "saveOffer exception: " + e.getMessage(), e);
-                main.post(() -> Toast.makeText(OfferManagementActivity.this,
-                        "Error: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                main.post(() -> {
+                    Log.e(TAG, "saveOffer error: " + e.getMessage());
+                    showErrorDialog("Error", "Failed to save offer: " + e.getMessage());
+                });
             }
         }).start();
     }
@@ -377,7 +439,7 @@ public class OfferManagementActivity extends BaseActivity {
                 JSONObject notif = new JSONObject();
                 notif.put("id",      UUID.randomUUID().toString());
                 notif.put("title",   "New Offer Available 🎉");
-                notif.put("message", "Get " + discStr + " on your booking. Use code " + code + " now!");
+                notif.put("message", offerTitle + " is live. Get " + discStr + " on your booking. Use code " + code + " now!");
                 notif.put("type",    "offer");
                 notif.put("is_read", false);
 
@@ -426,7 +488,18 @@ public class OfferManagementActivity extends BaseActivity {
     }
 
     // ── TOGGLE ACTIVE (Thread-based) ──────────────────────────────────────
+    /**
+     * Toggle offer active status.
+     * Supabase Query (PATCH):
+     *   UPDATE offers SET is_active = ?, status = ?, updated_at = NOW() 
+     *   WHERE id = ? RETURNING *
+     */
     private void toggleOfferActive(Offer offer, boolean newState) {
+        if (offer == null || offer.id == null) {
+            showErrorDialog("Error", "Invalid offer data");
+            return;
+        }
+
         new Thread(() -> {
             try {
                 JSONObject payload = new JSONObject();
@@ -444,19 +517,20 @@ public class OfferManagementActivity extends BaseActivity {
                         adapter.notifyDataSetChanged();
                         updateStats();
                         Toast.makeText(OfferManagementActivity.this,
-                                newState ? "Offer enabled" : "Offer disabled",
+                                newState ? "✓ Offer enabled" : "✓ Offer disabled",
                                 Toast.LENGTH_SHORT).show();
                     } else {
                         Log.e(TAG, "toggleOfferActive FAILED HTTP " + result.code + ": " + result.body);
-                        Toast.makeText(OfferManagementActivity.this,
-                                "Could not update offer (" + result.code + ")",
-                                Toast.LENGTH_SHORT).show();
+                        showErrorDialog("Update Failed",
+                                "Could not update offer status (HTTP " + result.code + ")");
                     }
                 });
             } catch (Exception e) {
                 Log.e(TAG, "toggleOfferActive exception", e);
-                main.post(() -> Toast.makeText(OfferManagementActivity.this,
-                        "Could not update offer", Toast.LENGTH_SHORT).show());
+                main.post(() -> {
+                    Log.e(TAG, "toggleOfferActive error: " + e.getMessage());
+                    showErrorDialog("Error", "Failed to update offer: " + e.getMessage());
+                });
             }
         }).start();
     }
@@ -504,16 +578,26 @@ public class OfferManagementActivity extends BaseActivity {
     }
 
     // ── DELETE (Thread-based) ─────────────────────────────────────────────
+    /**
+     * Delete offer from Supabase.
+     * Supabase Query (DELETE):
+     *   DELETE FROM offers WHERE id = ? RETURNING *
+     */
     private void confirmDelete(Offer offer) {
         new MaterialAlertDialogBuilder(this)
                 .setTitle("Delete Offer")
-                .setMessage("Delete \"" + offer.title + "\"?")
+                .setMessage("Delete \"" + (offer.title != null ? offer.title : "Offer") + "\"? This cannot be undone.")
                 .setPositiveButton("Delete", (d, w) -> deleteOffer(offer))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
     private void deleteOffer(Offer offer) {
+        if (offer == null || offer.id == null) {
+            showErrorDialog("Error", "Invalid offer data");
+            return;
+        }
+
         new Thread(() -> {
             try {
                 String deleteUrl = SUPABASE_URL + "/rest/v1/offers?id=eq." + offer.id;
@@ -532,21 +616,22 @@ public class OfferManagementActivity extends BaseActivity {
                     main.post(() -> {
                         if (resp.isSuccessful()) {
                             Toast.makeText(OfferManagementActivity.this,
-                                    "Offer deleted", Toast.LENGTH_SHORT).show();
+                                    "✓ Offer deleted", Toast.LENGTH_SHORT).show();
                             // ✓ Reload from database to ensure data consistency
                             loadOffers();
                         } else {
                             Log.e(TAG, "deleteOffer FAILED HTTP " + resp.code() + ": " + body);
-                            Toast.makeText(OfferManagementActivity.this,
-                                    "Delete failed (" + resp.code() + ")",
-                                    Toast.LENGTH_LONG).show();
+                            showErrorDialog("Delete Failed",
+                                    "Could not delete offer (HTTP " + resp.code() + ")");
                         }
                     });
                 }
             } catch (Exception e) {
                 Log.e(TAG, "deleteOffer exception", e);
-                main.post(() -> Toast.makeText(OfferManagementActivity.this,
-                        "Delete error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                main.post(() -> {
+                    Log.e(TAG, "deleteOffer error: " + e.getMessage());
+                    showErrorDialog("Error", "Failed to delete offer: " + e.getMessage());
+                });
             }
         }).start();
     }
@@ -573,5 +658,13 @@ public class OfferManagementActivity extends BaseActivity {
 
     private void setFieldError(TextInputLayout til, String msg) {
         if (til != null) til.setError(msg);
+    }
+
+    private void showErrorDialog(String title, String message) {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(title)
+                .setMessage(message)
+                .setPositiveButton("OK", null)
+                .show();
     }
 }
