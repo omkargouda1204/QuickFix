@@ -155,33 +155,68 @@ public class BannerManagementActivity extends BaseActivity {
         if (fabAdd != null) fabAdd.setOnClickListener(v -> showAddEditDialog(null));
     }
 
+    private static class CountStats {
+        int total;
+        int active;
+        int expired;
+    }
+
     // ── LOAD BANNERS ── uses Thread (same reliable pattern as MainActivity) ──
     private void loadBanners() {
         setLoading(true);
-        String url = SUPABASE_URL + "/rest/v1/banners?select=*&order=created_at.desc";
-        Log.d(TAG, "loadBanners -> " + url);
+        String today = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                .format(new java.util.Date());
+        String primaryUrl = SUPABASE_URL + "/rest/v1/banners?select=*"
+                + "&is_active=eq.true"
+                + "&or=(expiry_date.is.null,expiry_date.gte.now())"
+                + "&order=priority.asc,created_at.desc";
+        String fallbackUrl = SUPABASE_URL + "/rest/v1/banners?select=*"
+                + "&is_active=eq.true"
+                + "&or=(expiry_date.is.null,expiry_date.gte." + today + ")"
+                + "&order=priority.asc,created_at.desc";
+        Log.d(TAG, "loadBanners -> " + primaryUrl);
 
         new Thread(() -> {
             try {
-                Request req = new Request.Builder()
-                        .url(url)
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept",        "application/json")
-                        .build();
-                try (Response resp = http.newCall(req).execute()) {
-                    int    code = resp.code();
-                    String body = resp.body() != null ? resp.body().string() : "[]";
-                    Log.d(TAG, "loadBanners HTTP " + code + " | rows_body_len=" + body.length());
+                String[] urls = new String[]{primaryUrl, fallbackUrl};
+                int code = 0;
+                String body = "[]";
+                boolean success = false;
+
+                for (String url : urls) {
+                    Request req = new Request.Builder()
+                            .url(url)
+                            .addHeader("apikey", ANON_KEY)
+                            .addHeader("Authorization", "Bearer " + ANON_KEY)
+                            .addHeader("Accept", "application/json")
+                            .build();
+                    try (Response resp = http.newCall(req).execute()) {
+                        code = resp.code();
+                        body = resp.body() != null ? resp.body().string() : "[]";
+                        if (resp.isSuccessful()) {
+                            success = true;
+                            break;
+                        }
+                    }
+                }
+
+                final int finalCode = code;
+                final String finalBody = body;
+                if (success) {
+                    CountStats stats = fetchBannerCounts(today);
                     main.post(() -> {
                         setLoading(false);
                         swipeRefresh.setRefreshing(false);
-                        if (code == 200) {
-                            parseBanners(body);
-                        } else {
-                            Log.e(TAG, "loadBanners FAILED " + code + ": " + body);
-                            showError("Failed to load banners (HTTP " + code + ")");
-                        }
+                        parseBanners(finalBody);
+                        applyBannerStats(stats);
+                    });
+                } else {
+                    Log.e("ERROR", finalBody);
+                    Log.e("RESPONSE", finalBody);
+                    main.post(() -> {
+                        setLoading(false);
+                        swipeRefresh.setRefreshing(false);
+                        showError("Failed to load banners (HTTP " + finalCode + ")");
                     });
                 }
             } catch (Exception e) {
@@ -193,6 +228,54 @@ public class BannerManagementActivity extends BaseActivity {
                 });
             }
         }).start();
+    }
+
+    private CountStats fetchBannerCounts(String today) {
+        CountStats stats = new CountStats();
+        String base = SUPABASE_URL + "/rest/v1/banners?select=id";
+        stats.total = fetchCount(base);
+        stats.active = fetchCount(base
+                + "&is_active=eq.true"
+                + "&or=(expiry_date.is.null,expiry_date.gte." + today + ")");
+        stats.expired = fetchCount(base + "&expiry_date=lt." + today);
+        return stats;
+    }
+
+    private int fetchCount(String url) {
+        try {
+            Request req = new Request.Builder()
+                    .url(url)
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .addHeader("Prefer", "count=exact")
+                    .addHeader("Range", "0-0")
+                    .build();
+            try (Response resp = http.newCall(req).execute()) {
+                String body = resp.body() != null ? resp.body().string() : "[]";
+                if (!resp.isSuccessful()) {
+                    Log.e("ERROR", body);
+                    return 0;
+                }
+                String contentRange = resp.header("Content-Range", "");
+                if (contentRange != null && contentRange.contains("/")) {
+                    String totalPart = contentRange.substring(contentRange.lastIndexOf('/') + 1).trim();
+                    if (!"*".equals(totalPart)) {
+                        return Integer.parseInt(totalPart);
+                    }
+                }
+                return new JSONArray(body).length();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "fetchCount exception", e);
+            return 0;
+        }
+    }
+
+    private void applyBannerStats(CountStats stats) {
+        if (tvTotalBanners != null) tvTotalBanners.setText(String.valueOf(stats.total));
+        if (tvActiveBanners != null) tvActiveBanners.setText(String.valueOf(stats.active));
+        if (tvExpiredBanners != null) tvExpiredBanners.setText(String.valueOf(stats.expired));
     }
 
     private void parseBanners(String json) {
@@ -209,24 +292,13 @@ public class BannerManagementActivity extends BaseActivity {
                         BUCKET_BANNERS,
                         o.optString("image_url", ""));
                 b.redirectType = o.optString("redirect_type", "category");
-
-                // DB column is redirect_value (user spec) — fall back to redirect_id if missing
-                String rv = o.optString("redirect_value", "");
-                if (rv.isEmpty()) rv = o.optString("redirect_id", "");
-                b.redirectId = rv;
-
-                b.startDate  = o.optString("start_date", "");
-                b.expiryDate = o.optString("expiry_date", "");
-
-                // DB column is "active" (bool) per user spec — fall back to is_active
-                if (o.has("active") && !o.isNull("active")) {
-                    b.isActive = o.optBoolean("active", true);
-                } else {
-                    b.isActive = o.optBoolean("is_active", true);
-                }
-                b.status    = b.isActive ? "active" : "inactive";
-                b.priority  = o.optInt("priority", 1);
-                b.createdAt = o.optString("created_at");
+                b.redirectId   = o.optString("redirect_id", "");
+                b.startDate    = o.optString("start_date", "");
+                b.expiryDate   = o.optString("expiry_date", "");
+                b.isActive     = o.optBoolean("is_active", true);
+                b.status       = b.isActive ? "active" : "inactive";
+                b.priority     = o.optInt("priority", 1);
+                b.createdAt    = o.optString("created_at");
                 banners.add(b);
             }
         } catch (Exception e) {
@@ -234,7 +306,7 @@ public class BannerManagementActivity extends BaseActivity {
         }
         Log.d(TAG, "parseBanners: parsed " + banners.size() + " banners");
         adapter.setItems(banners);
-        updateStats();
+        adapter.notifyDataSetChanged();
         showListOrEmpty();
     }
 
@@ -248,20 +320,6 @@ public class BannerManagementActivity extends BaseActivity {
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
         if (emptyStateLayout != null) emptyStateLayout.setVisibility(View.VISIBLE);
         if (rvBanners        != null) rvBanners.setVisibility(View.GONE);
-    }
-
-    private void updateStats() {
-        String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
-                java.util.Locale.getDefault()).format(new java.util.Date());
-        int total = banners.size(), active = 0, expired = 0;
-        for (Banner b : banners) {
-            if (b.isEffectivelyActive()) active++;
-            if (b.expiryDate != null && !b.expiryDate.isEmpty()
-                    && b.expiryDate.compareTo(today) < 0) expired++;
-        }
-        if (tvTotalBanners   != null) tvTotalBanners.setText(String.valueOf(total));
-        if (tvActiveBanners  != null) tvActiveBanners.setText(String.valueOf(active));
-        if (tvExpiredBanners != null) tvExpiredBanners.setText(String.valueOf(expired));
     }
 
     // ── ADD / EDIT DIALOG ─────────────────────────────────────────────────
@@ -390,9 +448,9 @@ public class BannerManagementActivity extends BaseActivity {
                 payload.put("title",          title);
                 payload.put("image_url",      imageUrl != null ? imageUrl : "");
                 payload.put("redirect_type",  redirectType != null ? redirectType : "category");
-                payload.put("redirect_value", redirectId  != null ? redirectId  : "");
-                payload.put("active",         isActive);
-                payload.put("priority",       priority);
+                payload.put("redirect_id", redirectId != null ? redirectId : "");
+                payload.put("priority", priority);
+                payload.put("is_active", isActive);
                 if (!isEdit) {
                     payload.put("start_date", new java.text.SimpleDateFormat("yyyy-MM-dd",
                             java.util.Locale.US).format(new java.util.Date()));
@@ -404,8 +462,13 @@ public class BannerManagementActivity extends BaseActivity {
                 }
 
                 Log.d(TAG, "saveBanner " + method + " payload=" + payload);
+                if (isEdit) {
+                    Log.e("UPDATE_BODY", payload.toString());
+                }
+                Log.e("REQUEST", payload.toString());
                 SaveResult result = executeSave(url, method, payload);
                 Log.d(TAG, "saveBanner response HTTP " + result.code + ": " + result.body);
+                Log.e("RESPONSE", result.body != null ? result.body : "");
 
                 main.post(() -> {
                     if (result.success) {
@@ -415,6 +478,7 @@ public class BannerManagementActivity extends BaseActivity {
                                 Toast.LENGTH_SHORT).show();
                         loadBanners();
                     } else {
+                        Log.e("ERROR", result.body);
                         Log.e(TAG, "saveBanner FAILED HTTP " + result.code + ": " + result.body);
                         Toast.makeText(BannerManagementActivity.this,
                                 "Save failed (" + result.code + "): " + result.body,
@@ -434,9 +498,10 @@ public class BannerManagementActivity extends BaseActivity {
             try {
                 // DB column is "active" per spec
                 JSONObject payload = new JSONObject();
-                payload.put("active", newState);
+                payload.put("is_active", newState);
+                Log.e("REQUEST", payload.toString());
                 String patchUrl = SUPABASE_URL + "/rest/v1/banners?id=eq." + banner.id;
-                Log.d(TAG, "toggleBannerActive PATCH " + patchUrl + " active=" + newState);
+                Log.d(TAG, "toggleBannerActive PATCH " + patchUrl + " is_active=" + newState);
                 SaveResult rs = executePatch(patchUrl, payload);
                 Log.d(TAG, "toggleBannerActive HTTP " + rs.code + ": " + rs.body);
 
@@ -445,11 +510,11 @@ public class BannerManagementActivity extends BaseActivity {
                         banner.isActive = newState;
                         banner.status   = newState ? "active" : "inactive";
                         adapter.notifyDataSetChanged();
-                        updateStats();
                         Toast.makeText(BannerManagementActivity.this,
                                 newState ? "Banner enabled" : "Banner disabled",
                                 Toast.LENGTH_SHORT).show();
                     } else {
+                        Log.e("ERROR", rs.body);
                         Log.e(TAG, "toggleBannerActive FAILED HTTP " + rs.code + ": " + rs.body);
                         Toast.makeText(BannerManagementActivity.this,
                                 "Could not update banner (" + rs.code + ")", Toast.LENGTH_SHORT).show();
@@ -519,26 +584,30 @@ public class BannerManagementActivity extends BaseActivity {
         new Thread(() -> {
             try {
                 String deleteUrl = SUPABASE_URL + "/rest/v1/banners?id=eq." + banner.id;
+                Log.e("DELETE_URL", deleteUrl);
                 Log.d(TAG, "deleteBanner DELETE " + deleteUrl);
                 Request req = new Request.Builder()
                         .url(deleteUrl)
                         .delete()
-                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Prefer",        "return=minimal")
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
                         .build();
                 try (Response resp = http.newCall(req).execute()) {
                     String body = resp.body() != null ? resp.body().string() : "";
                     Log.d(TAG, "deleteBanner HTTP " + resp.code() + ": " + body);
+                    Log.e("RESPONSE", body);
                     main.post(() -> {
                         if (resp.isSuccessful()) {
                             banners.remove(banner);
                             adapter.notifyDataSetChanged();
-                            updateStats();
                             showListOrEmpty();
+                            loadBanners();
                             Toast.makeText(BannerManagementActivity.this,
                                     "Banner deleted", Toast.LENGTH_SHORT).show();
                         } else {
+                            Log.e("ERROR", body);
                             Log.e(TAG, "deleteBanner FAILED HTTP " + resp.code() + ": " + body);
                             Toast.makeText(BannerManagementActivity.this,
                                     "Delete failed (" + resp.code() + "): " + body,
