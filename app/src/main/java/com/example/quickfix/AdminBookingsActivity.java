@@ -46,10 +46,8 @@ public class AdminBookingsActivity extends BaseActivity {
 
     private static final String TAG = "AdminBookings";
 
-    // ── Supabase — only columns that exist in bookings table ─────────────
-    private static final String SELECT_COLS =
-            "id,customer_name,customer_phone,provider_name,service_name,category," +
-            "booking_date,booking_time,address,city,price,status,created_at,description";
+    // Admin should fetch all bookings columns.
+    private static final String SELECT_COLS = "*";
 
     private final OkHttpClient http = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)

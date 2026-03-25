@@ -32,10 +32,10 @@ public class Booking {
         b.customerId = s(o, "customer_id");
         b.customerName = s(o, "customer_name");
         b.customerPhone = s(o, "customer_phone");
-        // Try firebase_uid first (new schema), fallback to provider_id (old schema)
-        b.providerId = s(o, "firebase_uid");
+        // Current schema: provider_id. Keep firebase_uid as backward-compatible fallback.
+        b.providerId = s(o, "provider_id");
         if (b.providerId.isEmpty()) {
-            b.providerId = s(o, "provider_id");
+            b.providerId = s(o, "firebase_uid");
         }
         b.providerName = s(o, "provider_name");
         b.serviceId = s(o, "service_id");
@@ -59,4 +59,3 @@ public class Booking {
         return "null".equals(v) ? "" : v;
     }
 }
-

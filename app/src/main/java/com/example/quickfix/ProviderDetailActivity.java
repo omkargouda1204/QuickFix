@@ -77,6 +77,8 @@ public class ProviderDetailActivity extends BaseActivity {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private String providerFirebaseUid;
+    private String providerIdForBooking;
+    private String serviceIdForBooking;
     private String providerName;
     private String providerCategory;
     private String providerCity;
@@ -98,6 +100,11 @@ public class ProviderDetailActivity extends BaseActivity {
         // Read extras
         Intent i           = getIntent();
         providerFirebaseUid= i.getStringExtra(EXTRA_FIREBASE_UID);
+        providerIdForBooking = i.getStringExtra(EXTRA_PROVIDER_ID);
+        serviceIdForBooking = i.getStringExtra("service_id");
+        if (providerIdForBooking == null || providerIdForBooking.trim().isEmpty()) {
+            providerIdForBooking = providerFirebaseUid;
+        }
         String businessName= i.getStringExtra(EXTRA_BUSINESS_NAME);
         String ownerName   = i.getStringExtra(EXTRA_OWNER_NAME);
         providerCategory   = i.getStringExtra(EXTRA_CATEGORY);
@@ -319,26 +326,25 @@ public class ProviderDetailActivity extends BaseActivity {
                 Log.e(TAG, "Failed to fetch customer info: " + e.getMessage());
             }
 
-            // Create booking JSON — only columns that exist in the bookings table
             try {
                 JSONObject bookingBody = new JSONObject();
-                // Required for RLS checks and provider dashboard queries
                 bookingBody.put("customer_id", customerId);
-                bookingBody.put("firebase_uid", providerFirebaseUid != null ? providerFirebaseUid : "");
+                bookingBody.put("provider_id", providerIdForBooking != null ? providerIdForBooking : "");
                 bookingBody.put("customer_name", customerName.isEmpty() ? "Customer" : customerName);
-                bookingBody.put("customer_phone", customerPhone);
-                bookingBody.put("provider_name", providerName);
-                bookingBody.put("service_name", providerCategory != null ? providerCategory : "");
+                bookingBody.put("customer_phone", customerPhone != null ? customerPhone : "");
+                bookingBody.put("provider_name", providerName != null ? providerName : "");
+                bookingBody.put("service_id", serviceIdForBooking != null ? serviceIdForBooking : "");
+                bookingBody.put("service_name", providerCategory != null ? providerCategory : "Service");
                 bookingBody.put("category", providerCategory != null ? providerCategory : "");
                 bookingBody.put("booking_date", date);
                 bookingBody.put("booking_time", time);
                 bookingBody.put("address", address);
                 bookingBody.put("city", providerCity != null ? providerCity : "");
                 bookingBody.put("price", 0);
+                bookingBody.put("description", description != null ? description : "");
                 bookingBody.put("status", "pending");
-                bookingBody.put("description", description);
 
-                Log.d(TAG, "Booking payload: " + bookingBody.toString());
+                Log.d("BOOKING_DATA", bookingBody.toString());
 
                 String url = SUPABASE_URL + "/rest/v1/bookings";
 
@@ -350,8 +356,6 @@ public class ProviderDetailActivity extends BaseActivity {
                         .addHeader("Content-Type", "application/json")
                         .addHeader("Prefer", "return=minimal")
                         .build();
-
-                final String custName = customerName.isEmpty() ? "Customer" : customerName;
 
                 httpClient.newCall(request).enqueue(new Callback() {
                     @Override
@@ -374,10 +378,10 @@ public class ProviderDetailActivity extends BaseActivity {
                                         "Booking submitted successfully!",
                                         Toast.LENGTH_LONG).show();
                             } else {
-                                Log.e(TAG, "Booking failed: HTTP " + code + " | " + resp);
-                                String shortMsg = (resp != null && !resp.trim().isEmpty()) ? resp : ("HTTP " + code);
+                                Log.e(TAG, "BOOKING_ERROR HTTP " + code + " | " + resp);
+                                String msg = extractSupabaseError(resp);
                                 Toast.makeText(ProviderDetailActivity.this,
-                                        "Booking failed: " + shortMsg,
+                                        "Booking failed: " + msg,
                                         Toast.LENGTH_LONG).show();
                             }
                         });
@@ -392,6 +396,20 @@ public class ProviderDetailActivity extends BaseActivity {
                                 Toast.LENGTH_SHORT).show());
             }
         }).start();
+    }
+
+    private String extractSupabaseError(String body) {
+        if (body == null || body.trim().isEmpty()) return "HTTP error";
+        try {
+            JSONObject obj = new JSONObject(body);
+            String message = obj.optString("message", "");
+            String details = obj.optString("details", "");
+            String hint = obj.optString("hint", "");
+            String merged = (message + " " + details + " " + hint).trim();
+            return merged.isEmpty() ? body : merged;
+        } catch (Exception ignored) {
+            return body;
+        }
     }
 
     private void setText(int viewId, String text) {
