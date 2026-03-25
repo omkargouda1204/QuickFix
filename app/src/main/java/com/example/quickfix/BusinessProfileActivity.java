@@ -52,7 +52,7 @@ public class BusinessProfileActivity extends BaseActivity {
                               etAddress, etCity, etPhone;
     private AutoCompleteTextView acCategory;
     private SwitchCompat switchAvailability;
-    private MaterialButton btnSelectImage, btnSave, btnAddMedia;
+    private MaterialButton btnSelectImage, btnSave, btnAddMedia, btnEditProfile;
     private TextView tvMediaCount;
     private RecyclerView rvMediaGallery;
     private ProgressBar progressBar;
@@ -80,6 +80,8 @@ public class BusinessProfileActivity extends BaseActivity {
     private ActivityResultLauncher<String> mediaPickerLauncher;
 
     private boolean isUploadingMedia = false;
+    private boolean isEditMode = false;
+    private String lockedCategory = "";
 
     private interface PendingMediaUploadCallback {
         void onComplete(int successCount, int failedCount, String firstError);
@@ -155,24 +157,77 @@ public class BusinessProfileActivity extends BaseActivity {
         switchAvailability = findViewById(R.id.switchAvailability);
         btnSelectImage = findViewById(R.id.btnSelectImage);
         btnAddMedia = findViewById(R.id.btnAddMedia);
+        btnSave = findViewById(R.id.btnSave);
+        btnEditProfile = findViewById(R.id.btnEditProfile);
         tvMediaCount = findViewById(R.id.tvMediaCount);
         rvMediaGallery = findViewById(R.id.rvMediaGallery);
-        btnSave = findViewById(R.id.btnSave);
         progressBar = findViewById(R.id.progressBar);
 
         if (acCategory != null) {
             ArrayAdapter<String> categoryAdapter = new ArrayAdapter<>(this,
                     android.R.layout.simple_dropdown_item_1line, categories);
             acCategory.setAdapter(categoryAdapter);
+            acCategory.setKeyListener(null);
+            acCategory.setEnabled(false);
+            acCategory.setFocusable(false);
+            acCategory.setFocusableInTouchMode(false);
+            acCategory.setClickable(false);
         }
         if (btnSelectImage != null) {
-            btnSelectImage.setOnClickListener(v -> imagePickerLauncher.launch("image/*"));
+            btnSelectImage.setOnClickListener(v -> {
+                if (!isEditMode) {
+                    return;
+                }
+                imagePickerLauncher.launch("image/*");
+            });
         }
         if (btnAddMedia != null) {
-            btnAddMedia.setOnClickListener(v -> showMediaPickerDialog());
+            btnAddMedia.setOnClickListener(v -> {
+                if (!isEditMode) {
+                    return;
+                }
+                showMediaPickerDialog();
+            });
         }
         if (btnSave != null) {
             btnSave.setOnClickListener(v -> saveProfile());
+        }
+        if (btnEditProfile != null) {
+            btnEditProfile.setOnClickListener(v -> setEditMode(true));
+        }
+
+        setEditMode(false);
+    }
+
+    private void setEditMode(boolean enabled) {
+        isEditMode = enabled;
+
+        if (etBusinessName != null) etBusinessName.setEnabled(enabled);
+        if (etDescription != null) etDescription.setEnabled(enabled);
+        if (etExperience != null) etExperience.setEnabled(enabled);
+        if (etAddress != null) etAddress.setEnabled(enabled);
+        if (etCity != null) etCity.setEnabled(enabled);
+        if (etPhone != null) etPhone.setEnabled(enabled);
+        if (switchAvailability != null) switchAvailability.setEnabled(enabled);
+        if (btnSelectImage != null) btnSelectImage.setEnabled(enabled);
+        if (btnAddMedia != null) btnAddMedia.setEnabled(enabled);
+
+        // Category is immutable after onboarding.
+        if (acCategory != null) {
+            acCategory.setEnabled(false);
+            acCategory.setFocusable(false);
+            acCategory.setFocusableInTouchMode(false);
+            acCategory.setClickable(false);
+        }
+
+        if (btnEditProfile != null) {
+            btnEditProfile.setVisibility(enabled ? View.GONE : View.VISIBLE);
+        }
+        if (btnSave != null) {
+            btnSave.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        }
+        if (mediaAdapter != null) {
+            mediaAdapter.setEditMode(enabled);
         }
     }
 
@@ -180,6 +235,9 @@ public class BusinessProfileActivity extends BaseActivity {
         mediaAdapter = new BusinessMediaAdapter(this, new BusinessMediaAdapter.MediaActionListener() {
             @Override
             public void onDelete(Object item, int position) {
+                if (!isEditMode) {
+                    return;
+                }
                 confirmDeleteMedia(item, position);
             }
 
@@ -196,9 +254,13 @@ public class BusinessProfileActivity extends BaseActivity {
 
         rvMediaGallery.setLayoutManager(new GridLayoutManager(this, 3));
         rvMediaGallery.setAdapter(mediaAdapter);
+        mediaAdapter.setEditMode(isEditMode);
     }
 
     private void showMediaPickerDialog() {
+        if (!isEditMode) {
+            return;
+        }
         new AlertDialog.Builder(this)
                 .setTitle("Add Media")
                 .setItems(new String[]{"Photo", "Video"}, (dialog, which) -> {
@@ -276,6 +338,7 @@ public class BusinessProfileActivity extends BaseActivity {
                 String businessName = profile.optString("business_name", "");
                 String description = profile.optString("description", "");
                 String category = profile.optString("category", "");
+                lockedCategory = category;
                 String experience = profile.optString("experience", "");
                 String address = profile.optString("address", "");
                 String city = profile.optString("city", "");
@@ -357,6 +420,9 @@ public class BusinessProfileActivity extends BaseActivity {
     }
 
     private void confirmDeleteMedia(Object item, int position) {
+        if (!isEditMode) {
+            return;
+        }
         new AlertDialog.Builder(this)
                 .setTitle("Delete Media")
                 .setMessage("Are you sure you want to delete this media?")
@@ -414,9 +480,12 @@ public class BusinessProfileActivity extends BaseActivity {
     }
 
     private void saveProfile() {
+        if (!isEditMode) {
+            return;
+        }
+
         String businessName = getText(etBusinessName);
         String description = getText(etDescription);
-        String category = acCategory != null ? acCategory.getText().toString().trim() : "";
         String experience = getText(etExperience);
         String address = getText(etAddress);
         String city = getText(etCity);
@@ -430,11 +499,10 @@ public class BusinessProfileActivity extends BaseActivity {
             }
             return;
         }
-        if (category.isEmpty()) {
-            if (acCategory != null) {
-                acCategory.setError("Category required");
-                acCategory.requestFocus();
-            }
+
+        // Category is immutable after onboarding and must already exist.
+        if (lockedCategory == null || lockedCategory.trim().isEmpty()) {
+            Toast.makeText(this, "Category is locked and cannot be changed here.", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -452,6 +520,10 @@ public class BusinessProfileActivity extends BaseActivity {
             return;
         }
 
+        if (btnEditProfile != null) {
+            btnEditProfile.setEnabled(false);
+        }
+
         isUploadingMedia = true;
 
         // Upload pending media first, then update profile
@@ -466,10 +538,10 @@ public class BusinessProfileActivity extends BaseActivity {
             }
 
             if (selectedImageUri != null) {
-                uploadImageAndSave(businessName, description, category, experience,
+                uploadImageAndSave(businessName, description, experience,
                                   address, city, phone, isAvailable);
             } else {
-                updateProfile(businessName, description, category, experience,
+                updateProfile(businessName, description, experience,
                              address, city, phone, isAvailable, currentImageUrl);
             }
         });
@@ -588,7 +660,7 @@ public class BusinessProfileActivity extends BaseActivity {
             onComplete.onComplete(false, "Failed to prepare media save.");
         }
     }
-    private void uploadImageAndSave(String businessName, String description, String category,
+    private void uploadImageAndSave(String businessName, String description,
                                     String experience, String address, String city, String phone,
                                     boolean isAvailable) {
         SupabaseStorageHelper.uploadFile(
@@ -599,7 +671,7 @@ public class BusinessProfileActivity extends BaseActivity {
                 new SupabaseStorageHelper.UploadCallback() {
                     @Override
                     public void onSuccess(String publicUrl) {
-                        updateProfile(businessName, description, category, experience,
+                        updateProfile(businessName, description, experience,
                                      address, city, phone, isAvailable, publicUrl);
                     }
                     @Override
@@ -611,6 +683,9 @@ public class BusinessProfileActivity extends BaseActivity {
                             if (btnSave != null) {
                                 btnSave.setEnabled(true);
                             }
+                            if (btnEditProfile != null) {
+                                btnEditProfile.setEnabled(true);
+                            }
                             Toast.makeText(BusinessProfileActivity.this,
                                     "Image upload failed: " + error,
                                     Toast.LENGTH_SHORT).show();
@@ -619,15 +694,14 @@ public class BusinessProfileActivity extends BaseActivity {
                 }
         );
     }
-    private void updateProfile(String businessName, String description, String category,
-                              String experience, String address, String city, String phone,
+
+    private void updateProfile(String businessName, String description, String experience,
+                              String address, String city, String phone,
                               boolean isAvailable, String imageUrl) {
         try {
             JSONObject body = new JSONObject();
-            body.put("firebase_uid", providerId);
             body.put("business_name", businessName != null ? businessName : "");
             body.put("description", description != null ? description : "");
-            body.put("category", category != null ? category : "");
             body.put("experience", experience != null ? experience : "");
             body.put("address", address != null ? address : "");
             body.put("city", city != null ? city : "");
@@ -636,14 +710,16 @@ public class BusinessProfileActivity extends BaseActivity {
             if (imageUrl != null && !imageUrl.isEmpty()) {
                 body.put("business_image_url", imageUrl);
             }
-            String url = SUPABASE_URL + "/rest/v1/provider_profiles";
+
+            // Update existing profile row only; do not allow category mutation in this flow.
+            String url = SUPABASE_URL + "/rest/v1/provider_profiles?firebase_uid=eq." + providerId;
             Request request = new Request.Builder()
                     .url(url)
-                    .post(RequestBody.create(body.toString(), JSON))
+                    .patch(RequestBody.create(body.toString(), JSON))
                     .addHeader("apikey", ANON_KEY)
                     .addHeader("Authorization", "Bearer " + ANON_KEY)
                     .addHeader("Content-Type", "application/json")
-                    .addHeader("Prefer", "resolution=merge-duplicates,return=minimal")
+                    .addHeader("Prefer", "return=minimal")
                     .build();
             httpClient.newCall(request).enqueue(new Callback() {
                 @Override
@@ -655,6 +731,9 @@ public class BusinessProfileActivity extends BaseActivity {
                         if (btnSave != null) {
                             btnSave.setEnabled(true);
                         }
+                        if (btnEditProfile != null) {
+                            btnEditProfile.setEnabled(true);
+                        }
                         Toast.makeText(BusinessProfileActivity.this,
                                 "Update failed: " + e.getMessage(),
                                 Toast.LENGTH_SHORT).show();
@@ -663,6 +742,7 @@ public class BusinessProfileActivity extends BaseActivity {
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
                     int code = response.code();
+                    String resp = response.body() != null ? response.body().string() : "";
                     response.close();
                     mainHandler.post(() -> {
                         if (progressBar != null) {
@@ -671,13 +751,18 @@ public class BusinessProfileActivity extends BaseActivity {
                         if (btnSave != null) {
                             btnSave.setEnabled(true);
                         }
-                        if (code == 201 || code == 200 || code == 204) {
+                        if (btnEditProfile != null) {
+                            btnEditProfile.setEnabled(true);
+                        }
+                        if (code == 200 || code == 204) {
                             Toast.makeText(BusinessProfileActivity.this,
                                     "Profile updated successfully!",
                                     Toast.LENGTH_SHORT).show();
                             selectedImageUri = null;
+                            setEditMode(false);
                             loadProfile();
                         } else {
+                            Log.e(TAG, "Profile update HTTP " + code + " | " + resp);
                             Toast.makeText(BusinessProfileActivity.this,
                                     "Update failed: HTTP " + code,
                                     Toast.LENGTH_SHORT).show();
@@ -693,9 +778,13 @@ public class BusinessProfileActivity extends BaseActivity {
             if (btnSave != null) {
                 btnSave.setEnabled(true);
             }
+            if (btnEditProfile != null) {
+                btnEditProfile.setEnabled(true);
+            }
             Toast.makeText(this, "Error updating profile", Toast.LENGTH_SHORT).show();
         }
     }
+
     private String getText(TextInputEditText editText) {
         if (editText == null || editText.getText() == null) return "";
         return editText.getText().toString().trim();

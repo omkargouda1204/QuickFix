@@ -27,6 +27,7 @@ public class BusinessMediaAdapter extends RecyclerView.Adapter<RecyclerView.View
     private final Context context;
     private final List<Object> mediaItems = new ArrayList<>();
     private final MediaActionListener listener;
+    private boolean isEditMode = false;
 
     public interface MediaActionListener {
         void onDelete(Object item, int position);
@@ -67,6 +68,11 @@ public class BusinessMediaAdapter extends RecyclerView.Adapter<RecyclerView.View
             }
         }
         return uris;
+    }
+
+    public void setEditMode(boolean editMode) {
+        isEditMode = editMode;
+        notifyDataSetChanged();
     }
 
     @Override
@@ -132,7 +138,12 @@ public class BusinessMediaAdapter extends RecyclerView.Adapter<RecyclerView.View
                 tvMediaType.setText("Pending");
             }
 
+            btnDelete.setVisibility(isEditMode ? View.VISIBLE : View.GONE);
+            btnDelete.setEnabled(isEditMode);
             btnDelete.setOnClickListener(v -> {
+                if (!isEditMode) {
+                    return;
+                }
                 if (listener != null) {
                     listener.onDelete(item, position);
                 }
@@ -146,4 +157,3 @@ public class BusinessMediaAdapter extends RecyclerView.Adapter<RecyclerView.View
         }
     }
 }
-
