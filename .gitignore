@@ -30,3 +30,11 @@ local.properties
 
 # Supabase credentials — NEVER commit
 supabase.properties
+
+# Firebase Admin / service-account secrets — NEVER commit
+secrets/
+*.env
+.env
+.env.*
+*service-account*.json
+*firebase-admin*.json

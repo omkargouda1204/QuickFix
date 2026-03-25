@@ -4,11 +4,13 @@ import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bumptech.glide.Glide;
 import com.example.quickfix.Offer;
 import com.example.quickfix.R;
 
@@ -42,12 +44,32 @@ public class HomeOfferAdapter extends RecyclerView.Adapter<HomeOfferAdapter.VH> 
     public void onBindViewHolder(@NonNull VH h, int pos) {
         Offer o = items.get(pos);
 
-        String discountStr = o.discountType != null && o.discountType.equals("percentage")
+        String discountStr = o.discountType != null && o.discountType.equalsIgnoreCase("percentage")
                 ? (int) o.discountValue + "% OFF"
                 : "₹" + (int) o.discountValue + " OFF";
         h.tvDiscount.setText(discountStr);
         h.tvTitle.setText(o.title != null ? o.title : "");
-        h.tvCode.setText(o.offerCode != null ? o.offerCode : "");
+        h.tvDescription.setText(o.description != null && !o.description.trim().isEmpty()
+                ? o.description
+                : h.itemView.getContext().getString(R.string.home_offer_default_description));
+        h.tvCode.setText(o.offerCode != null && !o.offerCode.trim().isEmpty()
+                ? "Code " + o.offerCode.trim().toUpperCase()
+                : h.itemView.getContext().getString(R.string.home_offer_no_code));
+
+        if (o.imageUrl != null && !o.imageUrl.trim().isEmpty()) {
+            h.ivImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            h.ivImage.setPadding(0, 0, 0, 0);
+            Glide.with(ctx)
+                    .load(o.imageUrl.trim())
+                    .placeholder(R.drawable.bg_promo_card)
+                    .error(R.drawable.ic_offers)
+                    .centerCrop()
+                    .into(h.ivImage);
+        } else {
+            h.ivImage.setImageResource(R.drawable.ic_offers);
+            h.ivImage.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            h.ivImage.setPadding(24, 24, 24, 24);
+        }
 
         h.itemView.setOnClickListener(v -> { if (listener != null) listener.onOfferClick(o); });
     }
@@ -62,12 +84,15 @@ public class HomeOfferAdapter extends RecyclerView.Adapter<HomeOfferAdapter.VH> 
     }
 
     static class VH extends RecyclerView.ViewHolder {
-        TextView tvDiscount, tvTitle, tvCode;
+        ImageView ivImage;
+        TextView tvDiscount, tvTitle, tvDescription, tvCode;
 
         VH(View v) {
             super(v);
+            ivImage = v.findViewById(R.id.ivHomeOfferImage);
             tvDiscount = v.findViewById(R.id.tvHomeOfferDiscount);
             tvTitle    = v.findViewById(R.id.tvHomeOfferTitle);
+            tvDescription = v.findViewById(R.id.tvHomeOfferDescription);
             tvCode     = v.findViewById(R.id.tvHomeOfferCode);
         }
     }

@@ -125,6 +125,16 @@
     <string name="rating_label">4.8 ★</string>
     <string name="promo_title">Get 20% off your first booking!</string>
     <string name="promo_subtitle">Use code QUICKFIX20 at checkout</string>
+    <string name="retry">Retry</string>
+    <string name="home_banner_empty_title">No banners right now</string>
+    <string name="home_banner_empty_subtitle">New promotions will appear here soon.</string>
+    <string name="home_banner_error_message">Could not load banners. Please try again.</string>
+    <string name="home_offers_empty_title">No active offers</string>
+    <string name="home_offers_empty_subtitle">Check back in a while for fresh deals.</string>
+    <string name="home_offers_error_message">Could not load offers. Please try again.</string>
+    <string name="home_offer_default_description">Limited time savings on your next booking.</string>
+    <string name="home_offer_no_code">Code unavailable</string>
+    <string name="home_offer_image">Offer image</string>
     <string name="logout">Logout</string>
 
     <!-- List Your Business Card -->

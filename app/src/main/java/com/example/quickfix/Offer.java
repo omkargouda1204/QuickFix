@@ -7,6 +7,7 @@ public class Offer {
     public String  id;
     public String  title;
     public String  description;
+    public String  imageUrl;        // optional URL/path for visual card image
     public String  offerCode;       // e.g. "QUICKFIX20"
     public String  discountType;    // "percentage" | "fixed"
     public double  discountValue;

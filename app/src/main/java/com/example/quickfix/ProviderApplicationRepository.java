@@ -177,8 +177,6 @@ public class ProviderApplicationRepository {
                         if (autoApprove) {
                             // Auto-approve means role is promoted immediately.
                             patchUserAsProviderSync(firebaseUid);
-                        } else {
-                            FcmNotificationHelper.notifyAdminsNewApplication(name, businessName, category);
                         }
                         MAIN.post(callback::onSuccess);
                     } else {
@@ -787,6 +785,17 @@ public class ProviderApplicationRepository {
                 MAIN.post(() -> callback.onError(e.getMessage()));
             }
         }).start();
+    }
+
+    private static String extractInsertedApplicationId(String responseBody) {
+        try {
+            JSONArray arr = new JSONArray(responseBody != null ? responseBody : "[]");
+            if (arr.length() == 0) return "";
+            JSONObject first = arr.getJSONObject(0);
+            return first.optString("id", "");
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     // Approve/Reject methods to be added...

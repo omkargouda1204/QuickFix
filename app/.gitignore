@@ -2,3 +2,9 @@
 # Android Studio / IntelliJ
 .idea/
 *.iml
+
+# Local secret files
+*.env
+*service-account*.json
+*firebase-admin*.json
+

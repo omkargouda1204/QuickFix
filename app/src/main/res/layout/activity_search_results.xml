@@ -62,7 +62,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="1"
                     android:background="@android:color/transparent"
-                    android:hint="Search services, providers..."
+                    android:hint="Search services or providers (e.g. cleaning near me)"
                     android:textColor="@color/text_primary"
                     android:textColorHint="@color/text_secondary"
                     android:textSize="14sp"
