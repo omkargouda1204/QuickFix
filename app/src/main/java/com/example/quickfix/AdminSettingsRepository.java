@@ -177,7 +177,7 @@ public final class AdminSettingsRepository {
         JSONArray rows = fetchRows();
         AppSettings.Snapshot snapshot;
         if (rows.length() == 0) {
-            Log.d(TAG, "fetchOrCreateSync: no rows found, creating default");
+            Log.d(TAG, "fetchOrCreateSync: no rows found, creating default singleton row");
             snapshot = createDefaultRow();
         } else {
             snapshot = parseSnapshot(rows.getJSONObject(0));
@@ -216,8 +216,13 @@ public final class AdminSettingsRepository {
     }
 
     private static AppSettings.Snapshot createDefaultRow() throws Exception {
-        // Try multiple payload variants because some deployments use different column names.
+        // Prefer minimal row creation so DB defaults populate all columns.
+        JSONObject minimalDefaults = new JSONObject();
+        minimalDefaults.put("id", java.util.UUID.randomUUID().toString());
+        minimalDefaults.put("maintenance_end_time", JSONObject.NULL);
+
         JSONObject primary = new JSONObject();
+        primary.put("id", java.util.UUID.randomUUID().toString());
         primary.put("push_notifications",     AppSettings.DEFAULT_PUSH_NOTIFICATIONS);
         primary.put("email_notifications",    AppSettings.DEFAULT_EMAIL_NOTIFICATIONS);
         primary.put("admin_alerts",           AppSettings.DEFAULT_ADMIN_ALERTS);
@@ -226,9 +231,10 @@ public final class AdminSettingsRepository {
         primary.put("daily_email_digest",     AppSettings.DEFAULT_DAILY_EMAIL_DIGEST);
         primary.put("maintenance_mode",       AppSettings.DEFAULT_MAINTENANCE_MODE);
         primary.put("maintenance_message",    AppSettings.DEFAULT_MAINTENANCE_MESSAGE);
-        primary.put("maintenance_end_time",   AppSettings.DEFAULT_MAINTENANCE_END_TIME);
+        primary.put("maintenance_end_time",   JSONObject.NULL);
 
         JSONObject legacy = new JSONObject();
+        legacy.put("id", java.util.UUID.randomUUID().toString());
         legacy.put("push_notifications",     AppSettings.DEFAULT_PUSH_NOTIFICATIONS);
         legacy.put("email_notifications",    AppSettings.DEFAULT_EMAIL_NOTIFICATIONS);
         legacy.put("admin_alerts",           AppSettings.DEFAULT_ADMIN_ALERTS);
@@ -237,16 +243,9 @@ public final class AdminSettingsRepository {
         legacy.put("daily_digest",           AppSettings.DEFAULT_DAILY_EMAIL_DIGEST);
         legacy.put("maintenance_mode",       AppSettings.DEFAULT_MAINTENANCE_MODE);
         legacy.put("maintenance_message",    AppSettings.DEFAULT_MAINTENANCE_MESSAGE);
-        legacy.put("maintenance_end_time",   AppSettings.DEFAULT_MAINTENANCE_END_TIME);
+        legacy.put("maintenance_end_time",   JSONObject.NULL);
 
-        JSONObject minimal = new JSONObject();
-        minimal.put("push_notifications",     AppSettings.DEFAULT_PUSH_NOTIFICATIONS);
-        minimal.put("email_notifications",    AppSettings.DEFAULT_EMAIL_NOTIFICATIONS);
-        minimal.put("admin_alerts",           AppSettings.DEFAULT_ADMIN_ALERTS);
-        minimal.put("dark_mode",              AppSettings.DEFAULT_DARK_MODE);
-        minimal.put("maintenance_mode",       AppSettings.DEFAULT_MAINTENANCE_MODE);
-
-        JSONObject[] payloads = new JSONObject[]{ primary, legacy, minimal };
+        JSONObject[] payloads = new JSONObject[]{ minimalDefaults, primary, legacy };
 
         for (JSONObject body : payloads) {
             Request req = new Request.Builder()
@@ -264,6 +263,7 @@ public final class AdminSettingsRepository {
                     JSONArray arr = new JSONArray(resp);
                     if (arr.length() > 0) return parseSnapshot(arr.getJSONObject(0));
                 }
+                // If row already exists, just fetch and continue.
                 if (r.code() == 409) {
                     JSONArray retry = fetchRows();
                     if (retry.length() > 0) return parseSnapshot(retry.getJSONObject(0));

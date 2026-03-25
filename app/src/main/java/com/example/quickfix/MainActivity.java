@@ -48,6 +48,8 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -386,6 +388,49 @@ public class MainActivity extends BaseActivity {
 
             homeSwipeRefresh = findViewSafe(R.id.homeSwipeRefresh);
 
+            // Initialize adapters once with the shared source lists.
+            if (vpBannersCarousel != null && homeBannerAdapter == null) {
+                homeBannerAdapter = new HomeBannerAdapter(this, homeBanners, b -> {
+                    try {
+                        if (b == null) return;
+                        String type = b.redirectType == null ? "" : b.redirectType.trim().toLowerCase(Locale.US);
+                        String rid = b.redirectId == null ? "" : b.redirectId.trim();
+                        if (rid.isEmpty()) return;
+                        if ("service".equals(type) || "category".equals(type)) {
+                            openProvidersList(rid);
+                        } else if ("external".equals(type) || rid.startsWith("http")) {
+                            try {
+                                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(rid)));
+                            } catch (Exception ignored) {
+                                Log.w(TAG, "Could not open banner URL: " + rid);
+                            }
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error handling banner click: " + e.getMessage());
+                    }
+                });
+                vpBannersCarousel.setAdapter(homeBannerAdapter);
+            }
+
+            if (rvOffersStrip != null) {
+                rvOffersStrip.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+                if (homeOfferAdapter == null) {
+                    homeOfferAdapter = new HomeOfferAdapter(this, homeOffers, offer -> {
+                        try {
+                            if (offer == null || offer.offerCode == null) return;
+                            String message = "Use code: " + offer.offerCode + " for " +
+                                    ("percentage".equalsIgnoreCase(offer.discountType)
+                                            ? (int) offer.discountValue + "% OFF"
+                                            : "₹" + (int) offer.discountValue + " OFF");
+                            Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error handling offer click: " + e.getMessage());
+                        }
+                    });
+                }
+                rvOffersStrip.setAdapter(homeOfferAdapter);
+            }
+
             // Setup retry listeners safely
             if (btnRetryBannerLoad != null) {
                 btnRetryBannerLoad.setOnClickListener(v -> {
@@ -668,54 +713,46 @@ public class MainActivity extends BaseActivity {
         if (bannerApi == null) {
             Log.e(TAG, "Banner API is null");
             showBannerErrorState("Service unavailable");
-            markHomeSectionLoaded();
             return;
         }
 
         try {
-            String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new java.util.Date());
-
-            bannerApi.getBanners(BuildConfig.SUPABASE_ANON_KEY, "Bearer " + BuildConfig.SUPABASE_ANON_KEY, "*", "eq.true", "(expiry_date.is.null,expiry_date.gte." + today + ")", "priority.asc,created_at.desc")
+            bannerApi.getBanners(
+                            BuildConfig.SUPABASE_ANON_KEY,
+                            "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                            "*",
+                            "eq.true",
+                            null,
+                            "priority.asc"
+                    )
                     .enqueue(new Callback<List<Banner>>() {
                         @Override
                         public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
                             try {
                                 runOnUiThread(() -> {
                                     try {
-                                        if (response == null) {
-                                            Log.e(TAG, "Banner response is null");
-                                            showBannerErrorState("Connection error");
-                                            markHomeSectionLoaded();
-                                            return;
-                                        }
-
-                                        if (!response.isSuccessful()) {
-                                            Log.e(TAG, "Banner API error: " + response.code() + " " + response.message());
+                                        if (response == null || !response.isSuccessful()) {
+                                            Log.e(TAG, "Banner API error: " + (response != null ? response.code() + " " + response.message() : "null response"));
                                             showBannerErrorState("Failed to load banners");
                                             markHomeSectionLoaded();
                                             return;
                                         }
 
                                         List<Banner> body = response.body();
-                                        if (body == null) {
-                                            Log.w(TAG, "Banner response body is null");
-                                            body = new ArrayList<>();
-                                        }
-
-                                        // Process banners safely
-                                        List<Banner> processedBanners = new ArrayList<>();
-                                        for (Banner b : body) {
-                                            if (b != null) {
-                                                // Ensure image URL is properly set
+                                        homeBanners.clear();
+                                        if (body != null) {
+                                            for (Banner b : body) {
+                                                if (b == null || !b.isActive || isExpired(b.expiryDate)) continue;
                                                 if (b.imageUrl != null && !b.imageUrl.startsWith("http")) {
                                                     b.imageUrl = SupabaseStorageHelper.getPublicObjectUrl("banner-images", b.imageUrl);
                                                 }
-                                                processedBanners.add(b);
+                                                homeBanners.add(b);
                                             }
                                         }
 
-                                        showBannersOnHome(processedBanners);
-                                        Log.d(TAG, "Loaded " + processedBanners.size() + " banners");
+                                        Log.d("BANNER_SIZE", String.valueOf(homeBanners.size()));
+                                        showBannersOnHome();
+                                        Log.d(TAG, "Loaded " + homeBanners.size() + " banners");
                                     } catch (Exception e) {
                                         Log.e(TAG, "Error processing banners: " + e.getMessage(), e);
                                         showBannerErrorState("Processing error");
@@ -756,50 +793,42 @@ public class MainActivity extends BaseActivity {
         if (offerApi == null) {
             Log.e(TAG, "Offer API is null");
             showOffersErrorState("Service unavailable");
-            markHomeSectionLoaded();
             return;
         }
 
         try {
-            String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new java.util.Date());
-
-            offerApi.getOffers(BuildConfig.SUPABASE_ANON_KEY, "Bearer " + BuildConfig.SUPABASE_ANON_KEY, "*", "eq.true", "(expiry_date.is.null,expiry_date.gte." + today + ")")
+            offerApi.getOffers(
+                            BuildConfig.SUPABASE_ANON_KEY,
+                            "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                            "*",
+                            "eq.true",
+                            null
+                    )
                     .enqueue(new Callback<List<Offer>>() {
                         @Override
                         public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
                             try {
                                 runOnUiThread(() -> {
                                     try {
-                                        if (response == null) {
-                                            Log.e(TAG, "Offer response is null");
-                                            showOffersErrorState("Connection error");
-                                            markHomeSectionLoaded();
-                                            return;
-                                        }
-
-                                        if (!response.isSuccessful()) {
-                                            Log.e(TAG, "Offer API error: " + response.code() + " " + response.message());
+                                        if (response == null || !response.isSuccessful()) {
+                                            Log.e(TAG, "Offer API error: " + (response != null ? response.code() + " " + response.message() : "null response"));
                                             showOffersErrorState("Failed to load offers");
                                             markHomeSectionLoaded();
                                             return;
                                         }
 
                                         List<Offer> body = response.body();
-                                        if (body == null) {
-                                            Log.w(TAG, "Offer response body is null");
-                                            body = new ArrayList<>();
-                                        }
-
-                                        // Filter valid offers
-                                        List<Offer> processedOffers = new ArrayList<>();
-                                        for (Offer o : body) {
-                                            if (o != null) {
-                                                processedOffers.add(o);
+                                        homeOffers.clear();
+                                        if (body != null) {
+                                            for (Offer o : body) {
+                                                if (o == null || !o.isActive || isExpired(o.expiryDate)) continue;
+                                                homeOffers.add(o);
                                             }
                                         }
 
-                                        showOffersOnHome(processedOffers);
-                                        Log.d(TAG, "Loaded " + processedOffers.size() + " offers");
+                                        Log.d("OFFER_SIZE", String.valueOf(homeOffers.size()));
+                                        showOffersOnHome();
+                                        Log.d(TAG, "Loaded " + homeOffers.size() + " offers");
                                     } catch (Exception e) {
                                         Log.e(TAG, "Error processing offers: " + e.getMessage(), e);
                                         showOffersErrorState("Processing error");
@@ -841,24 +870,13 @@ public class MainActivity extends BaseActivity {
         if (pendingHomeLoads == 0 && homeSwipeRefresh != null) homeSwipeRefresh.setRefreshing(false);
     }
 
-    private void showBannersOnHome(List<Banner> list) {
+    private void showBannersOnHome() {
         try {
             if (bannersSection == null || vpBannersCarousel == null || bannerDotsLayout == null) {
                 Log.w(TAG, "Banner views not initialized");
                 return;
             }
 
-            homeBanners.clear();
-
-            if (list != null) {
-                for (Banner b : list) {
-                    if (b != null) {
-                        homeBanners.add(b);
-                    }
-                }
-            }
-
-            // Empty state
             if (homeBanners.isEmpty()) {
                 Log.d(TAG, "No banners to display");
                 bannersSection.setVisibility(View.VISIBLE);
@@ -878,7 +896,6 @@ public class MainActivity extends BaseActivity {
                 return;
             }
 
-            // Show banners
             bannersSection.setVisibility(View.VISIBLE);
             if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE);
             if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE);
@@ -886,34 +903,10 @@ public class MainActivity extends BaseActivity {
             if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.VISIBLE);
             vpBannersCarousel.setVisibility(View.VISIBLE);
 
-            // Setup or update adapter
-            if (homeBannerAdapter == null) {
-                homeBannerAdapter = new HomeBannerAdapter(this, homeBanners, b -> {
-                    try {
-                        if (b == null) return;
-                        String type = b.redirectType == null ? "" : b.redirectType.trim().toLowerCase(Locale.US);
-                        String rid = b.redirectId == null ? "" : b.redirectId.trim();
-                        if (rid.isEmpty()) return;
-                        if ("service".equals(type) || "category".equals(type)) {
-                            openProvidersList(rid);
-                        } else if ("external".equals(type) || rid.startsWith("http")) {
-                            try {
-                                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(rid)));
-                            } catch (Exception ignored) {
-                                Log.w(TAG, "Could not open banner URL: " + rid);
-                            }
-                        }
-                    } catch (Exception e) {
-                        Log.e(TAG, "Error handling banner click: " + e.getMessage());
-                    }
-                });
-                vpBannersCarousel.setAdapter(homeBannerAdapter);
-            } else {
-                homeBannerAdapter.setItems(homeBanners);
+            if (homeBannerAdapter != null) {
                 homeBannerAdapter.notifyDataSetChanged();
             }
 
-            // Setup page change listener
             if (bannerPageCallback == null) {
                 bannerPageCallback = new ViewPager2.OnPageChangeCallback() {
                     @Override
@@ -931,7 +924,6 @@ public class MainActivity extends BaseActivity {
                 vpBannersCarousel.registerOnPageChangeCallback(bannerPageCallback);
             }
 
-            // Attach dots mediator
             if (bannerDotsMediator != null) {
                 try {
                     bannerDotsMediator.detach();
@@ -951,24 +943,13 @@ public class MainActivity extends BaseActivity {
         }
     }
 
-    private void showOffersOnHome(List<Offer> list) {
+    private void showOffersOnHome() {
         try {
             if (offersSection == null || rvOffersStrip == null) {
                 Log.w(TAG, "Offers views not initialized");
                 return;
             }
 
-            homeOffers.clear();
-
-            if (list != null) {
-                for (Offer o : list) {
-                    if (o != null) {
-                        homeOffers.add(o);
-                    }
-                }
-            }
-
-            // Empty state
             if (homeOffers.isEmpty()) {
                 Log.d(TAG, "No offers to display");
                 offersSection.setVisibility(View.VISIBLE);
@@ -979,31 +960,13 @@ public class MainActivity extends BaseActivity {
                 return;
             }
 
-            // Show offers
             offersSection.setVisibility(View.VISIBLE);
             if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE);
             if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE);
             if (offersErrorState != null) offersErrorState.setVisibility(View.GONE);
             if (offersContentContainer != null) offersContentContainer.setVisibility(View.VISIBLE);
 
-            // Setup or update adapter
-            if (homeOfferAdapter == null) {
-                homeOfferAdapter = new HomeOfferAdapter(this, homeOffers, offer -> {
-                    try {
-                        if (offer == null || offer.offerCode == null) return;
-                        String message = "Use code: " + offer.offerCode + " for " +
-                                ("percentage".equalsIgnoreCase(offer.discountType) ?
-                                    (int) offer.discountValue + "% OFF" :
-                                    "₹" + (int) offer.discountValue + " OFF");
-                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
-                    } catch (Exception e) {
-                        Log.e(TAG, "Error handling offer click: " + e.getMessage());
-                    }
-                });
-                rvOffersStrip.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
-                rvOffersStrip.setAdapter(homeOfferAdapter);
-            } else {
-                homeOfferAdapter.setItems(homeOffers);
+            if (homeOfferAdapter != null) {
                 homeOfferAdapter.notifyDataSetChanged();
             }
 
@@ -1012,6 +975,19 @@ public class MainActivity extends BaseActivity {
         } catch (Exception e) {
             Log.e(TAG, "Error in showOffersOnHome: " + e.getMessage(), e);
             showOffersErrorState("Failed to display offers");
+        }
+    }
+
+    private boolean isExpired(String date) {
+        if (date == null || date.trim().isEmpty()) return false;
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+            sdf.setLenient(false);
+            Date expiry = sdf.parse(date.trim());
+            return expiry != null && expiry.before(new Date());
+        } catch (Exception e) {
+            Log.w(TAG, "isExpired parse failed for date=" + date + ": " + e.getMessage());
+            return false;
         }
     }
 
