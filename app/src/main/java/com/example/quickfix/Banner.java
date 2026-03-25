@@ -6,23 +6,35 @@ import com.google.gson.annotations.SerializedName;
  * Data model for a promotional banner displayed on the home screen.
  */
 public class Banner {
-    public String  id;
-    public String  title;
+    @SerializedName("id")
+    public String id;
+
+    @SerializedName("title")
+    public String title;
+
     @SerializedName("image_url")
-    public String  imageUrl;       // Supabase Storage public URL
+    public String imageUrl;       // Supabase Storage public URL
+
     @SerializedName("redirect_type")
-    public String  redirectType;   // "service" | "category" | "external"
+    public String redirectType;   // "service" | "category" | "external"
+
     @SerializedName("redirect_id")
-    public String  redirectId;     // category/service id or URL
+    public String redirectId;     // category/service id or URL
+
     @SerializedName("start_date")
-    public String  startDate;      // ISO date string
+    public String startDate;      // ISO date string
+
     @SerializedName("expiry_date")
-    public String  expiryDate;     // ISO date string
+    public String expiryDate;     // ISO date string
+
     @SerializedName("is_active")
     public boolean isActive;
-    public int     priority;       // lower = higher priority
+
+    @SerializedName("priority")
+    public int priority;       // lower = higher priority
+
     @SerializedName("created_at")
-    public String  createdAt;
+    public String createdAt;
 
     public Banner() {}
 
