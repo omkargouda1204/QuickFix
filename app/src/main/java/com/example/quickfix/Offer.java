@@ -6,25 +6,38 @@ import com.google.gson.annotations.SerializedName;
  * Data model for a discount/offer/coupon shown in the user app.
  */
 public class Offer {
-    public String  id;
-    public String  title;
-    public String  description;
+    @SerializedName("id")
+    public String id;
+
+    @SerializedName("title")
+    public String title;
+
+    @SerializedName("description")
+    public String description;
+
     @SerializedName("image_url")
-    public String  imageUrl;        // optional URL/path for visual card image
+    public String imageUrl;        // optional URL/path for visual card image
+
     @SerializedName("offer_code")
-    public String  offerCode;       // e.g. "QUICKFIX20"
+    public String offerCode;       // e.g. "QUICKFIX20"
+
     @SerializedName("discount_type")
-    public String  discountType;    // "percentage" | "fixed"
+    public String discountType;    // "percentage" | "fixed"
+
     @SerializedName("discount_value")
-    public double  discountValue;
+    public double discountValue;
+
     @SerializedName("min_booking_amount")
-    public double  minBookingAmount;
+    public double minBookingAmount;
+
     @SerializedName("expiry_date")
-    public String  expiryDate;      // ISO date string
+    public String expiryDate;      // ISO date string
+
     @SerializedName("is_active")
     public boolean isActive;
+
     @SerializedName("created_at")
-    public String  createdAt;
+    public String createdAt;
 
     public Offer() {}
 

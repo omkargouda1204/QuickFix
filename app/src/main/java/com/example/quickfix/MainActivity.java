@@ -62,7 +62,8 @@ import retrofit2.Callback;
 public class MainActivity extends BaseActivity {
 
     private static final String TAG                      = "MainActivity";
-    private static final String MAIN_ERROR               = "MAIN_ERROR";
+    private static final String MAIN_CRASH               = "MAIN_CRASH";
+    private static final String MAIN_FATAL               = "MAIN_FATAL";
     private static final int    LOCATION_PERMISSION_REQ  = 1001;
     private static final int    NOTIFICATION_PERMISSION_REQ = 1002;
     private static final long   HOME_AUTO_REFRESH_MS = 60_000L;
@@ -152,6 +153,12 @@ public class MainActivity extends BaseActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Debug logging for uncaught exceptions
+        Thread.setDefaultUncaughtExceptionHandler((thread, e) -> {
+            Log.e("CRASH_LOG", "Uncaught: " + e.toString(), e);
+        });
+
         try {
             setContentView(R.layout.activity_main);
 
@@ -186,7 +193,7 @@ public class MainActivity extends BaseActivity {
 
             requestNotificationPermission();
         } catch (Exception e) {
-            Log.e(MAIN_ERROR, "onCreate: " + e.getMessage(), e);
+            Log.e(MAIN_FATAL, "onCreate: " + e.toString(), e);
         }
     }
 
@@ -198,7 +205,7 @@ public class MainActivity extends BaseActivity {
             startBannerAutoSlide();
             startHomeAutoRefresh();
         } catch (Exception e) {
-            Log.e(MAIN_ERROR, "onResume: " + e.getMessage(), e);
+            Log.e(TAG, "onResume: " + e.getMessage());
         }
     }
 
@@ -208,7 +215,7 @@ public class MainActivity extends BaseActivity {
             stopBannerAutoSlide();
             stopHomeAutoRefresh();
         } catch (Exception e) {
-            Log.e(MAIN_ERROR, "onPause: " + e.getMessage(), e);
+            Log.e(TAG, "onPause: " + e.getMessage());
         }
         super.onPause();
     }
@@ -221,7 +228,7 @@ public class MainActivity extends BaseActivity {
             }
             skeletonAnimators.clear();
         } catch (Exception e) {
-            Log.e(MAIN_ERROR, "onDestroy: " + e.getMessage(), e);
+            Log.e(TAG, "onDestroy: " + e.getMessage());
         }
         super.onDestroy();
     }
@@ -446,12 +453,16 @@ public class MainActivity extends BaseActivity {
     private void showListBusinessCard(boolean hasExistingApplication) { if (listBusinessSection == null) return; listBusinessSection.setVisibility(View.VISIBLE); listBusinessSection.setAlpha(0f); listBusinessSection.animate().alpha(1f).setDuration(400).start(); if (btnListBusinessStart != null) { btnListBusinessStart.startAnimation(AnimationUtils.loadAnimation(this, R.anim.pulse)); btnListBusinessStart.setOnClickListener(v -> { if (hasExistingApplication) { startActivity(new Intent(this, ApplicationStatusActivity.class)); } else { startActivity(new Intent(this, ProviderOnboardingActivity.class)); } overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); }); if (listBusinessSection.getChildCount() > 0) { listBusinessSection.getChildAt(0).setOnClickListener(v -> btnListBusinessStart.performClick()); } } }
 
     private void refreshHomeContent(boolean fromSwipe) {
-        pendingHomeLoads = 2;
-        setBannerLoadingState();
-        setOffersLoadingState();
-        if (fromSwipe && homeSwipeRefresh != null) homeSwipeRefresh.setRefreshing(true);
-        loadHomeBanners();
-        loadHomeOffers();
+        try {
+            pendingHomeLoads = 2;
+            setBannerLoadingState();
+            setOffersLoadingState();
+            if (fromSwipe && homeSwipeRefresh != null) homeSwipeRefresh.setRefreshing(true);
+            loadHomeBanners();
+            loadHomeOffers();
+        } catch (Exception e) {
+            Log.e(MAIN_CRASH, "refreshHomeContent: " + e.toString());
+        }
     }
 
     private void loadHomeBanners() {
@@ -463,13 +474,14 @@ public class MainActivity extends BaseActivity {
                         runOnUiThread(() -> {
                             if (response.isSuccessful() && response.body() != null) {
                                 List<Banner> list = response.body();
+                                if (list == null) list = new ArrayList<>();
                                 for (Banner b : list) if (b != null && b.imageUrl != null && !b.imageUrl.startsWith("http")) b.imageUrl = SupabaseStorageHelper.getPublicObjectUrl("banner-images", b.imageUrl);
                                 showBannersOnHome(list);
-                            } else { showBannerErrorState(getString(R.string.home_banner_error_message)); }
+                            } else { Log.e("API_ERROR", "Empty banner response"); showBannerErrorState(getString(R.string.home_banner_error_message)); }
                             markHomeSectionLoaded();
                         });
                     }
-                    @Override public void onFailure(Call<List<Banner>> call, Throwable t) { runOnUiThread(() -> { showBannerErrorState(getString(R.string.home_banner_error_message)); markHomeSectionLoaded(); }); }
+                    @Override public void onFailure(Call<List<Banner>> call, Throwable t) { runOnUiThread(() -> { Log.e("API_FAIL", "Banner fetch fail: " + t.getMessage()); showBannerErrorState(getString(R.string.home_banner_error_message)); markHomeSectionLoaded(); }); }
                 });
     }
 
@@ -480,12 +492,16 @@ public class MainActivity extends BaseActivity {
                 .enqueue(new Callback<List<Offer>>() {
                     @Override public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
                         runOnUiThread(() -> {
-                            if (response.isSuccessful() && response.body() != null) { showOffersOnHome(response.body()); }
-                            else { showOffersErrorState(getString(R.string.home_offers_error_message)); }
+                            if (response.isSuccessful() && response.body() != null) { 
+                                List<Offer> list = response.body();
+                                if (list == null) list = new ArrayList<>();
+                                showOffersOnHome(list); 
+                            }
+                            else { Log.e("API_ERROR", "Empty offer response"); showOffersErrorState(getString(R.string.home_offers_error_message)); }
                             markHomeSectionLoaded();
                         });
                     }
-                    @Override public void onFailure(Call<List<Offer>> call, Throwable t) { runOnUiThread(() -> { showOffersErrorState(getString(R.string.home_offers_error_message)); markHomeSectionLoaded(); }); }
+                    @Override public void onFailure(Call<List<Offer>> call, Throwable t) { runOnUiThread(() -> { Log.e("API_FAIL", "Offer fetch fail: " + t.getMessage()); showOffersErrorState(getString(R.string.home_offers_error_message)); markHomeSectionLoaded(); }); }
                 });
     }
 
@@ -497,7 +513,7 @@ public class MainActivity extends BaseActivity {
     private void showBannersOnHome(List<Banner> list) {
         if (bannersSection == null || vpBannersCarousel == null || bannerDotsLayout == null) return;
         homeBanners.clear();
-        if (list != null) {
+        if (list != null && !list.isEmpty()) {
             for (Banner b : list) if (b != null) homeBanners.add(b);
         }
         if (homeBanners.isEmpty()) { bannersSection.setVisibility(View.VISIBLE); if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE); if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE); if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE); if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.VISIBLE); stopBannerAutoSlide(); if (bannerDotsMediator != null) { bannerDotsMediator.detach(); bannerDotsMediator = null; } return; }
@@ -520,7 +536,7 @@ public class MainActivity extends BaseActivity {
 
     private void showOffersOnHome(List<Offer> list) {
         if (offersSection == null || rvOffersStrip == null) return;
-        homeOffers.clear(); if (list != null) { for (Offer o : list) if (o != null) homeOffers.add(o); }
+        homeOffers.clear(); if (list != null && !list.isEmpty()) { for (Offer o : list) if (o != null) homeOffers.add(o); }
         if (homeOffers.isEmpty()) { offersSection.setVisibility(View.VISIBLE); if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE); if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE); if (offersErrorState != null) offersErrorState.setVisibility(View.GONE); if (offersEmptyState != null) offersEmptyState.setVisibility(View.VISIBLE); return; }
         offersSection.setVisibility(View.VISIBLE); if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE); if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE); if (offersErrorState != null) offersErrorState.setVisibility(View.GONE); if (offersContentContainer != null) offersContentContainer.setVisibility(View.VISIBLE);
         if (homeOfferAdapter == null) { homeOfferAdapter = new HomeOfferAdapter(this, homeOffers, offer -> { if (offer == null) return; Toast.makeText(this, "Use code: " + offer.offerCode + " for " + ("percentage".equalsIgnoreCase(offer.discountType) ? (int) offer.discountValue + "% OFF" : "₹" + (int) offer.discountValue + " OFF"), Toast.LENGTH_LONG).show(); }); rvOffersStrip.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)); rvOffersStrip.setAdapter(homeOfferAdapter); }
