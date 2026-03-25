@@ -1,5 +1,7 @@
 package com.example.quickfix;
 
+import com.google.gson.annotations.SerializedName;
+
 /**
  * Data model for a discount/offer/coupon shown in the user app.
  */
@@ -7,22 +9,22 @@ public class Offer {
     public String  id;
     public String  title;
     public String  description;
+    @SerializedName("image_url")
     public String  imageUrl;        // optional URL/path for visual card image
+    @SerializedName("offer_code")
     public String  offerCode;       // e.g. "QUICKFIX20"
+    @SerializedName("discount_type")
     public String  discountType;    // "percentage" | "fixed"
+    @SerializedName("discount_value")
     public double  discountValue;
+    @SerializedName("min_booking_amount")
     public double  minBookingAmount;
+    @SerializedName("expiry_date")
     public String  expiryDate;      // ISO date string
+    @SerializedName("is_active")
     public boolean isActive;
-    public String  status;          // DB column: "active" | "inactive" (string)
-    public boolean sendNotification; // whether to push FCM on create
+    @SerializedName("created_at")
     public String  createdAt;
-
-    /** Returns true if either is_active=true OR status='active'. */
-    public boolean isEffectivelyActive() {
-        if (status != null && !status.isEmpty()) return "active".equalsIgnoreCase(status);
-        return isActive;
-    }
 
     public Offer() {}
 
@@ -41,4 +43,3 @@ public class Offer {
         this.createdAt        = createdAt;
     }
 }
-

@@ -20,6 +20,7 @@ import com.google.android.material.chip.Chip;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class BannerAdapter extends RecyclerView.Adapter<BannerAdapter.VH> {
 
@@ -49,39 +50,29 @@ public class BannerAdapter extends RecyclerView.Adapter<BannerAdapter.VH> {
     @Override
     public void onBindViewHolder(@NonNull VH h, int pos) {
         Banner b = items.get(pos);
+        String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new java.util.Date());
 
-        // Text fields
         if (h.tvTitle        != null) h.tvTitle.setText(b.title != null ? b.title : "");
         if (h.tvRedirectType != null) h.tvRedirectType.setText("Redirect: " + (b.redirectType != null ? b.redirectType : "none"));
-        if (h.tvExpiry       != null) h.tvExpiry.setText("Expires: " + (b.expiryDate != null && !b.expiryDate.isEmpty() ? b.expiryDate : "No expiry"));
+        
+        boolean expired = b.expiryDate != null && !b.expiryDate.isEmpty() && b.expiryDate.compareTo(today) < 0;
+        if (h.tvExpiry != null) {
+            h.tvExpiry.setText("Expires: " + (b.expiryDate != null && !b.expiryDate.isEmpty() ? b.expiryDate : "No expiry"));
+            h.tvExpiry.setTextColor(expired ? ContextCompat.getColor(ctx, android.R.color.holo_red_dark) : ContextCompat.getColor(ctx, R.color.text_secondary));
+        }
 
-        // Banner image
         if (h.ivBanner != null) {
-            if (b.imageUrl != null && !b.imageUrl.isEmpty()) {
-                Glide.with(ctx)
-                        .load(b.imageUrl)
-                        .placeholder(R.drawable.ic_content)
-                        .error(R.drawable.ic_content)
-                        .centerCrop()
-                        .into(h.ivBanner);
-            } else {
-                h.ivBanner.setImageResource(R.drawable.ic_content);
-            }
+            Glide.with(ctx).load(b.imageUrl).placeholder(R.drawable.ic_content).error(R.drawable.ic_content).centerCrop().into(h.ivBanner);
         }
 
-        // Status chip — use ColorStateList.valueOf to avoid crash on Material3
         if (h.chipStatus != null) {
-            boolean active = b.isEffectivelyActive();
-            h.chipStatus.setText(active ? "Active" : "Disabled");
-            int colorRes = active ? R.color.chip_active_bg : R.color.chip_disabled_bg;
-            h.chipStatus.setChipBackgroundColor(
-                    ColorStateList.valueOf(ContextCompat.getColor(ctx, colorRes)));
-            h.chipStatus.setOnClickListener(v -> {
-                if (listener != null) listener.onToggleActive(b, !b.isEffectivelyActive());
-            });
+            boolean active = b.isActive && !expired;
+            h.chipStatus.setText(expired ? "Expired" : (b.isActive ? "Active" : "Disabled"));
+            int colorRes = expired ? android.R.color.holo_red_light : (active ? R.color.chip_active_bg : R.color.chip_disabled_bg);
+            h.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(ContextCompat.getColor(ctx, colorRes)));
+            h.chipStatus.setOnClickListener(v -> { if (listener != null) listener.onToggleActive(b, !b.isActive); });
         }
 
-        // Edit / Delete buttons
         if (h.btnEdit   != null) h.btnEdit.setOnClickListener(v   -> { if (listener != null) listener.onEdit(b); });
         if (h.btnDelete != null) h.btnDelete.setOnClickListener(v -> { if (listener != null) listener.onDelete(b); });
     }
@@ -90,10 +81,8 @@ public class BannerAdapter extends RecyclerView.Adapter<BannerAdapter.VH> {
     public int getItemCount() { return items != null ? items.size() : 0; }
 
     public void setItems(List<Banner> newItems) {
-        List<Banner> copy = new ArrayList<>();
-        if (newItems != null) copy.addAll(newItems);
         items.clear();
-        items.addAll(copy);
+        if (newItems != null) items.addAll(newItems);
         notifyDataSetChanged();
     }
 
@@ -102,7 +91,6 @@ public class BannerAdapter extends RecyclerView.Adapter<BannerAdapter.VH> {
         TextView    tvTitle, tvRedirectType, tvExpiry;
         Chip        chipStatus;
         ImageButton btnEdit, btnDelete;
-
         VH(View v) {
             super(v);
             ivBanner       = v.findViewById(R.id.ivBannerPreview);
