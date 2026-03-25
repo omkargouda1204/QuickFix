@@ -18,6 +18,7 @@ import com.google.android.material.chip.Chip;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
 
@@ -47,11 +48,17 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
     @Override
     public void onBindViewHolder(@NonNull VH h, int pos) {
         Offer o = items.get(pos);
+        String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new java.util.Date());
 
         if (h.tvTitle     != null) h.tvTitle.setText(o.title != null ? o.title : "");
         if (h.tvCode      != null) h.tvCode.setText("Code: " + (o.offerCode != null ? o.offerCode : "—"));
-        if (h.tvExpiry    != null) h.tvExpiry.setText("Expires: " + (o.expiryDate != null && !o.expiryDate.isEmpty() ? o.expiryDate : "No expiry"));
         if (h.tvMinAmount != null) h.tvMinAmount.setText("Min: ₹" + (int) o.minBookingAmount);
+
+        boolean expired = o.expiryDate != null && !o.expiryDate.isEmpty() && o.expiryDate.compareTo(today) < 0;
+        if (h.tvExpiry != null) {
+            h.tvExpiry.setText("Expires: " + (o.expiryDate != null && !o.expiryDate.isEmpty() ? o.expiryDate : "No expiry"));
+            h.tvExpiry.setTextColor(expired ? ContextCompat.getColor(ctx, android.R.color.holo_red_dark) : ContextCompat.getColor(ctx, R.color.text_secondary));
+        }
 
         if (h.tvDiscount != null) {
             String discStr = (o.discountType != null && o.discountType.equals("percentage"))
@@ -60,16 +67,12 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
             h.tvDiscount.setText(discStr);
         }
 
-        // Status chip — use ColorStateList.valueOf to avoid crash on Material3
         if (h.chipStatus != null) {
-            boolean active = o.isEffectivelyActive();
-            h.chipStatus.setText(active ? "Active" : "Disabled");
-            int colorRes = active ? R.color.chip_active_bg : R.color.chip_disabled_bg;
-            h.chipStatus.setChipBackgroundColor(
-                    ColorStateList.valueOf(ContextCompat.getColor(ctx, colorRes)));
-            h.chipStatus.setOnClickListener(v -> {
-                if (listener != null) listener.onToggleActive(o, !o.isEffectivelyActive());
-            });
+            boolean active = o.isActive && !expired;
+            h.chipStatus.setText(expired ? "Expired" : (o.isActive ? "Active" : "Disabled"));
+            int colorRes = expired ? android.R.color.holo_red_light : (active ? R.color.chip_active_bg : R.color.chip_disabled_bg);
+            h.chipStatus.setChipBackgroundColor(ColorStateList.valueOf(ContextCompat.getColor(ctx, colorRes)));
+            h.chipStatus.setOnClickListener(v -> { if (listener != null) listener.onToggleActive(o, !o.isActive); });
         }
 
         if (h.btnEdit   != null) h.btnEdit.setOnClickListener(v   -> { if (listener != null) listener.onEdit(o); });
@@ -80,10 +83,8 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
     public int getItemCount() { return items != null ? items.size() : 0; }
 
     public void setItems(List<Offer> newItems) {
-        List<Offer> copy = new ArrayList<>();
-        if (newItems != null) copy.addAll(newItems);
         items.clear();
-        items.addAll(copy);
+        if (newItems != null) items.addAll(newItems);
         notifyDataSetChanged();
     }
 
@@ -91,7 +92,6 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
         TextView    tvTitle, tvCode, tvDiscount, tvExpiry, tvMinAmount;
         Chip        chipStatus;
         ImageButton btnEdit, btnDelete;
-
         VH(View v) {
             super(v);
             tvTitle     = v.findViewById(R.id.tvOfferTitle);

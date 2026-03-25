@@ -1,26 +1,28 @@
 package com.example.quickfix;
 
+import com.google.gson.annotations.SerializedName;
+
 /**
  * Data model for a promotional banner displayed on the home screen.
  */
 public class Banner {
     public String  id;
     public String  title;
+    @SerializedName("image_url")
     public String  imageUrl;       // Supabase Storage public URL
+    @SerializedName("redirect_type")
     public String  redirectType;   // "service" | "category" | "external"
+    @SerializedName("redirect_id")
     public String  redirectId;     // category/service id or URL
+    @SerializedName("start_date")
     public String  startDate;      // ISO date string
+    @SerializedName("expiry_date")
     public String  expiryDate;     // ISO date string
+    @SerializedName("is_active")
     public boolean isActive;
-    public String  status;         // DB column: "active" | "inactive" (string)
     public int     priority;       // lower = higher priority
+    @SerializedName("created_at")
     public String  createdAt;
-
-    /** Returns true if either is_active=true OR status='active'. */
-    public boolean isEffectivelyActive() {
-        if (status != null && !status.isEmpty()) return "active".equalsIgnoreCase(status);
-        return isActive;
-    }
 
     public Banner() {}
 
@@ -39,4 +41,3 @@ public class Banner {
         this.createdAt    = createdAt;
     }
 }
-

@@ -25,6 +25,8 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.bumptech.glide.Glide;
 import com.example.quickfix.adapters.BannerAdapter;
+import com.example.quickfix.api.BannerApi;
+import com.example.quickfix.api.RetrofitProvider;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.switchmaterial.SwitchMaterial;
@@ -33,20 +35,17 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 /**
  * BannerManagementActivity — Admin page to add/edit/delete home screen promotional banners.
@@ -55,17 +54,11 @@ import okhttp3.Response;
 public class BannerManagementActivity extends BaseActivity {
 
     private static final String TAG            = "BannerMgmt";
-    private static final String SUPABASE_URL   = BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY       = BuildConfig.SUPABASE_ANON_KEY;
     private static final String BUCKET_BANNERS = "banner-images";
-    private static final MediaType JSON_MT     = MediaType.get("application/json; charset=utf-8");
 
-    private final OkHttpClient http = new OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
-            .writeTimeout(20, TimeUnit.SECONDS)
-            .build();
     private final Handler main = new Handler(Looper.getMainLooper());
+    private BannerApi bannerApi;
 
     // Views
     private RecyclerView          rvBanners;
@@ -94,6 +87,8 @@ public class BannerManagementActivity extends BaseActivity {
 
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) { finish(); return; }
+
+        bannerApi = RetrofitProvider.get().create(BannerApi.class);
 
         registerImagePicker();
         bindViews();
@@ -154,83 +149,38 @@ public class BannerManagementActivity extends BaseActivity {
         if (fabAdd != null) fabAdd.setOnClickListener(v -> showAddEditDialog(null));
     }
 
-    // ── LOAD BANNERS ── uses Thread (same reliable pattern as MainActivity) ──
-    /**
-     * Fetch all banners from Supabase.
-     * Supabase Query (FETCH):
-     *   SELECT * FROM banners ORDER BY created_at DESC
-     */
     private void loadBanners() {
         setLoading(true);
-        String url = SUPABASE_URL + "/rest/v1/banners?select=*&order=created_at.desc";
-        Log.d(TAG, "loadBanners -> " + url);
-
-        new Thread(() -> {
-            try {
-                Request req = new Request.Builder()
-                        .url(url)
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept",        "application/json")
-                        .build();
-                try (Response resp = http.newCall(req).execute()) {
-                    int    code = resp.code();
-                    String body = resp.body() != null ? resp.body().string() : "[]";
-                    Log.d(TAG, "loadBanners HTTP " + code + " | rows_body_len=" + body.length());
-                    main.post(() -> {
+        bannerApi.getAllBanners(ANON_KEY, "Bearer " + ANON_KEY, "*", "priority.asc,created_at.desc")
+                .enqueue(new Callback<List<Banner>>() {
+                    @Override
+                    public void onResponse(Call<List<Banner>> call, Response<List<Banner>> response) {
                         setLoading(false);
                         swipeRefresh.setRefreshing(false);
-                        if (code == 200) {
-                            parseBanners(body);
+                        if (response.isSuccessful() && response.body() != null) {
+                            banners.clear();
+                            banners.addAll(response.body());
+                            // Fix image URLs if they are just paths
+                            for (Banner b : banners) {
+                                if (b.imageUrl != null && !b.imageUrl.startsWith("http")) {
+                                    b.imageUrl = SupabaseStorageHelper.getPublicObjectUrl(BUCKET_BANNERS, b.imageUrl);
+                                }
+                            }
+                            adapter.setItems(banners);
+                            updateStats();
+                            showListOrEmpty();
                         } else {
-                            Log.e(TAG, "loadBanners FAILED " + code + ": " + body);
-                            showError("Failed to load banners (HTTP " + code + ")");
+                            showError("Failed to load banners: " + response.code());
                         }
-                    });
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "loadBanners exception", e);
-                main.post(() -> {
-                    setLoading(false);
-                    swipeRefresh.setRefreshing(false);
-                    showError("Network error: " + e.getMessage());
-                });
-            }
-        }).start();
-    }
+                    }
 
-    private void parseBanners(String json) {
-        banners.clear();
-        try {
-            JSONArray arr = new JSONArray(json);
-            Log.d(TAG, "parseBanners: " + arr.length() + " rows received");
-            for (int i = 0; i < arr.length(); i++) {
-                JSONObject o = arr.getJSONObject(i);
-                Banner b       = new Banner();
-                b.id           = o.optString("id");
-                b.title        = o.optString("title");
-                b.imageUrl     = SupabaseStorageHelper.getPublicObjectUrl(
-                        BUCKET_BANNERS,
-                        o.optString("image_url", ""));
-                b.redirectType = o.optString("redirect_type", "category");
-                b.redirectId   = o.optString("redirect_id", "");
-                b.startDate    = o.optString("start_date", "");
-                b.expiryDate   = o.optString("expiry_date", "");
-                b.isActive     = o.has("is_active")
-                        ? o.optBoolean("is_active", true)
-                        : o.optBoolean("active", true);
-                b.status       = b.isActive ? "active" : "inactive";
-                b.priority     = o.optInt("priority", 1);
-                b.createdAt    = o.optString("created_at");
-                banners.add(b);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "parseBanners exception", e);
-        }
-        Log.d(TAG, "parseBanners: parsed " + banners.size() + " banners");
-        adapter.setItems(banners);
-        updateStats();
-        showListOrEmpty();
+                    @Override
+                    public void onFailure(Call<List<Banner>> call, Throwable t) {
+                        setLoading(false);
+                        swipeRefresh.setRefreshing(false);
+                        showError("Network error: " + t.getMessage());
+                    }
+                });
     }
 
     private void showListOrEmpty() {
@@ -241,25 +191,24 @@ public class BannerManagementActivity extends BaseActivity {
 
     private void showError(String msg) {
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
-        if (emptyStateLayout != null) emptyStateLayout.setVisibility(View.VISIBLE);
-        if (rvBanners        != null) rvBanners.setVisibility(View.GONE);
     }
 
     private void updateStats() {
-        String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
-                java.util.Locale.getDefault()).format(new java.util.Date());
+        String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new java.util.Date());
         int total = banners.size(), active = 0, expired = 0;
         for (Banner b : banners) {
-            if (b.isEffectivelyActive()) active++;
-            if (b.expiryDate != null && !b.expiryDate.isEmpty()
-                    && b.expiryDate.compareTo(today) < 0) expired++;
+            boolean notExpired = b.expiryDate == null || b.expiryDate.isEmpty() || b.expiryDate.compareTo(today) >= 0;
+            if (b.isActive && notExpired) {
+                active++;
+            } else if (b.expiryDate != null && !b.expiryDate.isEmpty() && b.expiryDate.compareTo(today) < 0) {
+                expired++;
+            }
         }
         if (tvTotalBanners   != null) tvTotalBanners.setText(String.valueOf(total));
         if (tvActiveBanners  != null) tvActiveBanners.setText(String.valueOf(active));
         if (tvExpiredBanners != null) tvExpiredBanners.setText(String.valueOf(expired));
     }
 
-    // ── ADD / EDIT DIALOG ─────────────────────────────────────────────────
     private void showAddEditDialog(Banner existing) {
         boolean isEdit = (existing != null);
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_edit_banner, null);
@@ -278,8 +227,7 @@ public class BannerManagementActivity extends BaseActivity {
         dialogUploadProgress    = dialogView.findViewById(R.id.tvUploadProgress);
 
         String[] types = {"service", "category", "external"};
-        actvRedir.setAdapter(new ArrayAdapter<>(this,
-                android.R.layout.simple_dropdown_item_1line, types));
+        actvRedir.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, types));
 
         tvDlgTitle.setText(isEdit ? "Edit Banner" : "Add Banner");
         uploadedImageUrl = null;
@@ -292,8 +240,8 @@ public class BannerManagementActivity extends BaseActivity {
             etPriority.setText(String.valueOf(existing.priority));
             etExpiry.setText(existing.expiryDate);
             swActive.setChecked(existing.isActive);
-            uploadedImageUrl = existing.imageUrl != null ? existing.imageUrl.trim() : "";
-            if (!uploadedImageUrl.isEmpty()) {
+            uploadedImageUrl = existing.imageUrl;
+            if (uploadedImageUrl != null && !uploadedImageUrl.isEmpty()) {
                 dialogImagePreview.setVisibility(View.VISIBLE);
                 dialogUploadPlaceholder.setVisibility(View.GONE);
                 Glide.with(this).load(uploadedImageUrl).centerCrop().into(dialogImagePreview);
@@ -314,26 +262,20 @@ public class BannerManagementActivity extends BaseActivity {
             boolean active = swActive.isChecked();
             int priority   = 1;
             try { priority = Integer.parseInt(getET(etPriority)); } catch (Exception ignored) {}
-            if (priority < 1) priority = 1;
-            if (!"service".equals(redir) && !"category".equals(redir) && !"external".equals(redir)) {
-                redir = "category";
-            }
 
             if (title.isEmpty()) {
                 setFieldError(dialogView.findViewById(R.id.tilBannerTitle), "Title is required");
                 return;
             }
-            if (!isEdit && selectedImageUri == null && (uploadedImageUrl == null || uploadedImageUrl.isEmpty())) {
+            if (!isEdit && selectedImageUri == null) {
                 Toast.makeText(this, "Banner image is required", Toast.LENGTH_SHORT).show();
                 return;
             }
 
             if (selectedImageUri != null) {
-                uploadBannerImage(selectedImageUri, title, redir, redirId, expiry,
-                        active, priority, isEdit ? existing.id : null, dialog);
+                uploadBannerImage(selectedImageUri, title, redir, redirId, expiry, active, priority, isEdit ? existing.id : null, dialog);
             } else {
-                saveBanner(title, uploadedImageUrl, redir, redirId,
-                        expiry, active, priority, isEdit ? existing.id : null, dialog);
+                saveBanner(title, uploadedImageUrl, redir, redirId, expiry, active, priority, isEdit ? existing.id : null, dialog);
             }
         });
         dialog.show();
@@ -344,247 +286,119 @@ public class BannerManagementActivity extends BaseActivity {
                                     String bannerId, AlertDialog dialog) {
         if (dialogUploadProgress != null) {
             dialogUploadProgress.setVisibility(View.VISIBLE);
-            dialogUploadProgress.setText("Compressing and uploading image...");
+            dialogUploadProgress.setText("Uploading image...");
         }
 
-        SupabaseStorageHelper.uploadBannerImage(this, uri,
-                new SupabaseStorageHelper.UploadCallback() {
-                    @Override
-                    public void onSuccess(String url) {
-                        Log.d(TAG, "uploadBannerImage SUCCESS url=" + url);
-                        uploadedImageUrl = url;
-                        if (dialogUploadProgress != null) dialogUploadProgress.setVisibility(View.GONE);
-                        saveBanner(title, url, redirect, redirId, expiry, active, priority, bannerId, dialog);
-                    }
-
-                    @Override
-                    public void onError(String msg) {
-                        Log.e(TAG, "uploadBannerImage FAILED: " + msg);
-                        if (dialogUploadProgress != null) dialogUploadProgress.setVisibility(View.GONE);
-                        Toast.makeText(BannerManagementActivity.this,
-                                "Image upload failed: " + msg,
-                                Toast.LENGTH_LONG).show();
-                    }
-                });
+        SupabaseStorageHelper.uploadBannerImage(this, uri, new SupabaseStorageHelper.UploadCallback() {
+            @Override
+            public void onSuccess(String url) {
+                uploadedImageUrl = url;
+                if (dialogUploadProgress != null) dialogUploadProgress.setVisibility(View.GONE);
+                saveBanner(title, url, redirect, redirId, expiry, active, priority, bannerId, dialog);
+            }
+            @Override
+            public void onError(String msg) {
+                if (dialogUploadProgress != null) dialogUploadProgress.setVisibility(View.GONE);
+                Toast.makeText(BannerManagementActivity.this, "Upload failed: " + msg, Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
-    // ── SAVE BANNER (INSERT or PATCH) ─────────────────────────────────────
-    /**
-     * Save banner to Supabase. Performs INSERT (POST) for new banners or UPDATE (PATCH) for existing.
-     * 
-     * Supabase Query (INSERT):
-     *   INSERT INTO banners (id, title, image_url, redirect_type, redirect_id, 
-     *     is_active, priority, start_date, expiry_date, status, created_at)
-     *   VALUES (...) RETURNING *
-     * 
-     * Supabase Query (UPDATE):
-     *   UPDATE banners SET title = ?, image_url = ?, redirect_type = ?, 
-     *     redirect_id = ?, is_active = ?, priority = ?, expiry_date = ?, updated_at = NOW()
-     *   WHERE id = ? RETURNING *
-     */
     private void saveBanner(String title, String imageUrl, String redirectType,
                              String redirectId, String expiryDate, boolean isActive,
                              int priority, String existingId, AlertDialog dialog) {
-        new Thread(() -> {
-            try {
-                boolean isEdit = (existingId != null && !existingId.isEmpty());
-                String method = isEdit ? "PATCH" : "POST";
-                String url = isEdit
-                        ? SUPABASE_URL + "/rest/v1/banners?id=eq." + existingId
-                        : SUPABASE_URL + "/rest/v1/banners";
+        Map<String, Object> body = new HashMap<>();
+        body.put("title", title);
+        // Save only the path if it's a Supabase URL
+        if (imageUrl != null && imageUrl.contains(BUCKET_BANNERS)) {
+            String[] parts = imageUrl.split(BUCKET_BANNERS + "/");
+            if (parts.length > 1) imageUrl = parts[1];
+        }
+        body.put("image_url", imageUrl);
+        body.put("redirect_type", redirectType);
+        body.put("redirect_id", redirectId);
+        body.put("is_active", isActive);
+        body.put("priority", priority);
+        body.put("expiry_date", (expiryDate == null || expiryDate.isEmpty()) ? null : expiryDate);
 
-                // ✓ Use correct DB column names
-                JSONObject payload = new JSONObject();
-                if (!isEdit) {
-                    payload.put("id", UUID.randomUUID().toString());
-                    String today = new java.text.SimpleDateFormat("yyyy-MM-dd",
-                            java.util.Locale.US).format(new java.util.Date());
-                    payload.put("start_date", today);
-                }
-                payload.put("title",          title != null ? title : "");
-                payload.put("image_url",      imageUrl != null ? imageUrl : "");
-                payload.put("redirect_type",  redirectType != null ? redirectType : "category");
-                payload.put("redirect_id",    redirectId  != null ? redirectId  : "");
-                payload.put("is_active",      isActive);
-                payload.put("active",         isActive);
-                payload.put("priority",       priority);
+        Call<Void> call;
+        if (existingId != null) {
+            call = bannerApi.updateBanner(ANON_KEY, "Bearer " + ANON_KEY, "application/json", "return=minimal", "eq." + existingId, body);
+        } else {
+            body.put("id", UUID.randomUUID().toString());
+            String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date());
+            body.put("start_date", today);
+            call = bannerApi.createBanner(ANON_KEY, "Bearer " + ANON_KEY, "application/json", "return=minimal", body);
+        }
 
-                if (expiryDate != null && !expiryDate.isEmpty()) {
-                    payload.put("expiry_date", expiryDate);
+        call.enqueue(new Callback<Void>() {
+            @Override
+            public void onResponse(Call<Void> call, Response<Void> response) {
+                if (response.isSuccessful()) {
+                    dialog.dismiss();
+                    Toast.makeText(BannerManagementActivity.this, "✓ Banner saved", Toast.LENGTH_SHORT).show();
+                    loadBanners();
                 } else {
-                    payload.put("expiry_date", JSONObject.NULL);
+                    showErrorDialog("Save Failed", "Error " + response.code());
                 }
-
-                Log.d(TAG, "saveBanner " + method + " url=" + url);
-                Log.d(TAG, "saveBanner payload=" + payload);
-                SaveResult result = executeSave(url, method, payload);
-                Log.d(TAG, "saveBanner response HTTP " + result.code + " | body=" + result.body);
-
-                main.post(() -> {
-                    if (result.success) {
-                        dialog.dismiss();
-                        Toast.makeText(BannerManagementActivity.this,
-                                isEdit ? "✓ Banner updated" : "✓ Banner added",
-                                Toast.LENGTH_SHORT).show();
-                        loadBanners();
-                    } else {
-                        Log.e(TAG, "saveBanner FAILED HTTP " + result.code + ": " + result.body);
-                        showErrorDialog("Save Failed",
-                                "Error (HTTP " + result.code + "): " + result.body);
-                    }
-                });
-            } catch (Exception e) {
-                Log.e(TAG, "saveBanner exception", e);
-                main.post(() -> {
-                    Log.e(TAG, "saveBanner error: " + e.getMessage());
-                    showErrorDialog("Error", "Failed to save banner: " + e.getMessage());
-                });
             }
-        }).start();
+            @Override
+            public void onFailure(Call<Void> call, Throwable t) {
+                showErrorDialog("Error", t.getMessage());
+            }
+        });
     }
 
     private void toggleBannerActive(Banner banner, boolean newState) {
-        new Thread(() -> {
-            try {
-                // ✓ Use correct DB column "is_active"
-                // Supabase Query (PATCH):
-                //   UPDATE banners SET is_active = ?, status = ?, updated_at = NOW()
-                //   WHERE id = ? RETURNING *
-                JSONObject payload = new JSONObject();
-                payload.put("is_active", newState);
-                payload.put("active", newState);
-                String patchUrl = SUPABASE_URL + "/rest/v1/banners?id=eq." + banner.id;
-                Log.d(TAG, "toggleBannerActive PATCH " + patchUrl + " is_active=" + newState);
-                Log.d(TAG, "toggleBannerActive payload=" + payload);
-                SaveResult rs = executePatch(patchUrl, payload);
-                Log.d(TAG, "toggleBannerActive HTTP " + rs.code + " | body=" + rs.body);
-
-                main.post(() -> {
-                    if (rs.success) {
-                        banner.isActive = newState;
-                        banner.status   = newState ? "active" : "inactive";
-                        adapter.notifyDataSetChanged();
-                        updateStats();
-                        Toast.makeText(BannerManagementActivity.this,
-                                newState ? "✓ Banner enabled" : "✓ Banner disabled",
-                                Toast.LENGTH_SHORT).show();
-                    } else {
-                        Log.e(TAG, "toggleBannerActive FAILED HTTP " + rs.code + ": " + rs.body);
-                        showErrorDialog("Update Failed",
-                                "Could not update banner status (HTTP " + rs.code + ")");
+        Map<String, Object> body = new HashMap<>();
+        body.put("is_active", newState);
+        bannerApi.updateBanner(ANON_KEY, "Bearer " + ANON_KEY, "application/json", "return=minimal", "eq." + banner.id, body)
+                .enqueue(new Callback<Void>() {
+                    @Override
+                    public void onResponse(Call<Void> call, Response<Void> response) {
+                        if (response.isSuccessful()) {
+                            banner.isActive = newState;
+                            adapter.notifyDataSetChanged();
+                            updateStats();
+                        } else {
+                            showError("Failed to update: " + response.code());
+                        }
+                    }
+                    @Override
+                    public void onFailure(Call<Void> call, Throwable t) {
+                        showError("Network error: " + t.getMessage());
                     }
                 });
-            } catch (Exception e) {
-                Log.e(TAG, "toggleBannerActive exception", e);
-                main.post(() -> {
-                    Log.e(TAG, "toggleBannerActive error: " + e.getMessage());
-                    showErrorDialog("Error", "Failed to update banner: " + e.getMessage());
-                });
-            }
-        }).start();
     }
 
-    private static class SaveResult {
-        boolean success;
-        int code;
-        String body;
-    }
-
-    private SaveResult executeSave(String url, String method, JSONObject payload) throws Exception {
-        Request req = new Request.Builder()
-                .url(url)
-                .method(method, RequestBody.create(payload.toString(), JSON_MT))
-                .addHeader("apikey", ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Prefer", "return=minimal")
-                .build();
-        try (Response resp = http.newCall(req).execute()) {
-            SaveResult r = new SaveResult();
-            r.code = resp.code();
-            r.body = resp.body() != null ? resp.body().string() : "";
-            r.success = (r.code == 200 || r.code == 201 || r.code == 204);
-            return r;
-        }
-    }
-
-    private SaveResult executePatch(String url, JSONObject payload) throws Exception {
-        Request req = new Request.Builder()
-                .url(url)
-                .patch(RequestBody.create(payload.toString(), JSON_MT))
-                .addHeader("apikey", ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Prefer", "return=minimal")
-                .build();
-        try (Response resp = http.newCall(req).execute()) {
-            SaveResult r = new SaveResult();
-            r.code = resp.code();
-            r.body = resp.body() != null ? resp.body().string() : "";
-            r.success = resp.isSuccessful();
-            return r;
-        }
-    }
-
-    // ── DELETE ────────────────────────────────────────────────────────────
-    /**
-     * Delete banner from Supabase.
-     * Supabase Query (DELETE):
-     *   DELETE FROM banners WHERE id = ? RETURNING *
-     */
     private void confirmDelete(Banner banner) {
         new MaterialAlertDialogBuilder(this)
                 .setTitle("Delete Banner")
-                .setMessage("Delete \"" + (banner.title != null ? banner.title : "Banner") + "\"? This cannot be undone.")
+                .setMessage("Delete \"" + banner.title + "\"?")
                 .setPositiveButton("Delete", (d, w) -> deleteBanner(banner))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
     private void deleteBanner(Banner banner) {
-        if (banner == null || banner.id == null) {
-            showErrorDialog("Error", "Invalid banner data");
-            return;
-        }
-
-        new Thread(() -> {
-            try {
-                String deleteUrl = SUPABASE_URL + "/rest/v1/banners?id=eq." + banner.id;
-                Log.d(TAG, "deleteBanner DELETE " + deleteUrl);
-                Request req = new Request.Builder()
-                        .url(deleteUrl)
-                        .delete()
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Prefer",        "return=minimal")
-                        .build();
-                try (Response resp = http.newCall(req).execute()) {
-                    String body = resp.body() != null ? resp.body().string() : "";
-                    Log.d(TAG, "deleteBanner HTTP " + resp.code() + " | body_len=" + body.length());
-                    main.post(() -> {
-                        if (resp.isSuccessful()) {
-                            Toast.makeText(BannerManagementActivity.this,
-                                    "✓ Banner deleted", Toast.LENGTH_SHORT).show();
-                            // ✓ Reload from database to ensure data consistency
+        bannerApi.deleteBanner(ANON_KEY, "Bearer " + ANON_KEY, "eq." + banner.id)
+                .enqueue(new Callback<Void>() {
+                    @Override
+                    public void onResponse(Call<Void> call, Response<Void> response) {
+                        if (response.isSuccessful()) {
+                            Toast.makeText(BannerManagementActivity.this, "✓ Deleted", Toast.LENGTH_SHORT).show();
                             loadBanners();
                         } else {
-                            Log.e(TAG, "deleteBanner FAILED HTTP " + resp.code() + ": " + body);
-                            showErrorDialog("Delete Failed",
-                                    "Could not delete banner (HTTP " + resp.code() + ")");
+                            showError("Delete failed: " + response.code());
                         }
-                    });
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "deleteBanner exception", e);
-                main.post(() -> {
-                    Log.e(TAG, "deleteBanner error: " + e.getMessage());
-                    showErrorDialog("Error", "Failed to delete banner: " + e.getMessage());
+                    }
+                    @Override
+                    public void onFailure(Call<Void> call, Throwable t) {
+                        showError("Network error: " + t.getMessage());
+                    }
                 });
-            }
-        }).start();
     }
 
-    // ── HELPERS ───────────────────────────────────────────────────────────
     private void setLoading(boolean loading) {
         if (shimmerLayout    != null) shimmerLayout.setVisibility(loading ? View.VISIBLE : View.GONE);
         if (rvBanners        != null) rvBanners.setVisibility(loading ? View.GONE : View.VISIBLE);
@@ -594,10 +408,8 @@ public class BannerManagementActivity extends BaseActivity {
     private void showDatePicker(TextInputEditText field) {
         Calendar cal = Calendar.getInstance();
         new DatePickerDialog(this, (v, y, m, d) -> {
-            field.setText(String.format(java.util.Locale.getDefault(),
-                    "%04d-%02d-%02d", y, m + 1, d));
-        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH),
-                cal.get(Calendar.DAY_OF_MONTH)).show();
+            field.setText(String.format(Locale.getDefault(), "%04d-%02d-%02d", y, m + 1, d));
+        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show();
     }
 
     private String getET(TextInputEditText et) {
@@ -609,11 +421,6 @@ public class BannerManagementActivity extends BaseActivity {
     }
 
     private void showErrorDialog(String title, String message) {
-        new MaterialAlertDialogBuilder(this)
-                .setTitle(title)
-                .setMessage(message)
-                .setPositiveButton("OK", null)
-                .show();
+        new MaterialAlertDialogBuilder(this).setTitle(title).setMessage(message).setPositiveButton("OK", null).show();
     }
 }
-
