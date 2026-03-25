@@ -224,6 +224,9 @@ public class ProviderDetailActivity extends BaseActivity {
             return;
         }
 
+        // Always use Firebase UID as plain string for TEXT columns in Supabase.
+        final String firebaseUid = currentUser.getUid();
+
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_book_service, null);
 
         TextInputEditText etBookDate = dialogView.findViewById(R.id.etBookDate);
@@ -284,7 +287,7 @@ public class ProviderDetailActivity extends BaseActivity {
                 }
 
                 dialog.dismiss();
-                submitBooking(currentUser.getUid(), date, time, address, description);
+                submitBooking(firebaseUid, date, time, address, description);
             });
         });
 
@@ -294,6 +297,11 @@ public class ProviderDetailActivity extends BaseActivity {
     private void submitBooking(String customerId, String date, String time,
                                String address, String description) {
         Toast.makeText(this, "Submitting booking...", Toast.LENGTH_SHORT).show();
+
+        if (providerIdForBooking == null || providerIdForBooking.trim().isEmpty()) {
+            Toast.makeText(this, "Provider not available. Please try again.", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
         // Fetch customer details from users table
         new Thread(() -> {
@@ -329,11 +337,15 @@ public class ProviderDetailActivity extends BaseActivity {
             try {
                 JSONObject bookingBody = new JSONObject();
                 bookingBody.put("customer_id", customerId);
-                bookingBody.put("provider_id", providerIdForBooking != null ? providerIdForBooking : "");
+                bookingBody.put("provider_id", providerIdForBooking);
                 bookingBody.put("customer_name", customerName.isEmpty() ? "Customer" : customerName);
-                bookingBody.put("customer_phone", customerPhone != null ? customerPhone : "");
+                bookingBody.put("customer_phone", customerPhone);
                 bookingBody.put("provider_name", providerName != null ? providerName : "");
-                bookingBody.put("service_id", serviceIdForBooking != null ? serviceIdForBooking : "");
+                if (serviceIdForBooking == null || serviceIdForBooking.trim().isEmpty()) {
+                    bookingBody.put("service_id", JSONObject.NULL);
+                } else {
+                    bookingBody.put("service_id", serviceIdForBooking.trim());
+                }
                 bookingBody.put("service_name", providerCategory != null ? providerCategory : "Service");
                 bookingBody.put("category", providerCategory != null ? providerCategory : "");
                 bookingBody.put("booking_date", date);
@@ -427,4 +439,3 @@ public class ProviderDetailActivity extends BaseActivity {
         return super.onOptionsItemSelected(item);
     }
 }
-
