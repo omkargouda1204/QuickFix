@@ -668,6 +668,7 @@ public class MainActivity extends BaseActivity {
         if (bannerApi == null) {
             Log.e(TAG, "Banner API is null");
             showBannerErrorState("Service unavailable");
+            markHomeSectionLoaded();
             return;
         }
 
@@ -755,6 +756,7 @@ public class MainActivity extends BaseActivity {
         if (offerApi == null) {
             Log.e(TAG, "Offer API is null");
             showOffersErrorState("Service unavailable");
+            markHomeSectionLoaded();
             return;
         }
 
