@@ -139,12 +139,14 @@ public class AdminNotificationsActivity extends BaseActivity {
     private void loadNotifications() {
         setLoading(true);
 
-        String url = SUPABASE_URL + "/rest/v1/admin_notifications"
-                + "?select=id,title,message,type,is_read,created_at"
+        String filter = "or=(receiver_role.eq.admin,receiver_id.eq." + adminFirebaseUid + ")";
+        String url = SUPABASE_URL + "/rest/v1/notifications"
+                + "?" + filter
+                + "&select=id,title,body,type,reference_id,is_read,created_at,receiver_role,receiver_id"
                 + "&order=created_at.desc"
                 + "&limit=200";
 
-        Log.d(TAG, "loadNotifications → " + url);
+        Log.d(TAG, "loadNotifications -> " + url);
 
         new Thread(() -> {
             try {
@@ -192,7 +194,7 @@ public class AdminNotificationsActivity extends BaseActivity {
                 NotifItem item  = new NotifItem();
                 item.id         = o.optString("id");
                 item.title      = o.optString("title", "Notification");
-                item.message    = o.optString("message", "");
+                item.message    = o.optString("body", o.optString("message", ""));
                 item.type       = o.optString("type", "general");
                 item.isRead     = o.optBoolean("is_read", false);
                 item.createdAt  = o.optString("created_at", "");
@@ -237,7 +239,7 @@ public class AdminNotificationsActivity extends BaseActivity {
                 JSONObject body = new JSONObject();
                 body.put("is_read", true);
                 Request req = new Request.Builder()
-                        .url(SUPABASE_URL + "/rest/v1/admin_notifications?id=eq." + item.id)
+                        .url(SUPABASE_URL + "/rest/v1/notifications?id=eq." + item.id)
                         .patch(RequestBody.create(body.toString(),
                                 okhttp3.MediaType.get("application/json")))
                         .addHeader("apikey",        ANON_KEY)
@@ -269,7 +271,7 @@ public class AdminNotificationsActivity extends BaseActivity {
             try {
                 JSONObject body = new JSONObject();
                 body.put("is_read", true);
-                String url = SUPABASE_URL + "/rest/v1/admin_notifications?is_read=eq.false";
+                String url = SUPABASE_URL + "/rest/v1/notifications?or=(receiver_role.eq.admin,receiver_id.eq." + adminFirebaseUid + ")&is_read=eq.false";
                 Request req = new Request.Builder()
                         .url(url)
                         .patch(RequestBody.create(body.toString(),
@@ -368,11 +370,13 @@ public class AdminNotificationsActivity extends BaseActivity {
                     iconRes = R.drawable.ic_check;
                     tint    = 0xFF00897B;
                 } else if ("provider_rejected".equals(item.type)) {
-                    iconRes = R.drawable.ic_notification;
                     tint    = 0xFFE53935;
                 }
-                h.ivIcon.setImageResource(iconRes);
-                h.ivIcon.setColorFilter(tint);
+                if (h.ivIcon instanceof ImageView) {
+                    ImageView icon = (ImageView) h.ivIcon;
+                    icon.setImageResource(iconRes);
+                    icon.setColorFilter(tint);
+                }
             }
 
             // Card alpha — read vs unread
@@ -409,7 +413,8 @@ public class AdminNotificationsActivity extends BaseActivity {
         }
 
         static class VH extends RecyclerView.ViewHolder {
-            ImageView ivIcon, unreadDot;
+            View ivIcon;
+            View unreadDot;
             TextView tvTitle, tvMessage, tvTime;
             ImageButton btnMarkRead;
 

@@ -367,17 +367,8 @@ public class ProviderDetailActivity extends BaseActivity {
                         mainHandler.post(() -> {
                             if (code == 200 || code == 201 || code == 204) {
                                 Toast.makeText(ProviderDetailActivity.this,
-                                        "Booking submitted successfully! The provider will be notified.",
+                                        "Booking submitted successfully!",
                                         Toast.LENGTH_LONG).show();
-
-                                // Send notification to provider
-                                if (providerFirebaseUid != null && !providerFirebaseUid.isEmpty()) {
-                                    FcmNotificationHelper.notifyProviderNewBooking(
-                                            providerFirebaseUid,
-                                            custName,
-                                            providerCategory != null ? providerCategory : "Service"
-                                    );
-                                }
                             } else {
                                 Log.e(TAG, "Booking failed: HTTP " + code + " | " + resp);
                                 String errMsg;

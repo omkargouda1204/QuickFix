@@ -411,10 +411,6 @@ public class OfferManagementActivity extends BaseActivity {
                                     : "₹" + (int) discountValue + " OFF";
                             sendOfferNotification(title, code, discStr);
                         }
-
-                        if (!isEdit) {
-                            FcmNotificationHelper.notifyAdminOfferCreated(title, null);
-                        }
                     } else {
                         Log.e(TAG, "saveOffer FAILED HTTP " + result.code + ": " + result.body);
                         showErrorDialog("Save Failed",
@@ -435,28 +431,10 @@ public class OfferManagementActivity extends BaseActivity {
     private void sendOfferNotification(String offerTitle, String code, String discStr) {
         new Thread(() -> {
             try {
-                // 1. Store broadcast notification in `notifications` table (in-app users)
-                JSONObject notif = new JSONObject();
-                notif.put("id",      UUID.randomUUID().toString());
-                notif.put("title",   "New Offer Available 🎉");
-                notif.put("message", offerTitle + " is live. Get " + discStr + " on your booking. Use code " + code + " now!");
-                notif.put("type",    "offer");
-                notif.put("is_read", false);
-
-                try (Response r = http.newCall(new Request.Builder()
-                        .url(SUPABASE_URL + "/rest/v1/notifications")
-                        .post(RequestBody.create(notif.toString(), JSON_MT))
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "return=minimal")
-                        .build()).execute()) {
-                    Log.d(TAG, "sendOfferNotification store user notifications HTTP " + r.code());
-                }
-
-                // 2. Fetch all user FCM tokens and trigger FCM push
+                // Admin-initiated broadcast: fetch user tokens and send via Edge Function.
                 String tokenUrl = SUPABASE_URL + "/rest/v1/users"
                         + "?select=fcm_token&fcm_token=not.is.null";
+                int sent = 0;
                 try (Response tr = http.newCall(new Request.Builder()
                         .url(tokenUrl)
                         .addHeader("apikey",        ANON_KEY)
@@ -470,6 +448,7 @@ public class OfferManagementActivity extends BaseActivity {
                         for (int i = 0; i < tokens.length(); i++) {
                             String token = tokens.getJSONObject(i).optString("fcm_token", "");
                             if (!token.isEmpty()) {
+                                sent++;
                                 FcmNotificationHelper.sendOfferFcm(token,
                                         "New Offer Available 🎉",
                                         "Get " + discStr + " — use code " + code);
@@ -478,8 +457,12 @@ public class OfferManagementActivity extends BaseActivity {
                     }
                 }
 
+                int finalSent = sent;
                 main.post(() -> Toast.makeText(OfferManagementActivity.this,
-                        "Notification sent to all users ✓", Toast.LENGTH_SHORT).show());
+                        finalSent > 0
+                                ? "Notification queued for " + finalSent + " users"
+                                : "No active user tokens found",
+                        Toast.LENGTH_SHORT).show());
 
             } catch (Exception e) {
                 Log.e(TAG, "sendOfferNotification exception: " + e.getMessage(), e);

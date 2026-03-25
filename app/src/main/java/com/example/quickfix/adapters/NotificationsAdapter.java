@@ -78,7 +78,7 @@ public class NotificationsAdapter extends RecyclerView.Adapter<NotificationsAdap
 
         void bind(Notification n) {
             tvTitle.setText(n.title.isEmpty()   ? "Notification" : n.title);
-            tvMessage.setText(n.message.isEmpty() ? "" : n.message);
+            tvMessage.setText(n.body == null || n.body.isEmpty() ? "" : n.body);
             tvTime.setText(formatTime(n.createdAt));
 
             // Unread indicator

@@ -177,13 +177,6 @@ public class ProviderApplicationRepository {
                         if (autoApprove) {
                             // Auto-approve means role is promoted immediately.
                             patchUserAsProviderSync(firebaseUid);
-                        } else {
-                            String eventKey = extractInsertedApplicationId(respBody);
-                            if (eventKey.trim().isEmpty()) {
-                                eventKey = (firebaseUid != null ? firebaseUid.trim() : "") + ":pending";
-                            }
-                            FcmNotificationHelper.notifyAdminsNewApplication(
-                                    name, businessName, category, eventKey);
                         }
                         MAIN.post(callback::onSuccess);
                     } else {

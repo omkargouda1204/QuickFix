@@ -261,8 +261,7 @@ public class FcmNotificationHelper {
     // ── In-App Notification Storage ───────────────────────────────────────
 
     /**
-     * Stores a notification record in the `notifications` table so it appears
-     * in the user's in-app notification list. userId = null = broadcast to all admins.
+     * Stores a notification record in the unified `notifications` table.
      */
     private static void saveInAppNotification(String userId, String title,
                                                String message, String type) {
@@ -271,14 +270,14 @@ public class FcmNotificationHelper {
                 JSONObject notif = new JSONObject();
                 notif.put("id",      java.util.UUID.randomUUID().toString());
                 notif.put("title",   title);
-                notif.put("message", message);
+                notif.put("body",    message);
                 notif.put("type",    type != null ? type : "general");
                 notif.put("is_read", false);
-                // user_id = null means broadcast (visible to admin / all users)
                 if (userId != null && !userId.isEmpty()) {
-                    notif.put("user_id", userId);
+                    notif.put("receiver_id", userId);
+                } else {
+                    notif.put("receiver_role", "admin");
                 }
-                // created_at handled by DB default
 
                 try (Response resp = HTTP.newCall(new Request.Builder()
                         .url(SUPABASE_URL + "/rest/v1/notifications")
@@ -289,16 +288,12 @@ public class FcmNotificationHelper {
                         .addHeader("Prefer",        "return=minimal")
                         .build()).execute()) {
                     Log.d(TAG, "saveInAppNotification HTTP " + resp.code()
-                            + " type=" + type + " userId=" + userId);
+                            + " type=" + type + " receiver=" + userId);
                 }
             } catch (Exception e) {
                 Log.w(TAG, "saveInAppNotification failed (non-fatal): " + e.getMessage());
             }
         }).start();
-    }
-
-    private static void saveAdminNotification(String title, String message, String type) {
-        saveAdminNotification(title, message, type, null);
     }
 
     private static void saveAdminNotification(String title,
@@ -308,15 +303,16 @@ public class FcmNotificationHelper {
         try {
             JSONObject notif = new JSONObject();
             notif.put("title", title != null ? title : "Notification");
-            notif.put("message", message != null ? message : "");
+            notif.put("body", message != null ? message : "");
             notif.put("type", type != null ? type : "general");
+            notif.put("receiver_role", "admin");
             notif.put("is_read", false);
             if (referenceId != null && !referenceId.trim().isEmpty()) {
                 notif.put("reference_id", referenceId.trim());
             }
 
             try (Response resp = HTTP.newCall(new Request.Builder()
-                    .url(SUPABASE_URL + "/rest/v1/admin_notifications")
+                    .url(SUPABASE_URL + "/rest/v1/notifications")
                     .post(RequestBody.create(notif.toString(), JSON_TYPE))
                     .addHeader("apikey", ANON_KEY)
                     .addHeader("Authorization", "Bearer " + ANON_KEY)
@@ -325,10 +321,6 @@ public class FcmNotificationHelper {
                     .build()).execute()) {
                 String rb = resp.body() != null ? resp.body().string() : "";
                 if (!resp.isSuccessful()) {
-                    if (resp.code() == 404 || rb.contains("admin_notifications")) {
-                        Log.w(TAG, "admin_notifications table not available, skipping persistence");
-                        return;
-                    }
                     Log.w(TAG, "saveAdminNotification failed HTTP " + resp.code() + ": " + rb);
                 } else {
                     Log.d(TAG, "saveAdminNotification ok type=" + type + " ref=" + referenceId);
@@ -475,7 +467,7 @@ public class FcmNotificationHelper {
     // ── Private Helpers ───────────────────────────────────────────────────
 
     /**
-     * Fetch FCM tokens for all users where is_admin = true.
+     * Fetch FCM tokens for all admin users.
      * Returns an empty list if no admins or network error.
      */
     private static List<String> fetchAdminFcmTokens() throws IOException {
@@ -483,7 +475,7 @@ public class FcmNotificationHelper {
 
         String url = SUPABASE_URL
                 + "/rest/v1/users"
-                + "?is_admin=eq.true"
+                + "?role=eq.admin"
                 + "&fcm_token=not.is.null"
                 + "&select=fcm_token";
 

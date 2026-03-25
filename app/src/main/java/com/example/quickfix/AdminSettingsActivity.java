@@ -29,6 +29,8 @@ public class AdminSettingsActivity extends BaseActivity {
     private FirebaseAuth mAuth;
     private boolean isApplyingUiState;
 
+    private static final String UPDATE_ERROR_MSG = "Failed to update setting. Please try again.";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -86,7 +88,7 @@ public class AdminSettingsActivity extends BaseActivity {
                 if (isFinishing() || isDestroyed()) return;
                 applySnapshotToUi(AppSettings.getSnapshot(AdminSettingsActivity.this));
                 setSwitchesEnabled(true);
-                toast(message != null ? message : "Failed to load settings");
+                toast("Failed to load admin settings. Please try again.");
             }
         });
     }
@@ -217,7 +219,9 @@ public class AdminSettingsActivity extends BaseActivity {
     }
 
     private void updateBooleanSetting(String column, boolean value, SwitchMaterial sourceSwitch) {
-        boolean previous = !value;
+        boolean previous = sourceSwitch != null && sourceSwitch.isChecked() != value
+                ? sourceSwitch.isChecked()
+                : !value;
         setSwitchesEnabled(false);
         AdminSettingsRepository.updateBooleanField(this, column, value,
                 new AdminSettingsRepository.UpdateCallback() {
@@ -233,7 +237,7 @@ public class AdminSettingsActivity extends BaseActivity {
                         if (isFinishing() || isDestroyed()) return;
                         rollbackSwitch(sourceSwitch, previous);
                         setSwitchesEnabled(true);
-                        toast("Could not update setting");
+                        toast(UPDATE_ERROR_MSG);
                     }
                 });
     }
@@ -297,7 +301,7 @@ public class AdminSettingsActivity extends BaseActivity {
                         rollbackSwitch(switchMaintenance, expectedRollback);
                         updateMaintenanceSettingsVisibility(expectedRollback);
                         setSwitchesEnabled(true);
-                        toast("Could not update setting");
+                        toast(UPDATE_ERROR_MSG);
                     }
                 });
     }

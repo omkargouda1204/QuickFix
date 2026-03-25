@@ -176,7 +176,6 @@ public class SignupActivity extends BaseActivity {
                                 new SupabaseClient.Callback2() {
                                     @Override
                                     public void onSuccess() {
-                                        FcmNotificationHelper.notifyAdminUserRegistration(name, user.getUid());
                                         updateOverlay("Sending verification email...");
                                         sendVerificationEmail(user, email);
                                     }
@@ -196,7 +195,6 @@ public class SignupActivity extends BaseActivity {
                             user.getUid(), name, email, phone,
                             new SupabaseClient.Callback2() {
                                 @Override public void onSuccess() {
-                                    FcmNotificationHelper.notifyAdminUserRegistration(name, user.getUid());
                                     updateOverlay("Sending verification email...");
                                     sendVerificationEmail(user, email);
                                 }

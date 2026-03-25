@@ -4,6 +4,7 @@ import android.Manifest;
 import android.animation.ObjectAnimator;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -65,6 +66,7 @@ public class MainActivity extends BaseActivity {
     private static final String CRASH_TAG                = "CRASH_ERROR";
     private static final int    LOCATION_PERMISSION_REQ  = 1001;
     private static final int    NOTIFICATION_PERMISSION_REQ = 1002;
+    private static final long   HOME_AUTO_REFRESH_MS = 60_000L;
 
     // ── Location ──────────────────────────────────────────────────────────
     private LinearLayout        locationSelector;
@@ -147,6 +149,7 @@ public class MainActivity extends BaseActivity {
             .readTimeout(12, TimeUnit.SECONDS)
             .build();
     private final Handler MAIN = new Handler(Looper.getMainLooper());
+    private Runnable homeAutoRefreshRunnable;
 
     // ═════════════════════════════════════════════════════════════════════
     @Override
@@ -205,11 +208,13 @@ public class MainActivity extends BaseActivity {
             Log.e(TAG, "Home content refresh failed", e);
         }
         startBannerAutoSlide();
+        startHomeAutoRefresh();
     }
 
     @Override
     protected void onPause() {
         stopBannerAutoSlide();
+        stopHomeAutoRefresh();
         super.onPause();
     }
 
@@ -880,33 +885,28 @@ public class MainActivity extends BaseActivity {
 
         new Thread(() -> {
             try {
-                String[] urls = new String[] {
-                        BuildConfig.SUPABASE_URL + "/rest/v1/banners?select=*&is_active=eq.true&or=(expiry_date.is.null,expiry_date.gte.now())&order=priority.asc,created_at.desc",
-                        BuildConfig.SUPABASE_URL + "/rest/v1/banners?select=*&is_active=eq.true&or=(expiry_date.is.null,expiry_date.gte." + today + ")&order=priority.asc,created_at.desc"
-                };
+                String url = BuildConfig.SUPABASE_URL
+                        + "/rest/v1/banners?select=*"
+                        + "&is_active=eq.true"
+                        + "&or=(expiry_date.is.null,expiry_date.gte." + today + ")"
+                        + "&order=priority.asc,created_at.desc";
 
-                String body = "[]";
-                int code = 0;
-                boolean ok = false;
-                for (String url : urls) {
-                    Request req = new Request.Builder()
-                            .url(url)
-                            .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                            .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                            .addHeader("Accept", "application/json")
-                            .build();
-                    try (Response resp = HTTP.newCall(req).execute()) {
-                        code = resp.code();
-                        body = resp.body() != null ? resp.body().string() : "[]";
-                        if (resp.isSuccessful()) {
-                            ok = true;
-                            break;
-                        }
-                    }
+                String body;
+                int code;
+                Request req = new Request.Builder()
+                        .url(url)
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
+                try (Response resp = HTTP.newCall(req).execute()) {
+                    code = resp.code();
+                    body = resp.body() != null ? resp.body().string() : "[]";
+                    Log.d(TAG, "banners_fetch http=" + code + " url=" + url);
                 }
 
-                Log.e("RESPONSE", body);
-                if (ok) {
+                if (code == 200) {
                     org.json.JSONArray arr = new org.json.JSONArray(body);
                     List<Banner> list = new ArrayList<>();
                     Set<String> seen = new HashSet<>();
@@ -917,25 +917,25 @@ public class MainActivity extends BaseActivity {
                         b.title = o.optString("title");
                         String rawImageUrl = o.optString("image_url", "");
                         b.imageUrl = resolveBannerImageUrl(rawImageUrl);
-                        b.redirectType = o.optString("redirect_type");
-                        b.redirectId = o.optString("redirect_id");
-                        b.expiryDate = o.optString("expiry_date");
+                        b.redirectType = o.optString("redirect_type", "");
+                        b.redirectId = o.optString("redirect_id", "");
+                        b.startDate = o.optString("start_date", "");
+                        b.expiryDate = o.optString("expiry_date", "");
                         b.priority = o.optInt("priority", 1);
-                        b.isActive = o.has("is_active")
-                                ? o.optBoolean("is_active", true)
-                                : o.optBoolean("active", true);
+                        b.isActive = o.optBoolean("is_active", false);
                         b.status = b.isActive ? "active" : "inactive";
 
+                        boolean started = b.startDate.isEmpty() || b.startDate.compareTo(today) <= 0;
                         boolean notExpired = b.expiryDate.isEmpty() || b.expiryDate.compareTo(today) >= 0;
                         String dedupeKey = !b.id.isEmpty() ? b.id : (rawImageUrl + "|" + b.title);
-                        if (b.isActive && notExpired && seen.add(dedupeKey)) {
+                        if (b.isActive && started && notExpired && seen.add(dedupeKey)) {
                             list.add(b);
                         }
                     }
+                    Log.d(TAG, "banners_fetch_success total=" + arr.length() + " visible=" + list.size());
                     MAIN.post(() -> showBannersOnHome(list));
                 } else {
-                    Log.e(CRASH_TAG, "loadBanners failed HTTP " + code);
-                    Log.e("ERROR", body);
+                    Log.e(CRASH_TAG, "loadBanners failed HTTP " + code + " body=" + body);
                     MAIN.post(() -> showBannerErrorState(getString(R.string.home_banner_error_message)));
                 }
             } catch (Exception e) {
@@ -953,33 +953,28 @@ public class MainActivity extends BaseActivity {
 
         new Thread(() -> {
             try {
-                String[] urls = new String[] {
-                        BuildConfig.SUPABASE_URL + "/rest/v1/offers?select=*&is_active=eq.true&or=(expiry_date.is.null,expiry_date.gte.now())&order=created_at.desc",
-                        BuildConfig.SUPABASE_URL + "/rest/v1/offers?select=*&is_active=eq.true&or=(expiry_date.is.null,expiry_date.gte." + today + ")&order=created_at.desc"
-                };
+                String url = BuildConfig.SUPABASE_URL
+                        + "/rest/v1/offers?select=*"
+                        + "&is_active=eq.true"
+                        + "&or=(expiry_date.is.null,expiry_date.gte." + today + ")"
+                        + "&order=created_at.desc";
 
-                String body = "[]";
-                int code = 0;
-                boolean ok = false;
-                for (String url : urls) {
-                    Request req = new Request.Builder()
-                            .url(url)
-                            .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                            .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                            .addHeader("Accept", "application/json")
-                            .build();
-                    try (Response resp = HTTP.newCall(req).execute()) {
-                        code = resp.code();
-                        body = resp.body() != null ? resp.body().string() : "[]";
-                        if (resp.isSuccessful()) {
-                            ok = true;
-                            break;
-                        }
-                    }
+                String body;
+                int code;
+                Request req = new Request.Builder()
+                        .url(url)
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
+                try (Response resp = HTTP.newCall(req).execute()) {
+                    code = resp.code();
+                    body = resp.body() != null ? resp.body().string() : "[]";
+                    Log.d(TAG, "offers_fetch http=" + code + " url=" + url);
                 }
 
-                Log.e("RESPONSE", body);
-                if (ok) {
+                if (code == 200) {
                     org.json.JSONArray arr = new org.json.JSONArray(body);
                     List<Offer> list = new ArrayList<>();
                     Set<String> seenCodes = new HashSet<>();
@@ -990,26 +985,26 @@ public class MainActivity extends BaseActivity {
                         offer.title = o.optString("title");
                         offer.description = o.optString("description", "");
                         offer.offerCode = o.optString("offer_code", "");
-                        offer.imageUrl = o.optString("image_url", "");
+                        offer.imageUrl = resolveOfferImageUrl(o.optString("image_url", ""));
                         offer.discountType = o.optString("discount_type", "percentage");
                         offer.discountValue = o.optDouble("discount_value", 0);
                         offer.minBookingAmount = o.optDouble("min_booking_amount", 0);
                         offer.expiryDate = o.optString("expiry_date", "");
-                        offer.isActive = o.optBoolean("is_active", true);
+                        offer.isActive = o.optBoolean("is_active", false);
                         offer.status = offer.isActive ? "active" : "inactive";
 
                         boolean notExpired = offer.expiryDate.isEmpty() || offer.expiryDate.compareTo(today) >= 0;
-                        String dedupeKey = offer.offerCode != null && !offer.offerCode.trim().isEmpty()
+                        String dedupeKey = !offer.offerCode.trim().isEmpty()
                                 ? offer.offerCode.trim().toUpperCase(Locale.US)
                                 : offer.id;
                         if (offer.isActive && notExpired && seenCodes.add(dedupeKey)) {
                             list.add(offer);
                         }
                     }
+                    Log.d(TAG, "offers_fetch_success total=" + arr.length() + " visible=" + list.size());
                     MAIN.post(() -> showOffersOnHome(list));
                 } else {
-                    Log.e(CRASH_TAG, "loadOffers failed HTTP " + code);
-                    Log.e("ERROR", body);
+                    Log.e(CRASH_TAG, "loadOffers failed HTTP " + code + " body=" + body);
                     MAIN.post(() -> showOffersErrorState(getString(R.string.home_offers_error_message)));
                 }
             } catch (Exception e) {
@@ -1058,10 +1053,18 @@ public class MainActivity extends BaseActivity {
 
         if (homeBannerAdapter == null) {
             homeBannerAdapter = new HomeBannerAdapter(this, homeBanners, banner -> {
-                if ("category".equals(banner.redirectType) && banner.redirectId != null) {
-                    openProvidersList(banner.redirectId);
-                } else if ("service".equals(banner.redirectType) && banner.redirectId != null) {
-                    openProvidersList(banner.redirectId);
+                String type = banner.redirectType == null ? "" : banner.redirectType.trim().toLowerCase(Locale.US);
+                String redirect = banner.redirectId == null ? "" : banner.redirectId.trim();
+                if (redirect.isEmpty()) return;
+
+                if ("service".equals(type) || "category".equals(type)) {
+                    openProvidersList(redirect);
+                } else if ("external".equals(type) || redirect.startsWith("http://") || redirect.startsWith("https://")) {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(redirect)));
+                    } catch (Exception ignored) {
+                        Toast.makeText(this, "Unable to open banner link", Toast.LENGTH_SHORT).show();
+                    }
                 }
             });
         }
@@ -1253,6 +1256,33 @@ public class MainActivity extends BaseActivity {
         if (value.isEmpty()) return "";
         if (value.startsWith("http://") || value.startsWith("https://")) return value;
         return SupabaseStorageHelper.getPublicObjectUrl("banner-images", value);
+    }
+
+    private String resolveOfferImageUrl(String rawImageValue) {
+        if (rawImageValue == null) return "";
+        String value = rawImageValue.trim();
+        if (value.isEmpty()) return "";
+        if (value.startsWith("http://") || value.startsWith("https://")) return value;
+        return SupabaseStorageHelper.getPublicObjectUrl("banner-images", value);
+    }
+
+    private void startHomeAutoRefresh() {
+        stopHomeAutoRefresh();
+        homeAutoRefreshRunnable = new Runnable() {
+            @Override
+            public void run() {
+                refreshHomeContent(false);
+                MAIN.postDelayed(this, HOME_AUTO_REFRESH_MS);
+            }
+        };
+        MAIN.postDelayed(homeAutoRefreshRunnable, HOME_AUTO_REFRESH_MS);
+    }
+
+    private void stopHomeAutoRefresh() {
+        if (homeAutoRefreshRunnable != null) {
+            MAIN.removeCallbacks(homeAutoRefreshRunnable);
+            homeAutoRefreshRunnable = null;
+        }
     }
 
 

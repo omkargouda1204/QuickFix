@@ -107,10 +107,14 @@ public class NotificationsActivity extends BaseActivity
         showLoading(true);
         new Thread(() -> {
             try {
-                // Try querying by user_id (firebase_uid stored as user_id)
-                List<Notification> list = fetchNotifications("user_id", userId);
+                // Primary path: unified notifications table scoped by receiver_id.
+                List<Notification> list = fetchNotifications("receiver_id", userId);
 
-                // If empty, also check for firebase_uid column (schema variants)
+                // Backward compatibility for older rows.
+                if (list.isEmpty()) {
+                    List<Notification> legacy = fetchNotifications("user_id", userId);
+                    if (!legacy.isEmpty()) list = legacy;
+                }
                 if (list.isEmpty()) {
                     List<Notification> byFirebaseUid = fetchNotifications("firebase_uid", userId);
                     if (!byFirebaseUid.isEmpty()) list = byFirebaseUid;
@@ -129,7 +133,6 @@ public class NotificationsActivity extends BaseActivity
                 Log.e(TAG, "loadNotifications: " + e.getMessage());
                 MAIN.post(() -> {
                     showLoading(false);
-                    // Show empty state gracefully instead of error toast
                     emptyState.setVisibility(View.VISIBLE);
                     recyclerView.setVisibility(View.GONE);
                     if (tvUnreadCount != null) tvUnreadCount.setText("No notifications");
@@ -241,7 +244,7 @@ public class NotificationsActivity extends BaseActivity
             try {
                 JSONObject body = new JSONObject();
                 body.put("is_read", true);
-                String url = BASE_URL + "/rest/v1/notifications?user_id=eq." + userId + "&is_read=eq.false";
+                String url = BASE_URL + "/rest/v1/notifications?receiver_id=eq." + userId + "&is_read=eq.false";
                 Request req = new Request.Builder().url(url)
                         .patch(RequestBody.create(body.toString(), MediaType.get("application/json")))
                         .addHeader("apikey",        ANON_KEY)
