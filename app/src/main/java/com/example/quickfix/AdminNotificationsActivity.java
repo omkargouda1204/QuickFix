@@ -48,6 +48,8 @@ public class AdminNotificationsActivity extends BaseActivity {
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY     = BuildConfig.SUPABASE_ANON_KEY;
 
+    private static final String TABLE_NOTIFICATIONS = "notifications";
+
     private final OkHttpClient http = new OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
@@ -77,6 +79,7 @@ public class AdminNotificationsActivity extends BaseActivity {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) { finish(); return; }
         adminFirebaseUid = user.getUid();
+        Log.d(TAG, "ADMIN USER: " + adminFirebaseUid);
 
         bindViews();
         setupRecyclerView();
@@ -126,11 +129,11 @@ public class AdminNotificationsActivity extends BaseActivity {
         chipGroupFilter.setOnCheckedStateChangeListener((group, ids) -> {
             if (ids.isEmpty()) return;
             int id = ids.get(0);
-            if      (id == R.id.chipAll)      currentFilter = "all";
-            else if (id == R.id.chipUnread)   currentFilter = "unread";
-            else if (id == R.id.chipProvider) currentFilter = "provider_application";
-            else if (id == R.id.chipUsers)    currentFilter = "user_registration";
-            else if (id == R.id.chipOffers)   currentFilter = "offer";
+            if (id == R.id.chipAll) currentFilter = "all";
+            else if (id == R.id.chipUnread) currentFilter = "unread";
+            else if (id == R.id.chipUsers) currentFilter = "users";
+            else if (id == R.id.chipProvider) currentFilter = "providers";
+            else if (id == R.id.chipOffers) currentFilter = "offer";
             applyFilter();
         });
     }
@@ -139,41 +142,40 @@ public class AdminNotificationsActivity extends BaseActivity {
     private void loadNotifications() {
         setLoading(true);
 
-        String filter = "or=(receiver_role.eq.admin,receiver_id.eq." + adminFirebaseUid + ")";
-        String url = SUPABASE_URL + "/rest/v1/notifications"
-                + "?" + filter
-                + "&select=id,title,body,type,reference_id,is_read,created_at,receiver_role,receiver_id"
+        String url = SUPABASE_URL + "/rest/v1/" + TABLE_NOTIFICATIONS
+                + "?select=id,title,body,message,type,is_read,created_at,receiver_role,receiver_id"
                 + "&order=created_at.desc"
-                + "&limit=200";
+                + "&limit=300";
 
-        Log.d(TAG, "loadNotifications -> " + url);
+        Log.d(TAG, "loadNotifications url=" + url);
 
         new Thread(() -> {
             try {
                 Request req = new Request.Builder()
                         .url(url)
-                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept",        "application/json")
+                        .addHeader("Accept", "application/json")
                         .build();
+
                 try (Response resp = http.newCall(req).execute()) {
-                    int    code = resp.code();
+                    int code = resp.code();
                     String body = resp.body() != null ? resp.body().string() : "[]";
-                    Log.d(TAG, "loadNotifications HTTP " + code + " len=" + body.length());
+                    Log.d(TAG, "loadNotifications HTTP=" + code + " bodyLen=" + body.length());
                     main.post(() -> {
                         setLoading(false);
                         if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
                         if (code == 200) {
-                            parseNotifications(body);
+                            parseNotifications(body, TABLE_NOTIFICATIONS);
                         } else {
-                            Log.e(TAG, "loadNotifications FAILED " + code + ": " + body);
+                            Log.e(TAG, "ERROR LOADING NOTIFICATIONS: HTTP " + code + " " + body);
                             Toast.makeText(this, "Failed to load notifications", Toast.LENGTH_SHORT).show();
                             showEmptyState();
                         }
                     });
                 }
             } catch (Exception e) {
-                Log.e(TAG, "loadNotifications exception", e);
+                Log.e(TAG, "ERROR LOADING NOTIFICATIONS", e);
                 main.post(() -> {
                     setLoading(false);
                     if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
@@ -184,20 +186,23 @@ public class AdminNotificationsActivity extends BaseActivity {
         }).start();
     }
 
-    private void parseNotifications(String json) {
+    private void parseNotifications(String json, String sourceTable) {
         allItems.clear();
         try {
             JSONArray arr = new JSONArray(json);
-            Log.d(TAG, "parseNotifications: " + arr.length() + " rows");
+            Log.d(TAG, "parseNotifications(" + sourceTable + "): " + arr.length() + " rows");
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
                 NotifItem item  = new NotifItem();
                 item.id         = o.optString("id");
                 item.title      = o.optString("title", "Notification");
-                item.message    = o.optString("body", o.optString("message", ""));
+                item.message    = o.optString("message", o.optString("body", ""));
                 item.type       = o.optString("type", "general");
                 item.isRead     = o.optBoolean("is_read", false);
                 item.createdAt  = o.optString("created_at", "");
+                item.sourceTable = sourceTable;
+                item.receiverRole = o.optString("receiver_role", "");
+                item.receiverId = o.optString("receiver_id", "");
                 allItems.add(item);
             }
         } catch (Exception e) {
@@ -213,7 +218,14 @@ public class AdminNotificationsActivity extends BaseActivity {
                 filtered.add(item);
             } else if ("unread".equals(currentFilter) && !item.isRead) {
                 filtered.add(item);
-            } else if (currentFilter.equals(item.type)) {
+            } else if ("users".equals(currentFilter)
+                    && "user".equalsIgnoreCase(item.receiverRole)) {
+                filtered.add(item);
+            } else if ("providers".equals(currentFilter)
+                    && "provider".equalsIgnoreCase(item.receiverRole)) {
+                filtered.add(item);
+            } else if ("offer".equals(currentFilter)
+                    && "offer".equalsIgnoreCase(item.type)) {
                 filtered.add(item);
             }
         }
@@ -221,9 +233,11 @@ public class AdminNotificationsActivity extends BaseActivity {
         int unreadCount = 0;
         for (NotifItem n : allItems) if (!n.isRead) unreadCount++;
 
-        if (tvNotifCount != null)
+        if (tvNotifCount != null) {
             tvNotifCount.setText(unreadCount + " unread · " + allItems.size() + " total");
+        }
 
+        Log.d(TAG, "NOTIFICATIONS COUNT: " + allItems.size() + " filtered=" + filtered.size());
         adapter.notifyDataSetChanged();
 
         if (filtered.isEmpty()) showEmptyState();
@@ -233,13 +247,14 @@ public class AdminNotificationsActivity extends BaseActivity {
     // ── MARK READ ─────────────────────────────────────────────────────────
     private void markItemRead(NotifItem item) {
         if (item == null || item.isRead || item.id == null || item.id.isEmpty()) return;
+        final String table = TABLE_NOTIFICATIONS;
 
         new Thread(() -> {
             try {
                 JSONObject body = new JSONObject();
                 body.put("is_read", true);
                 Request req = new Request.Builder()
-                        .url(SUPABASE_URL + "/rest/v1/notifications?id=eq." + item.id)
+                        .url(SUPABASE_URL + "/rest/v1/" + table + "?id=eq." + item.id)
                         .patch(RequestBody.create(body.toString(),
                                 okhttp3.MediaType.get("application/json")))
                         .addHeader("apikey",        ANON_KEY)
@@ -257,7 +272,7 @@ public class AdminNotificationsActivity extends BaseActivity {
                             applyFilter();
                         });
                     } else {
-                        Log.e(TAG, "markItemRead failed HTTP " + r.code() + ": " + rb);
+                        Log.e(TAG, "markItemRead failed [" + table + "] HTTP " + r.code() + ": " + rb);
                     }
                 }
             } catch (Exception e) {
@@ -271,7 +286,11 @@ public class AdminNotificationsActivity extends BaseActivity {
             try {
                 JSONObject body = new JSONObject();
                 body.put("is_read", true);
-                String url = SUPABASE_URL + "/rest/v1/notifications?or=(receiver_role.eq.admin,receiver_id.eq." + adminFirebaseUid + ")&is_read=eq.false";
+
+                final String targetTable = TABLE_NOTIFICATIONS;
+
+                String url = SUPABASE_URL + "/rest/v1/" + targetTable + "?is_read=eq.false";
+
                 Request req = new Request.Builder()
                         .url(url)
                         .patch(RequestBody.create(body.toString(),
@@ -291,7 +310,7 @@ public class AdminNotificationsActivity extends BaseActivity {
                             applyFilter();
                             Toast.makeText(this, "All marked as read", Toast.LENGTH_SHORT).show();
                         } else {
-                            Log.e(TAG, "markAllRead failed HTTP " + r.code() + ": " + rb);
+                            Log.e(TAG, "markAllRead failed [" + targetTable + "] HTTP " + r.code() + ": " + rb);
                             Toast.makeText(this, "Could not update setting", Toast.LENGTH_SHORT).show();
                         }
                     });
@@ -320,8 +339,9 @@ public class AdminNotificationsActivity extends BaseActivity {
 
     // ── Data model ────────────────────────────────────────────────────────
     public static class NotifItem {
-        public String  id, title, message, type, createdAt;
+        public String id, title, message, type, createdAt, receiverRole, receiverId;
         public boolean isRead;
+        public String sourceTable;
     }
 
     // ── Adapter ───────────────────────────────────────────────────────────

@@ -7,6 +7,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -40,14 +43,13 @@ import okhttp3.Response;
  *
  * The Edge Function source is in: supabase/functions/send-notification/index.ts
  */
-public class FcmNotificationHelper {
+public final class FcmNotificationHelper {
 
     private static final String TAG = "FcmNotificationHelper";
 
-    // Credentials injected from supabase.properties — never hardcoded
-    private static final String SUPABASE_URL   = BuildConfig.SUPABASE_URL;
-    private static final String ANON_KEY        = BuildConfig.SUPABASE_ANON_KEY;
-    private static final String NOTIFY_FN_URL   = BuildConfig.SUPABASE_NOTIFY_FN_URL;
+    private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
+    private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
+    private static final String NOTIFY_FN_URL = BuildConfig.SUPABASE_NOTIFY_FN_URL;
 
     private static final MediaType JSON_TYPE =
             MediaType.get("application/json; charset=utf-8");
@@ -57,6 +59,9 @@ public class FcmNotificationHelper {
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
             .build();
+
+    private FcmNotificationHelper() {
+    }
 
     // ── Public API ────────────────────────────────────────────────────────
 
@@ -90,40 +95,15 @@ public class FcmNotificationHelper {
      */
     public static void notifyProviderApproved(String providerFirebaseUid,
                                                String businessName) {
-        if (providerFirebaseUid == null || providerFirebaseUid.isEmpty()) return;
-
-        new Thread(() -> {
-            try {
-                Context appCtx = QuickFixApp.getInstance();
-                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
-                    Log.d(TAG, "notifyProviderApproved suppressed by push_notifications=false");
-                    return;
-                }
-
-                String token = fetchUserFcmToken(providerFirebaseUid);
-                if (token == null || token.isEmpty()) {
-                    Log.d(TAG, "notifyProviderApproved: no token for uid=" + providerFirebaseUid);
-                    return;
-                }
-
-                String title = "🎉 Application Approved!";
-                String body  = "Congratulations! Your provider application"
-                        + (businessName != null && !businessName.isEmpty()
-                        ? " for " + businessName : "")
-                        + " has been approved. You can now start receiving bookings.";
-
-                sendViaEdgeFunction(token, title, body,
-                        "provider_approved", providerFirebaseUid);
-
-                // Save in-app notification for the provider
-                saveInAppNotification(providerFirebaseUid, title, body, "provider_approved");
-
-                Log.d(TAG, "notifyProviderApproved: sent to uid=" + providerFirebaseUid);
-
-            } catch (Exception e) {
-                Log.w(TAG, "notifyProviderApproved failed (non-fatal): " + e.getMessage());
-            }
-        }).start();
+        notifyProviderEvent(
+                providerFirebaseUid,
+                "Application Approved",
+                "Your provider application"
+                        + (trimToEmpty(businessName).isEmpty() ? "" : " for " + businessName)
+                        + " has been approved.",
+                "provider_status",
+                null
+        );
     }
 
     /**
@@ -135,40 +115,16 @@ public class FcmNotificationHelper {
      */
     public static void notifyProviderRejected(String providerFirebaseUid,
                                                String rejectionReason) {
-        if (providerFirebaseUid == null || providerFirebaseUid.isEmpty()) return;
-
-        new Thread(() -> {
-            try {
-                Context appCtx = QuickFixApp.getInstance();
-                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
-                    Log.d(TAG, "notifyProviderRejected suppressed by push_notifications=false");
-                    return;
-                }
-
-                String token = fetchUserFcmToken(providerFirebaseUid);
-                if (token == null || token.isEmpty()) {
-                    Log.d(TAG, "notifyProviderRejected: no token for uid=" + providerFirebaseUid);
-                    return;
-                }
-
-                String title = "Application Status Update";
-                String body  = "Your provider application was not approved at this time."
-                        + (rejectionReason != null && !rejectionReason.isEmpty()
-                        ? " Reason: " + rejectionReason : "")
-                        + " You may reapply after 24 hours.";
-
-                sendViaEdgeFunction(token, title, body,
-                        "provider_rejected", providerFirebaseUid);
-
-                // Save in-app notification for the provider
-                saveInAppNotification(providerFirebaseUid, title, body, "provider_rejected");
-
-                Log.d(TAG, "notifyProviderRejected: sent to uid=" + providerFirebaseUid);
-
-            } catch (Exception e) {
-                Log.w(TAG, "notifyProviderRejected failed (non-fatal): " + e.getMessage());
-            }
-        }).start();
+        String reason = trimToEmpty(rejectionReason);
+        notifyProviderEvent(
+                providerFirebaseUid,
+                "Application Rejected",
+                reason.isEmpty()
+                        ? "Your provider application was rejected."
+                        : "Your provider application was rejected. Reason: " + reason,
+                "provider_status",
+                null
+        );
     }
 
     /**
@@ -180,48 +136,19 @@ public class FcmNotificationHelper {
      * @param serviceName         The service/category that was booked.
      */
     public static void notifyProviderNewBooking(String providerFirebaseUid,
-                                                 String customerName,
-                                                 String serviceName) {
-        if (providerFirebaseUid == null || providerFirebaseUid.isEmpty()) return;
+                                                String customerName,
+                                                String serviceName) {
+        String body = (trimToEmpty(customerName).isEmpty() ? "A customer" : customerName)
+                + " requested"
+                + (trimToEmpty(serviceName).isEmpty() ? " a service." : " " + serviceName + ".");
 
-        new Thread(() -> {
-            try {
-                Context appCtx = QuickFixApp.getInstance();
-                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
-                    Log.d(TAG, "notifyProviderNewBooking suppressed by push_notifications=false");
-                    return;
-                }
-
-                String token = fetchUserFcmToken(providerFirebaseUid);
-                if (token == null || token.isEmpty()) {
-                    Log.d(TAG, "notifyProviderNewBooking: no token for uid=" + providerFirebaseUid);
-                    // Still save in-app notification even if push fails
-                }
-
-                String title = "📋 New Booking Request!";
-                String body  = (customerName != null && !customerName.isEmpty()
-                        ? customerName : "A customer")
-                        + " has requested a booking"
-                        + (serviceName != null && !serviceName.isEmpty()
-                        ? " for " + serviceName : "")
-                        + ". Tap to review and accept.";
-
-                // Send push notification if token available
-                if (token != null && !token.isEmpty()) {
-                    sendViaEdgeFunction(token, title, body,
-                            "booking_request", providerFirebaseUid);
-                }
-
-                // Save in-app notification for the provider
-                saveInAppNotification(providerFirebaseUid, title, body, "booking_request");
-                saveAdminNotification("New Booking", body, "booking", providerFirebaseUid);
-
-                Log.d(TAG, "notifyProviderNewBooking: sent to uid=" + providerFirebaseUid);
-
-            } catch (Exception e) {
-                Log.w(TAG, "notifyProviderNewBooking failed (non-fatal): " + e.getMessage());
-            }
-        }).start();
+        notifyProviderEvent(
+                providerFirebaseUid,
+                "New Booking",
+                body,
+                "booking",
+                null
+        );
     }
 
     // ── Public single-token send (used by OfferManagement) ───────────────
@@ -231,101 +158,94 @@ public class FcmNotificationHelper {
      * Called from OfferManagementActivity for each user token found.
      */
     public static void sendOfferFcm(String deviceToken, String title, String body) {
-        new Thread(() -> sendViaEdgeFunction(deviceToken, title, body, "offer", null)).start();
+        if (trimToEmpty(deviceToken).isEmpty()) return;
+        sendViaEdgeFunction(
+                listOf(deviceToken),
+                new ArrayList<>(),
+                listOf("user"),
+                trimToEmpty(title),
+                trimToEmpty(body),
+                "offer",
+                null
+        );
     }
 
     /**
      * System alert for admin panel timeline (e.g., maintenance mode changes).
      */
     public static void notifyAdminSystemAlert(String title, String message) {
-        new Thread(() -> {
-            try {
-                saveAdminNotification(title, message, "system_alert", null);
-            } catch (Exception e) {
-                Log.w(TAG, "notifyAdminSystemAlert failed: " + e.getMessage());
-            }
-        }).start();
+        notifyAdminsEvent(
+                trimToEmpty(title).isEmpty() ? "System Alert" : title.trim(),
+                trimToEmpty(message),
+                "system_alert",
+                null
+        );
     }
-
-    // ── In-App Notification Storage ───────────────────────────────────────
 
     /**
-     * Stores a notification record in the `notifications` table so it appears
-     * in the user's in-app notification list. userId = null = broadcast to all admins.
+     * Notify admin users of a new user registration.
+     * Called after a new user signs up (and their account is active).
+     *
+     * @param userName The name of the new user (for notification text).
+     * @param userId   The ID of the new user (for linking in admin panel).
      */
-    private static void saveInAppNotification(String userId, String title,
-                                               String message, String type) {
+    public static void notifyAdminUserRegistration(String userName, String userId) {
+        String safeName = trimToEmpty(userName);
+        String body = safeName.isEmpty()
+                ? "A new user created an account"
+                : safeName + " created an account";
+        notifyAdminsEvent("New User Registered", body, "user_registration", userId);
+    }
+
+    /**
+     * Notify admin users of a newly created offer.
+     * Called after an offer is successfully created.
+     *
+     * @param offerTitle The title of the offer (for notification text).
+     * @param offerId    The ID of the offer (for linking in admin panel).
+     */
+    public static void notifyAdminOfferCreated(String offerTitle, String offerId) {
+        String body = trimToEmpty(offerTitle).isEmpty()
+                ? "A new offer is available"
+                : "Offer created: " + offerTitle;
+        notifyAdminsEvent("New Offer Created", body, "offer", offerId);
+    }
+
+    // ── Private Helpers ───────────────────────────────────────────────────
+
+    private static void notifyProviderEvent(String providerFirebaseUid,
+                                            String title,
+                                            String body,
+                                            String type,
+                                            String referenceId) {
+        if (trimToEmpty(providerFirebaseUid).isEmpty()) return;
+
         new Thread(() -> {
             try {
-                JSONObject notif = new JSONObject();
-                notif.put("id",      java.util.UUID.randomUUID().toString());
-                notif.put("title",   title);
-                notif.put("message", message);
-                notif.put("type",    type != null ? type : "general");
-                notif.put("is_read", false);
-                // user_id = null means broadcast (visible to admin / all users)
-                if (userId != null && !userId.isEmpty()) {
-                    notif.put("user_id", userId);
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    return;
                 }
-                // created_at handled by DB default
 
-                try (Response resp = HTTP.newCall(new Request.Builder()
-                        .url(SUPABASE_URL + "/rest/v1/notifications")
-                        .post(RequestBody.create(notif.toString(), JSON_TYPE))
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "return=minimal")
-                        .build()).execute()) {
-                    Log.d(TAG, "saveInAppNotification HTTP " + resp.code()
-                            + " type=" + type + " userId=" + userId);
+                UserRecipient recipient = fetchUserRecipient(providerFirebaseUid);
+                if (recipient == null || trimToEmpty(recipient.token).isEmpty()) {
+                    Log.d(TAG, "notifyProviderEvent skipped: token not found for " + providerFirebaseUid);
+                    return;
                 }
+
+                sendViaEdgeFunction(
+                        listOf(recipient.token),
+                        listOf(recipient.userId),
+                        listOf("provider"),
+                        title,
+                        body,
+                        type,
+                        referenceId
+                );
             } catch (Exception e) {
-                Log.w(TAG, "saveInAppNotification failed (non-fatal): " + e.getMessage());
+                Log.w(TAG, "notifyProviderEvent failed: " + e.getMessage());
             }
         }).start();
-    }
-
-    private static void saveAdminNotification(String title, String message, String type) {
-        saveAdminNotification(title, message, type, null);
-    }
-
-    private static void saveAdminNotification(String title,
-                                              String message,
-                                              String type,
-                                              String referenceId) {
-        try {
-            JSONObject notif = new JSONObject();
-            notif.put("title", title != null ? title : "Notification");
-            notif.put("message", message != null ? message : "");
-            notif.put("type", type != null ? type : "general");
-            notif.put("is_read", false);
-            if (referenceId != null && !referenceId.trim().isEmpty()) {
-                notif.put("reference_id", referenceId.trim());
-            }
-
-            try (Response resp = HTTP.newCall(new Request.Builder()
-                    .url(SUPABASE_URL + "/rest/v1/admin_notifications")
-                    .post(RequestBody.create(notif.toString(), JSON_TYPE))
-                    .addHeader("apikey", ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Prefer", "return=minimal")
-                    .build()).execute()) {
-                String rb = resp.body() != null ? resp.body().string() : "";
-                if (!resp.isSuccessful()) {
-                    if (resp.code() == 404 || rb.contains("admin_notifications")) {
-                        Log.w(TAG, "admin_notifications table not available, skipping persistence");
-                        return;
-                    }
-                    Log.w(TAG, "saveAdminNotification failed HTTP " + resp.code() + ": " + rb);
-                } else {
-                    Log.d(TAG, "saveAdminNotification ok type=" + type + " ref=" + referenceId);
-                }
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "saveAdminNotification exception: " + e.getMessage());
-        }
     }
 
     private static void notifyAdminsEvent(String title,
@@ -335,210 +255,211 @@ public class FcmNotificationHelper {
         new Thread(() -> {
             try {
                 Context appCtx = QuickFixApp.getInstance();
-                boolean pushAllowed = appCtx == null
-                        || (AppSettings.isPushEnabled(appCtx) && AppSettings.isAdminAlertsEnabled(appCtx));
-
-                if (pushAllowed) {
-                    List<String> adminTokens = fetchAdminFcmTokens();
-                    Set<String> uniqueTokens = new LinkedHashSet<>();
-                    for (String token : adminTokens) {
-                        String t = trimToEmpty(token);
-                        if (!t.isEmpty()) uniqueTokens.add(t);
-                    }
-
-                    for (String token : uniqueTokens) {
-                        sendViaEdgeFunction(token, title, body, type, referenceId);
-                    }
-
-                    Log.d(TAG, "notifyAdminsEvent push sent to " + uniqueTokens.size() + " admins");
-                } else {
-                    Log.d(TAG, "notifyAdminsEvent push suppressed by admin settings");
+                if (appCtx != null && (!AppSettings.isPushEnabled(appCtx)
+                        || !AppSettings.isAdminAlertsEnabled(appCtx))) {
+                    return;
                 }
 
-                saveInAppNotification(null, title, body, type);
-                saveAdminNotification(title, body, type, referenceId);
+                AdminRecipients recipients = fetchAdminRecipients();
+                if (recipients.tokens.isEmpty()) {
+                    Log.d(TAG, "notifyAdminsEvent: no admin tokens available");
+                    return;
+                }
 
+                sendViaEdgeFunction(
+                        recipients.tokens,
+                        recipients.receiverIds,
+                        recipients.receiverRoles,
+                        title,
+                        body,
+                        type,
+                        referenceId
+                );
             } catch (Exception e) {
-                Log.w(TAG, "notifyAdminsEvent failed (non-fatal): " + e.getMessage());
+                Log.w(TAG, "notifyAdminsEvent failed: " + e.getMessage());
             }
         }).start();
+    }
+
+    private static AdminRecipients fetchAdminRecipients() {
+        AdminRecipients out = new AdminRecipients();
+
+        String url = SUPABASE_URL
+                + "/rest/v1/users"
+                + "?role=eq.admin"
+                + "&fcm_token=not.is.null"
+                + "&select=id,fcm_token"
+                + "&limit=500";
+
+        Request req = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .build();
+
+        try (Response resp = HTTP.newCall(req).execute()) {
+            String body = resp.body() != null ? resp.body().string() : "[]";
+            if (resp.code() != 200) {
+                Log.w(TAG, "fetchAdminRecipients HTTP " + resp.code() + " body=" + body);
+                return out;
+            }
+
+            JSONArray arr = new JSONArray(body);
+            Set<String> dedupeTokens = new LinkedHashSet<>();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject row = arr.getJSONObject(i);
+                String id = trimToEmpty(row.optString("id", ""));
+                String token = trimToEmpty(row.optString("fcm_token", ""));
+                if (id.isEmpty() || token.isEmpty() || dedupeTokens.contains(token)) continue;
+                dedupeTokens.add(token);
+                out.receiverIds.add(id);
+                out.receiverRoles.add("admin");
+                out.tokens.add(token);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "fetchAdminRecipients failed: " + e.getMessage());
+        }
+
+        return out;
+    }
+
+    private static UserRecipient fetchUserRecipient(String firebaseUid) {
+        if (trimToEmpty(firebaseUid).isEmpty()) return null;
+
+        String url = SUPABASE_URL
+                + "/rest/v1/users"
+                + "?firebase_uid=eq." + urlEncode(firebaseUid)
+                + "&fcm_token=not.is.null"
+                + "&select=id,fcm_token"
+                + "&limit=1";
+
+        Request req = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .build();
+
+        try (Response resp = HTTP.newCall(req).execute()) {
+            String body = resp.body() != null ? resp.body().string() : "[]";
+            if (resp.code() != 200) {
+                Log.w(TAG, "fetchUserRecipient HTTP " + resp.code() + " body=" + body);
+                return null;
+            }
+            JSONArray arr = new JSONArray(body);
+            if (arr.length() == 0) return null;
+            JSONObject row = arr.getJSONObject(0);
+            String id = trimToEmpty(row.optString("id", ""));
+            String token = trimToEmpty(row.optString("fcm_token", ""));
+            if (id.isEmpty() || token.isEmpty()) return null;
+            return new UserRecipient(id, token);
+        } catch (Exception e) {
+            Log.w(TAG, "fetchUserRecipient failed: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static void sendViaEdgeFunction(List<String> tokens,
+                                            List<String> receiverIds,
+                                            List<String> receiverRoles,
+                                            String title,
+                                            String body,
+                                            String type,
+                                            String referenceId) {
+        if (trimToEmpty(NOTIFY_FN_URL).isEmpty()) {
+            Log.w(TAG, "SUPABASE_NOTIFY_FN_URL is not configured");
+            return;
+        }
+
+        List<String> cleanTokens = sanitize(tokens);
+        if (cleanTokens.isEmpty()) {
+            Log.d(TAG, "sendViaEdgeFunction skipped: no valid tokens");
+            return;
+        }
+
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("tokens", new JSONArray(cleanTokens));
+            payload.put("receiver_ids", new JSONArray(sanitize(receiverIds)));
+            payload.put("receiver_roles", new JSONArray(sanitize(receiverRoles)));
+            payload.put("title", trimToEmpty(title));
+            payload.put("body", trimToEmpty(body));
+            payload.put("type", trimToEmpty(type).isEmpty() ? "general" : type.trim());
+            payload.put("reference_id", trimToEmpty(referenceId).isEmpty() ? JSONObject.NULL : referenceId.trim());
+
+            Request req = new Request.Builder()
+                    .url(NOTIFY_FN_URL)
+                    .post(RequestBody.create(payload.toString(), JSON_TYPE))
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .build();
+
+            HTTP.newCall(req).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    Log.w(TAG, "sendViaEdgeFunction failed: " + e.getMessage());
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    int code = response.code();
+                    String rb = response.body() != null ? response.body().string() : "";
+                    response.close();
+                    if (code >= 200 && code < 300) {
+                        Log.d(TAG, "sendViaEdgeFunction success HTTP " + code + " type=" + type);
+                    } else {
+                        Log.w(TAG, "sendViaEdgeFunction HTTP " + code + " body=" + rb);
+                    }
+                }
+            });
+        } catch (Exception e) {
+            Log.w(TAG, "sendViaEdgeFunction exception: " + e.getMessage());
+        }
+    }
+
+    private static List<String> sanitize(List<String> values) {
+        List<String> out = new ArrayList<>();
+        if (values == null) return out;
+        Set<String> dedupe = new LinkedHashSet<>();
+        for (String value : values) {
+            String v = trimToEmpty(value);
+            if (!v.isEmpty()) dedupe.add(v);
+        }
+        out.addAll(dedupe);
+        return out;
+    }
+
+    private static List<String> listOf(String value) {
+        List<String> list = new ArrayList<>();
+        if (!trimToEmpty(value).isEmpty()) list.add(value.trim());
+        return list;
     }
 
     private static String trimToEmpty(String value) {
         return value == null ? "" : value.trim();
     }
 
-    // ── Private Helpers ───────────────────────────────────────────────────
-
-    /**
-     * Fetch FCM tokens for all users where is_admin = true.
-     * Returns an empty list if no admins or network error.
-     */
-    private static List<String> fetchAdminFcmTokens() throws IOException {
-        java.util.List<String> tokens = new java.util.ArrayList<>();
-
-        String url = SUPABASE_URL
-                + "/rest/v1/users"
-                + "?is_admin=eq.true"
-                + "&fcm_token=not.is.null"
-                + "&select=fcm_token";
-
-        Request req = new Request.Builder()
-                .url(url)
-                .get()
-                .addHeader("apikey",        ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .addHeader("Accept",        "application/json")
-                .build();
-
-        try (Response resp = HTTP.newCall(req).execute()) {
-            String body = resp.body() != null ? resp.body().string() : "[]";
-            Log.d(TAG, "fetchAdminFcmTokens HTTP " + resp.code() + " | " + body);
-
-            if (resp.code() == 200) {
-                JSONArray arr = new JSONArray(body);
-                for (int i = 0; i < arr.length(); i++) {
-                    String token = arr.getJSONObject(i).optString("fcm_token", "");
-                    if (!token.isEmpty()) tokens.add(token);
-                }
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "fetchAdminFcmTokens exception: " + e.getMessage());
-        }
-
-        return tokens;
+    private static String urlEncode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
-    /**
-     * Fetch the FCM token for a specific user by firebase_uid.
-     * Returns null if not found or network error.
-     */
-    private static String fetchUserFcmToken(String firebaseUid) {
-        String url = SUPABASE_URL
-                + "/rest/v1/users"
-                + "?firebase_uid=eq." + firebaseUid
-                + "&fcm_token=not.is.null"
-                + "&select=fcm_token"
-                + "&limit=1";
+    private static final class UserRecipient {
+        final String userId;
+        final String token;
 
-        Request req = new Request.Builder()
-                .url(url)
-                .get()
-                .addHeader("apikey",        ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .addHeader("Accept",        "application/json")
-                .build();
-
-        try (Response resp = HTTP.newCall(req).execute()) {
-            String body = resp.body() != null ? resp.body().string() : "[]";
-            Log.d(TAG, "fetchUserFcmToken HTTP " + resp.code() + " uid=" + firebaseUid);
-
-            if (resp.code() == 200) {
-                JSONArray arr = new JSONArray(body);
-                if (arr.length() > 0) {
-                    return arr.getJSONObject(0).optString("fcm_token", null);
-                }
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "fetchUserFcmToken exception: " + e.getMessage());
-        }
-
-        return null;
-    }
-
-    /**
-     * Calls the Supabase Edge Function to send a push notification.
-     *
-     * The Edge Function uses the Firebase Admin SDK / FCM v1 API with
-     * the server key stored securely as a Supabase secret.
-     *
-     * Payload sent to edge function:
-     * {
-     *   "token":     "<device_fcm_token>",
-     *   "title":     "<notification_title>",
-     *   "body":      "<notification_body>",
-     *   "data": {
-     *     "type":    "<notification_type>",
-     *     "uid":     "<optional_uid>"
-     *   }
-     * }
-     */
-    private static void sendViaEdgeFunction(String deviceToken,
-                                             String title,
-                                             String body,
-                                             String type,
-                                             String targetUid) {
-        if (NOTIFY_FN_URL == null || NOTIFY_FN_URL.isEmpty()
-                || NOTIFY_FN_URL.contains("YOUR_")) {
-            Log.w(TAG, "SUPABASE_NOTIFY_FN_URL not configured — skipping push notification.\n"
-                    + "Add SUPABASE_NOTIFY_FN_URL to supabase.properties and deploy the edge function.");
-            return;
-        }
-
-        if (deviceToken == null || deviceToken.isEmpty()) {
-            Log.w(TAG, "sendViaEdgeFunction: empty device token, skipping");
-            return;
-        }
-
-        try {
-            JSONObject data = new JSONObject();
-            data.put("type", type != null ? type : "general");
-            if (targetUid != null && !targetUid.isEmpty()) data.put("uid", targetUid);
-
-            JSONObject payload = new JSONObject();
-            payload.put("token", deviceToken);
-            payload.put("title", title);
-            payload.put("body",  body);
-            payload.put("data",  data);
-
-            Request req = new Request.Builder()
-                    .url(NOTIFY_FN_URL)
-                    .post(RequestBody.create(payload.toString(), JSON_TYPE))
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Content-Type",  "application/json")
-                    .build();
-
-            HTTP.newCall(req).enqueue(new Callback() {
-                @Override
-                public void onFailure(Call call, IOException e) {
-                    Log.w(TAG, "sendViaEdgeFunction onFailure: " + e.getMessage());
-                }
-
-                @Override
-                public void onResponse(Call call, Response response) throws IOException {
-                    int    code    = response.code();
-                    String respBody = response.body() != null ? response.body().string() : "";
-                    response.close();
-                    if (code == 200 || code == 201 || code == 204) {
-                        Log.d(TAG, "sendViaEdgeFunction ✅ HTTP " + code
-                                + " | type=" + type);
-                    } else {
-                        Log.w(TAG, "sendViaEdgeFunction ❌ HTTP " + code
-                                + " | body=" + respBody);
-                    }
-                }
-            });
-
-        } catch (Exception e) {
-            Log.w(TAG, "sendViaEdgeFunction exception: " + e.getMessage());
+        UserRecipient(String userId, String token) {
+            this.userId = userId;
+            this.token = token;
         }
     }
 
-    public static void notifyAdminUserRegistration(String userName, String userId) {
-        String safeName = trimToEmpty(userName);
-        String body = safeName.isEmpty()
-                ? "A new user created an account"
-                : safeName + " created an account";
-        notifyAdminsEvent("New User Registered", body, "user_registration", userId);
-    }
-
-    public static void notifyAdminOfferCreated(String offerTitle, String offerId) {
-        new Thread(() -> {
-            String title = "New Offer Created";
-            String body = (offerTitle != null && !offerTitle.trim().isEmpty())
-                    ? "Offer created: " + offerTitle
-                    : "Admin created a new offer";
-            saveAdminNotification(title, body, "offer", offerId);
-        }).start();
+    private static final class AdminRecipients {
+        final List<String> receiverIds = new ArrayList<>();
+        final List<String> receiverRoles = new ArrayList<>();
+        final List<String> tokens = new ArrayList<>();
     }
 }

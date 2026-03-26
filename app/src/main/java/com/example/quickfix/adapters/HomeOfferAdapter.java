@@ -1,11 +1,14 @@
 package com.example.quickfix.adapters;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -13,9 +16,11 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.example.quickfix.Offer;
 import com.example.quickfix.R;
+import com.google.android.material.button.MaterialButton;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class HomeOfferAdapter extends RecyclerView.Adapter<HomeOfferAdapter.VH> {
 
@@ -48,13 +53,18 @@ public class HomeOfferAdapter extends RecyclerView.Adapter<HomeOfferAdapter.VH> 
                 ? (int) o.discountValue + "% OFF"
                 : "₹" + (int) o.discountValue + " OFF";
         h.tvDiscount.setText(discountStr);
+
         h.tvTitle.setText(o.title != null ? o.title : "");
         h.tvDescription.setText(o.description != null && !o.description.trim().isEmpty()
                 ? o.description
                 : h.itemView.getContext().getString(R.string.home_offer_default_description));
-        h.tvCode.setText(o.offerCode != null && !o.offerCode.trim().isEmpty()
-                ? "Code " + o.offerCode.trim().toUpperCase()
-                : h.itemView.getContext().getString(R.string.home_offer_no_code));
+
+        String normalizedCode = o.offerCode != null ? o.offerCode.trim().toUpperCase(Locale.US) : "";
+        if (normalizedCode.isEmpty()) {
+            h.tvCode.setText(R.string.home_offer_no_code);
+        } else {
+            h.tvCode.setText(h.itemView.getContext().getString(R.string.home_offer_code_format, normalizedCode));
+        }
 
         if (o.imageUrl != null && !o.imageUrl.trim().isEmpty()) {
             h.ivImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -71,6 +81,20 @@ public class HomeOfferAdapter extends RecyclerView.Adapter<HomeOfferAdapter.VH> 
             h.ivImage.setPadding(24, 24, 24, 24);
         }
 
+        h.copyBtn.setOnClickListener(v -> {
+            String offerCode = o.offerCode != null ? o.offerCode.trim() : "";
+            if (offerCode.isEmpty()) {
+                Toast.makeText(ctx, R.string.home_offer_no_code, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            ClipboardManager clipboard = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard != null) {
+                ClipData clip = ClipData.newPlainText("Offer Code", offerCode);
+                clipboard.setPrimaryClip(clip);
+                Toast.makeText(ctx, R.string.offer_code_copied, Toast.LENGTH_SHORT).show();
+            }
+        });
+
         h.itemView.setOnClickListener(v -> { if (listener != null) listener.onOfferClick(o); });
     }
 
@@ -83,9 +107,10 @@ public class HomeOfferAdapter extends RecyclerView.Adapter<HomeOfferAdapter.VH> 
         notifyDataSetChanged();
     }
 
-    static class VH extends RecyclerView.ViewHolder {
+    public static class VH extends RecyclerView.ViewHolder {
         ImageView ivImage;
         TextView tvDiscount, tvTitle, tvDescription, tvCode;
+        MaterialButton copyBtn;
 
         VH(View v) {
             super(v);
@@ -94,7 +119,7 @@ public class HomeOfferAdapter extends RecyclerView.Adapter<HomeOfferAdapter.VH> 
             tvTitle    = v.findViewById(R.id.tvHomeOfferTitle);
             tvDescription = v.findViewById(R.id.tvHomeOfferDescription);
             tvCode     = v.findViewById(R.id.tvHomeOfferCode);
+            copyBtn    = v.findViewById(R.id.copyBtn);
         }
     }
 }
-

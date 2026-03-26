@@ -135,6 +135,13 @@
     <string name="home_offer_default_description">Limited time savings on your next booking.</string>
     <string name="home_offer_no_code">Code unavailable</string>
     <string name="home_offer_image">Offer image</string>
+    <string name="home_offer_code_format">Code: %1$s</string>
+    <string name="home_offer_discount_sample">20% OFF</string>
+    <string name="home_offer_title_placeholder">Offer title</string>
+    <string name="home_offer_description_placeholder">Offer description</string>
+    <string name="home_offer_code_placeholder">Code: QUICKFIX20</string>
+    <string name="offer_copy_code">Copy Code</string>
+    <string name="offer_code_copied">Code Copied!</string>
     <string name="logout">Logout</string>
 
     <!-- List Your Business Card -->
@@ -209,6 +216,7 @@
     <string name="profile_list_business_sub">Start earning for FREE</string>
     <string name="profile_my_bookings">My Bookings</string>
     <string name="profile_notifications">Notifications</string>
+    <string name="profile_notifications_sub">Manage your alerts and updates</string>
     <string name="profile_language">Language</string>
     <string name="profile_dark_mode">Dark Mode</string>
     <string name="profile_help_support">Help &amp; Support</string>

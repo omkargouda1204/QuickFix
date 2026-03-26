@@ -52,10 +52,31 @@ Deno.serve(async (req) => {
       payload.receiver_id ?? "",
     ].map((v) => v.trim()).filter(Boolean));
 
-    const receiverRoles = dedupe([
+
+    const receiverRoles = [
       ...(payload.receiver_roles ?? []),
       payload.receiver_role ?? "",
-    ].map((v) => v.trim()).filter(Boolean));
+    ].map((v) => v.trim()).filter(Boolean);
+
+    if (tokens.length === 0 && receiverIds.length === 0) {
+      return json({ error: "Provide at least one token or receiver_id" }, 400);
+    }
+
+    if (tokens.length > 0 && receiverIds.length > 0 && tokens.length !== receiverIds.length) {
+      return json({
+        error: "tokens and receiver_ids length mismatch",
+        tokens: tokens.length,
+        receiver_ids: receiverIds.length,
+      }, 400);
+    }
+
+    if (receiverRoles.length > 0 && receiverIds.length > 0 && receiverRoles.length !== receiverIds.length && receiverRoles.length !== 1) {
+      return json({
+        error: "receiver_roles must be length 1 or match receiver_ids length",
+        receiver_roles: receiverRoles.length,
+        receiver_ids: receiverIds.length,
+      }, 400);
+    }
 
     const serviceAccountRaw = Deno.env.get("FCM_SERVICE_ACCOUNT") ?? "";
     if (!serviceAccountRaw) {
@@ -134,10 +155,14 @@ Deno.serve(async (req) => {
     const rows: Array<Record<string, unknown>> = [];
 
     if (receiverIds.length > 0) {
-      for (const receiverId of receiverIds) {
+      for (let i = 0; i < receiverIds.length; i++) {
+        const receiverId = receiverIds[i];
+        const role = receiverRoles.length === receiverIds.length
+          ? receiverRoles[i]
+          : (receiverRoles[0] ?? null);
         rows.push({
           receiver_id: receiverId,
-          receiver_role: receiverRoles[0] ?? null,
+          receiver_role: role,
           title,
           body,
           type,
@@ -146,7 +171,7 @@ Deno.serve(async (req) => {
         });
       }
     } else if (receiverRoles.length > 0) {
-      for (const role of receiverRoles) {
+      for (const role of dedupe(receiverRoles)) {
         rows.push({
           receiver_id: null,
           receiver_role: role,

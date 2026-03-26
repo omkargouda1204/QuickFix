@@ -742,7 +742,7 @@ public class MainActivity extends BaseActivity {
                                         homeBanners.clear();
                                         if (body != null) {
                                             for (Banner b : body) {
-                                                if (b == null || !b.isActive || isExpired(b.expiryDate)) continue;
+                                                if (b == null || !b.isActive || !hasStarted(b.startDate) || isExpired(b.expiryDate)) continue;
                                                 if (b.imageUrl != null && !b.imageUrl.startsWith("http")) {
                                                     b.imageUrl = SupabaseStorageHelper.getPublicObjectUrl("banner-images", b.imageUrl);
                                                 }
@@ -797,12 +797,15 @@ public class MainActivity extends BaseActivity {
         }
 
         try {
+            String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
+            String offerExpiryFilter = "(expiry_date.is.null,expiry_date.gte." + today + ")";
+
             offerApi.getOffers(
                             BuildConfig.SUPABASE_ANON_KEY,
                             "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                             "*",
                             "eq.true",
-                            null
+                            offerExpiryFilter
                     )
                     .enqueue(new Callback<List<Offer>>() {
                         @Override
@@ -975,6 +978,33 @@ public class MainActivity extends BaseActivity {
         } catch (Exception e) {
             Log.e(TAG, "Error in showOffersOnHome: " + e.getMessage(), e);
             showOffersErrorState("Failed to display offers");
+        }
+    }
+
+    private boolean hasStarted(String date) {
+        if (date == null || date.trim().isEmpty()) return true;
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+            sdf.setLenient(false);
+            Date start = sdf.parse(date.trim());
+            if (start == null) return true;
+            java.util.Calendar cStart = java.util.Calendar.getInstance();
+            cStart.setTime(start);
+            cStart.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            cStart.set(java.util.Calendar.MINUTE, 0);
+            cStart.set(java.util.Calendar.SECOND, 0);
+            cStart.set(java.util.Calendar.MILLISECOND, 0);
+
+            java.util.Calendar cNow = java.util.Calendar.getInstance();
+            cNow.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            cNow.set(java.util.Calendar.MINUTE, 0);
+            cNow.set(java.util.Calendar.SECOND, 0);
+            cNow.set(java.util.Calendar.MILLISECOND, 0);
+
+            return !cStart.after(cNow);
+        } catch (Exception e) {
+            Log.w(TAG, "hasStarted parse failed for date=" + date + ": " + e.getMessage());
+            return true;
         }
     }
 

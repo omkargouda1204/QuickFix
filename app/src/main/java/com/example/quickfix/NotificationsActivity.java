@@ -105,19 +105,31 @@ public class NotificationsActivity extends BaseActivity
 
     private void loadNotifications() {
         showLoading(true);
+        Log.d(TAG, "USER: " + userId);
         new Thread(() -> {
             try {
-                // Primary path: unified notifications table scoped by receiver_id.
-                List<Notification> list = fetchNotifications("receiver_id", userId);
+                String url = BASE_URL
+                        + "/rest/v1/notifications?receiver_id=eq." + userId
+                        + "&select=*&order=created_at.desc";
+                Request req = new Request.Builder().url(url)
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
 
-                // Backward compatibility for older rows.
-                if (list.isEmpty()) {
-                    List<Notification> legacy = fetchNotifications("user_id", userId);
-                    if (!legacy.isEmpty()) list = legacy;
-                }
-                if (list.isEmpty()) {
-                    List<Notification> byFirebaseUid = fetchNotifications("firebase_uid", userId);
-                    if (!byFirebaseUid.isEmpty()) list = byFirebaseUid;
+                List<Notification> list = new ArrayList<>();
+                try (Response r = HTTP.newCall(req).execute()) {
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    Log.d(TAG, "loadNotifications HTTP=" + r.code() + " bodyLen=" + body.length());
+                    if (r.code() == 200 && body.startsWith("[")) {
+                        JSONArray arr = new JSONArray(body);
+                        for (int i = 0; i < arr.length(); i++) {
+                            Notification n = Notification.fromJson(arr.getJSONObject(i));
+                            if (n != null) list.add(n);
+                        }
+                    } else {
+                        Log.e(TAG, "ERROR LOADING NOTIFICATIONS: HTTP " + r.code() + " " + body);
+                    }
                 }
 
                 final List<Notification> finalList = list;
@@ -128,9 +140,10 @@ public class NotificationsActivity extends BaseActivity
                     updateUnreadCount();
                     emptyState.setVisibility(finalList.isEmpty() ? View.VISIBLE : View.GONE);
                     recyclerView.setVisibility(finalList.isEmpty() ? View.GONE : View.VISIBLE);
+                    Log.d(TAG, "NOTIFICATIONS COUNT: " + finalList.size());
                 });
             } catch (Exception e) {
-                Log.e(TAG, "loadNotifications: " + e.getMessage());
+                Log.e(TAG, "ERROR LOADING NOTIFICATIONS", e);
                 MAIN.post(() -> {
                     showLoading(false);
                     emptyState.setVisibility(View.VISIBLE);
@@ -141,35 +154,12 @@ public class NotificationsActivity extends BaseActivity
         }).start();
     }
 
-    /** Fetch notifications filtering by a given column name. Returns empty list on any error. */
+    /**
+     * @deprecated Legacy fallback fetch is intentionally disabled in the clean system.
+     */
+    @Deprecated
     private List<Notification> fetchNotifications(String column, String value) {
-        List<Notification> result = new ArrayList<>();
-        try {
-            String url = BASE_URL
-                    + "/rest/v1/notifications?" + column + "=eq." + value
-                    + "&select=*&order=created_at.desc";
-            Request req = new Request.Builder().url(url)
-                    .addHeader("apikey",        ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Accept",        "application/json")
-                    .build();
-            try (Response r = HTTP.newCall(req).execute()) {
-                String body = r.body() != null ? r.body().string() : "[]";
-                Log.d(TAG, "fetchNotifications(" + column + ") HTTP " + r.code());
-                if (r.code() == 200 && body.startsWith("[")) {
-                    JSONArray arr = new JSONArray(body);
-                    for (int i = 0; i < arr.length(); i++) {
-                        Notification n = Notification.fromJson(arr.getJSONObject(i));
-                        if (n != null) result.add(n);
-                    }
-                } else if (r.code() != 200) {
-                    Log.w(TAG, "fetchNotifications HTTP " + r.code() + " body=" + body);
-                }
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "fetchNotifications exception: " + e.getMessage());
-        }
-        return result;
+        return new ArrayList<>();
     }
 
     @Override

@@ -468,7 +468,7 @@ public class SupabaseClient {
                     "yyyy-MM-dd'T'HH:mm:ss").format(new java.util.Date()));
 
             Request req = new Request.Builder()
-                    .url(SUPABASE_URL + "/rest/v1/pending_approvals?id=eq." + applicationId)
+                    .url(SUPABASE_URL + "/rest/v1/provider_applications?id=eq." + applicationId)
                     .patch(RequestBody.create(body.toString(), JSON_TYPE))
                     .addHeader("apikey", ANON_KEY)
                     .addHeader("Authorization", "Bearer " + ANON_KEY)
@@ -504,7 +504,7 @@ public class SupabaseClient {
                     "yyyy-MM-dd'T'HH:mm:ss").format(new java.util.Date()));
 
             Request req = new Request.Builder()
-                    .url(SUPABASE_URL + "/rest/v1/pending_approvals?id=eq." + applicationId)
+                    .url(SUPABASE_URL + "/rest/v1/provider_applications?id=eq." + applicationId)
                     .patch(RequestBody.create(body.toString(), JSON_TYPE))
                     .addHeader("apikey", ANON_KEY)
                     .addHeader("Authorization", "Bearer " + ANON_KEY)
