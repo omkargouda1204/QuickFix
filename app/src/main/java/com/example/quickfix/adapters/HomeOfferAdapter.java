@@ -66,20 +66,10 @@ public class HomeOfferAdapter extends RecyclerView.Adapter<HomeOfferAdapter.VH> 
             h.tvCode.setText(h.itemView.getContext().getString(R.string.home_offer_code_format, normalizedCode));
         }
 
-        if (o.imageUrl != null && !o.imageUrl.trim().isEmpty()) {
-            h.ivImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            h.ivImage.setPadding(0, 0, 0, 0);
-            Glide.with(ctx)
-                    .load(o.imageUrl.trim())
-                    .placeholder(R.drawable.bg_promo_card)
-                    .error(R.drawable.ic_offers)
-                    .centerCrop()
-                    .into(h.ivImage);
-        } else {
-            h.ivImage.setImageResource(R.drawable.ic_offers);
-            h.ivImage.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-            h.ivImage.setPadding(24, 24, 24, 24);
-        }
+        // Display placeholder image for offers
+        h.ivImage.setImageResource(R.drawable.ic_offers);
+        h.ivImage.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        h.ivImage.setPadding(24, 24, 24, 24);
 
         h.copyBtn.setOnClickListener(v -> {
             String offerCode = o.offerCode != null ? o.offerCode.trim() : "";

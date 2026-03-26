@@ -9,9 +9,12 @@
 -- PART 1: CREATE TABLES
 -- ============================================================================
 
+-- Ensure UUID generation function is available in Supabase/Postgres.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- 1. BANNERS TABLE
 CREATE TABLE IF NOT EXISTS banners (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title           VARCHAR(255) NOT NULL,
   image_url       VARCHAR(500),
   redirect_type   VARCHAR(50),           -- 'service', 'category', 'external'
@@ -28,7 +31,7 @@ CREATE TABLE IF NOT EXISTS banners (
 
 -- 2. OFFERS TABLE
 CREATE TABLE IF NOT EXISTS offers (
-  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title               VARCHAR(255) NOT NULL,
   description         TEXT,
   offer_code          VARCHAR(50) UNIQUE NOT NULL,
@@ -48,20 +51,20 @@ CREATE TABLE IF NOT EXISTS offers (
 -- ============================================================================
 
 -- BANNERS INDEXES
-CREATE INDEX idx_banners_is_active ON banners(is_active);
-CREATE INDEX idx_banners_created_at ON banners(created_at DESC);
-CREATE INDEX idx_banners_expiry_date ON banners(expiry_date);
-CREATE INDEX idx_banners_priority ON banners(priority DESC);
-CREATE INDEX idx_banners_status ON banners(status);
-CREATE INDEX idx_banners_deleted_at ON banners(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_banners_is_active ON banners(is_active);
+CREATE INDEX IF NOT EXISTS idx_banners_created_at ON banners(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_banners_expiry_date ON banners(expiry_date);
+CREATE INDEX IF NOT EXISTS idx_banners_priority ON banners(priority DESC);
+CREATE INDEX IF NOT EXISTS idx_banners_status ON banners(status);
+CREATE INDEX IF NOT EXISTS idx_banners_deleted_at ON banners(deleted_at);
 
 -- OFFERS INDEXES
-CREATE INDEX idx_offers_is_active ON offers(is_active);
-CREATE INDEX idx_offers_offer_code ON offers(offer_code);
-CREATE INDEX idx_offers_created_at ON offers(created_at DESC);
-CREATE INDEX idx_offers_expiry_date ON offers(expiry_date);
-CREATE INDEX idx_offers_status ON offers(status);
-CREATE INDEX idx_offers_deleted_at ON offers(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_offers_is_active ON offers(is_active);
+CREATE INDEX IF NOT EXISTS idx_offers_offer_code ON offers(offer_code);
+CREATE INDEX IF NOT EXISTS idx_offers_created_at ON offers(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_offers_expiry_date ON offers(expiry_date);
+CREATE INDEX IF NOT EXISTS idx_offers_status ON offers(status);
+CREATE INDEX IF NOT EXISTS idx_offers_deleted_at ON offers(deleted_at);
 
 -- ============================================================================
 -- PART 3: ROW LEVEL SECURITY (RLS) POLICIES
