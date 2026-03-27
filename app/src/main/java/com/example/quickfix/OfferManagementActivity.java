@@ -245,6 +245,18 @@ public class OfferManagementActivity extends BaseActivity {
         body.put("min_booking_amount", minAmount);
         body.put("is_active", isActive);
         body.put("expiry_date", (expiryDate == null || expiryDate.isEmpty()) ? null : expiryDate);
+        
+        // Add status field: active, inactive, or expired based on conditions
+        String status = "active";
+        if (!isActive) {
+            status = "inactive";
+        } else if (expiryDate != null && !expiryDate.isEmpty()) {
+            String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date());
+            if (expiryDate.compareTo(today) < 0) {
+                status = "expired";
+            }
+        }
+        body.put("status", status);
 
         Call<Void> call;
         if (existingId != null) {
