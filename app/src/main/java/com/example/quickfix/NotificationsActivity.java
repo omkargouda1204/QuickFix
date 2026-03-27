@@ -23,6 +23,8 @@ import com.google.firebase.auth.FirebaseUser;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -52,7 +54,9 @@ public class NotificationsActivity extends BaseActivity
     private TextView              tvUnreadCount;
     private MaterialButton        btnMarkAllRead;
 
-    private String userId;
+    private String firebaseUid;
+    private String currentUserId;
+    private String currentUserRole = "user";
     private List<Notification> allNotifications = new ArrayList<>();
 
     private final OkHttpClient HTTP = new OkHttpClient.Builder()
@@ -68,12 +72,66 @@ public class NotificationsActivity extends BaseActivity
 
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) { finish(); return; }
-        userId = user.getUid();
+        firebaseUid = user.getUid();
 
         bindViews();
         setupRecyclerView();
         setupSwipeRefresh();
-        loadNotifications();
+        resolveUserIdentityAndLoad();
+    }
+
+    private void resolveUserIdentityAndLoad() {
+        showLoading(true);
+        new Thread(() -> {
+            UserIdentity identity = resolveUserIdentity(firebaseUid);
+            currentUserId = identity.userId;
+            currentUserRole = identity.role;
+            MAIN.post(this::loadNotifications);
+        }).start();
+    }
+
+    private UserIdentity resolveUserIdentity(String uid) {
+        UserIdentity fallback = new UserIdentity(uid, "user");
+        if (uid == null || uid.trim().isEmpty()) return fallback;
+
+        try {
+            String url = BASE_URL + "/rest/v1/users?firebase_uid=eq."
+                    + URLEncoder.encode(uid, StandardCharsets.UTF_8.name())
+                    + "&select=id,role,is_admin,is_service_provider,is_user&limit=1";
+            Request req = new Request.Builder().url(url)
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response r = HTTP.newCall(req).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                if (r.code() != 200 || !body.startsWith("[")) {
+                    Log.w(TAG, "resolveUserIdentity HTTP=" + r.code() + " body=" + body);
+                    return fallback;
+                }
+                JSONArray arr = new JSONArray(body);
+                if (arr.length() == 0) return fallback;
+                JSONObject row = arr.getJSONObject(0);
+
+                String userId = row.optString("id", uid);
+                String role = normalizeRole(row);
+                return new UserIdentity(userId, role);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "resolveUserIdentity failed", e);
+            return fallback;
+        }
+    }
+
+    private String normalizeRole(JSONObject row) {
+        String role = row.optString("role", "").trim().toLowerCase();
+        if ("admin".equals(role) || "provider".equals(role) || "user".equals(role)) {
+            return role;
+        }
+        if (row.optBoolean("is_admin", false)) return "admin";
+        if (row.optBoolean("is_service_provider", false)) return "provider";
+        return "user";
     }
 
     private void bindViews() {
@@ -105,12 +163,21 @@ public class NotificationsActivity extends BaseActivity
 
     private void loadNotifications() {
         showLoading(true);
-        Log.d(TAG, "USER: " + userId);
+        Log.d(TAG, "USER firebaseUid=" + firebaseUid + " userId=" + currentUserId + " role=" + currentUserRole);
         new Thread(() -> {
             try {
+                String roleFilter = (currentUserRole == null || currentUserRole.trim().isEmpty())
+                        ? "user"
+                        : currentUserRole.trim().toLowerCase();
+                String resolvedUserId = (currentUserId == null || currentUserId.trim().isEmpty())
+                        ? firebaseUid
+                        : currentUserId.trim();
+
                 String url = BASE_URL
-                        + "/rest/v1/notifications?receiver_id=eq." + userId
-                        + "&select=*&order=created_at.desc";
+                        + "/rest/v1/notifications?select=*"
+                        + "&or=(receiver_id.eq." + URLEncoder.encode(resolvedUserId, StandardCharsets.UTF_8.name())
+                        + ",receiver_role.eq." + URLEncoder.encode(roleFilter, StandardCharsets.UTF_8.name()) + ")"
+                        + "&order=created_at.desc";
                 Request req = new Request.Builder().url(url)
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
@@ -232,9 +299,14 @@ public class NotificationsActivity extends BaseActivity
     private void markAllRead() {
         new Thread(() -> {
             try {
+                String resolvedUserId = (currentUserId == null || currentUserId.trim().isEmpty())
+                        ? firebaseUid
+                        : currentUserId.trim();
                 JSONObject body = new JSONObject();
                 body.put("is_read", true);
-                String url = BASE_URL + "/rest/v1/notifications?receiver_id=eq." + userId + "&is_read=eq.false";
+                String url = BASE_URL + "/rest/v1/notifications?receiver_id=eq."
+                        + URLEncoder.encode(resolvedUserId, StandardCharsets.UTF_8.name())
+                        + "&is_read=eq.false";
                 Request req = new Request.Builder().url(url)
                         .patch(RequestBody.create(body.toString(), MediaType.get("application/json")))
                         .addHeader("apikey",        ANON_KEY)
@@ -245,7 +317,11 @@ public class NotificationsActivity extends BaseActivity
                 try (Response r = HTTP.newCall(req).execute()) {
                     MAIN.post(() -> {
                         if (r.code() == 200 || r.code() == 204) {
-                            for (Notification n : allNotifications) n.isRead = true;
+                            for (Notification n : allNotifications) {
+                                if (resolvedUserId.equals(n.receiverId)) {
+                                    n.isRead = true;
+                                }
+                            }
                             adapter.notifyDataSetChanged();
                             updateUnreadCount();
                             Toast.makeText(this, "All marked as read", Toast.LENGTH_SHORT).show();
@@ -271,6 +347,16 @@ public class NotificationsActivity extends BaseActivity
             return;
         }
         if (progressBar != null) progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+
+    private static final class UserIdentity {
+        final String userId;
+        final String role;
+
+        UserIdentity(String userId, String role) {
+            this.userId = userId;
+            this.role = role;
+        }
     }
 }
 
