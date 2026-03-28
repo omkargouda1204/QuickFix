@@ -62,7 +62,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="1"
                     android:background="@android:color/transparent"
-                    android:hint="Search services or providers (e.g. cleaning near me)"
+                    android:hint="Search providers by name, category, or city"
                     android:textColor="@color/text_primary"
                     android:textColorHint="@color/text_secondary"
                     android:textSize="14sp"
@@ -146,14 +146,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:checked="true"
-                android:text="All" />
-
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipServices"
-                style="@style/Widget.Material3.Chip.Filter"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Services" />
+                android:text="All Providers" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chipProviders"

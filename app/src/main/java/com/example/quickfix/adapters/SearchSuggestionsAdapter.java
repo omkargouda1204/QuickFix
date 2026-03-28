@@ -46,12 +46,18 @@ public class SearchSuggestionsAdapter extends RecyclerView.Adapter<SearchSuggest
     public void onBindViewHolder(@NonNull VH h, int pos) {
         SearchResult r = items.get(pos);
         h.tvTitle.setText(r.name);
-        h.tvSub.setText(r.type + (r.city != null && !r.city.isEmpty() ? " • " + r.city : ""));
-        if (SearchResult.TYPE_PROVIDER.equals(r.type)) {
-            h.ivIcon.setImageResource(R.drawable.ic_business);
+
+        String category = r.subtitle != null ? r.subtitle.trim() : "";
+        String city = r.city != null ? r.city.trim() : "";
+        String sub;
+        if (!category.isEmpty() && !city.isEmpty()) {
+            sub = category + " • " + city;
         } else {
-            h.ivIcon.setImageResource(R.drawable.ic_search);
+            sub = !category.isEmpty() ? category : city;
         }
+        h.tvSub.setText(sub);
+        h.ivIcon.setImageResource(R.drawable.ic_business);
+
         h.itemView.setOnClickListener(v -> { if (listener != null) listener.onSuggestionClick(r); });
     }
 
@@ -68,4 +74,3 @@ public class SearchSuggestionsAdapter extends RecyclerView.Adapter<SearchSuggest
         }
     }
 }
-

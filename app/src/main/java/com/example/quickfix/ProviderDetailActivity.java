@@ -123,6 +123,16 @@ public class ProviderDetailActivity extends BaseActivity {
         bindViews(businessName, ownerName, providerCategory, providerCity, phone,
                   email, description, experience, imageUrl, isVerified, rating);
 
+        // When opened from lightweight provider search suggestions, fetch complete profile.
+        if (providerIdForBooking != null && !providerIdForBooking.trim().isEmpty()) {
+            boolean needsFullLoad = (phone == null || phone.trim().isEmpty())
+                    || (description == null || description.trim().isEmpty())
+                    || (experience == null || experience.trim().isEmpty());
+            if (needsFullLoad) {
+                fetchProviderDetailsById(providerIdForBooking);
+            }
+        }
+
         if (openBooking) {
             showBookingDialog();
         }
@@ -437,5 +447,67 @@ public class ProviderDetailActivity extends BaseActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == android.R.id.home) { finish(); return true; }
         return super.onOptionsItemSelected(item);
+    }
+
+    private void fetchProviderDetailsById(String providerId) {
+        new Thread(() -> {
+            try {
+                JSONObject data = fetchProviderRecord("provider_profiles", providerId);
+                if (data == null) {
+                    data = fetchProviderRecord("provider_applications", providerId);
+                }
+                if (data == null) return;
+
+                JSONObject finalData = data;
+                mainHandler.post(() -> {
+                    providerFirebaseUid = finalData.optString("firebase_uid", providerFirebaseUid);
+                    providerIdForBooking = finalData.optString("id", providerIdForBooking);
+                    providerName = finalData.optString("business_name", providerName);
+                    providerCategory = finalData.optString("category", providerCategory);
+                    providerCity = finalData.optString("city", providerCity);
+
+                    bindViews(
+                            finalData.optString("business_name", providerName),
+                            finalData.optString("owner_name", finalData.optString("user_name", "")),
+                            finalData.optString("category", providerCategory),
+                            finalData.optString("city", providerCity),
+                            finalData.optString("phone", ""),
+                            finalData.optString("email", ""),
+                            finalData.optString("description", ""),
+                            finalData.optString("experience_yrs", finalData.optString("experience", "")),
+                            finalData.optString("business_image_url", ""),
+                            finalData.optBoolean("is_verified", false),
+                            (float) finalData.optDouble("rating", 0d)
+                    );
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "fetchProviderDetailsById: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    private JSONObject fetchProviderRecord(String table, String providerId) {
+        try {
+            String url = SUPABASE_URL + "/rest/v1/" + table
+                    + "?id=eq." + providerId
+                    + "&select=*&limit=1";
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                String body = response.body() != null ? response.body().string() : "[]";
+                if (response.code() != 200) return null;
+                JSONArray arr = new JSONArray(body);
+                if (arr.length() == 0) return null;
+                return arr.getJSONObject(0);
+            }
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

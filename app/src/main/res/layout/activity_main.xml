@@ -233,20 +233,20 @@
                 android:layout_height="wrap_content"
                 android:animateLayoutChanges="true"
                 android:orientation="vertical"
-                android:paddingTop="20dp"
-                android:visibility="visible">
+                android:paddingTop="12dp"
+                android:visibility="gone">
 
                 <LinearLayout
                     android:id="@+id/bannerLoadingState"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:paddingStart="20dp"
-                    android:paddingEnd="20dp">
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp">
 
                     <View
                         android:layout_width="match_parent"
-                        android:layout_height="150dp"
+                        android:layout_height="160dp"
                         android:background="@drawable/bg_shimmer_block" />
 
                     <LinearLayout
@@ -258,34 +258,35 @@
                         android:orientation="horizontal">
 
                         <View
-                            android:layout_width="5dp"
-                            android:layout_height="5dp"
-                            android:layout_marginEnd="6dp"
+                            android:layout_width="4dp"
+                            android:layout_height="4dp"
+                            android:layout_marginEnd="3dp"
                             android:background="@drawable/bg_shimmer_block" />
 
                         <View
-                            android:layout_width="5dp"
-                            android:layout_height="5dp"
-                            android:layout_marginEnd="6dp"
+                            android:layout_width="4dp"
+                            android:layout_height="4dp"
+                            android:layout_marginEnd="3dp"
                             android:background="@drawable/bg_shimmer_block" />
 
                         <View
-                            android:layout_width="5dp"
-                            android:layout_height="5dp"
+                            android:layout_width="4dp"
+                            android:layout_height="4dp"
                             android:background="@drawable/bg_shimmer_block" />
                     </LinearLayout>
                 </LinearLayout>
 
+                <!-- Keep for error fallback but section is hidden when data is empty -->
                 <LinearLayout
                     android:id="@+id/bannerEmptyState"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="20dp"
-                    android:layout_marginEnd="20dp"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
                     android:background="@drawable/bg_card"
                     android:gravity="center"
                     android:orientation="vertical"
-                    android:padding="18dp"
+                    android:padding="14dp"
                     android:visibility="gone">
 
                     <TextView
@@ -309,12 +310,12 @@
                     android:id="@+id/bannerErrorState"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="20dp"
-                    android:layout_marginEnd="20dp"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
                     android:background="@drawable/bg_card"
                     android:gravity="center"
                     android:orientation="vertical"
-                    android:padding="18dp"
+                    android:padding="14dp"
                     android:visibility="gone">
 
                     <TextView
@@ -342,28 +343,31 @@
                     android:orientation="vertical"
                     android:visibility="gone">
 
-                <androidx.viewpager2.widget.ViewPager2
-                    android:id="@+id/vpBannersCarousel"
-                    android:layout_width="match_parent"
-                    android:layout_height="160dp"
-                    android:clipToPadding="false"
-                    android:paddingStart="20dp"
-                    android:paddingEnd="20dp"
-                    android:overScrollMode="never" />
+                    <androidx.viewpager2.widget.ViewPager2
+                        android:id="@+id/vpBannersCarousel"
+                        android:layout_width="match_parent"
+                        android:layout_height="160dp"
+                        android:clipToPadding="false"
+                        android:overScrollMode="never"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp" />
 
-                <com.google.android.material.tabs.TabLayout
-                    android:id="@+id/bannerDotsLayout"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center_horizontal"
-                    android:layout_marginTop="8dp"
-                    app:tabBackground="@drawable/bg_banner_dot_selector"
-                    app:tabIndicator="@null"
-                    app:tabRippleColor="@android:color/transparent"
-                    app:tabIndicatorFullWidth="false"
-                    app:tabMinWidth="0dp"
-                    app:tabPaddingStart="2dp"
-                    app:tabPaddingEnd="2dp" />
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:gravity="center"
+                        android:orientation="horizontal">
+
+                        <com.tbuonomo.viewpagerdotsindicator.WormDotsIndicator
+                            android:id="@+id/bannerDotsLayout"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            app:dotsColor="#80FFFFFF"
+                            app:dotsSize="4dp"
+                            app:dotsSpacing="3dp"
+                            app:selectedDotColor="@color/primary" />
+                    </LinearLayout>
 
                 </LinearLayout>
 
@@ -376,10 +380,10 @@
                 android:layout_height="wrap_content"
                 android:animateLayoutChanges="true"
                 android:orientation="vertical"
-                android:paddingStart="20dp"
-                android:paddingEnd="20dp"
-                android:paddingTop="14dp"
-                android:visibility="visible">
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="12dp"
+                android:visibility="gone">
 
                 <LinearLayout
                     android:id="@+id/offersLoadingState"
@@ -388,23 +392,20 @@
                     android:orientation="horizontal">
 
                     <View
-                        android:layout_width="0dp"
-                        android:layout_height="112dp"
-                        android:layout_marginEnd="10dp"
-                        android:layout_weight="1"
+                        android:layout_width="180dp"
+                        android:layout_height="172dp"
+                        android:layout_marginEnd="8dp"
                         android:background="@drawable/bg_shimmer_block" />
 
                     <View
-                        android:layout_width="0dp"
-                        android:layout_height="112dp"
-                        android:layout_marginEnd="10dp"
-                        android:layout_weight="1"
+                        android:layout_width="180dp"
+                        android:layout_height="172dp"
+                        android:layout_marginEnd="8dp"
                         android:background="@drawable/bg_shimmer_block" />
 
                     <View
-                        android:layout_width="0dp"
-                        android:layout_height="112dp"
-                        android:layout_weight="1"
+                        android:layout_width="180dp"
+                        android:layout_height="172dp"
                         android:background="@drawable/bg_shimmer_block" />
                 </LinearLayout>
 
@@ -470,38 +471,41 @@
                     android:orientation="vertical"
                     android:visibility="gone">
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_marginBottom="8dp">
-                    <TextView
-                        android:layout_width="0dp"
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="🎉 Active Offers"
-                        android:textColor="@color/text_primary"
-                        android:textSize="16sp"
-                        android:textStyle="bold" />
-                    <TextView
-                        android:id="@+id/tvSeeAllOffers"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="See all"
-                        android:textColor="@color/primary"
-                        android:textSize="13sp"
-                        android:clickable="true"
-                        android:focusable="true" />
-                </LinearLayout>
+                        android:layout_marginBottom="6dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/rvOffersStrip"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:nestedScrollingEnabled="false"
-                    android:clipToPadding="false"
-                    android:scrollbars="none" />
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="🎉 Active Offers"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvSeeAllOffers"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:text="See all"
+                            android:textColor="@color/primary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/rvOffersStrip"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:clipToPadding="false"
+                        android:nestedScrollingEnabled="false"
+                        android:paddingEnd="4dp"
+                        android:scrollbars="none" />
 
                 </LinearLayout>
 

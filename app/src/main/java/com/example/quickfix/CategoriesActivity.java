@@ -87,6 +87,7 @@ public class CategoriesActivity extends BaseActivity {
     private void openProviders(String category) {
         Intent intent = new Intent(this, ProviderListActivity.class);
         intent.putExtra(ProviderListActivity.EXTRA_CATEGORY, category);
+        intent.putExtra(ProviderListActivity.EXTRA_CITY, cityFilter != null ? cityFilter : "");
         startActivity(intent);
         overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
     }
@@ -101,32 +102,38 @@ public class CategoriesActivity extends BaseActivity {
             new Thread(() -> {
                 try {
                     StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
-                            .append("/rest/v1/provider_applications")
-                            .append("?status=eq.approved")
-                            .append("&category=ilike.*")
-                            .append(java.net.URLEncoder.encode(catName, "UTF-8"))
-                            .append("*")
-                            .append("&select=id");
+                            .append("/rest/v1/provider_profiles")
+                            .append("?select=id")
+                            .append("&or=(approved.eq.true,status.eq.approved,status.eq.active,is_active.eq.true)")
+                            .append("&category=ilike.")
+                            .append(java.net.URLEncoder.encode(catName, "UTF-8"));
 
-                    if (!cityFilter.isEmpty()) {
-                        url.append("&city=ilike.*")
-                           .append(java.net.URLEncoder.encode(cityFilter, "UTF-8"))
-                           .append("*");
+                    if (cityFilter != null && !cityFilter.trim().isEmpty()) {
+                        url.append("&city=ilike.")
+                                .append(java.net.URLEncoder.encode(cityFilter.trim(), "UTF-8"));
                     }
 
                     Request req = new Request.Builder().url(url.toString())
-                            .addHeader("apikey",         BuildConfig.SUPABASE_ANON_KEY)
-                            .addHeader("Authorization",  "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                            .addHeader("Accept",         "application/json")
+                            .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                            .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                            .addHeader("Accept", "application/json")
+                            .addHeader("Prefer", "count=exact")
+                            .addHeader("Range", "0-0")
                             .build();
 
                     try (Response r = HTTP.newCall(req).execute()) {
-                        if (r.code() == 200) {
-                            String body = r.body() != null ? r.body().string() : "[]";
-                            int count = new JSONArray(body).length();
-                            String label = count == 0 ? "No providers"
-                                    : count + " provider" + (count != 1 ? "s" : "");
+                        if (r.code() >= 200 && r.code() < 300) {
+                            int count = parseExactCount(r);
+                            if (count < 0) {
+                                String body = r.body() != null ? r.body().string() : "[]";
+                                count = new JSONArray(body).length();
+                            }
+                            int finalCount = Math.max(count, 0);
+                            String label = finalCount == 0 ? "No providers"
+                                    : finalCount + " provider" + (finalCount != 1 ? "s" : "");
                             MAIN.post(() -> adapter.updateCount(catName, label));
+                        } else {
+                            MAIN.post(() -> adapter.updateCount(catName, "—"));
                         }
                     }
                 } catch (Exception e) {
@@ -136,5 +143,18 @@ public class CategoriesActivity extends BaseActivity {
             }).start();
         }
     }
-}
 
+    private int parseExactCount(Response response) {
+        try {
+            String contentRange = response.header("Content-Range");
+            if (contentRange == null || !contentRange.contains("/")) return -1;
+            String[] parts = contentRange.split("/");
+            if (parts.length != 2) return -1;
+            String countPart = parts[1].trim();
+            if (countPart.equals("*")) return -1;
+            return Integer.parseInt(countPart);
+        } catch (Exception ignore) {
+            return -1;
+        }
+    }
+}

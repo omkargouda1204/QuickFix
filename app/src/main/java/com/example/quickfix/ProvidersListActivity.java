@@ -69,7 +69,7 @@ public class ProvidersListActivity extends BaseActivity
     private ProvidersAdapter      adapter;
     private List<ProviderProfile> allProviders  = new ArrayList<>();
     private String                category      = "";
-    private String                cityFilter    = "Bangalore";
+    private String                cityFilter    = "";
     private String                currentChip   = "All";
     private String                searchQuery   = "";
     private AppLocationManager    locationManager;
@@ -88,14 +88,16 @@ public class ProvidersListActivity extends BaseActivity
 
         category = getIntent().getStringExtra(EXTRA_CATEGORY);
         if (category == null) category = "";
+        category = category.trim();
 
         locationManager = new AppLocationManager(this);
         SharedPreferences prefs = getSharedPreferences(AppLocationManager.PREFS_NAME, MODE_PRIVATE);
-        cityFilter = prefs.getString(AppLocationManager.KEY_CITY_LEGACY,
-                prefs.getString(AppLocationManager.KEY_CITY, "Bangalore"));
-        if (cityFilter == null || cityFilter.trim().isEmpty()) {
-            cityFilter = "Bangalore";
-        }
+        String incomingCity = getIntent().getStringExtra(EXTRA_CITY);
+        String savedCity = prefs.getString(AppLocationManager.KEY_CITY_LEGACY,
+                prefs.getString(AppLocationManager.KEY_CITY, ""));
+        cityFilter = incomingCity != null && !incomingCity.trim().isEmpty()
+                ? incomingCity.trim()
+                : (savedCity != null ? savedCity.trim() : "");
 
         searchQuery = getIntent().getStringExtra(EXTRA_QUERY);
         if (searchQuery == null) searchQuery = "";
@@ -197,7 +199,8 @@ public class ProvidersListActivity extends BaseActivity
         String title = category.isEmpty() ? "Service Providers" : category + " Providers";
         if (tvCategoryTitle != null) tvCategoryTitle.setText(title);
         if (tvResultSubtitle != null) {
-            tvResultSubtitle.setText("City: " + cityFilter);
+            String cityLabel = cityFilter.isEmpty() ? "All cities" : cityFilter;
+            tvResultSubtitle.setText("City: " + cityLabel);
         }
     }
 
@@ -248,22 +251,11 @@ public class ProvidersListActivity extends BaseActivity
                     .append("/rest/v1/provider_profiles?select=*");
 
             if (withStatusFilter) {
-                url.append("&or=(approved.eq.true,status.eq.approved,status.eq.active)");
+                url.append("&or=(approved.eq.true,status.eq.approved,status.eq.active,is_active.eq.true)");
             }
 
-            if (!category.isEmpty()) {
-                url.append("&category=ilike.*")
-                        .append(java.net.URLEncoder.encode(category, "UTF-8"))
-                        .append("*");
-            }
-
-            if (!cityFilter.isEmpty()) {
-                url.append("&city=ilike.*")
-                        .append(java.net.URLEncoder.encode(cityFilter, "UTF-8"))
-                        .append("*");
-            }
-
-            url.append("&order=created_at.desc&limit=150");
+            // Keep backend query broad and enforce exact matching in app to avoid category/city mismatch.
+            url.append("&order=created_at.desc");
 
             Log.d(TAG, "fetchProviders URL: " + url);
 
@@ -282,7 +274,12 @@ public class ProvidersListActivity extends BaseActivity
                 List<ProviderProfile> list = new ArrayList<>();
                 for (int i = 0; i < arr.length(); i++) {
                     ProviderProfile p = parseProvider(arr.getJSONObject(i));
-                    if (p != null) list.add(p);
+                    if (p == null) continue;
+
+                    if (!matchesCategory(category, p.category)) continue;
+                    if (!matchesCity(cityFilter, p.city)) continue;
+
+                    list.add(p);
                 }
                 return list;
             }
@@ -290,6 +287,18 @@ public class ProvidersListActivity extends BaseActivity
             Log.e(TAG, "fetchProviders error: " + e.getMessage());
             return null;
         }
+    }
+
+    private boolean matchesCategory(String selectedCategory, String providerCategory) {
+        if (selectedCategory == null || selectedCategory.trim().isEmpty()) return true;
+        if (providerCategory == null || providerCategory.trim().isEmpty()) return false;
+        return providerCategory.trim().equalsIgnoreCase(selectedCategory.trim());
+    }
+
+    private boolean matchesCity(String selectedCity, String providerCity) {
+        if (selectedCity == null || selectedCity.trim().isEmpty()) return true;
+        if (providerCity == null || providerCity.trim().isEmpty()) return false;
+        return providerCity.trim().equalsIgnoreCase(selectedCity.trim());
     }
 
     private ProviderProfile parseProvider(JSONObject o) {
@@ -430,19 +439,22 @@ public class ProvidersListActivity extends BaseActivity
 
     private void renderProviderList(List<ProviderProfile> filtered) {
         adapter.setProviders(filtered);
+        adapter.notifyDataSetChanged();
 
         if (filtered.isEmpty()) {
             rvProviders.setVisibility(View.GONE);
             errorState.setVisibility(View.GONE);
             emptyState.setVisibility(View.VISIBLE);
-            tvEmptySubtitle.setText("No providers found for selected city/category.");
+            tvEmptySubtitle.setText("No providers found for selected category/city.");
         } else {
             emptyState.setVisibility(View.GONE);
             errorState.setVisibility(View.GONE);
             rvProviders.setVisibility(View.VISIBLE);
         }
+
+        String cityLabel = cityFilter == null || cityFilter.trim().isEmpty() ? "All cities" : cityFilter;
         tvResultSubtitle.setText(filtered.size() + " provider" +
-                (filtered.size() != 1 ? "s" : "") + " found");
+                (filtered.size() != 1 ? "s" : "") + " in " + cityLabel);
     }
 
     // ── State helpers ─────────────────────────────────────────────────────

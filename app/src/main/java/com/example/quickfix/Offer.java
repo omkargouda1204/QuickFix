@@ -16,6 +16,9 @@ public class Offer {
     @SerializedName("description")
     public String description;
 
+    @SerializedName("image_url")
+    public String imageUrl;
+
     @SerializedName("offer_code")
     public String offerCode;       // e.g. "QUICKFIX20"
 
@@ -65,5 +68,21 @@ public class Offer {
         this.createdAt        = createdAt;
         this.updatedAt        = updatedAt;
         this.deletedAt        = deletedAt;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public String getOfferCode() {
+        return offerCode;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public String getDescription() {
+        return description;
     }
 }

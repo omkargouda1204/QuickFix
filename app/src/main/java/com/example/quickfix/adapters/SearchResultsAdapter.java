@@ -47,32 +47,27 @@ public class SearchResultsAdapter extends RecyclerView.Adapter<SearchResultsAdap
     public void onBindViewHolder(@NonNull VH h, int pos) {
         SearchResult r = items.get(pos);
         h.tvName.setText(r.name);
-        h.tvSubtitle.setText(r.subtitle);
-        h.tvCity.setText(r.city != null && !r.city.isEmpty() ? r.city : "-");
-        h.tvType.setText(r.type);
 
-        if (SearchResult.TYPE_PROVIDER.equals(r.type)) {
-            h.tvType.setBackgroundResource(R.drawable.bg_role_badge_provider);
-            h.tvType.setTextColor(0xFF2E7D32);
-            h.ivIcon.setImageResource(R.drawable.ic_business);
-            h.tvAvailability.setVisibility(View.VISIBLE);
-            h.tvDistance.setVisibility(View.VISIBLE);
-            h.tvRating.setVisibility(r.rating > 0f ? View.VISIBLE : View.GONE);
-            h.tvRating.setText(String.format(Locale.getDefault(), "%.1f", r.rating));
-            h.tvDistance.setText(r.distanceKm >= 0f
-                    ? String.format(Locale.getDefault(), "%.1f km", r.distanceKm)
-                    : "-");
-            h.tvAvailability.setText((r.availabilityStatus == null || r.availabilityStatus.isEmpty())
-                    ? "Available"
-                    : r.availabilityStatus);
-        } else {
-            h.tvType.setBackgroundResource(R.drawable.bg_role_badge_user);
-            h.tvType.setTextColor(0xFF1565C0);
-            h.ivIcon.setImageResource(R.drawable.ic_book_service);
-            h.tvRating.setVisibility(View.GONE);
-            h.tvDistance.setVisibility(View.GONE);
-            h.tvAvailability.setVisibility(View.GONE);
-        }
+        String category = r.subtitle != null ? r.subtitle.trim() : "";
+        String city = r.city != null ? r.city.trim() : "";
+        h.tvSubtitle.setText(!category.isEmpty() && !city.isEmpty() ? category + " • " + city : (!category.isEmpty() ? category : city));
+        h.tvCity.setVisibility(View.GONE);
+
+        h.ivIcon.setImageResource(R.drawable.ic_business);
+        h.tvType.setBackgroundResource(R.drawable.bg_role_badge_provider);
+        h.tvType.setTextColor(0xFF2E7D32);
+        h.tvType.setText("Provider");
+
+        h.tvAvailability.setVisibility(View.VISIBLE);
+        h.tvDistance.setVisibility(View.VISIBLE);
+        h.tvRating.setVisibility(r.rating > 0f ? View.VISIBLE : View.GONE);
+        h.tvRating.setText(String.format(Locale.getDefault(), "%.1f", r.rating));
+        h.tvDistance.setText(r.distanceKm >= 0f
+                ? String.format(Locale.getDefault(), "%.1f km", r.distanceKm)
+                : "");
+        h.tvAvailability.setText((r.availabilityStatus == null || r.availabilityStatus.isEmpty())
+                ? "Available"
+                : r.availabilityStatus);
 
         h.itemView.setOnClickListener(v -> { if (listener != null) listener.onResultClick(r); });
     }

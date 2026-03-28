@@ -171,9 +171,11 @@ public class SearchResultsActivity extends BaseActivity
         chipGroup.setOnCheckedStateChangeListener((group, checkedIds) -> {
             if (checkedIds.isEmpty()) return;
             int id = checkedIds.get(0);
-            if      (id == R.id.chipAll)       currentFilter = "All";
-            else if (id == R.id.chipServices)  currentFilter = SearchResult.TYPE_SERVICE;
-            else if (id == R.id.chipProviders) currentFilter = SearchResult.TYPE_PROVIDER;
+            if (id == R.id.chipProviders) {
+                currentFilter = SearchResult.TYPE_PROVIDER;
+            } else {
+                currentFilter = "All";
+            }
             applyFilter();
         });
     }
@@ -245,7 +247,6 @@ public class SearchResultsActivity extends BaseActivity
         new Thread(() -> {
             List<SearchResult> results = new ArrayList<>();
             results.addAll(searchProviders(query, userLat, userLng, NEARBY_RADIUS_KM, useNearby));
-            results.addAll(searchServices(query));
             MAIN.post(() -> {
                 allResults = results;
                 applyFilter();
@@ -318,7 +319,7 @@ public class SearchResultsActivity extends BaseActivity
                     .append("?status=eq.active")
                     .append("&or=(business_name.ilike.*").append(encQuery)
                     .append("*,category.ilike.*").append(encQuery)
-                    .append("*,description.ilike.*").append(encQuery).append("*)")
+                    .append("*,city.ilike.*").append(encQuery).append("*)")
                     .append("&select=id,business_name,category,city,area,owner_name,rating,status,availability_status,is_available,")
                     .append(latKey).append(",").append(lngKey)
                     .append("&limit=220");
@@ -373,7 +374,7 @@ public class SearchResultsActivity extends BaseActivity
                     .append("?status=eq.active")
                     .append("&or=(business_name.ilike.*").append(encQuery)
                     .append("*,category.ilike.*").append(encQuery)
-                    .append("*,owner_name.ilike.*").append(encQuery).append("*)")
+                    .append("*,city.ilike.*").append(encQuery).append("*)")
                     .append("&select=id,business_name,category,city,area,owner_name,rating,status,availability_status,is_available")
                     .append("&limit=30");
             if (!cityFilter.isEmpty()) {
@@ -457,98 +458,7 @@ public class SearchResultsActivity extends BaseActivity
         return list;
     }
 
-    private static String composeCityArea(String city, String area) {
-        String c = city == null ? "" : city.trim();
-        String a = area == null ? "" : area.trim();
-        if (!c.isEmpty() && !a.isEmpty()) return c + ", " + a;
-        return c.isEmpty() ? a : c;
-    }
-
-    private static String resolveAvailability(JSONObject o) {
-        String availability = o.optString("availability_status", "").trim();
-        if (!availability.isEmpty()) return availability;
-
-        String status = o.optString("status", "").trim();
-        if (!status.isEmpty()) {
-            if ("active".equalsIgnoreCase(status)) return "Available";
-            return status.substring(0, 1).toUpperCase(Locale.getDefault())
-                    + status.substring(1).toLowerCase(Locale.getDefault());
-        }
-
-        if (o.has("is_available") && !o.optBoolean("is_available", true)) {
-            return "Busy";
-        }
-        return "Available";
-    }
-
-    private static double optDoubleFlexible(JSONObject obj, String key) {
-        try {
-            if (!obj.has(key) || obj.isNull(key)) return Double.NaN;
-            Object raw = obj.get(key);
-            if (raw instanceof Number) return ((Number) raw).doubleValue();
-            return Double.parseDouble(String.valueOf(raw));
-        } catch (Exception ignored) {
-            return Double.NaN;
-        }
-    }
-
-    private static double haversineKm(double lat1, double lon1, double lat2, double lon2) {
-        final double r = 6371.0d;
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLon = Math.toRadians(lon2 - lon1);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(Math.toRadians(lat1))
-                * Math.cos(Math.toRadians(lat2))
-                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        return r * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-    }
-
-    // (searchProviders(String query) replaced by new GPS-aware searchProviders above)
-
-    /**
-     * Query services table — gracefully skipped if table doesn't exist.
-     * City filter only applied when cityFilter is non-empty.
-     */
-    private List<SearchResult> searchServices(String query) {
-        List<SearchResult> list = new ArrayList<>();
-        if (query.isEmpty()) return list;
-        try {
-            String enc = java.net.URLEncoder.encode(query, "UTF-8");
-            StringBuilder url = new StringBuilder(BASE_URL)
-                    .append("/rest/v1/services")
-                    .append("?or=(title.ilike.*").append(enc)
-                    .append("*,category.ilike.*").append(enc).append("*)")
-                    .append("&select=id,title,category")
-                    .append("&limit=20");
-            // No city filter on services table (it usually has no city column)
-
-            Request req = new Request.Builder().url(url.toString())
-                    .addHeader("apikey",        ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Accept",        "application/json")
-                    .build();
-
-            try (Response r = HTTP.newCall(req).execute()) {
-                if (r.code() == 404 || r.code() == 400) return list; // table may not exist
-                String body = r.body() != null ? r.body().string() : "[]";
-                if (r.code() == 200) {
-                    JSONArray arr = new JSONArray(body);
-                    for (int i = 0; i < arr.length(); i++) {
-                        JSONObject o = arr.getJSONObject(i);
-                        list.add(new SearchResult(
-                            o.optString("id"),
-                            o.optString("title", o.optString("name", "—")),
-                            o.optString("category", ""),
-                            "",
-                            SearchResult.TYPE_SERVICE
-                        ));
-                    }
-                }
-            }
-        } catch (IOException e) { Log.e(TAG, "searchServices: " + e.getMessage()); }
-        catch (Exception ignored) {}
-        return list;
-    }
+    // Provider-only results: services lookup intentionally disabled.
 
     private void applyFilter() {
         filtered.clear();
@@ -564,13 +474,8 @@ public class SearchResultsActivity extends BaseActivity
 
         boolean isEmpty = filtered.isEmpty() && !queryText.isEmpty();
         if (isEmpty) {
-            if (SearchResult.TYPE_PROVIDER.equals(currentFilter) || "All".equals(currentFilter)) {
-                tvEmptyTitle.setText("No nearby providers found");
-                tvEmptySubtitle.setText("Try a larger radius, different service, or location.");
-            } else {
-                tvEmptyTitle.setText("No results found");
-                tvEmptySubtitle.setText("Try a different keyword or location");
-            }
+            tvEmptyTitle.setText("No providers found");
+            tvEmptySubtitle.setText("Try another provider name, category, or city.");
         }
 
         emptyState.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
@@ -587,15 +492,7 @@ public class SearchResultsActivity extends BaseActivity
 
     @Override
     public void onResultClick(SearchResult result) {
-        if (SearchResult.TYPE_PROVIDER.equals(result.type)) {
-            // Fetch full provider profile from Supabase, then open detail
-            fetchProviderAndOpenDetail(result.id);
-        } else if (SearchResult.TYPE_SERVICE.equals(result.type)) {
-            Intent intent = new Intent(this, ProviderListActivity.class);
-            intent.putExtra(ProviderListActivity.EXTRA_CATEGORY, result.subtitle);
-            intent.putExtra(ProviderListActivity.EXTRA_QUERY, result.name);
-            startActivity(intent);
-        }
+        fetchProviderAndOpenDetail(result.id);
     }
 
     private void fetchProviderAndOpenDetail(String providerId) {
@@ -712,5 +609,50 @@ public class SearchResultsActivity extends BaseActivity
             }
         }
     }
-}
 
+    private static String composeCityArea(String city, String area) {
+        String c = city == null ? "" : city.trim();
+        String a = area == null ? "" : area.trim();
+        if (!c.isEmpty() && !a.isEmpty()) return c + ", " + a;
+        return c.isEmpty() ? a : c;
+    }
+
+    private static String resolveAvailability(JSONObject o) {
+        String availability = o.optString("availability_status", "").trim();
+        if (!availability.isEmpty()) return availability;
+
+        String status = o.optString("status", "").trim();
+        if (!status.isEmpty()) {
+            if ("active".equalsIgnoreCase(status)) return "Available";
+            return status.substring(0, 1).toUpperCase(Locale.getDefault())
+                    + status.substring(1).toLowerCase(Locale.getDefault());
+        }
+
+        if (o.has("is_available") && !o.optBoolean("is_available", true)) {
+            return "Busy";
+        }
+        return "Available";
+    }
+
+    private static double optDoubleFlexible(JSONObject obj, String key) {
+        try {
+            if (!obj.has(key) || obj.isNull(key)) return Double.NaN;
+            Object raw = obj.get(key);
+            if (raw instanceof Number) return ((Number) raw).doubleValue();
+            return Double.parseDouble(String.valueOf(raw));
+        } catch (Exception ignored) {
+            return Double.NaN;
+        }
+    }
+
+    private static double haversineKm(double lat1, double lon1, double lat2, double lon2) {
+        final double r = 6371.0d;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1))
+                * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return r * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    }
+}

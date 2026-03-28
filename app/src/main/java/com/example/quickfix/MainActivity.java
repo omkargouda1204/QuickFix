@@ -39,11 +39,10 @@ import com.example.quickfix.api.BannerApi;
 import com.example.quickfix.api.OfferApi;
 import com.example.quickfix.api.RetrofitProvider;
 import com.google.android.material.button.MaterialButton;
-import com.google.android.material.tabs.TabLayout;
-import com.google.android.material.tabs.TabLayoutMediator;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.messaging.FirebaseMessaging;
+import com.tbuonomo.viewpagerdotsindicator.WormDotsIndicator;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -117,12 +116,11 @@ public class MainActivity extends BaseActivity {
     private MaterialButton     btnRetryBannerLoad;
     private ViewPager2         vpBannersCarousel;
     private RecyclerView       rvOffersStrip;
-    private TabLayout          bannerDotsLayout;
+    private WormDotsIndicator  bannerDotsLayout;
     private HomeBannerAdapter  homeBannerAdapter;
     private HomeOfferAdapter   homeOfferAdapter;
     private final List<Banner> homeBanners = new ArrayList<>();
     private final List<Offer>  homeOffers  = new ArrayList<>();
-    private TabLayoutMediator  bannerDotsMediator;
     private ViewPager2.OnPageChangeCallback bannerPageCallback;
     private final Handler bannerAutoSlideHandler = new Handler(Looper.getMainLooper());
     private Runnable bannerAutoSlideRunnable;
@@ -594,7 +592,14 @@ public class MainActivity extends BaseActivity {
     private void setupSearchBar() {
         if (etSearch == null) return;
         if (rvSearchSuggestions != null) {
-            suggestionsAdapter = new SearchSuggestionsAdapter(this, suggestion -> { hideSuggestions(); openSearchResults(suggestion.name); });
+            suggestionsAdapter = new SearchSuggestionsAdapter(this, suggestion -> {
+                hideSuggestions();
+                if (suggestion != null && suggestion.id != null && !suggestion.id.trim().isEmpty()) {
+                    openProviderDetailFromSuggestion(suggestion);
+                } else {
+                    openSearchResults(suggestion != null ? suggestion.name : "");
+                }
+            });
             rvSearchSuggestions.setLayoutManager(new LinearLayoutManager(this));
             rvSearchSuggestions.setAdapter(suggestionsAdapter);
         }
@@ -620,18 +625,61 @@ public class MainActivity extends BaseActivity {
                 List<SearchResult> list = new ArrayList<>();
                 String enc = java.net.URLEncoder.encode(query, "UTF-8");
                 String city = locationManager != null ? locationManager.getSavedCity() : "";
-                StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL).append("/rest/v1/provider_profiles?status=eq.active&or=(business_name.ilike.*").append(enc).append("*,category.ilike.*").append(enc).append("*,owner_name.ilike.*").append(enc).append("*)&select=id,business_name,category,city&limit=6");
-                if (!city.isEmpty()) url.append("&city=ilike.*").append(java.net.URLEncoder.encode(city, "UTF-8")).append("*");
-                Request req = new Request.Builder().url(url.toString()).addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY).addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY).addHeader("Accept", "application/json").build();
+                StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
+                        .append("/rest/v1/provider_profiles?status=eq.active")
+                        .append("&or=(business_name.ilike.*").append(enc)
+                        .append("*,category.ilike.*").append(enc)
+                        .append("*,city.ilike.*").append(enc).append("*)")
+                        .append("&select=id,business_name,category,city")
+                        .append("&limit=8");
+                if (!city.isEmpty()) {
+                    url.append("&city=ilike.*").append(java.net.URLEncoder.encode(city, "UTF-8")).append("*");
+                }
+
+                Request req = new Request.Builder()
+                        .url(url.toString())
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
                 try (Response r = HTTP.newCall(req).execute()) {
                     if (r.code() == 200 && r.body() != null) {
                         JSONArray arr = new JSONArray(r.body().string());
-                        for (int i = 0; i < arr.length(); i++) { JSONObject o = arr.getJSONObject(i); list.add(new SearchResult(o.optString("id"), o.optString("business_name", ""), o.optString("category", ""), o.optString("city", ""), SearchResult.TYPE_PROVIDER)); }
+                        for (int i = 0; i < arr.length(); i++) {
+                            JSONObject o = arr.getJSONObject(i);
+                            list.add(new SearchResult(
+                                    o.optString("id"),
+                                    o.optString("business_name", ""),
+                                    o.optString("category", ""),
+                                    o.optString("city", ""),
+                                    SearchResult.TYPE_PROVIDER
+                            ));
+                        }
                     }
                 }
-                MAIN.post(() -> { if (suggestionsAdapter != null) { suggestionsAdapter.setSuggestions(list); if (searchSuggestionsContainer != null) searchSuggestionsContainer.setVisibility(list.isEmpty() ? View.GONE : View.VISIBLE); } });
-            } catch (Exception e) { Log.e(TAG, "fetchSuggestions: " + e.getMessage()); }
+                MAIN.post(() -> {
+                    if (suggestionsAdapter != null) {
+                        suggestionsAdapter.setSuggestions(list);
+                        if (searchSuggestionsContainer != null) {
+                            searchSuggestionsContainer.setVisibility(list.isEmpty() ? View.GONE : View.VISIBLE);
+                        }
+                    }
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "fetchSuggestions: " + e.getMessage());
+            }
         }).start();
+    }
+
+    private void openProviderDetailFromSuggestion(SearchResult suggestion) {
+        Intent intent = new Intent(this, ProviderDetailActivity.class);
+        intent.putExtra(ProviderDetailActivity.EXTRA_PROVIDER_ID, suggestion.id);
+        intent.putExtra(ProviderDetailActivity.EXTRA_BUSINESS_NAME, suggestion.name != null ? suggestion.name : "");
+        intent.putExtra(ProviderDetailActivity.EXTRA_CATEGORY, suggestion.subtitle != null ? suggestion.subtitle : "");
+        intent.putExtra(ProviderDetailActivity.EXTRA_CITY, suggestion.city != null ? suggestion.city : "");
+        startActivity(intent);
+        overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
     }
 
     private void hideSuggestions() { if (searchSuggestionsContainer != null) searchSuggestionsContainer.setVisibility(View.GONE); }
@@ -644,7 +692,14 @@ public class MainActivity extends BaseActivity {
         if (catMore != null) catMore.setOnClickListener(v -> { startActivity(new Intent(this, CategoriesActivity.class)); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); });
     }
 
-    private void openProvidersList(String category) { Intent intent = new Intent(this, ProviderListActivity.class); intent.putExtra(ProviderListActivity.EXTRA_CATEGORY, category); startActivity(intent); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); }
+    private void openProvidersList(String category) {
+        Intent intent = new Intent(this, ProviderListActivity.class);
+        intent.putExtra(ProviderListActivity.EXTRA_CATEGORY, category);
+        String selectedCity = locationManager != null ? locationManager.getSavedCity() : "";
+        intent.putExtra(ProviderListActivity.EXTRA_CITY, selectedCity != null ? selectedCity : "");
+        startActivity(intent);
+        overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+    }
 
     private void setupQuickActionListeners() {
         if (quickBookService != null) quickBookService.setOnClickListener(v -> { startActivity(new Intent(this, CategoriesActivity.class)); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); });
@@ -875,27 +930,19 @@ public class MainActivity extends BaseActivity {
 
     private void showBannersOnHome() {
         try {
-            if (bannersSection == null || vpBannersCarousel == null || bannerDotsLayout == null) {
+            if (bannersSection == null || vpBannersCarousel == null) {
                 Log.w(TAG, "Banner views not initialized");
                 return;
             }
 
             if (homeBanners.isEmpty()) {
                 Log.d(TAG, "No banners to display");
-                bannersSection.setVisibility(View.VISIBLE);
+                bannersSection.setVisibility(View.GONE);
                 if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE);
                 if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE);
                 if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE);
-                if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.VISIBLE);
+                if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE);
                 stopBannerAutoSlide();
-                if (bannerDotsMediator != null) {
-                    try {
-                        bannerDotsMediator.detach();
-                    } catch (Exception e) {
-                        Log.e(TAG, "Error detaching dots mediator: " + e.getMessage());
-                    }
-                    bannerDotsMediator = null;
-                }
                 return;
             }
 
@@ -910,32 +957,24 @@ public class MainActivity extends BaseActivity {
                 homeBannerAdapter.notifyDataSetChanged();
             }
 
+            if (bannerDotsLayout != null) {
+                try {
+                    bannerDotsLayout.setViewPager2(vpBannersCarousel);
+                } catch (Exception e) {
+                    Log.e(TAG, "Error binding worm dots indicator: " + e.getMessage());
+                }
+            }
+
             if (bannerPageCallback == null) {
                 bannerPageCallback = new ViewPager2.OnPageChangeCallback() {
                     @Override
                     public void onPageSelected(int position) {
                         super.onPageSelected(position);
-                        try {
-                            if (bannerDotsLayout.getTabCount() == 0) return;
-                            TabLayout.Tab tab = bannerDotsLayout.getTabAt(position);
-                            if (tab != null) bannerDotsLayout.selectTab(tab);
-                        } catch (Exception e) {
-                            Log.e(TAG, "Error updating dot indicator: " + e.getMessage());
-                        }
                     }
                 };
                 vpBannersCarousel.registerOnPageChangeCallback(bannerPageCallback);
             }
 
-            if (bannerDotsMediator != null) {
-                try {
-                    bannerDotsMediator.detach();
-                } catch (Exception e) {
-                    Log.e(TAG, "Error detaching old mediator: " + e.getMessage());
-                }
-            }
-            bannerDotsMediator = new TabLayoutMediator(bannerDotsLayout, vpBannersCarousel, (tab, position) -> {});
-            bannerDotsMediator.attach();
 
             startBannerAutoSlide();
             Log.d(TAG, "Banners displayed successfully");
@@ -955,11 +994,11 @@ public class MainActivity extends BaseActivity {
 
             if (homeOffers.isEmpty()) {
                 Log.d(TAG, "No offers to display");
-                offersSection.setVisibility(View.VISIBLE);
+                offersSection.setVisibility(View.GONE);
                 if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE);
                 if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE);
                 if (offersErrorState != null) offersErrorState.setVisibility(View.GONE);
-                if (offersEmptyState != null) offersEmptyState.setVisibility(View.VISIBLE);
+                if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE);
                 return;
             }
 

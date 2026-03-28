@@ -14,6 +14,10 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.target.Target;
 import com.example.quickfix.Offer;
 import com.example.quickfix.R;
 import com.google.android.material.button.MaterialButton;
@@ -21,6 +25,8 @@ import com.google.android.material.button.MaterialButton;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+
+import androidx.annotation.Nullable;
 
 public class HomeOfferAdapter extends RecyclerView.Adapter<HomeOfferAdapter.VH> {
 
@@ -54,25 +60,61 @@ public class HomeOfferAdapter extends RecyclerView.Adapter<HomeOfferAdapter.VH> 
                 : "₹" + (int) o.discountValue + " OFF";
         h.tvDiscount.setText(discountStr);
 
-        h.tvTitle.setText(o.title != null ? o.title : "");
-        h.tvDescription.setText(o.description != null && !o.description.trim().isEmpty()
-                ? o.description
-                : h.itemView.getContext().getString(R.string.home_offer_default_description));
-
-        String normalizedCode = o.offerCode != null ? o.offerCode.trim().toUpperCase(Locale.US) : "";
-        if (normalizedCode.isEmpty()) {
-            h.tvCode.setText(R.string.home_offer_no_code);
+        String title = o.getTitle() != null ? o.getTitle().trim() : "";
+        if (title.isEmpty()) {
+            h.tvTitle.setVisibility(View.GONE);
         } else {
+            h.tvTitle.setVisibility(View.VISIBLE);
+            h.tvTitle.setText(title);
+        }
+
+        String description = o.getDescription() != null ? o.getDescription().trim() : "";
+        if (description.isEmpty()) {
+            h.tvDescription.setVisibility(View.GONE);
+        } else {
+            h.tvDescription.setVisibility(View.VISIBLE);
+            h.tvDescription.setText(description);
+        }
+
+        String normalizedCode = o.getOfferCode() != null ? o.getOfferCode().trim().toUpperCase(Locale.US) : "";
+        if (normalizedCode.isEmpty()) {
+            h.tvCode.setVisibility(View.GONE);
+            h.copyBtn.setVisibility(View.GONE);
+        } else {
+            h.tvCode.setVisibility(View.VISIBLE);
+            h.copyBtn.setVisibility(View.VISIBLE);
             h.tvCode.setText(h.itemView.getContext().getString(R.string.home_offer_code_format, normalizedCode));
         }
 
-        // Display placeholder image for offers
-        h.ivImage.setImageResource(R.drawable.ic_offers);
-        h.ivImage.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        h.ivImage.setPadding(24, 24, 24, 24);
+        String imageUrl = o.getImageUrl() != null ? o.getImageUrl().trim() : "";
+        if (!imageUrl.isEmpty()) {
+            h.ivImage.setVisibility(View.VISIBLE);
+            h.ivImage.setPadding(0, 0, 0, 0);
+            h.ivImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            Glide.with(ctx)
+                    .load(imageUrl)
+                    .placeholder(R.drawable.placeholder)
+                    .listener(new RequestListener<android.graphics.drawable.Drawable>() {
+                        @Override
+                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<android.graphics.drawable.Drawable> target, boolean isFirstResource) {
+                            h.ivImage.setVisibility(View.GONE);
+                            return false;
+                        }
+
+                        @Override
+                        public boolean onResourceReady(android.graphics.drawable.Drawable resource, Object model, Target<android.graphics.drawable.Drawable> target, DataSource dataSource, boolean isFirstResource) {
+                            h.ivImage.setVisibility(View.VISIBLE);
+                            return false;
+                        }
+                    })
+                    .error(R.drawable.placeholder)
+                    .into(h.ivImage);
+        } else {
+            h.ivImage.setVisibility(View.GONE);
+        }
 
         h.copyBtn.setOnClickListener(v -> {
-            String offerCode = o.offerCode != null ? o.offerCode.trim() : "";
+            String offerCode = o.getOfferCode() != null ? o.getOfferCode().trim() : "";
             if (offerCode.isEmpty()) {
                 Toast.makeText(ctx, R.string.home_offer_no_code, Toast.LENGTH_SHORT).show();
                 return;

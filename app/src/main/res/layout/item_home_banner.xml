@@ -4,7 +4,6 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:layout_marginEnd="12dp"
     android:clickable="true"
     android:focusable="true"
     app:cardCornerRadius="16dp"
@@ -20,9 +19,9 @@
             android:id="@+id/ivBannerImage"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:contentDescription="Banner"
             android:scaleType="centerCrop"
-            android:src="@drawable/bg_promo_card"
-            android:contentDescription="Banner" />
+            android:src="@drawable/bg_promo_card" />
 
         <!-- Fallback gradient when no image -->
         <View
@@ -43,25 +42,24 @@
             android:layout_height="wrap_content"
             android:layout_gravity="bottom"
             android:orientation="vertical"
-            android:padding="14dp">
+            android:padding="12dp">
 
             <TextView
                 android:id="@+id/tvBannerTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:shadowColor="#88000000"
+                android:shadowRadius="4"
                 android:text="Banner Title"
                 android:textColor="#FFFFFF"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:maxLines="2"
-                android:ellipsize="end"
-                android:shadowColor="#88000000"
-                android:shadowRadius="4" />
+                android:textSize="14sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
     </FrameLayout>
 
 </com.google.android.material.card.MaterialCardView>
-
 
 
