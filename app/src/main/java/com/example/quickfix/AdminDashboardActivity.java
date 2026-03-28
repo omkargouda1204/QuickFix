@@ -390,16 +390,17 @@ public class AdminDashboardActivity extends BaseActivity {
         loadStatCount("/rest/v1/users?select=id&is_user=eq.true",
                 statTotalUsers);
 
-        // Load service providers count
-        loadStatCount("/rest/v1/users?select=id&is_service_provider=eq.true",
+        // Load approved providers from provider_profiles (single source of truth)
+        loadStatCount("/rest/v1/provider_profiles?select=id&or=(is_approved.eq.true,approved.eq.true,status.eq.approved,status.eq.active,is_active.eq.true)",
                 statTotalProviders);
 
         // Load pending approvals count — from provider_applications
         loadStatCount("/rest/v1/provider_applications?select=id&status=eq.pending",
                 statPendingApprovals);
 
-        // Active bookings — set placeholder (bookings table depends on schema)
-        if (statActiveBookings != null) statActiveBookings.setText("—");
+        // Active bookings count
+        loadStatCount("/rest/v1/bookings?select=id",
+                statActiveBookings);
     }
 
     /**

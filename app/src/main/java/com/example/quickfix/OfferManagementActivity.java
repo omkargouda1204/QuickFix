@@ -239,53 +239,113 @@ public class OfferManagementActivity extends BaseActivity {
         Map<String, Object> body = new HashMap<>();
         body.put("title", title);
         body.put("description", desc);
+        // Compatibility: support both detailed schema and simplified schema.
         body.put("offer_code", code);
+        body.put("code", code);
         body.put("discount_type", discountType);
         body.put("discount_value", discountValue);
+        body.put("discount", (int) discountValue);
         body.put("min_booking_amount", minAmount);
         body.put("is_active", isActive);
         body.put("expiry_date", (expiryDate == null || expiryDate.isEmpty()) ? null : expiryDate);
-        
-        // Add status field: active, inactive, or expired based on conditions
-        String status = "active";
-        if (!isActive) {
-            status = "inactive";
-        } else if (expiryDate != null && !expiryDate.isEmpty()) {
-            String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date());
-            if (expiryDate.compareTo(today) < 0) {
-                status = "expired";
-            }
-        }
-        body.put("status", status);
 
-        Call<Void> call;
         if (existingId != null) {
-            call = offerApi.updateOffer(ANON_KEY, "Bearer " + ANON_KEY, "application/json", "return=minimal", "eq." + existingId, body);
+            executeOfferUpdate(existingId, body, title, discountType, discountValue, code, sendNotif, dialog, false);
         } else {
             body.put("id", UUID.randomUUID().toString());
-            call = offerApi.createOffer(ANON_KEY, "Bearer " + ANON_KEY, "application/json", "return=minimal", body);
+            executeOfferCreate(body, title, discountType, discountValue, code, sendNotif, dialog, false);
         }
+    }
 
-        call.enqueue(new Callback<Void>() {
-            @Override
-            public void onResponse(Call<Void> call, Response<Void> response) {
-                if (response.isSuccessful()) {
-                    dialog.dismiss();
-                    Toast.makeText(OfferManagementActivity.this, "✓ Offer saved", Toast.LENGTH_SHORT).show();
-                    loadOffers();
-                    if (sendNotif) {
-                        String discStr = "percentage".equals(discountType) ? (int) discountValue + "% OFF" : "₹" + (int) discountValue + " OFF";
-                        sendOfferNotification(title, code, discStr);
+    private void executeOfferCreate(Map<String, Object> body,
+                                    String title,
+                                    String discountType,
+                                    double discountValue,
+                                    String code,
+                                    boolean sendNotif,
+                                    AlertDialog dialog,
+                                    boolean fallbackMode) {
+        offerApi.createOffer(ANON_KEY, "Bearer " + ANON_KEY, "application/json", "return=minimal", body)
+                .enqueue(new Callback<Void>() {
+                    @Override
+                    public void onResponse(Call<Void> call, Response<Void> response) {
+                        if (response.isSuccessful()) {
+                            dialog.dismiss();
+                            Toast.makeText(OfferManagementActivity.this, "✓ Offer saved", Toast.LENGTH_SHORT).show();
+                            loadOffers();
+                            if (sendNotif) {
+                                String discStr = "percentage".equals(discountType)
+                                        ? (int) discountValue + "% OFF"
+                                        : "₹" + (int) discountValue + " OFF";
+                                sendOfferNotification(title, code, discStr);
+                            }
+                            return;
+                        }
+
+                        if (!fallbackMode) {
+                            executeOfferCreate(buildOfferFallbackBody(body), title, discountType, discountValue, code, sendNotif, dialog, true);
+                        } else {
+                            showErrorDialog("Save Failed", "Error " + response.code());
+                        }
                     }
-                } else {
-                    showErrorDialog("Save Failed", "Error " + response.code());
-                }
-            }
-            @Override
-            public void onFailure(Call<Void> call, Throwable t) {
-                showErrorDialog("Error", t.getMessage());
-            }
-        });
+
+                    @Override
+                    public void onFailure(Call<Void> call, Throwable t) {
+                        showErrorDialog("Error", t.getMessage());
+                    }
+                });
+    }
+
+    private void executeOfferUpdate(String id,
+                                    Map<String, Object> body,
+                                    String title,
+                                    String discountType,
+                                    double discountValue,
+                                    String code,
+                                    boolean sendNotif,
+                                    AlertDialog dialog,
+                                    boolean fallbackMode) {
+        offerApi.updateOffer(ANON_KEY, "Bearer " + ANON_KEY, "application/json", "return=minimal", "eq." + id, body)
+                .enqueue(new Callback<Void>() {
+                    @Override
+                    public void onResponse(Call<Void> call, Response<Void> response) {
+                        if (response.isSuccessful()) {
+                            dialog.dismiss();
+                            Toast.makeText(OfferManagementActivity.this, "✓ Offer saved", Toast.LENGTH_SHORT).show();
+                            loadOffers();
+                            if (sendNotif) {
+                                String discStr = "percentage".equals(discountType)
+                                        ? (int) discountValue + "% OFF"
+                                        : "₹" + (int) discountValue + " OFF";
+                                sendOfferNotification(title, code, discStr);
+                            }
+                            return;
+                        }
+
+                        if (!fallbackMode) {
+                            executeOfferUpdate(id, buildOfferFallbackBody(body), title, discountType, discountValue, code, sendNotif, dialog, true);
+                        } else {
+                            showErrorDialog("Save Failed", "Error " + response.code());
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<Void> call, Throwable t) {
+                        showErrorDialog("Error", t.getMessage());
+                    }
+                });
+    }
+
+    private Map<String, Object> buildOfferFallbackBody(Map<String, Object> source) {
+        Map<String, Object> fallback = new HashMap<>();
+        fallback.put("title", source.get("title"));
+        fallback.put("description", source.get("description"));
+        fallback.put("code", source.get("code"));
+        fallback.put("discount", source.get("discount"));
+        fallback.put("is_active", source.get("is_active"));
+        fallback.put("expiry_date", source.get("expiry_date"));
+        if (source.containsKey("id")) fallback.put("id", source.get("id"));
+        return fallback;
     }
 
     private void sendOfferNotification(String offerTitle, String code, String discStr) {

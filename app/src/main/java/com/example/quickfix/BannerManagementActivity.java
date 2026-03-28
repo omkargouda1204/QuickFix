@@ -320,43 +320,77 @@ public class BannerManagementActivity extends BaseActivity {
         body.put("is_active", isActive);
         body.put("priority", priority);
         body.put("expiry_date", (expiryDate == null || expiryDate.isEmpty()) ? null : expiryDate);
-        
-        // Add status field: active by default, expired if expiry_date is passed
-        String status = "active";
-        if (expiryDate != null && !expiryDate.isEmpty()) {
-            String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date());
-            if (expiryDate.compareTo(today) < 0) {
-                status = "expired";
-            }
-        }
-        body.put("status", status);
 
-        Call<Void> call;
         if (existingId != null) {
-            call = bannerApi.updateBanner(ANON_KEY, "Bearer " + ANON_KEY, "application/json", "return=minimal", "eq." + existingId, body);
+            executeBannerUpdate(existingId, body, dialog, false);
         } else {
             body.put("id", UUID.randomUUID().toString());
             String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date());
             body.put("start_date", today);
-            call = bannerApi.createBanner(ANON_KEY, "Bearer " + ANON_KEY, "application/json", "return=minimal", body);
+            executeBannerCreate(body, dialog, false);
         }
+    }
 
-        call.enqueue(new Callback<Void>() {
-            @Override
-            public void onResponse(Call<Void> call, Response<Void> response) {
-                if (response.isSuccessful()) {
-                    dialog.dismiss();
-                    Toast.makeText(BannerManagementActivity.this, "✓ Banner saved", Toast.LENGTH_SHORT).show();
-                    loadBanners();
-                } else {
-                    showErrorDialog("Save Failed", "Error " + response.code());
-                }
-            }
-            @Override
-            public void onFailure(Call<Void> call, Throwable t) {
-                showErrorDialog("Error", t.getMessage());
-            }
-        });
+    private void executeBannerCreate(Map<String, Object> body, AlertDialog dialog, boolean fallbackMode) {
+        bannerApi.createBanner(ANON_KEY, "Bearer " + ANON_KEY, "application/json", "return=minimal", body)
+                .enqueue(new Callback<Void>() {
+                    @Override
+                    public void onResponse(Call<Void> call, Response<Void> response) {
+                        if (response.isSuccessful()) {
+                            dialog.dismiss();
+                            Toast.makeText(BannerManagementActivity.this, "✓ Banner saved", Toast.LENGTH_SHORT).show();
+                            loadBanners();
+                            return;
+                        }
+
+                        if (!fallbackMode) {
+                            executeBannerCreate(buildBannerFallbackBody(body), dialog, true);
+                        } else {
+                            showErrorDialog("Save Failed", "Error " + response.code());
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<Void> call, Throwable t) {
+                        showErrorDialog("Error", t.getMessage());
+                    }
+                });
+    }
+
+    private void executeBannerUpdate(String id, Map<String, Object> body, AlertDialog dialog, boolean fallbackMode) {
+        bannerApi.updateBanner(ANON_KEY, "Bearer " + ANON_KEY, "application/json", "return=minimal", "eq." + id, body)
+                .enqueue(new Callback<Void>() {
+                    @Override
+                    public void onResponse(Call<Void> call, Response<Void> response) {
+                        if (response.isSuccessful()) {
+                            dialog.dismiss();
+                            Toast.makeText(BannerManagementActivity.this, "✓ Banner saved", Toast.LENGTH_SHORT).show();
+                            loadBanners();
+                            return;
+                        }
+
+                        if (!fallbackMode) {
+                            executeBannerUpdate(id, buildBannerFallbackBody(body), dialog, true);
+                        } else {
+                            showErrorDialog("Save Failed", "Error " + response.code());
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<Void> call, Throwable t) {
+                        showErrorDialog("Error", t.getMessage());
+                    }
+                });
+    }
+
+    private Map<String, Object> buildBannerFallbackBody(Map<String, Object> source) {
+        Map<String, Object> fallback = new HashMap<>();
+        fallback.put("title", source.get("title"));
+        fallback.put("image_url", source.get("image_url"));
+        fallback.put("is_active", source.get("is_active"));
+        fallback.put("expiry_date", source.get("expiry_date"));
+        if (source.containsKey("id")) fallback.put("id", source.get("id"));
+        return fallback;
     }
 
     private void toggleBannerActive(Banner banner, boolean newState) {

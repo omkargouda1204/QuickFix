@@ -1,6 +1,6 @@
 package com.example.quickfix;
 
-/** Model for a provider fetched from provider_applications (approved). */
+/** Model for a provider fetched from provider_profiles. */
 public class ProviderProfile {
     public String id;
     public String firebaseUid;
@@ -16,6 +16,7 @@ public class ProviderProfile {
     public String businessImageUrl;
     public String idProofUrl;
     public boolean isVerified;
+    public boolean isApproved;
     public float   rating;
     public int     reviewCount;
     public String  status;
@@ -25,4 +26,3 @@ public class ProviderProfile {
 
     public ProviderProfile() {}
 }
-

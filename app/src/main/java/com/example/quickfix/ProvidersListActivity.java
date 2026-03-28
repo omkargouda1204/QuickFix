@@ -53,6 +53,8 @@ public class ProvidersListActivity extends BaseActivity
     public static final String EXTRA_QUERY = "query";
 
     private static final String TAG = "ProvidersListActivity";
+    private static final float NEARBY_RADIUS_PRIMARY_METERS = 20000f;
+    private static final float NEARBY_RADIUS_SECONDARY_METERS = 25000f;
 
     // ── Views ─────────────────────────────────────────────────────────────
     private TextView          tvCategoryTitle, tvResultSubtitle, tvLocationLabel, tvEmptySubtitle;
@@ -251,10 +253,9 @@ public class ProvidersListActivity extends BaseActivity
                     .append("/rest/v1/provider_profiles?select=*");
 
             if (withStatusFilter) {
-                url.append("&or=(approved.eq.true,status.eq.approved,status.eq.active,is_active.eq.true)");
+                url.append("&or=(is_approved.eq.true,approved.eq.true,status.eq.approved,status.eq.active,is_active.eq.true)");
             }
 
-            // Keep backend query broad and enforce exact matching in app to avoid category/city mismatch.
             url.append("&order=created_at.desc");
 
             Log.d(TAG, "fetchProviders URL: " + url);
@@ -275,10 +276,9 @@ public class ProvidersListActivity extends BaseActivity
                 for (int i = 0; i < arr.length(); i++) {
                     ProviderProfile p = parseProvider(arr.getJSONObject(i));
                     if (p == null) continue;
-
+                    if (!isProviderEligible(p)) continue;
                     if (!matchesCategory(category, p.category)) continue;
                     if (!matchesCity(cityFilter, p.city)) continue;
-
                     list.add(p);
                 }
                 return list;
@@ -287,6 +287,12 @@ public class ProvidersListActivity extends BaseActivity
             Log.e(TAG, "fetchProviders error: " + e.getMessage());
             return null;
         }
+    }
+
+    private boolean isProviderEligible(ProviderProfile p) {
+        if (p == null || p.status == null) return false;
+        String status = p.status.trim().toLowerCase(Locale.getDefault());
+        return "approved".equals(status) || "active".equals(status);
     }
 
     private boolean matchesCategory(String selectedCategory, String providerCategory) {
@@ -319,7 +325,10 @@ public class ProvidersListActivity extends BaseActivity
             p.isVerified       = o.optBoolean("is_verified", false);
 
             String status      = o.optString("status", "");
-            p.status           = status.isEmpty()
+            if (status.isEmpty() && (o.optBoolean("is_approved", false) || o.optBoolean("approved", false))) {
+                status = "approved";
+            }
+            p.status = status.isEmpty()
                     ? (o.optBoolean("is_active", true) ? "active" : "inactive")
                     : status;
 
@@ -402,26 +411,26 @@ public class ProvidersListActivity extends BaseActivity
         locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
             @Override
             public void onSuccess(String city, String area, double lat, double lng) {
-                List<ProviderProfile> filtered = new ArrayList<>();
-                for (ProviderProfile p : allProviders) {
-                    if (Double.isNaN(p.lat) || Double.isNaN(p.lng)) continue;
-                    float[] result = new float[1];
-                    Location.distanceBetween(lat, lng, p.lat, p.lng, result);
-                    if (result[0] > 10000f) continue;
-
-                    if (!cleanedQuery.isEmpty()) {
-                        String q = cleanedQuery.toLowerCase(Locale.getDefault());
-                        boolean matchBusiness = p.businessName != null
-                                && p.businessName.toLowerCase(Locale.getDefault()).contains(q);
-                        boolean matchCategory = p.category != null
-                                && p.category.toLowerCase(Locale.getDefault()).contains(q);
-                        boolean matchOwner = p.ownerName != null
-                                && p.ownerName.toLowerCase(Locale.getDefault()).contains(q);
-                        if (!(matchBusiness || matchCategory || matchOwner)) continue;
-                    }
-                    filtered.add(p);
+                List<ProviderProfile> within20Km = filterByDistanceAndQuery(cleanedQuery, lat, lng, NEARBY_RADIUS_PRIMARY_METERS);
+                if (!within20Km.isEmpty()) {
+                    runOnUiThread(() -> renderProviderList(within20Km));
+                    return;
                 }
-                runOnUiThread(() -> renderProviderList(filtered));
+
+                List<ProviderProfile> within25Km = filterByDistanceAndQuery(cleanedQuery, lat, lng, NEARBY_RADIUS_SECONDARY_METERS);
+                if (!within25Km.isEmpty()) {
+                    runOnUiThread(() -> renderProviderList(within25Km));
+                    return;
+                }
+
+                // Final fallback: use city/category results instead of empty nearby list.
+                runOnUiThread(() -> {
+                    Toast.makeText(ProvidersListActivity.this,
+                            "No providers in 25km. Showing city results.",
+                            Toast.LENGTH_SHORT).show();
+                    searchQuery = cleanedQuery;
+                    applyFilterAndSearch();
+                });
             }
 
             @Override
@@ -435,6 +444,30 @@ public class ProvidersListActivity extends BaseActivity
                 });
             }
         });
+    }
+
+    private List<ProviderProfile> filterByDistanceAndQuery(String cleanedQuery, double lat, double lng, float radiusMeters) {
+        List<ProviderProfile> filtered = new ArrayList<>();
+        String q = cleanedQuery == null ? "" : cleanedQuery.toLowerCase(Locale.getDefault()).trim();
+
+        for (ProviderProfile p : allProviders) {
+            if (Double.isNaN(p.lat) || Double.isNaN(p.lng)) continue;
+            float[] result = new float[1];
+            Location.distanceBetween(lat, lng, p.lat, p.lng, result);
+            if (result[0] > radiusMeters) continue;
+
+            if (!q.isEmpty()) {
+                boolean matchBusiness = p.businessName != null
+                        && p.businessName.toLowerCase(Locale.getDefault()).contains(q);
+                boolean matchCategory = p.category != null
+                        && p.category.toLowerCase(Locale.getDefault()).contains(q);
+                boolean matchOwner = p.ownerName != null
+                        && p.ownerName.toLowerCase(Locale.getDefault()).contains(q);
+                if (!(matchBusiness || matchCategory || matchOwner)) continue;
+            }
+            filtered.add(p);
+        }
+        return filtered;
     }
 
     private void renderProviderList(List<ProviderProfile> filtered) {

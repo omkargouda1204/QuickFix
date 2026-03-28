@@ -557,12 +557,8 @@ public class SupabaseClient {
     //  SAVE FCM TOKEN  — silently patch fcm_token on the users row
     // ══════════════════════════════════════════════════════════════════════
     /**
-     * Stores the FCM device token for the given user in the database.
-     * Runs entirely on a background thread — never shown in the UI.
-     * Safe to call on every app launch; uses PATCH so it never creates duplicates.
-     *
-     * Requires a column: fcm_token TEXT in the public.users table.
-     * SQL: ALTER TABLE public.users ADD COLUMN IF NOT EXISTS fcm_token TEXT;
+     * Stores the latest FCM token in user_fcm_tokens and mirrors it to users.fcm_token.
+     * This method is safe to call on every login and token refresh.
      */
     public static void saveFcmToken(String firebaseUid, String fcmToken) {
         if (firebaseUid == null || firebaseUid.isEmpty()) return;
@@ -570,25 +566,57 @@ public class SupabaseClient {
 
         new Thread(() -> {
             try {
-                JSONObject patch = new JSONObject();
-                patch.put("fcm_token", fcmToken);
-
-                Request request = new Request.Builder()
-                        .url(SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + firebaseUid)
-                        .patch(RequestBody.create(patch.toString(), JSON_TYPE))
-                        .addHeader("apikey",        ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "return=minimal")
-                        .build();
-
-                try (Response r = HTTP.newCall(request).execute()) {
-                    Log.d(TAG, "saveFcmToken HTTP " + r.code() + " uid=" + firebaseUid);
-                }
+                upsertFcmTokenRow(firebaseUid, fcmToken);
+                mirrorFcmTokenToUsers(firebaseUid, fcmToken);
             } catch (Exception e) {
                 Log.w(TAG, "saveFcmToken (non-fatal): " + e.getMessage());
             }
         }).start();
+    }
+
+    private static void upsertFcmTokenRow(String firebaseUid, String fcmToken) {
+        try {
+            JSONObject row = new JSONObject();
+            row.put("user_id", firebaseUid);
+            row.put("fcm_token", fcmToken);
+
+            Request request = new Request.Builder()
+                    .url(SUPABASE_URL + "/rest/v1/user_fcm_tokens?on_conflict=user_id")
+                    .post(RequestBody.create("[" + row.toString() + "]", JSON_TYPE))
+                    .addHeader("apikey",        ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type",  "application/json")
+                    .addHeader("Prefer",        "resolution=merge-duplicates,return=minimal")
+                    .build();
+
+            try (Response r = HTTP.newCall(request).execute()) {
+                Log.d(TAG, "upsertFcmTokenRow HTTP " + r.code() + " uid=" + firebaseUid);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "upsertFcmTokenRow failed (non-fatal): " + e.getMessage());
+        }
+    }
+
+    private static void mirrorFcmTokenToUsers(String firebaseUid, String fcmToken) {
+        try {
+            JSONObject patch = new JSONObject();
+            patch.put("fcm_token", fcmToken);
+
+            Request request = new Request.Builder()
+                    .url(SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + firebaseUid)
+                    .patch(RequestBody.create(patch.toString(), JSON_TYPE))
+                    .addHeader("apikey",        ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type",  "application/json")
+                    .addHeader("Prefer",        "return=minimal")
+                    .build();
+
+            try (Response r = HTTP.newCall(request).execute()) {
+                Log.d(TAG, "mirrorFcmTokenToUsers HTTP " + r.code() + " uid=" + firebaseUid);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "mirrorFcmTokenToUsers failed (non-fatal): " + e.getMessage());
+        }
     }
 
     public static void logAdminAction(String adminUid, String actionType,

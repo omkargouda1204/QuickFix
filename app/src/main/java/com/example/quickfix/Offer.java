@@ -19,13 +19,14 @@ public class Offer {
     @SerializedName("image_url")
     public String imageUrl;
 
-    @SerializedName("offer_code")
+
+    @SerializedName(value = "offer_code", alternate = {"code"})
     public String offerCode;       // e.g. "QUICKFIX20"
 
     @SerializedName("discount_type")
     public String discountType;    // "percentage" | "fixed"
 
-    @SerializedName("discount_value")
+    @SerializedName(value = "discount_value", alternate = {"discount"})
     public double discountValue;
 
     @SerializedName("min_booking_amount")

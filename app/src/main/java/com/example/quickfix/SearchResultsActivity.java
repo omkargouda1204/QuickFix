@@ -46,8 +46,8 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 /**
- * SearchResultsActivity — full-screen search results filtered by query + city.
- * Queries Supabase provider_applications (approved) + services tables.
+ * SearchResultsActivity — full-screen provider search filtered by query + city.
+ * Queries Supabase provider_profiles only.
  */
 public class SearchResultsActivity extends BaseActivity
         implements SearchResultsAdapter.OnResultClickListener {
@@ -61,7 +61,8 @@ public class SearchResultsActivity extends BaseActivity
     private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
     private static final String BASE_URL = BuildConfig.SUPABASE_URL;
     private static final int LOCATION_PERMISSION_REQ = 1014;
-    private static final float NEARBY_RADIUS_KM = 10f;
+    private static final float NEARBY_RADIUS_PRIMARY_KM = 20f;
+    private static final float NEARBY_RADIUS_SECONDARY_KM = 25f;
 
     // ...existing fields...
     private AppLocationManager locationManager;
@@ -183,7 +184,7 @@ public class SearchResultsActivity extends BaseActivity
     private void updateLocationLabel() {
         String base = cityFilter.isEmpty() ? "All locations" : "📍 " + cityFilter;
         if (!Double.isNaN(userLat) && !Double.isNaN(userLng)) {
-            tvSearchLocation.setText(base + " • " + (int) NEARBY_RADIUS_KM + "km radius");
+            tvSearchLocation.setText(base + " • " + (int) NEARBY_RADIUS_PRIMARY_KM + "km radius");
         } else {
             tvSearchLocation.setText(base);
         }
@@ -246,7 +247,7 @@ public class SearchResultsActivity extends BaseActivity
     private void executeSearch(String query, boolean useNearby) {
         new Thread(() -> {
             List<SearchResult> results = new ArrayList<>();
-            results.addAll(searchProviders(query, userLat, userLng, NEARBY_RADIUS_KM, useNearby));
+            results.addAll(searchProviders(query, userLat, userLng, useNearby));
             MAIN.post(() -> {
                 allResults = results;
                 applyFilter();
@@ -277,7 +278,6 @@ public class SearchResultsActivity extends BaseActivity
     private List<SearchResult> searchProviders(String query,
                                                double originLat,
                                                double originLng,
-                                               float radiusKm,
                                                boolean useNearby) {
         List<SearchResult> list = new ArrayList<>();
         if (query.isEmpty()) return list;
@@ -289,12 +289,28 @@ public class SearchResultsActivity extends BaseActivity
 
             if (useNearby && !Double.isNaN(originLat) && !Double.isNaN(originLng)) {
                 list.addAll(fetchNearbyFromProfiles(enc, "latitude", "longitude",
-                        originLat, originLng, radiusKm, seenIds));
+                        originLat, originLng, NEARBY_RADIUS_PRIMARY_KM, seenIds));
                 if (list.isEmpty()) {
                     list.addAll(fetchNearbyFromProfiles(enc, "lat", "lng",
-                            originLat, originLng, radiusKm, seenIds));
+                            originLat, originLng, NEARBY_RADIUS_PRIMARY_KM, seenIds));
                 }
-                list.sort((a, b) -> Float.compare(a.distanceKm, b.distanceKm));
+
+                // Expand radius to 25km if no nearby result in 20km.
+                if (list.isEmpty()) {
+                    list.addAll(fetchNearbyFromProfiles(enc, "latitude", "longitude",
+                            originLat, originLng, NEARBY_RADIUS_SECONDARY_KM, seenIds));
+                    if (list.isEmpty()) {
+                        list.addAll(fetchNearbyFromProfiles(enc, "lat", "lng",
+                                originLat, originLng, NEARBY_RADIUS_SECONDARY_KM, seenIds));
+                    }
+                }
+
+                // Final fallback: city-based text search when no nearby providers are found.
+                if (list.isEmpty()) {
+                    list.addAll(fetchTextProviders(enc, seenIds));
+                } else {
+                    list.sort((a, b) -> Float.compare(a.distanceKm, b.distanceKm));
+                }
                 return list;
             }
 
@@ -371,12 +387,12 @@ public class SearchResultsActivity extends BaseActivity
         try {
             StringBuilder url = new StringBuilder(BASE_URL)
                     .append("/rest/v1/provider_profiles")
-                    .append("?status=eq.active")
-                    .append("&or=(business_name.ilike.*").append(encQuery)
+                    .append("?or=(business_name.ilike.*").append(encQuery)
                     .append("*,category.ilike.*").append(encQuery)
                     .append("*,city.ilike.*").append(encQuery).append("*)")
+                    .append("&or=(is_approved.eq.true,approved.eq.true,status.eq.approved,status.eq.active,is_active.eq.true)")
                     .append("&select=id,business_name,category,city,area,owner_name,rating,status,availability_status,is_available")
-                    .append("&limit=30");
+                    .append("&limit=60");
             if (!cityFilter.isEmpty()) {
                 url.append("&city=ilike.*")
                    .append(java.net.URLEncoder.encode(cityFilter, "UTF-8")).append("*");
@@ -407,48 +423,6 @@ public class SearchResultsActivity extends BaseActivity
                                 -1f,
                                 resolveAvailability(o)
                         ));
-                    }
-                }
-            }
-
-            if (list.isEmpty()) {
-                StringBuilder url2 = new StringBuilder(BASE_URL)
-                        .append("/rest/v1/provider_applications")
-                        .append("?status=eq.approved")
-                        .append("&or=(business_name.ilike.*").append(encQuery)
-                        .append("*,category.ilike.*").append(encQuery)
-                        .append("*,user_name.ilike.*").append(encQuery).append("*)")
-                        .append("&select=id,business_name,category,city,user_name")
-                        .append("&limit=30");
-                if (!cityFilter.isEmpty()) {
-                    url2.append("&city=ilike.*")
-                            .append(java.net.URLEncoder.encode(cityFilter, "UTF-8")).append("*");
-                }
-                Request req2 = new Request.Builder().url(url2.toString())
-                        .addHeader("apikey", ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept", "application/json")
-                        .build();
-                try (Response r2 = HTTP.newCall(req2).execute()) {
-                    String body2 = r2.body() != null ? r2.body().string() : "[]";
-                    if (r2.code() == 200) {
-                        JSONArray arr = new JSONArray(body2);
-                        for (int i = 0; i < arr.length(); i++) {
-                            JSONObject o = arr.getJSONObject(i);
-                            String id = o.optString("id", "").trim();
-                            if (id.isEmpty() || seenIds.contains(id)) continue;
-                            seenIds.add(id);
-                            list.add(new SearchResult(
-                                    id,
-                                    o.optString("business_name", "-"),
-                                    o.optString("category", ""),
-                                    o.optString("city", ""),
-                                    SearchResult.TYPE_PROVIDER,
-                                    0f,
-                                    -1f,
-                                    "Available"
-                            ));
-                        }
                     }
                 }
             }
@@ -499,7 +473,6 @@ public class SearchResultsActivity extends BaseActivity
         showLoading(true);
         new Thread(() -> {
             try {
-                // Try provider_profiles first
                 String url = BASE_URL + "/rest/v1/provider_profiles"
                         + "?id=eq." + providerId
                         + "&select=*&limit=1";
@@ -514,32 +487,6 @@ public class SearchResultsActivity extends BaseActivity
                     String body = r.body() != null ? r.body().string() : "[]";
                     if (r.code() == 200) {
                         JSONArray arr = new JSONArray(body);
-                        if (arr.length() > 0) {
-                            JSONObject o = arr.getJSONObject(0);
-                            MAIN.post(() -> {
-                                showLoading(false);
-                                openProviderDetail(o);
-                            });
-                            return;
-                        }
-                    }
-                }
-
-                // Fallback: try provider_applications
-                String url2 = BASE_URL + "/rest/v1/provider_applications"
-                        + "?id=eq." + providerId
-                        + "&select=*&limit=1";
-
-                Request req2 = new Request.Builder().url(url2)
-                        .addHeader("apikey", ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept", "application/json")
-                        .build();
-
-                try (Response r2 = HTTP.newCall(req2).execute()) {
-                    String body2 = r2.body() != null ? r2.body().string() : "[]";
-                    if (r2.code() == 200) {
-                        JSONArray arr = new JSONArray(body2);
                         if (arr.length() > 0) {
                             JSONObject o = arr.getJSONObject(0);
                             MAIN.post(() -> {

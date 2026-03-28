@@ -30,6 +30,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
+import com.google.firebase.messaging.FirebaseMessaging;
 
 /**
  * LoginActivity — Email/Password + Google Sign-In with role-based navigation.
@@ -480,6 +481,9 @@ public class LoginActivity extends BaseActivity {
 
                         AppSettings.setLastKnownAdminRole(LoginActivity.this, info.isAdmin);
 
+                        // Always refresh FCM token on login and upsert latest token to DB.
+                        syncFcmTokenOnLogin(firebaseUid);
+
                         // ── Priority routing ──────────────────────────────────
                         final Intent target;
                         if (info.isAdmin) {
@@ -537,6 +541,21 @@ public class LoginActivity extends BaseActivity {
                         }
                     }
                 });
+    }
+
+    private void syncFcmTokenOnLogin(String firebaseUid) {
+        if (firebaseUid == null || firebaseUid.trim().isEmpty()) return;
+        try {
+            FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
+                if (task.isSuccessful() && task.getResult() != null && !task.getResult().trim().isEmpty()) {
+                    SupabaseClient.saveFcmToken(firebaseUid, task.getResult().trim());
+                } else if (task.getException() != null) {
+                    Log.w(TAG, "FCM token refresh on login failed: " + task.getException().getMessage());
+                }
+            });
+        } catch (Exception e) {
+            Log.w(TAG, "syncFcmTokenOnLogin exception: " + e.getMessage());
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════

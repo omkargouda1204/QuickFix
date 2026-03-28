@@ -15,9 +15,13 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.quickfix.adapters.CategoriesAdapter;
 
 import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -93,55 +97,74 @@ public class CategoriesActivity extends BaseActivity {
     }
 
     /**
-     * Fetch count of approved providers per category from Supabase.
-     * Updates each category card asynchronously.
+     * Fetch approved providers once and aggregate category counts in-app.
      */
     private void loadProviderCounts() {
-        for (ServiceCategory cat : categories) {
-            final String catName = cat.name;
-            new Thread(() -> {
-                try {
-                    StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
-                            .append("/rest/v1/provider_profiles")
-                            .append("?select=id")
-                            .append("&or=(approved.eq.true,status.eq.approved,status.eq.active,is_active.eq.true)")
-                            .append("&category=ilike.")
-                            .append(java.net.URLEncoder.encode(catName, "UTF-8"));
+        new Thread(() -> {
+            try {
+                StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
+                        .append("/rest/v1/provider_profiles")
+                        .append("?select=category,city,is_approved,approved,status,is_active");
 
-                    if (cityFilter != null && !cityFilter.trim().isEmpty()) {
-                        url.append("&city=ilike.")
-                                .append(java.net.URLEncoder.encode(cityFilter.trim(), "UTF-8"));
+                Request req = new Request.Builder().url(url.toString())
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
+                try (Response r = HTTP.newCall(req).execute()) {
+                    if (!r.isSuccessful()) {
+                        MAIN.post(() -> {
+                            for (ServiceCategory c : categories) adapter.updateCount(c.name, "No providers");
+                        });
+                        return;
                     }
 
-                    Request req = new Request.Builder().url(url.toString())
-                            .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                            .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                            .addHeader("Accept", "application/json")
-                            .addHeader("Prefer", "count=exact")
-                            .addHeader("Range", "0-0")
-                            .build();
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    JSONArray arr = new JSONArray(body);
+                    Map<String, Integer> countByCategory = new HashMap<>();
 
-                    try (Response r = HTTP.newCall(req).execute()) {
-                        if (r.code() >= 200 && r.code() < 300) {
-                            int count = parseExactCount(r);
-                            if (count < 0) {
-                                String body = r.body() != null ? r.body().string() : "[]";
-                                count = new JSONArray(body).length();
-                            }
-                            int finalCount = Math.max(count, 0);
-                            String label = finalCount == 0 ? "No providers"
-                                    : finalCount + " provider" + (finalCount != 1 ? "s" : "");
-                            MAIN.post(() -> adapter.updateCount(catName, label));
-                        } else {
-                            MAIN.post(() -> adapter.updateCount(catName, "—"));
+                    for (int i = 0; i < arr.length(); i++) {
+                        JSONObject o = arr.getJSONObject(i);
+                        if (!isProviderApproved(o)) continue;
+
+                        String rowCity = o.optString("city", "").trim();
+                        if (cityFilter != null && !cityFilter.trim().isEmpty()
+                                && !rowCity.equalsIgnoreCase(cityFilter.trim())) {
+                            continue;
                         }
+
+                        String category = o.optString("category", "").trim();
+                        if (category.isEmpty()) continue;
+
+                        String key = category.toLowerCase(Locale.getDefault());
+                        countByCategory.put(key, countByCategory.getOrDefault(key, 0) + 1);
                     }
-                } catch (Exception e) {
-                    Log.e(TAG, "loadCount " + catName + ": " + e.getMessage());
-                    MAIN.post(() -> adapter.updateCount(catName, "—"));
+
+                    MAIN.post(() -> {
+                        for (ServiceCategory cat : categories) {
+                            int count = countByCategory.getOrDefault(cat.name.toLowerCase(Locale.getDefault()), 0);
+                            String label = count == 0
+                                    ? "No providers"
+                                    : count + " provider" + (count != 1 ? "s" : "");
+                            adapter.updateCount(cat.name, label);
+                        }
+                    });
                 }
-            }).start();
-        }
+            } catch (Exception e) {
+                Log.e(TAG, "loadProviderCounts: " + e.getMessage());
+                MAIN.post(() -> {
+                    for (ServiceCategory c : categories) adapter.updateCount(c.name, "No providers");
+                });
+            }
+        }).start();
+    }
+
+    private boolean isProviderApproved(org.json.JSONObject o) {
+        if (o.optBoolean("is_approved", false) || o.optBoolean("approved", false)) return true;
+        String status = o.optString("status", "").trim().toLowerCase(Locale.getDefault());
+        if ("approved".equals(status) || "active".equals(status)) return true;
+        return o.optBoolean("is_active", false);
     }
 
     private int parseExactCount(Response response) {

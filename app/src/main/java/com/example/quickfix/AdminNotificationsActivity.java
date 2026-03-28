@@ -48,7 +48,7 @@ public class AdminNotificationsActivity extends BaseActivity {
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY     = BuildConfig.SUPABASE_ANON_KEY;
 
-    private static final String TABLE_NOTIFICATIONS = "notifications";
+    private static final String TABLE_NOTIFICATIONS = "admin_notifications";
 
     private final OkHttpClient http = new OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -69,17 +69,14 @@ public class AdminNotificationsActivity extends BaseActivity {
     private final List<NotifItem>     allItems    = new ArrayList<>();
     private final List<NotifItem>     filtered    = new ArrayList<>();
     private String                    currentFilter = "all";
-    private String                    adminFirebaseUid = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_admin_notifications);
+        super.setContentView(R.layout.activity_admin_notifications);
 
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) { finish(); return; }
-        adminFirebaseUid = user.getUid();
-        Log.d(TAG, "ADMIN USER: " + adminFirebaseUid);
 
         bindViews();
         setupRecyclerView();
@@ -143,7 +140,7 @@ public class AdminNotificationsActivity extends BaseActivity {
         setLoading(true);
 
         String url = SUPABASE_URL + "/rest/v1/" + TABLE_NOTIFICATIONS
-                + "?select=id,title,body,message,type,is_read,created_at,receiver_role,receiver_id"
+                + "?select=id,title,message,type,is_read,created_at"
                 + "&order=created_at.desc"
                 + "&limit=300";
 
@@ -196,13 +193,13 @@ public class AdminNotificationsActivity extends BaseActivity {
                 NotifItem item  = new NotifItem();
                 item.id         = o.optString("id");
                 item.title      = o.optString("title", "Notification");
-                item.message    = o.optString("message", o.optString("body", ""));
+                item.message    = o.optString("message", "");
                 item.type       = o.optString("type", "general");
                 item.isRead     = o.optBoolean("is_read", false);
                 item.createdAt  = o.optString("created_at", "");
                 item.sourceTable = sourceTable;
-                item.receiverRole = o.optString("receiver_role", "");
-                item.receiverId = o.optString("receiver_id", "");
+                item.receiverRole = "admin";
+                item.receiverId = "";
                 allItems.add(item);
             }
         } catch (Exception e) {
@@ -219,10 +216,13 @@ public class AdminNotificationsActivity extends BaseActivity {
             } else if ("unread".equals(currentFilter) && !item.isRead) {
                 filtered.add(item);
             } else if ("users".equals(currentFilter)
-                    && "user".equalsIgnoreCase(item.receiverRole)) {
+                    && ("register".equalsIgnoreCase(item.type)
+                    || "user_registration".equalsIgnoreCase(item.type)
+                    || "welcome".equalsIgnoreCase(item.type))) {
                 filtered.add(item);
             } else if ("providers".equals(currentFilter)
-                    && "provider".equalsIgnoreCase(item.receiverRole)) {
+                    && item.type != null
+                    && item.type.toLowerCase(Locale.US).contains("provider")) {
                 filtered.add(item);
             } else if ("offer".equals(currentFilter)
                     && "offer".equalsIgnoreCase(item.type)) {
@@ -311,13 +311,13 @@ public class AdminNotificationsActivity extends BaseActivity {
                             Toast.makeText(this, "All marked as read", Toast.LENGTH_SHORT).show();
                         } else {
                             Log.e(TAG, "markAllRead failed [" + targetTable + "] HTTP " + r.code() + ": " + rb);
-                            Toast.makeText(this, "Could not update setting", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Could not mark notifications", Toast.LENGTH_SHORT).show();
                         }
                     });
                 }
             } catch (Exception e) {
                 Log.e(TAG, "markAllRead", e);
-                main.post(() -> Toast.makeText(this, "Could not update setting", Toast.LENGTH_SHORT).show());
+                main.post(() -> Toast.makeText(this, "Could not mark notifications", Toast.LENGTH_SHORT).show());
             }
         }).start();
     }

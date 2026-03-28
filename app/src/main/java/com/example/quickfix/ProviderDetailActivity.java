@@ -453,9 +453,6 @@ public class ProviderDetailActivity extends BaseActivity {
         new Thread(() -> {
             try {
                 JSONObject data = fetchProviderRecord("provider_profiles", providerId);
-                if (data == null) {
-                    data = fetchProviderRecord("provider_applications", providerId);
-                }
                 if (data == null) return;
 
                 JSONObject finalData = data;
