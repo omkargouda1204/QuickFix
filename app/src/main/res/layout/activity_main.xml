@@ -356,14 +356,14 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_horizontal"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="8dp"
                     app:tabBackground="@drawable/bg_banner_dot_selector"
                     app:tabIndicator="@null"
                     app:tabRippleColor="@android:color/transparent"
                     app:tabIndicatorFullWidth="false"
                     app:tabMinWidth="0dp"
-                    app:tabPaddingStart="3dp"
-                    app:tabPaddingEnd="3dp" />
+                    app:tabPaddingStart="2dp"
+                    app:tabPaddingEnd="2dp" />
 
                 </LinearLayout>
 
