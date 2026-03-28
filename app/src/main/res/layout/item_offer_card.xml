@@ -6,10 +6,11 @@
     android:layout_height="wrap_content"
     android:layout_marginStart="16dp"
     android:layout_marginEnd="16dp"
-    android:layout_marginTop="6dp"
-    android:layout_marginBottom="6dp"
-    app:cardCornerRadius="16dp"
-    app:cardElevation="4dp"
+    android:layout_marginTop="8dp"
+    android:layout_marginBottom="8dp"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="2dp"
+    app:cardBackgroundColor="#FFFFFF"
     app:strokeWidth="0dp">
 
     <LinearLayout
@@ -19,11 +20,12 @@
         android:gravity="center_vertical"
         android:padding="16dp">
 
-        <!-- Offer icon circle -->
+        <!-- Offer discount badge -->
         <FrameLayout
             android:layout_width="56dp"
             android:layout_height="56dp"
-            android:background="@drawable/bg_stat_orange">
+            android:background="@drawable/bg_stat_orange"
+            android:elevation="0dp">
 
             <TextView
                 android:id="@+id/tvOfferDiscount"
@@ -112,28 +114,31 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:gravity="center">
+            android:gravity="center"
+            android:paddingStart="12dp">
 
             <ImageButton
                 android:id="@+id/btnOfferEdit"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:background="@drawable/bg_edit_btn"
                 android:src="@drawable/ic_edit"
-                android:contentDescription="Edit"
+                android:contentDescription="Edit Offer"
                 android:padding="8dp"
-                android:tint="@color/primary" />
+                android:tint="@color/primary"
+                android:scaleType="centerInside" />
 
             <ImageButton
                 android:id="@+id/btnOfferDelete"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:layout_marginTop="6dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginTop="8dp"
                 android:background="@drawable/bg_delete_btn"
                 android:src="@drawable/ic_delete"
-                android:contentDescription="Delete"
+                android:contentDescription="Delete Offer"
                 android:padding="8dp"
-                android:tint="@color/error_red" />
+                android:tint="@color/error_red"
+                android:scaleType="centerInside" />
 
         </LinearLayout>
     </LinearLayout>
