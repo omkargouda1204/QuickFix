@@ -154,17 +154,16 @@ public class OfferManagementActivity extends BaseActivity {
 
     private void updateStats() {
         String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new java.util.Date());
-        int total = offers.size(), active = 0, expired = 0;
+        int total = offers.size();
+        int active = 0;
+        int expired = 0;
         for (Offer o : offers) {
-            boolean notExpired = o.expiryDate == null || o.expiryDate.isEmpty() || o.expiryDate.compareTo(today) >= 0;
-            if (o.isActive && notExpired) {
-                active++;
-            } else if (o.expiryDate != null && !o.expiryDate.isEmpty() && o.expiryDate.compareTo(today) < 0) {
-                expired++;
-            }
+            boolean isExpired = o.expiryDate != null && !o.expiryDate.isEmpty() && o.expiryDate.compareTo(today) < 0;
+            if (o.isActive) active++;
+            if (isExpired) expired++;
         }
-        if (tvTotalOffers   != null) tvTotalOffers.setText(String.valueOf(total));
-        if (tvActiveOffers  != null) tvActiveOffers.setText(String.valueOf(active));
+        if (tvTotalOffers != null) tvTotalOffers.setText(String.valueOf(total));
+        if (tvActiveOffers != null) tvActiveOffers.setText(String.valueOf(active));
         if (tvExpiredOffers != null) tvExpiredOffers.setText(String.valueOf(expired));
     }
 
@@ -238,13 +237,10 @@ public class OfferManagementActivity extends BaseActivity {
                             AlertDialog dialog) {
         Map<String, Object> body = new HashMap<>();
         body.put("title", title);
-        body.put("description", desc);
-        // Compatibility: support both detailed schema and simplified schema.
+        body.put("description", desc == null ? "" : desc);
         body.put("offer_code", code);
-        body.put("code", code);
         body.put("discount_type", discountType);
         body.put("discount_value", discountValue);
-        body.put("discount", (int) discountValue);
         body.put("min_booking_amount", minAmount);
         body.put("is_active", isActive);
         body.put("expiry_date", (expiryDate == null || expiryDate.isEmpty()) ? null : expiryDate);
@@ -340,8 +336,10 @@ public class OfferManagementActivity extends BaseActivity {
         Map<String, Object> fallback = new HashMap<>();
         fallback.put("title", source.get("title"));
         fallback.put("description", source.get("description"));
-        fallback.put("code", source.get("code"));
-        fallback.put("discount", source.get("discount"));
+        fallback.put("offer_code", source.get("offer_code"));
+        fallback.put("discount_type", source.get("discount_type"));
+        fallback.put("discount_value", source.get("discount_value"));
+        fallback.put("min_booking_amount", source.get("min_booking_amount"));
         fallback.put("is_active", source.get("is_active"));
         fallback.put("expiry_date", source.get("expiry_date"));
         if (source.containsKey("id")) fallback.put("id", source.get("id"));

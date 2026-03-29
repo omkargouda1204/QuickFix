@@ -89,7 +89,7 @@
                         android:layout_marginTop="6dp"
                         android:layout_marginEnd="6dp"
                         android:background="@drawable/bg_stat_orange"
-                        android:visibility="visible" />
+                        android:visibility="gone" />
                 </FrameLayout>
 
                 <!-- Admin avatar circle with initial -->
@@ -499,13 +499,28 @@
                             android:orientation="vertical"
                             android:layout_marginHorizontal="14dp">
 
-                            <TextView
+                            <LinearLayout
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Business Approvals"
-                                android:textColor="@color/text_primary"
-                                android:textSize="15sp"
-                                android:textStyle="bold" />
+                                android:orientation="horizontal"
+                                android:gravity="center_vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Business Approvals"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="15sp"
+                                    android:textStyle="bold" />
+
+                                <View
+                                    android:id="@+id/providerSectionBadge"
+                                    android:layout_width="8dp"
+                                    android:layout_height="8dp"
+                                    android:layout_marginStart="6dp"
+                                    android:background="@drawable/bg_stat_orange"
+                                    android:visibility="gone" />
+                            </LinearLayout>
 
                             <TextView
                                 android:layout_width="wrap_content"
@@ -566,13 +581,28 @@
                             android:orientation="vertical"
                             android:layout_marginHorizontal="14dp">
 
-                            <TextView
+                            <LinearLayout
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="User Management"
-                                android:textColor="@color/text_primary"
-                                android:textSize="15sp"
-                                android:textStyle="bold" />
+                                android:orientation="horizontal"
+                                android:gravity="center_vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="User Management"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="15sp"
+                                    android:textStyle="bold" />
+
+                                <View
+                                    android:id="@+id/userSectionBadge"
+                                    android:layout_width="8dp"
+                                    android:layout_height="8dp"
+                                    android:layout_marginStart="6dp"
+                                    android:background="@drawable/bg_stat_orange"
+                                    android:visibility="gone" />
+                            </LinearLayout>
 
                             <TextView
                                 android:layout_width="wrap_content"

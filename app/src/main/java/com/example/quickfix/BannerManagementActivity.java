@@ -151,7 +151,7 @@ public class BannerManagementActivity extends BaseActivity {
 
     private void loadBanners() {
         setLoading(true);
-        bannerApi.getAllBanners(ANON_KEY, "Bearer " + ANON_KEY, "*", "priority.asc,created_at.desc")
+        bannerApi.getAllBanners(ANON_KEY, "Bearer " + ANON_KEY, "*", "created_at.desc")
                 .enqueue(new Callback<List<Banner>>() {
                     @Override
                     public void onResponse(Call<List<Banner>> call, Response<List<Banner>> response) {
@@ -195,17 +195,16 @@ public class BannerManagementActivity extends BaseActivity {
 
     private void updateStats() {
         String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new java.util.Date());
-        int total = banners.size(), active = 0, expired = 0;
+        int total = banners.size();
+        int active = 0;
+        int expired = 0;
         for (Banner b : banners) {
-            boolean notExpired = b.expiryDate == null || b.expiryDate.isEmpty() || b.expiryDate.compareTo(today) >= 0;
-            if (b.isActive && notExpired) {
-                active++;
-            } else if (b.expiryDate != null && !b.expiryDate.isEmpty() && b.expiryDate.compareTo(today) < 0) {
-                expired++;
-            }
+            boolean isExpired = b.expiryDate != null && !b.expiryDate.isEmpty() && b.expiryDate.compareTo(today) < 0;
+            if (b.isActive) active++;
+            if (isExpired) expired++;
         }
-        if (tvTotalBanners   != null) tvTotalBanners.setText(String.valueOf(total));
-        if (tvActiveBanners  != null) tvActiveBanners.setText(String.valueOf(active));
+        if (tvTotalBanners != null) tvTotalBanners.setText(String.valueOf(total));
+        if (tvActiveBanners != null) tvActiveBanners.setText(String.valueOf(active));
         if (tvExpiredBanners != null) tvExpiredBanners.setText(String.valueOf(expired));
     }
 

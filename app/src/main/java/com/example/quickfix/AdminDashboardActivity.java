@@ -50,6 +50,8 @@ public class AdminDashboardActivity extends BaseActivity {
     // ── Header views ─────────────────────────────────────────────────────
     private TextView  welcomeText, avatarInitial;
     private View      notificationBadge;
+    private View      providerSectionBadge;
+    private View      userSectionBadge;
 
     // ── Quick Stats ───────────────────────────────────────────────────────
     private TextView statTotalUsers, statTotalProviders,
@@ -123,6 +125,8 @@ public class AdminDashboardActivity extends BaseActivity {
         welcomeText          = findViewById(R.id.welcomeText);
         avatarInitial        = findViewById(R.id.avatarInitial);
         notificationBadge    = findViewById(R.id.notificationBadge);
+        providerSectionBadge = findViewById(R.id.providerSectionBadge);
+        userSectionBadge     = findViewById(R.id.userSectionBadge);
 
         statTotalUsers       = findViewById(R.id.statTotalUsers);
         statTotalProviders   = findViewById(R.id.statTotalProviders);
@@ -146,6 +150,11 @@ public class AdminDashboardActivity extends BaseActivity {
 
         adminLocationSelector = findViewById(R.id.adminLocationSelector);
         tvAdminSelectedLocation = findViewById(R.id.tvAdminSelectedLocation);
+
+        // Keep badges hidden until unread counts load.
+        if (notificationBadge != null) notificationBadge.setVisibility(View.GONE);
+        if (providerSectionBadge != null) providerSectionBadge.setVisibility(View.GONE);
+        if (userSectionBadge != null) userSectionBadge.setVisibility(View.GONE);
     }
 
     private void setupLocationSelector() {
@@ -390,8 +399,8 @@ public class AdminDashboardActivity extends BaseActivity {
         loadStatCount("/rest/v1/users?select=id&is_user=eq.true",
                 statTotalUsers);
 
-        // Load approved providers from provider_profiles (single source of truth)
-        loadStatCount("/rest/v1/provider_profiles?select=id&or=(is_approved.eq.true,approved.eq.true,status.eq.approved,status.eq.active,is_active.eq.true)",
+        // Provider count (requested): approved provider profiles.
+        loadStatCount("/rest/v1/provider_profiles?select=id&is_approved=eq.true",
                 statTotalProviders);
 
         // Load pending approvals count — from provider_applications
@@ -401,6 +410,75 @@ public class AdminDashboardActivity extends BaseActivity {
         // Active bookings count
         loadStatCount("/rest/v1/bookings?select=id",
                 statActiveBookings);
+    }
+
+    private interface CountCallback {
+        void onResult(int count);
+    }
+
+    private void loadNotificationBadges() {
+        // Red dot on bell icon
+        loadCountAsync("/rest/v1/admin_notifications?select=id&is_read=eq.false", count -> {
+            if (notificationBadge != null) {
+                notificationBadge.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
+            }
+        });
+
+        // Red dot for provider section
+        loadCountAsync("/rest/v1/admin_notifications?select=id&is_read=eq.false&type=in.(provider,provider_application)", count -> {
+            if (providerSectionBadge != null) {
+                providerSectionBadge.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
+            }
+        });
+
+        // Red dot for user section
+        loadCountAsync("/rest/v1/admin_notifications?select=id&is_read=eq.false&type=in.(user,user_registration,register,welcome)", count -> {
+            if (userSectionBadge != null) {
+                userSectionBadge.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
+            }
+        });
+    }
+
+    private void loadCountAsync(String path, CountCallback callback) {
+        if (callback == null) return;
+        String url = BuildConfig.SUPABASE_URL + path + "&limit=1";
+
+        okhttp3.Request request = new okhttp3.Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Accept",        "application/json")
+                .addHeader("Prefer",        "count=exact")
+                .build();
+
+        http.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(okhttp3.Call call, java.io.IOException e) {
+                Log.w(TAG, "loadCountAsync failed: " + e.getMessage());
+                runOnUiThread(() -> callback.onResult(0));
+            }
+
+            @Override
+            public void onResponse(okhttp3.Call call, okhttp3.Response response) {
+                int count = extractCountFromResponse(response);
+                runOnUiThread(() -> callback.onResult(Math.max(0, count)));
+            }
+        });
+    }
+
+    private int extractCountFromResponse(okhttp3.Response response) {
+        try {
+            String range = response.header("Content-Range", "");
+            if (range.contains("/")) {
+                String countStr = range.substring(range.lastIndexOf('/') + 1).trim();
+                return Integer.parseInt(countStr);
+            }
+        } catch (Exception ignored) {
+        } finally {
+            response.close();
+        }
+        return 0;
     }
 
     /**
@@ -421,29 +499,17 @@ public class AdminDashboardActivity extends BaseActivity {
                 .addHeader("Prefer",        "count=exact")
                 .build();
 
-        new okhttp3.OkHttpClient().newCall(request).enqueue(new okhttp3.Callback() {
+        http.newCall(request).enqueue(new okhttp3.Callback() {
             @Override
             public void onFailure(okhttp3.Call call, java.io.IOException e) {
                 Log.w(TAG, "loadStatCount failed: " + e.getMessage());
+                runOnUiThread(() -> targetView.setText("0"));
             }
 
             @Override
-            public void onResponse(okhttp3.Call call, okhttp3.Response response)
-                    throws java.io.IOException {
-                // PostgREST returns count in Content-Range: 0-0/COUNT
-                String range = response.header("Content-Range");
-                response.close();
-                if (range != null && range.contains("/")) {
-                    String countStr = range.split("/")[1].trim();
-                    runOnUiThread(() -> {
-                        try {
-                            int count = Integer.parseInt(countStr);
-                            targetView.setText(String.valueOf(count));
-                        } catch (NumberFormatException ex) {
-                            targetView.setText("—");
-                        }
-                    });
-                }
+            public void onResponse(okhttp3.Call call, okhttp3.Response response) {
+                int count = extractCountFromResponse(response);
+                runOnUiThread(() -> targetView.setText(String.valueOf(Math.max(0, count))));
             }
         });
     }
@@ -452,6 +518,7 @@ public class AdminDashboardActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         loadQuickStats();
+        loadNotificationBadges();
         if (tvAdminSelectedLocation != null) {
             String savedLabel = locationManager.getSavedLocationLabel();
             tvAdminSelectedLocation.setText(savedLabel.isEmpty() ? "All Cities" : savedLabel);

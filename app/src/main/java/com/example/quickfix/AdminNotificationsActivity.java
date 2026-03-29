@@ -50,6 +50,13 @@ public class AdminNotificationsActivity extends BaseActivity {
 
     private static final String TABLE_NOTIFICATIONS = "admin_notifications";
 
+    private static final String FILTER_ALL      = "all";
+    private static final String FILTER_UNREAD   = "unread";
+    private static final String FILTER_USERS    = "users";
+    private static final String FILTER_PROVIDER = "providers";
+    private static final String FILTER_OFFER    = "offer";
+    private static final String FILTER_BANNER   = "banner";
+
     private final OkHttpClient http = new OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
@@ -126,11 +133,12 @@ public class AdminNotificationsActivity extends BaseActivity {
         chipGroupFilter.setOnCheckedStateChangeListener((group, ids) -> {
             if (ids.isEmpty()) return;
             int id = ids.get(0);
-            if (id == R.id.chipAll) currentFilter = "all";
-            else if (id == R.id.chipUnread) currentFilter = "unread";
-            else if (id == R.id.chipUsers) currentFilter = "users";
-            else if (id == R.id.chipProvider) currentFilter = "providers";
-            else if (id == R.id.chipOffers) currentFilter = "offer";
+            if (id == R.id.chipAll) currentFilter = FILTER_ALL;
+            else if (id == R.id.chipUnread) currentFilter = FILTER_UNREAD;
+            else if (id == R.id.chipUsers) currentFilter = FILTER_USERS;
+            else if (id == R.id.chipProvider) currentFilter = FILTER_PROVIDER;
+            else if (id == R.id.chipOffers) currentFilter = FILTER_OFFER;
+            else if (id == R.id.chipBanners) currentFilter = FILTER_BANNER;
             applyFilter();
         });
     }
@@ -162,7 +170,7 @@ public class AdminNotificationsActivity extends BaseActivity {
                     main.post(() -> {
                         setLoading(false);
                         if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
-                        if (code == 200) {
+                        if (code >= 200 && code < 300) {
                             parseNotifications(body, TABLE_NOTIFICATIONS);
                         } else {
                             Log.e(TAG, "ERROR LOADING NOTIFICATIONS: HTTP " + code + " " + body);
@@ -211,21 +219,7 @@ public class AdminNotificationsActivity extends BaseActivity {
     private void applyFilter() {
         filtered.clear();
         for (NotifItem item : allItems) {
-            if ("all".equals(currentFilter)) {
-                filtered.add(item);
-            } else if ("unread".equals(currentFilter) && !item.isRead) {
-                filtered.add(item);
-            } else if ("users".equals(currentFilter)
-                    && ("register".equalsIgnoreCase(item.type)
-                    || "user_registration".equalsIgnoreCase(item.type)
-                    || "welcome".equalsIgnoreCase(item.type))) {
-                filtered.add(item);
-            } else if ("providers".equals(currentFilter)
-                    && item.type != null
-                    && item.type.toLowerCase(Locale.US).contains("provider")) {
-                filtered.add(item);
-            } else if ("offer".equals(currentFilter)
-                    && "offer".equalsIgnoreCase(item.type)) {
+            if (matchesFilter(item)) {
                 filtered.add(item);
             }
         }
@@ -242,6 +236,38 @@ public class AdminNotificationsActivity extends BaseActivity {
 
         if (filtered.isEmpty()) showEmptyState();
         else showList();
+    }
+
+    private boolean matchesFilter(NotifItem item) {
+        String type = item.type == null ? "" : item.type.toLowerCase(Locale.US);
+
+        if (FILTER_ALL.equals(currentFilter)) return true;
+        if (FILTER_UNREAD.equals(currentFilter)) return !item.isRead;
+
+        if (FILTER_USERS.equals(currentFilter)) {
+            return type.equals("user")
+                    || type.equals("user_registration")
+                    || type.equals("register")
+                    || type.equals("welcome");
+        }
+
+        if (FILTER_PROVIDER.equals(currentFilter)) {
+            return type.equals("provider")
+                    || type.equals("provider_application")
+                    || type.equals("provider_status")
+                    || type.equals("provider_approved")
+                    || type.equals("provider_rejected");
+        }
+
+        if (FILTER_OFFER.equals(currentFilter)) {
+            return type.equals("offer");
+        }
+
+        if (FILTER_BANNER.equals(currentFilter)) {
+            return type.equals("banner");
+        }
+
+        return true;
     }
 
     // ── MARK READ ─────────────────────────────────────────────────────────
