@@ -17,9 +17,11 @@ public class ProviderProfile {
     public String idProofUrl;
     public boolean isVerified;
     public boolean isApproved;
+    public boolean isAvailable = true;
     public float   rating;
     public int     reviewCount;
     public String  status;
+    public String  createdAt;
 
     public double  lat = Double.NaN;
     public double  lng = Double.NaN;

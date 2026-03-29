@@ -153,18 +153,37 @@ public class OfferManagementActivity extends BaseActivity {
     }
 
     private void updateStats() {
-        String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new java.util.Date());
         int total = offers.size();
         int active = 0;
         int expired = 0;
+        long now = System.currentTimeMillis();
+
         for (Offer o : offers) {
-            boolean isExpired = o.expiryDate != null && !o.expiryDate.isEmpty() && o.expiryDate.compareTo(today) < 0;
-            if (o.isActive) active++;
-            if (isExpired) expired++;
+            boolean isExpired = isDateExpired(o.expiryDate, now);
+            if (isExpired) {
+                expired++;
+            }
+            if (o.isActive && !isExpired) {
+                active++;
+            }
         }
+
         if (tvTotalOffers != null) tvTotalOffers.setText(String.valueOf(total));
         if (tvActiveOffers != null) tvActiveOffers.setText(String.valueOf(active));
         if (tvExpiredOffers != null) tvExpiredOffers.setText(String.valueOf(expired));
+    }
+
+    private boolean isDateExpired(String expiryDate, long nowMs) {
+        if (expiryDate == null || expiryDate.trim().isEmpty()) return false;
+        String raw = expiryDate.trim();
+        String dateOnly = raw.length() >= 10 ? raw.substring(0, 10) : raw;
+        try {
+            java.util.Date d = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(dateOnly);
+            if (d == null) return false;
+            return d.getTime() < nowMs;
+        } catch (Exception ignore) {
+            return false;
+        }
     }
 
     private void showError(String msg) {

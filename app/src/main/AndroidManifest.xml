@@ -143,6 +143,11 @@
             android:exported="false"
             android:parentActivityName=".AdminDashboardActivity" />
 
+        <!-- Admin Provider Management Activity (provider_profiles list) -->
+        <activity
+            android:name=".AdminProviderManagementActivity"
+            android:exported="false"
+            android:parentActivityName=".AdminDashboardActivity" />
 
         <!-- User Management Activity -->
         <activity

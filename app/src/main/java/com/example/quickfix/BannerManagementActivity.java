@@ -194,18 +194,37 @@ public class BannerManagementActivity extends BaseActivity {
     }
 
     private void updateStats() {
-        String today = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new java.util.Date());
         int total = banners.size();
         int active = 0;
         int expired = 0;
+        long now = System.currentTimeMillis();
+
         for (Banner b : banners) {
-            boolean isExpired = b.expiryDate != null && !b.expiryDate.isEmpty() && b.expiryDate.compareTo(today) < 0;
-            if (b.isActive) active++;
-            if (isExpired) expired++;
+            boolean isExpired = isDateExpired(b.expiryDate, now);
+            if (isExpired) {
+                expired++;
+            }
+            if (b.isActive && !isExpired) {
+                active++;
+            }
         }
+
         if (tvTotalBanners != null) tvTotalBanners.setText(String.valueOf(total));
         if (tvActiveBanners != null) tvActiveBanners.setText(String.valueOf(active));
         if (tvExpiredBanners != null) tvExpiredBanners.setText(String.valueOf(expired));
+    }
+
+    private boolean isDateExpired(String expiryDate, long nowMs) {
+        if (expiryDate == null || expiryDate.trim().isEmpty()) return false;
+        String raw = expiryDate.trim();
+        String dateOnly = raw.length() >= 10 ? raw.substring(0, 10) : raw;
+        try {
+            java.util.Date d = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(dateOnly);
+            if (d == null) return false;
+            return d.getTime() < nowMs;
+        } catch (Exception ignore) {
+            return false;
+        }
     }
 
     private void showAddEditDialog(Banner existing) {

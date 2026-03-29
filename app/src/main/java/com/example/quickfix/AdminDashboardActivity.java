@@ -289,7 +289,7 @@ public class AdminDashboardActivity extends BaseActivity {
                 goTo(AdminBookingsActivity.class);
                 return true;
             } else if (id == R.id.nav_providers) {
-                goTo(BusinessApprovalActivity.class);
+                goTo(AdminProviderManagementActivity.class);
                 return true;
             } else if (id == R.id.nav_messages) {
                 Toast.makeText(this, "Messages — coming soon", Toast.LENGTH_SHORT).show();
@@ -399,8 +399,8 @@ public class AdminDashboardActivity extends BaseActivity {
         loadStatCount("/rest/v1/users?select=id&is_user=eq.true",
                 statTotalUsers);
 
-        // Provider count (requested): approved provider profiles.
-        loadStatCount("/rest/v1/provider_profiles?select=id&is_approved=eq.true",
+        // Provider count from provider_profiles table.
+        loadStatCount("/rest/v1/provider_profiles?select=id",
                 statTotalProviders);
 
         // Load pending approvals count — from provider_applications
@@ -469,11 +469,14 @@ public class AdminDashboardActivity extends BaseActivity {
 
     private int extractCountFromResponse(okhttp3.Response response) {
         try {
+            String body = response.body() != null ? response.body().string() : "[]";
             String range = response.header("Content-Range", "");
             if (range.contains("/")) {
                 String countStr = range.substring(range.lastIndexOf('/') + 1).trim();
                 return Integer.parseInt(countStr);
             }
+            // Fallback for proxies/configs that omit Content-Range.
+            return new org.json.JSONArray(body).length();
         } catch (Exception ignored) {
         } finally {
             response.close();
