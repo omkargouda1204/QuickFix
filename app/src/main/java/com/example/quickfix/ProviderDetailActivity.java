@@ -30,7 +30,10 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
@@ -82,6 +85,12 @@ public class ProviderDetailActivity extends BaseActivity {
     private String providerName;
     private String providerCategory;
     private String providerCity;
+
+    private static class UserMeta {
+        String id;
+        String name;
+        String phone;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -244,13 +253,21 @@ public class ProviderDetailActivity extends BaseActivity {
         TextInputEditText etBookAddress = dialogView.findViewById(R.id.etBookAddress);
         TextInputEditText etBookDescription = dialogView.findViewById(R.id.etBookDescription);
 
+        final long minBookingDateMs = startOfDayMillis(Calendar.getInstance());
+        Calendar maxWindow = Calendar.getInstance();
+        maxWindow.add(Calendar.DAY_OF_YEAR, 7);
+        final long maxBookingDateMs = endOfDayMillis(maxWindow);
+
         // Date picker
         etBookDate.setOnClickListener(v -> {
             Calendar cal = Calendar.getInstance();
-            new DatePickerDialog(this, (view, year, month, day) -> {
+            DatePickerDialog pickerDialog = new DatePickerDialog(this, (view, year, month, day) -> {
                 String date = String.format(Locale.getDefault(), "%04d-%02d-%02d", year, month + 1, day);
                 etBookDate.setText(date);
-            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show();
+            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH));
+            pickerDialog.getDatePicker().setMinDate(minBookingDateMs);
+            pickerDialog.getDatePicker().setMaxDate(maxBookingDateMs);
+            pickerDialog.show();
         });
         etBookDate.setFocusable(false);
 
@@ -287,6 +304,10 @@ public class ProviderDetailActivity extends BaseActivity {
                     etBookDate.setError("Select a date");
                     return;
                 }
+                if (!isBookingDateAllowed(date, minBookingDateMs, maxBookingDateMs)) {
+                    etBookDate.setError("Choose date from today to next 7 days");
+                    return;
+                }
                 if (time.isEmpty()) {
                     etBookTime.setError("Select a time");
                     return;
@@ -313,43 +334,30 @@ public class ProviderDetailActivity extends BaseActivity {
             return;
         }
 
-        // Fetch customer details from users table
         new Thread(() -> {
-            String customerName = "";
-            String customerPhone = "";
-
             try {
-                String userUrl = SUPABASE_URL + "/rest/v1/users"
-                        + "?firebase_uid=eq." + customerId
-                        + "&select=name,phone&limit=1";
+                UserMeta customerMeta = fetchUserByFirebaseUid(customerId);
 
-                Request userReq = new Request.Builder().url(userUrl)
-                        .addHeader("apikey", ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept", "application/json")
-                        .build();
-
-                try (Response r = httpClient.newCall(userReq).execute()) {
-                    String body = r.body() != null ? r.body().string() : "[]";
-                    if (r.code() == 200) {
-                        JSONArray arr = new JSONArray(body);
-                        if (arr.length() > 0) {
-                            JSONObject user = arr.getJSONObject(0);
-                            customerName = user.optString("name", "");
-                            customerPhone = user.optString("phone", "");
-                        }
-                    }
+                // Canonical provider_id for bookings is provider_profiles.id.
+                String providerProfileId = providerIdForBooking != null ? providerIdForBooking.trim() : "";
+                if (providerProfileId.isEmpty() && providerFirebaseUid != null && !providerFirebaseUid.trim().isEmpty()) {
+                    providerProfileId = fetchProviderProfileIdByFirebaseUid(providerFirebaseUid.trim());
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "Failed to fetch customer info: " + e.getMessage());
-            }
+                if (providerProfileId.isEmpty()) {
+                    mainHandler.post(() -> Toast.makeText(ProviderDetailActivity.this,
+                            "Booking failed: provider profile not found.", Toast.LENGTH_LONG).show());
+                    return;
+                }
 
-            try {
+                String customerIdForInsert = (customerMeta != null && customerMeta.id != null
+                        && !customerMeta.id.trim().isEmpty()) ? customerMeta.id.trim() : customerId;
+
                 JSONObject bookingBody = new JSONObject();
-                bookingBody.put("customer_id", customerId);
-                bookingBody.put("provider_id", providerIdForBooking);
-                bookingBody.put("customer_name", customerName.isEmpty() ? "Customer" : customerName);
-                bookingBody.put("customer_phone", customerPhone);
+                bookingBody.put("customer_id", customerIdForInsert);
+                bookingBody.put("provider_id", providerProfileId);
+                bookingBody.put("customer_name", (customerMeta == null || customerMeta.name == null || customerMeta.name.isEmpty())
+                        ? "Customer" : customerMeta.name);
+                bookingBody.put("customer_phone", (customerMeta == null || customerMeta.phone == null) ? "" : customerMeta.phone);
                 bookingBody.put("provider_name", providerName != null ? providerName : "");
                 if (serviceIdForBooking == null || serviceIdForBooking.trim().isEmpty()) {
                     bookingBody.put("service_id", JSONObject.NULL);
@@ -396,12 +404,18 @@ public class ProviderDetailActivity extends BaseActivity {
 
                         mainHandler.post(() -> {
                             if (code == 200 || code == 201 || code == 204) {
+                                FcmNotificationHelper.notifyProviderNewBooking(
+                                        providerFirebaseUid,
+                                        bookingBody.optString("customer_name", "Customer"),
+                                        bookingBody.optString("service_name", "Service"),
+                                        null
+                                );
                                 Toast.makeText(ProviderDetailActivity.this,
                                         "Booking submitted successfully!",
                                         Toast.LENGTH_LONG).show();
                             } else {
                                 Log.e(TAG, "BOOKING_ERROR HTTP " + code + " | " + resp);
-                                String msg = extractSupabaseError(resp);
+                                String msg = (resp == null || resp.trim().isEmpty()) ? ("HTTP " + code) : resp;
                                 Toast.makeText(ProviderDetailActivity.this,
                                         "Booking failed: " + msg,
                                         Toast.LENGTH_LONG).show();
@@ -418,6 +432,76 @@ public class ProviderDetailActivity extends BaseActivity {
                                 Toast.LENGTH_SHORT).show());
             }
         }).start();
+    }
+
+    private String fetchProviderProfileIdByFirebaseUid(String firebaseUid) {
+        try {
+            String url = SUPABASE_URL + "/rest/v1/provider_profiles"
+                    + "?firebase_uid=eq." + Uri.encode(firebaseUid)
+                    + "&select=id&limit=1";
+
+            Request request = new Request.Builder().url(url)
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                String body = response.body() != null ? response.body().string() : "[]";
+                if (response.code() != 200) return "";
+                JSONArray arr = new JSONArray(body);
+                if (arr.length() == 0) return "";
+                return arr.getJSONObject(0).optString("id", "");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "fetchProviderProfileIdByFirebaseUid: " + e.getMessage());
+            return "";
+        }
+    }
+
+    private UserMeta fetchUserByFirebaseUid(String firebaseUid) {
+        if (firebaseUid == null || firebaseUid.trim().isEmpty()) return null;
+        String encoded = Uri.encode(firebaseUid.trim());
+        String url = SUPABASE_URL + "/rest/v1/users"
+                + "?firebase_uid=eq." + encoded
+                + "&select=id,name,phone&limit=1";
+        return fetchUserMeta(url);
+    }
+
+    private UserMeta fetchUserById(String userId) {
+        if (userId == null || userId.trim().isEmpty()) return null;
+        String encoded = Uri.encode(userId.trim());
+        String url = SUPABASE_URL + "/rest/v1/users"
+                + "?id=eq." + encoded
+                + "&select=id,name,phone&limit=1";
+        return fetchUserMeta(url);
+    }
+
+    private UserMeta fetchUserMeta(String url) {
+        try {
+            Request req = new Request.Builder().url(url)
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response r = httpClient.newCall(req).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                if (r.code() != 200) return null;
+                JSONArray arr = new JSONArray(body);
+                if (arr.length() == 0) return null;
+
+                JSONObject o = arr.getJSONObject(0);
+                UserMeta meta = new UserMeta();
+                meta.id = o.optString("id", "");
+                meta.name = o.optString("name", "");
+                meta.phone = o.optString("phone", "");
+                return meta;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "fetchUserMeta failed: " + e.getMessage());
+            return null;
+        }
     }
 
     private String extractSupabaseError(String body) {
@@ -506,5 +590,42 @@ public class ProviderDetailActivity extends BaseActivity {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private boolean isBookingDateAllowed(String yyyyMmDd, long minMs, long maxMs) {
+        try {
+            SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+            fmt.setLenient(false);
+            Date parsed = fmt.parse(yyyyMmDd);
+            if (parsed == null) return false;
+            long selected = startOfDayMillis(parsed.getTime());
+            return selected >= startOfDayMillis(minMs) && selected <= startOfDayMillis(maxMs);
+        } catch (ParseException e) {
+            return false;
+        }
+    }
+
+    private long startOfDayMillis(Calendar cal) {
+        Calendar c = (Calendar) cal.clone();
+        c.set(Calendar.HOUR_OF_DAY, 0);
+        c.set(Calendar.MINUTE, 0);
+        c.set(Calendar.SECOND, 0);
+        c.set(Calendar.MILLISECOND, 0);
+        return c.getTimeInMillis();
+    }
+
+    private long endOfDayMillis(Calendar cal) {
+        Calendar c = (Calendar) cal.clone();
+        c.set(Calendar.HOUR_OF_DAY, 23);
+        c.set(Calendar.MINUTE, 59);
+        c.set(Calendar.SECOND, 59);
+        c.set(Calendar.MILLISECOND, 999);
+        return c.getTimeInMillis();
+    }
+
+    private long startOfDayMillis(long ms) {
+        Calendar c = Calendar.getInstance();
+        c.setTimeInMillis(ms);
+        return startOfDayMillis(c);
     }
 }

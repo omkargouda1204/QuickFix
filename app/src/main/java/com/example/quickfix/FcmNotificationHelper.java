@@ -137,18 +137,103 @@ public final class FcmNotificationHelper {
      */
     public static void notifyProviderNewBooking(String providerFirebaseUid,
                                                 String customerName,
-                                                String serviceName) {
+                                                String serviceName,
+                                                String bookingId) {
         String body = (trimToEmpty(customerName).isEmpty() ? "A customer" : customerName)
                 + " requested"
                 + (trimToEmpty(serviceName).isEmpty() ? " a service." : " " + serviceName + ".");
 
         notifyProviderEvent(
                 providerFirebaseUid,
-                "New Booking",
+                "New Booking Request",
                 body,
-                "booking",
-                null
+                "booking_request",
+                trimToEmpty(bookingId).isEmpty() ? null : bookingId
         );
+    }
+
+    /** Backward-compatible overload used by older call sites. */
+    public static void notifyProviderNewBooking(String providerFirebaseUid,
+                                                String customerName,
+                                                String serviceName) {
+        notifyProviderNewBooking(providerFirebaseUid, customerName, serviceName, null);
+    }
+
+    /**
+     * Notify the customer that their booking status has been updated.
+     * Called after a provider accepts, rejects, or completes a booking.
+     *
+     * @param customerUserId The user ID of the customer (for notification).
+     * @param providerName   The name of the provider (for notification text).
+     * @param serviceName    The service/category of the booking (for notification text).
+     * @param newStatus      The new status of the booking (accepted, cancelled, completed, etc.).
+     * @param bookingId      The ID of the booking (for linking in admin panel, if needed).
+     */
+    public static void notifyCustomerBookingStatus(String customerUserId,
+                                                   String providerName,
+                                                   String serviceName,
+                                                   String newStatus,
+                                                   String bookingId) {
+        if (trimToEmpty(customerUserId).isEmpty()) return;
+
+        String normalized = trimToEmpty(newStatus).toLowerCase();
+        String title;
+        String type;
+        switch (normalized) {
+            case "accepted":
+                title = "Booking Accepted";
+                type = "booking_accepted";
+                break;
+            case "cancelled":
+                title = "Booking Rejected";
+                type = "booking_rejected";
+                break;
+            case "completed":
+                title = "Service Completed";
+                type = "booking_completed";
+                break;
+            default:
+                title = "Booking Updated";
+                type = "booking_update";
+                break;
+        }
+
+        String safeProvider = trimToEmpty(providerName);
+        String safeService = trimToEmpty(serviceName);
+        String body = (safeProvider.isEmpty() ? "Your provider" : safeProvider)
+                + " updated"
+                + (safeService.isEmpty() ? " your booking." : " your " + safeService + " booking.");
+
+        new Thread(() -> {
+            try {
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    return;
+                }
+
+                UserRecipient recipient = fetchUserRecipientByUserId(customerUserId);
+                if (recipient == null || trimToEmpty(recipient.token).isEmpty()) {
+                    // Fallback for older rows where customer_id may still hold firebase_uid text.
+                    recipient = fetchUserRecipient(customerUserId);
+                }
+                if (recipient == null || trimToEmpty(recipient.token).isEmpty()) {
+                    Log.d(TAG, "notifyCustomerBookingStatus skipped: token not found for " + customerUserId);
+                    return;
+                }
+
+                sendViaEdgeFunction(
+                        listOf(recipient.token),
+                        listOf(recipient.userId),
+                        listOf("user"),
+                        title,
+                        body,
+                        type,
+                        trimToEmpty(bookingId).isEmpty() ? null : bookingId
+                );
+            } catch (Exception e) {
+                Log.w(TAG, "notifyCustomerBookingStatus failed: " + e.getMessage());
+            }
+        }).start();
     }
 
     // ── Public single-token send (used by OfferManagement) ───────────────
@@ -362,6 +447,43 @@ public final class FcmNotificationHelper {
         }
     }
 
+    private static UserRecipient fetchUserRecipientByUserId(String userId) {
+        if (trimToEmpty(userId).isEmpty()) return null;
+
+        String url = SUPABASE_URL
+                + "/rest/v1/users"
+                + "?id=eq." + urlEncode(userId)
+                + "&fcm_token=not.is.null"
+                + "&select=id,fcm_token"
+                + "&limit=1";
+
+        Request req = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .build();
+
+        try (Response resp = HTTP.newCall(req).execute()) {
+            String body = resp.body() != null ? resp.body().string() : "[]";
+            if (resp.code() != 200) {
+                Log.w(TAG, "fetchUserRecipientByUserId HTTP " + resp.code() + " body=" + body);
+                return null;
+            }
+            JSONArray arr = new JSONArray(body);
+            if (arr.length() == 0) return null;
+            JSONObject row = arr.getJSONObject(0);
+            String id = trimToEmpty(row.optString("id", ""));
+            String token = trimToEmpty(row.optString("fcm_token", ""));
+            if (id.isEmpty() || token.isEmpty()) return null;
+            return new UserRecipient(id, token);
+        } catch (Exception e) {
+            Log.w(TAG, "fetchUserRecipientByUserId failed: " + e.getMessage());
+            return null;
+        }
+    }
+
     private static void sendViaEdgeFunction(List<String> tokens,
                                             List<String> receiverIds,
                                             List<String> receiverRoles,
@@ -444,7 +566,13 @@ public final class FcmNotificationHelper {
     }
 
     private static String urlEncode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+        try {
+            return URLEncoder.encode(value, StandardCharsets.UTF_8.name());
+        } catch (java.io.UnsupportedEncodingException e) {
+            // UTF-8 is always available, but return a safe fallback for compiler/runtime safety.
+            Log.w(TAG, "urlEncode fallback: " + e.getMessage());
+            return value;
+        }
     }
 
     private static final class UserRecipient {

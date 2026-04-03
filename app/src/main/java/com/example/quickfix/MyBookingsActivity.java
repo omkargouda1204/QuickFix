@@ -60,6 +60,8 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
 
     private FirebaseAuth mAuth;
     private String providerId;
+    private String providerFirebaseUid;
+    private String providerProfileId;
     private String currentFilter = "all";
     private List<Booking> allBookings = new ArrayList<>();
 
@@ -82,6 +84,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
             return;
         }
         providerId = user.getUid();
+        providerFirebaseUid = providerId;
 
         setupToolbar();
         initViews();
@@ -140,25 +143,77 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
     private void loadBookings() {
         showLoading(true);
 
-        if (providerId == null || providerId.isEmpty()) {
+        if (providerFirebaseUid == null || providerFirebaseUid.isEmpty()) {
             showLoading(false);
             Toast.makeText(this, "Provider ID not available", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (providerProfileId == null || providerProfileId.trim().isEmpty()) {
+            resolveProviderProfileIdAndLoad();
             return;
         }
 
         loadBookingsWithProviderId();
     }
 
-    // Keep method for call-site compatibility.
-    private void getProviderNameAndLoadBookings() {
-        loadBookingsWithProviderId();
+    private void resolveProviderProfileIdAndLoad() {
+        String url = SUPABASE_URL + "/rest/v1/provider_profiles"
+                + "?firebase_uid=eq." + android.net.Uri.encode(providerFirebaseUid)
+                + "&select=id&limit=1";
+
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                mainHandler.post(() -> {
+                    showLoading(false);
+                    Toast.makeText(MyBookingsActivity.this,
+                            "Failed to resolve provider profile",
+                            Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                String body = response.body() != null ? response.body().string() : "[]";
+                int code = response.code();
+                response.close();
+
+                if (code == 200) {
+                    try {
+                        JSONArray arr = new JSONArray(body);
+                        if (arr.length() > 0) {
+                            providerProfileId = arr.getJSONObject(0).optString("id", "");
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+
+                mainHandler.post(() -> {
+                    if (providerProfileId == null || providerProfileId.trim().isEmpty()) {
+                        showLoading(false);
+                        Toast.makeText(MyBookingsActivity.this,
+                                "Provider profile not found",
+                                Toast.LENGTH_LONG).show();
+                    } else {
+                        loadBookingsWithProviderId();
+                    }
+                });
+            }
+        });
     }
 
     private void loadBookingsWithProviderId() {
         String url = SUPABASE_URL + "/rest/v1/bookings"
-                + "?provider_id=eq." + providerId
-                + "&order=created_at.desc"
-                + "&select=*";
+                + "?provider_id=eq." + android.net.Uri.encode(providerProfileId)
+                + "&order=created_at.desc&select=*";
 
         Log.d(TAG, "loadBookingsWithProviderId URL: " + url);
 
@@ -266,7 +321,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         new AlertDialog.Builder(this)
                 .setTitle("Accept Booking")
                 .setMessage("Accept booking from " + booking.customerName + "?")
-                .setPositiveButton("Accept", (d, w) -> updateBookingStatus(booking.id, "accepted"))
+                .setPositiveButton("Accept", (d, w) -> updateBookingStatus(booking, "accepted"))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
@@ -276,7 +331,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         new AlertDialog.Builder(this)
                 .setTitle("Reject Booking")
                 .setMessage("Reject booking from " + booking.customerName + "?")
-                .setPositiveButton("Reject", (d, w) -> updateBookingStatus(booking.id, "cancelled"))
+                .setPositiveButton("Reject", (d, w) -> updateBookingStatus(booking, "cancelled"))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
@@ -286,12 +341,12 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         new AlertDialog.Builder(this)
                 .setTitle("Mark as Completed")
                 .setMessage("Mark this job as completed?")
-                .setPositiveButton("Complete", (d, w) -> updateBookingStatus(booking.id, "completed"))
+                .setPositiveButton("Complete", (d, w) -> updateBookingStatus(booking, "completed"))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
-    private void updateBookingStatus(String bookingId, String newStatus) {
+    private void updateBookingStatus(Booking booking, String newStatus) {
         try {
             JSONObject body = new JSONObject();
             body.put("status", newStatus);
@@ -302,7 +357,12 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
             //             .format(new java.util.Date()));
             // }
 
-            String url = SUPABASE_URL + "/rest/v1/bookings?id=eq." + bookingId;
+            String url = SUPABASE_URL + "/rest/v1/bookings?id=eq." + booking.id;
+            if (providerProfileId != null && !providerProfileId.trim().isEmpty()) {
+                url += "&provider_id=eq." + android.net.Uri.encode(providerProfileId.trim());
+            }
+
+            Log.d(TAG, "updateBookingStatus URL=" + url + " body=" + body);
 
             Request request = new Request.Builder()
                     .url(url)
@@ -325,18 +385,32 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
                     int code = response.code();
+                    String resp = response.body() != null ? response.body().string() : "";
                     response.close();
+
+                    Log.d(TAG, "updateBookingStatus response: HTTP " + code + " | " + resp);
 
                     mainHandler.post(() -> {
                         if (code == 200 || code == 204) {
+                            FcmNotificationHelper.notifyCustomerBookingStatus(
+                                    booking.customerId,
+                                    booking.providerName,
+                                    booking.serviceName,
+                                    newStatus,
+                                    booking.id
+                            );
                             Toast.makeText(MyBookingsActivity.this,
                                     "Status updated successfully",
                                     Toast.LENGTH_SHORT).show();
                             loadBookings();
                         } else {
+                            String shortMsg = resp == null || resp.trim().isEmpty()
+                                    ? ("HTTP " + code)
+                                    : resp;
+                            if (shortMsg.length() > 180) shortMsg = shortMsg.substring(0, 180) + "...";
                             Toast.makeText(MyBookingsActivity.this,
-                                    "Update failed: HTTP " + code,
-                                    Toast.LENGTH_SHORT).show();
+                                    "Update failed: " + shortMsg,
+                                    Toast.LENGTH_LONG).show();
                         }
                     });
                 }
@@ -347,4 +421,3 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         }
     }
 }
-

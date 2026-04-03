@@ -58,6 +58,7 @@ public class UserBookingsActivity extends BaseActivity
     private String currentFilter = "all";
     private List<Booking> allBookings = new ArrayList<>();
     private String userId;
+    private String userDbId;
 
     private final OkHttpClient HTTP = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -120,10 +121,18 @@ public class UserBookingsActivity extends BaseActivity
 
     private void loadBookings() {
         showLoading(true);
+
+        if (userDbId == null || userDbId.trim().isEmpty()) {
+            resolveUserDbIdAndLoad();
+            return;
+        }
+
         new Thread(() -> {
             try {
+                String uid = android.net.Uri.encode(userId);
+                String dbId = android.net.Uri.encode(userDbId);
                 String url = BASE_URL
-                        + "/rest/v1/bookings?customer_id=eq." + userId
+                        + "/rest/v1/bookings?or=(customer_id.eq." + uid + ",customer_id.eq." + dbId + ")"
                         + "&select=*&order=created_at.desc";
                 Request req = new Request.Builder().url(url)
                         .addHeader("apikey",        ANON_KEY)
@@ -152,6 +161,40 @@ public class UserBookingsActivity extends BaseActivity
                 MAIN.post(() -> { showLoading(false);
                     Toast.makeText(this, "Network error", Toast.LENGTH_SHORT).show(); });
             }
+        }).start();
+    }
+
+    private void resolveUserDbIdAndLoad() {
+        new Thread(() -> {
+            try {
+                String url = BASE_URL + "/rest/v1/users"
+                        + "?firebase_uid=eq." + android.net.Uri.encode(userId)
+                        + "&select=id&limit=1";
+                Request req = new Request.Builder().url(url)
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+                try (Response r = HTTP.newCall(req).execute()) {
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    if (r.code() == 200) {
+                        JSONArray arr = new JSONArray(body);
+                        if (arr.length() > 0) {
+                            userDbId = arr.getJSONObject(0).optString("id", "");
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "resolveUserDbId: " + e.getMessage());
+            }
+
+            MAIN.post(() -> {
+                if (userDbId == null || userDbId.trim().isEmpty()) {
+                    // Fallback to Firebase UID-only read.
+                    userDbId = userId;
+                }
+                loadBookings();
+            });
         }).start();
     }
 
@@ -197,7 +240,22 @@ public class UserBookingsActivity extends BaseActivity
             try {
                 JSONObject body = new JSONObject();
                 body.put("status", "cancelled");
+                String uid = userId != null ? userId.trim() : "";
+                String dbId = userDbId != null ? userDbId.trim() : "";
                 String url = BASE_URL + "/rest/v1/bookings?id=eq." + booking.id;
+                if (!uid.isEmpty() || !dbId.isEmpty()) {
+                    url += "&or=(";
+                    boolean hasPrev = false;
+                    if (!uid.isEmpty()) {
+                        url += "customer_id.eq." + android.net.Uri.encode(uid);
+                        hasPrev = true;
+                    }
+                    if (!dbId.isEmpty()) {
+                        if (hasPrev) url += ",";
+                        url += "customer_id.eq." + android.net.Uri.encode(dbId);
+                    }
+                    url += ")";
+                }
                 Request req = new Request.Builder().url(url)
                         .patch(RequestBody.create(body.toString(), MediaType.get("application/json")))
                         .addHeader("apikey",        ANON_KEY)
@@ -247,4 +305,3 @@ public class UserBookingsActivity extends BaseActivity
         if (progressBar != null) progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 }
-
