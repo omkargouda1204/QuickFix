@@ -11,7 +11,9 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
@@ -860,64 +862,103 @@ public class SupabaseClient {
         }).start();
     }
 
-    public static void softDeleteUser(String firebaseUid, Callback2 callback) {
+    public static void hardDeleteUserData(String firebaseUid, Callback2 callback) {
         if (callback == null) return;
+        if (firebaseUid == null || firebaseUid.trim().isEmpty()) {
+            MAIN.post(() -> callback.onError("User uid is required"));
+            return;
+        }
+
         new Thread(() -> {
+            List<String> failures = new ArrayList<>();
             try {
-                JSONObject modern = new JSONObject();
-                modern.put("deleted_at", isoNowUtc());
-                modern.put("name", JSONObject.NULL);
-                modern.put("phone", JSONObject.NULL);
-                modern.put("city", JSONObject.NULL);
-                modern.put("address", JSONObject.NULL);
-                modern.put("profile_image", JSONObject.NULL);
-                modern.put("fcm_token", JSONObject.NULL);
-                modern.put("is_user", false);
-                modern.put("is_service_provider", false);
-                modern.put("is_admin", false);
+                String encUid = java.net.URLEncoder.encode(firebaseUid.trim(), "UTF-8");
 
-                String encUid = java.net.URLEncoder.encode(firebaseUid, "UTF-8");
-                Request modernReq = new Request.Builder()
-                        .url(SUPABASE_URL + "/rest/v1/users?or=(firebase_uid.eq." + encUid + ",id.eq." + encUid + ")")
-                        .patch(RequestBody.create(modern.toString(), JSON_TYPE))
-                        .addHeader("apikey", ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type", "application/json")
-                        .addHeader("Prefer", "return=minimal")
-                        .build();
+                // Dependents first, then the user row.
+                deleteByFilter("business_media", "provider_id=eq." + encUid, true, failures);
+                deleteByFilter("bookings", "customer_id=eq." + encUid, true, failures);
+                deleteByFilter("bookings", "provider_id=eq." + encUid, true, failures);
+                deleteByFilter("notifications", "receiver_id=eq." + encUid, true, failures);
+                deleteByFilter("provider_applications", "firebase_uid=eq." + encUid, true, failures);
 
-                try (Response r = HTTP.newCall(modernReq).execute()) {
-                    if (r.code() == 200 || r.code() == 204) {
-                        MAIN.post(callback::onSuccess);
-                        return;
-                    }
+                boolean providerProfileDeleted = deleteByFilter(
+                        "provider_profiles",
+                        "or=(firebase_uid.eq." + encUid + ",id.eq." + encUid + ")",
+                        true,
+                        failures
+                );
+                if (!providerProfileDeleted) {
+                    deleteByFilter("provider_profiles", "id=eq." + encUid, true, failures);
                 }
 
-                JSONObject legacy = new JSONObject();
-                legacy.put("deleted_at", isoNowUtc());
-                legacy.put("full_name", JSONObject.NULL);
-                legacy.put("phone", JSONObject.NULL);
+                boolean usersDeleted = deleteByFilter(
+                        "users",
+                        "or=(firebase_uid.eq." + encUid + ",id.eq." + encUid + ")",
+                        false,
+                        failures
+                );
+                if (!usersDeleted) {
+                    deleteByFilter("users", "id=eq." + encUid, false, failures);
+                }
 
-                Request legacyReq = new Request.Builder()
-                        .url(SUPABASE_URL + "/rest/v1/users?id=eq." + encUid)
-                        .patch(RequestBody.create(legacy.toString(), JSON_TYPE))
-                        .addHeader("apikey", ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type", "application/json")
-                        .addHeader("Prefer", "return=minimal")
-                        .build();
-
-                try (Response r2 = HTTP.newCall(legacyReq).execute()) {
-                    if (r2.code() == 200 || r2.code() == 204) {
-                        MAIN.post(callback::onSuccess);
-                    } else {
-                        MAIN.post(() -> callback.onError("HTTP " + r2.code()));
-                    }
+                if (failures.isEmpty()) {
+                    MAIN.post(callback::onSuccess);
+                } else {
+                    MAIN.post(() -> callback.onError("Failed to remove data from: " + joinFailures(failures)));
                 }
             } catch (Exception e) {
                 MAIN.post(() -> callback.onError(e.getMessage()));
             }
         }).start();
+    }
+
+    // Backward-compatible name used by older call sites.
+    public static void softDeleteUser(String firebaseUid, Callback2 callback) {
+        hardDeleteUserData(firebaseUid, callback);
+    }
+
+    private static boolean deleteByFilter(String table,
+                                          String filter,
+                                          boolean optional,
+                                          List<String> failures) {
+        String url = SUPABASE_URL + "/rest/v1/" + table + "?" + filter;
+        Request req = new Request.Builder()
+                .url(url)
+                .delete()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Prefer", "return=minimal")
+                .build();
+
+        try (Response r = HTTP.newCall(req).execute()) {
+            int code = r.code();
+            if (code == 200 || code == 204) {
+                return true;
+            }
+            // Optional tables/filters may legitimately fail in older schemas.
+            if (optional && (code == 400 || code == 404)) {
+                Log.w(TAG, "deleteByFilter optional skip: table=" + table + " code=" + code);
+                return false;
+            }
+
+            String body = r.body() != null ? r.body().string() : "";
+            Log.e(TAG, "deleteByFilter failed table=" + table + " code=" + code + " body=" + body);
+            failures.add(table + "(HTTP " + code + ")");
+            return false;
+        } catch (Exception e) {
+            Log.e(TAG, "deleteByFilter exception table=" + table + " msg=" + e.getMessage());
+            failures.add(table);
+            return false;
+        }
+    }
+
+    private static String joinFailures(List<String> failures) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < failures.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(failures.get(i));
+        }
+        return sb.toString();
     }
 
     private static JSONObject fetchAccountRow(String filterQuery) throws Exception {

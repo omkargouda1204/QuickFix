@@ -249,6 +249,29 @@
     <string name="settings_dark_mode">Dark Mode</string>
     <string name="settings_change_password">Change Password</string>
     <string name="settings_delete_account">Delete Account</string>
+    <string name="settings_delete_account_subtitle" translatable="false">Permanent and irreversible</string>
+    <string name="settings_delete_dialog_title" translatable="false">Delete Account</string>
+    <string name="settings_delete_dialog_message" translatable="false">Are you sure you want to delete your account?\n\nThis action is permanent and cannot be undone.\n\n- Your profile data will be removed\n- Your bookings will be removed\n- You will be signed out immediately</string>
+    <string name="settings_delete_dialog_confirm" translatable="false">Delete My Account</string>
+    <string name="settings_delete_overlay_checking" translatable="false">Checking deletion eligibility...</string>
+    <string name="settings_delete_overlay_profile_image" translatable="false">Deleting profile image...</string>
+    <string name="settings_delete_overlay_firebase" translatable="false">Deleting account from authentication...</string>
+    <string name="settings_delete_overlay_supabase" translatable="false">Deleting account data...</string>
+    <string name="settings_delete_overlay_reauth" translatable="false">Re-authenticating...</string>
+    <string name="settings_delete_overlay_signout" translatable="false">Signing out...</string>
+    <string name="settings_delete_verify_error" translatable="false">Could not verify account creation time. Please try again.</string>
+    <string name="settings_delete_cooldown_error" translatable="false">Account can be deleted only after 24 hours of creation.</string>
+    <string name="settings_delete_firebase_error" translatable="false">Failed to delete account. Please try again.\n\n%1$s</string>
+    <string name="settings_delete_password_title" translatable="false">Confirm Your Password</string>
+    <string name="settings_delete_password_message" translatable="false">Please enter your password to permanently delete your account.</string>
+    <string name="settings_delete_password_confirm" translatable="false">Confirm and Delete</string>
+    <string name="settings_delete_password_empty" translatable="false">Password cannot be empty</string>
+    <string name="settings_delete_email_missing" translatable="false">Could not retrieve account email. Please contact support.</string>
+    <string name="settings_delete_password_incorrect" translatable="false">Incorrect password. Please try again.</string>
+    <string name="settings_delete_reauth_failed" translatable="false">Re-authentication failed. Please sign in again and retry.</string>
+    <string name="settings_delete_google_reauth_failed" translatable="false">Could not re-authenticate with Google. Please sign in again and retry.</string>
+    <string name="settings_delete_success" translatable="false">Your account and related data were permanently deleted.</string>
+    <string name="settings_delete_partial_failure" translatable="false">Account deleted, but some app data cleanup failed. Please contact support.</string>
 
     <!-- Profile placeholders -->
     <string name="profile_avatar_initial">U</string>
