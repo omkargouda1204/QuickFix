@@ -351,7 +351,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="48dp"
                         android:layout_marginBottom="14dp"
-                        android:text="@string/cd_change_photo"
+                        android:text="@string/pd_btn_change_photo"
                         android:textAllCaps="false"
                         android:textSize="14sp"
                         app:icon="@drawable/ic_profile"
@@ -360,6 +360,15 @@
                         app:iconTint="@color/white"
                         app:cornerRadius="12dp"
                         app:backgroundTint="@color/primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="-6dp"
+                        android:layout_marginBottom="10dp"
+                        android:text="@string/pd_change_photo_hint"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
 
                     <!-- Email (read-only display) -->
                     <TextView
@@ -382,7 +391,7 @@
                         android:textSize="14sp"
                         android:textColor="#9E9E9E"
                         android:layout_marginBottom="14dp"
-                        android:drawableStart="@drawable/ic_lock"
+                        app:drawableStartCompat="@drawable/ic_lock"
                         android:drawablePadding="8dp"
                         android:hint="@string/pd_hint_email_readonly" />
 

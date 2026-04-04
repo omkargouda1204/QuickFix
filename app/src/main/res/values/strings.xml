@@ -300,6 +300,7 @@
     <string name="pd_dash">—</string>
     <string name="pd_section_personal">Personal Information</string>
     <string name="pd_section_edit">Edit Personal Information</string>
+    <string name="pd_btn_change_photo">Change Profile Photo</string>
     <string name="pd_label_full_name">Full Name</string>
     <string name="pd_label_email_address">Email Address</string>
     <string name="pd_label_phone_number">Phone Number</string>
@@ -318,8 +319,17 @@
     <string name="pd_edit_before_photo">Tap Edit Profile before changing photo.</string>
     <string name="pd_uploading_photo">Uploading photo...</string>
     <string name="pd_photo_upload_failed">Photo upload failed. Please try again.</string>
+    <string name="pd_photo_source_title">Update profile photo</string>
+    <string name="pd_photo_source_gallery">Choose from gallery</string>
+    <string name="pd_photo_source_camera">Take a photo</string>
+    <string name="pd_photo_selected_save_hint">Photo selected. Tap Save Changes to upload.</string>
+    <string name="pd_gallery_permission_denied">Gallery permission denied. Please allow access to select a photo.</string>
+    <string name="pd_camera_permission_denied">Camera permission denied. Please allow access to take a photo.</string>
+    <string name="pd_camera_unavailable">Unable to open camera. Please try again.</string>
+    <string name="pd_camera_capture_cancelled">Camera capture cancelled.</string>
     <string name="pd_saving">Saving...</string>
     <string name="pd_saved_ok">Profile saved successfully.</string>
+    <string name="pd_saved_with_photo_ok">Profile photo uploaded and profile updated.</string>
     <string name="pd_save_http_error">Save failed (HTTP %1$d). Please try again.</string>
     <string name="pd_load_http_error">Could not load profile (HTTP %1$d).</string>
     <string name="pd_network_error">Network error. Check your connection and try again.</string>

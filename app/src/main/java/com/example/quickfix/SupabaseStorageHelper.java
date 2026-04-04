@@ -69,6 +69,8 @@ public class SupabaseStorageHelper {
 
     private static final int BANNER_MAX_SOURCE_BYTES = 10 * 1024 * 1024; // 10 MB
     private static final int BANNER_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;  // 2 MB
+    private static final int PROFILE_MAX_SOURCE_BYTES = 10 * 1024 * 1024; // 10 MB
+    private static final int PROFILE_MAX_UPLOAD_BYTES = 1024 * 1024;      // 1 MB
 
     /**
      * Upload a file from a Uri to a Supabase Storage bucket.
@@ -337,15 +339,11 @@ public class SupabaseStorageHelper {
                                                                 Uri fileUri,
                                                                 String storagePath) throws Exception {
         UploadPayload payload = new UploadPayload();
-        String mimeType = context.getContentResolver().getType(fileUri);
-        if (mimeType == null || mimeType.trim().isEmpty()) mimeType = "image/jpeg";
-        payload.mimeType = mimeType;
+        payload.mimeType = "image/jpeg";
         payload.storagePath = storagePath;
 
-        try (InputStream is = context.getContentResolver().openInputStream(fileUri)) {
-            if (is == null) throw new IllegalStateException("Cannot read file");
-            payload.fileBytes = readAllBytes(is);
-        }
+        byte[] sourceBytes = readUriBytes(context, fileUri, PROFILE_MAX_SOURCE_BYTES);
+        payload.fileBytes = compressProfileBytes(sourceBytes, PROFILE_MAX_UPLOAD_BYTES);
 
         return payload;
     }
@@ -416,6 +414,48 @@ public class SupabaseStorageHelper {
             byte[] finalBytes = fallback.toByteArray();
             if (finalBytes.length > maxBytes) {
                 throw new IllegalStateException("Compressed image is still too large. Please choose a smaller image.");
+            }
+            return finalBytes;
+        } finally {
+            if (current != null && !current.isRecycled()) current.recycle();
+            if (bitmap != null && bitmap != current && !bitmap.isRecycled()) bitmap.recycle();
+        }
+    }
+
+    private static byte[] compressProfileBytes(byte[] source, int maxBytes) throws Exception {
+        Bitmap bitmap = BitmapFactory.decodeByteArray(source, 0, source.length);
+        if (bitmap == null) {
+            throw new IllegalStateException("Unsupported or corrupted image file.");
+        }
+
+        Bitmap current = bitmap;
+        try {
+            int quality = 88;
+            for (int iteration = 0; iteration < 7; iteration++) {
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                current.compress(Bitmap.CompressFormat.JPEG, quality, out);
+                byte[] result = out.toByteArray();
+                if (result.length <= maxBytes) return result;
+
+                quality -= 8;
+                if (quality < 56) {
+                    quality = 82;
+                    int w = Math.max(480, (int) (current.getWidth() * 0.8f));
+                    int h = Math.max(480, (int) (current.getHeight() * 0.8f));
+                    if (w == current.getWidth() && h == current.getHeight()) {
+                        break;
+                    }
+                    Bitmap scaled = Bitmap.createScaledBitmap(current, w, h, true);
+                    if (current != bitmap && !current.isRecycled()) current.recycle();
+                    current = scaled;
+                }
+            }
+
+            java.io.ByteArrayOutputStream fallback = new java.io.ByteArrayOutputStream();
+            current.compress(Bitmap.CompressFormat.JPEG, 68, fallback);
+            byte[] finalBytes = fallback.toByteArray();
+            if (finalBytes.length > maxBytes) {
+                throw new IllegalStateException("Image is too large after compression. Please choose a smaller photo.");
             }
             return finalBytes;
         } finally {
