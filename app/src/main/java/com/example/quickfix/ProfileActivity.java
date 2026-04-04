@@ -45,7 +45,6 @@ public class ProfileActivity extends BaseActivity {
     private static final String TAG           = "ProfileActivity";
     private static final String PREFS_NAME    = "quickfix_prefs";
     private static final String KEY_LANGUAGE  = "selected_language";
-    private static final String KEY_DARK_MODE = "dark_mode_enabled";
     private static final String KEY_NOTIF     = "notifications_enabled";
     private static final int AVATAR_SIGNED_URL_TTL_SEC = 3600;
 
@@ -100,7 +99,6 @@ public class ProfileActivity extends BaseActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        applyDarkModeFromPrefs();
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_profile);
 
@@ -336,14 +334,12 @@ public class ProfileActivity extends BaseActivity {
         menuDarkMode.setOnClickListener(v -> {
             if (switchDarkMode != null) switchDarkMode.toggle();
         });
-        // Load current dark mode state from ThemeManager (shared across all roles)
+        // Load current dark mode state from the user-only theme preference.
         if (switchDarkMode != null) {
-            switchDarkMode.setChecked(ThemeManager.isDarkMode(this));
+            switchDarkMode.setChecked(ThemeManager.isUserDarkMode(this));
             switchDarkMode.setEnabled(true);
             switchDarkMode.setOnCheckedChangeListener((btn, checked) -> {
-                ThemeManager.toggle(this, checked);
-                // Sync with AppSettings key for backwards compat
-                prefs.edit().putBoolean(KEY_DARK_MODE, checked).apply();
+                ThemeManager.toggleUser(this, checked);
                 Toast.makeText(this, checked ? "🌙 Dark mode enabled" : "☀️ Light mode enabled",
                         Toast.LENGTH_SHORT).show();
             });
@@ -450,18 +446,22 @@ public class ProfileActivity extends BaseActivity {
 
     // ── Dark Mode ─────────────────────────────────────────────────────────
     private void applyDarkModeFromPrefs() {
-        // Use ThemeManager — shared preference for all roles
-        ThemeManager.applyFromPrefs(this);
+        ThemeManager.applyFromPrefs(this, false);
     }
 
     private void setupTogglesFromPrefs() {
         switchNotifications.setChecked(prefs.getBoolean(KEY_NOTIF, true));
-        // Load dark mode from ThemeManager
+        // Load dark mode from the user-only theme preference.
         if (switchDarkMode != null) {
-            switchDarkMode.setChecked(ThemeManager.isDarkMode(this));
+            switchDarkMode.setChecked(ThemeManager.isUserDarkMode(this));
         }
         String lang = prefs.getString(KEY_LANGUAGE, "English");
         tvCurrentLanguage.setText(lang);
+    }
+
+    @Override
+    protected boolean isAdminThemeScreen() {
+        return false;
     }
 
     // ── Logout ────────────────────────────────────────────────────────────

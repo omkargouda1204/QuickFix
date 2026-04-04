@@ -60,6 +60,7 @@ public class SettingsActivity extends BaseActivity {
 
     // ── Views ─────────────────────────────────────────────────────────────
     private SwitchMaterial switchPush, switchEmail, switchBookingRem;
+    private SwitchMaterial switchDarkMode;
     private LinearLayout   settingsChangePassword, settingsDeleteAccount;
     private FrameLayout    loadingOverlay;
     private TextView       tvDeletingMessage;
@@ -113,6 +114,7 @@ public class SettingsActivity extends BaseActivity {
         switchPush             = findViewById(R.id.switchPushNotifications);
         switchEmail            = findViewById(R.id.switchEmailNotifications);
         switchBookingRem       = findViewById(R.id.switchBookingReminders);
+        switchDarkMode         = findViewById(R.id.switchDarkMode);
         settingsChangePassword = findViewById(R.id.settingsChangePassword);
         settingsDeleteAccount  = findViewById(R.id.settingsDeleteAccount);
         loadingOverlay         = findViewById(R.id.settingsLoadingOverlay);
@@ -124,6 +126,7 @@ public class SettingsActivity extends BaseActivity {
         if (switchPush       != null) switchPush.setChecked(prefs.getBoolean(KEY_PUSH_NOTIF,  true));
         if (switchEmail      != null) switchEmail.setChecked(prefs.getBoolean(KEY_EMAIL_NOTIF, true));
         if (switchBookingRem != null) switchBookingRem.setChecked(prefs.getBoolean(KEY_BOOKING_REM, true));
+        if (switchDarkMode    != null) switchDarkMode.setChecked(ThemeManager.isUserDarkMode(this));
     }
 
     // ── Click / change listeners ──────────────────────────────────────────
@@ -140,12 +143,21 @@ public class SettingsActivity extends BaseActivity {
             switchBookingRem.setOnCheckedChangeListener((v, c) ->
                     prefs.edit().putBoolean(KEY_BOOKING_REM, c).apply());
 
+        if (switchDarkMode != null)
+            switchDarkMode.setOnCheckedChangeListener((v, checked) ->
+                    ThemeManager.toggleUser(this, checked));
+
         if (settingsChangePassword != null)
             settingsChangePassword.setOnClickListener(v ->
                     startActivity(new Intent(this, ForgotPasswordActivity.class)));
 
         if (settingsDeleteAccount != null)
             settingsDeleteAccount.setOnClickListener(v -> showDeleteConfirmDialog());
+    }
+
+    @Override
+    protected boolean isAdminThemeScreen() {
+        return false;
     }
 
     // ═════════════════════════════════════════════════════════════════════

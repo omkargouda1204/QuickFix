@@ -461,8 +461,8 @@ public final class AdminSettingsRepository {
 
     private static void applyGlobalEffects(Context context, AppSettings.Snapshot snapshot) {
         if (context == null || snapshot == null) return;
-        ThemeManager.save(context, snapshot.darkMode);
-        ThemeManager.apply(snapshot.darkMode);
+        ThemeManager.saveAdmin(context, snapshot.darkMode);
+        ThemeManager.applyAdminMode(context);
     }
 
     private static String sanitize(String value, String fallback) {

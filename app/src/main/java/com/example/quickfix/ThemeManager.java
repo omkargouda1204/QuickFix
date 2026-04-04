@@ -2,13 +2,10 @@ package com.example.quickfix;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
 
 import androidx.appcompat.app.AppCompatDelegate;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.concurrent.TimeUnit;
@@ -20,23 +17,23 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 /**
- * ThemeManager — single source of truth for dark/light mode across the app.
+ * ThemeManager — role-aware source of truth for dark/light mode across the app.
  *
  * Flow:
- *  1. On app start  → load saved preference → apply via AppCompatDelegate
- *  2. Admin toggles → save locally → apply immediately → sync to Supabase
- *  3. User opens app → load from SharedPreferences (fast, no network)
- *  4. Optionally: fetch from Supabase to sync admin-set preference to all users
- *
- * The preference is stored in SharedPreferences under key "dark_mode_enabled"
- * in prefs file "quickfix_theme_prefs" so ALL roles share the same key.
+ *  1. On app start  → resolve role-specific preference → apply via AppCompatDelegate
+ *  2. Admin toggles → save locally + in admin_settings → apply immediately → sync to Supabase
+ *  3. User toggles  → save in user-only prefs → apply immediately
+ *  4. Legacy shared preferences are migrated on first read per role
  */
 public class ThemeManager {
 
     private static final String TAG        = "ThemeManager";
-    private static final String PREFS_NAME = "quickfix_theme_prefs";
-    private static final String KEY        = "dark_mode_enabled";
-    private static final String LEGACY_PREFS_NAME = "quickfix_prefs";
+    private static final String USER_PREFS_NAME  = "quickfix_theme_user_prefs";
+    private static final String ADMIN_PREFS_NAME = "quickfix_theme_admin_prefs";
+    private static final String KEY              = "dark_mode_enabled";
+    private static final String LEGACY_USER_PREFS_NAME  = "quickfix_prefs";
+    private static final String LEGACY_SHARED_PREFS_NAME = "quickfix_theme_prefs";
+    private static final String LEGACY_ADMIN_PREFS_NAME = "quickfix_theme_prefs";
     private static final String LEGACY_KEY = "dark_mode_enabled";
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
@@ -47,40 +44,54 @@ public class ThemeManager {
             .writeTimeout(10, TimeUnit.SECONDS)
             .build();
 
-    private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
     // ── Persist ───────────────────────────────────────────────────────────
 
-    /** Save dark mode preference locally */
-    public static void save(Context ctx, boolean darkMode) {
+    /** Save the user-facing dark mode preference locally. */
+    public static void saveUser(Context ctx, boolean darkMode) {
         if (ctx == null) return;
-        prefs(ctx).edit().putBoolean(KEY, darkMode).apply();
+        userPrefs(ctx).edit().putBoolean(KEY, darkMode).apply();
         ctx.getApplicationContext()
-                .getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE)
+                .getSharedPreferences(LEGACY_USER_PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(LEGACY_KEY, darkMode)
+                .apply();
+    }
+
+    /** Save the admin-facing dark mode preference locally and in the admin cache. */
+    public static void saveAdmin(Context ctx, boolean darkMode) {
+        if (ctx == null) return;
+        adminPrefs(ctx).edit().putBoolean(KEY, darkMode).apply();
+        ctx.getApplicationContext()
+                .getSharedPreferences(LEGACY_ADMIN_PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean(LEGACY_KEY, darkMode)
                 .apply();
         AppSettings.set(ctx, AppSettings.KEY_DARK_MODE, darkMode);
     }
 
-    /** Read saved preference (default: light mode) */
-    public static boolean isDarkMode(Context ctx) {
+    /** Read the user dark mode preference (default: light mode). */
+    public static boolean isUserDarkMode(Context ctx) {
         if (ctx == null) return AppSettings.DEFAULT_DARK_MODE;
+        return readRoleMode(ctx, userPrefs(ctx), LEGACY_USER_PREFS_NAME, AppSettings.DEFAULT_DARK_MODE,
+                false);
+    }
 
-        SharedPreferences themePrefs = prefs(ctx);
-        if (themePrefs.contains(KEY)) {
-            return themePrefs.getBoolean(KEY, AppSettings.DEFAULT_DARK_MODE);
-        }
+    /** Read the admin dark mode preference (default: light mode). */
+    public static boolean isAdminDarkMode(Context ctx) {
+        if (ctx == null) return AppSettings.DEFAULT_DARK_MODE;
+        return readRoleMode(ctx, adminPrefs(ctx), LEGACY_ADMIN_PREFS_NAME, AppSettings.DEFAULT_DARK_MODE,
+                true);
+    }
 
-        SharedPreferences legacyPrefs = ctx.getApplicationContext()
-                .getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE);
-        if (legacyPrefs.contains(LEGACY_KEY)) {
-            boolean legacyValue = legacyPrefs.getBoolean(LEGACY_KEY, AppSettings.DEFAULT_DARK_MODE);
-            save(ctx, legacyValue);
-            return legacyValue;
-        }
+    /** Backward-compatible role-aware lookup used by legacy call sites. */
+    public static boolean isDarkMode(Context ctx) {
+        return isDarkMode(ctx, AppSettings.isLastKnownAdminRole(ctx));
+    }
 
-        return AppSettings.isDarkMode(ctx);
+    /** Role-aware lookup for explicit admin/user screens. */
+    public static boolean isDarkMode(Context ctx, boolean isAdmin) {
+        return isAdmin ? isAdminDarkMode(ctx) : isUserDarkMode(ctx);
     }
 
     // ── Apply ─────────────────────────────────────────────────────────────
@@ -94,6 +105,12 @@ public class ThemeManager {
         apply(isDarkMode(ctx));
     }
 
+    /** Apply the theme for an explicit role without relying on cached role state. */
+    public static void applyFromPrefs(Context ctx, boolean isAdmin) {
+        if (ctx == null) return;
+        apply(isDarkMode(ctx, isAdmin));
+    }
+
     /** Apply a specific mode immediately (no restart needed with AppCompatDelegate). */
     public static void apply(boolean darkMode) {
         AppCompatDelegate.setDefaultNightMode(
@@ -102,17 +119,37 @@ public class ThemeManager {
                         : AppCompatDelegate.MODE_NIGHT_NO);
     }
 
+    public static void applyUserMode(Context ctx) {
+        apply(isUserDarkMode(ctx));
+    }
+
+    public static void applyAdminMode(Context ctx) {
+        apply(isAdminDarkMode(ctx));
+    }
+
     // ── Toggle ────────────────────────────────────────────────────────────
 
     /**
      * Toggle dark mode: save + apply immediately + push to Supabase.
      * This is the single method called from any settings screen.
      */
-    public static void toggle(Context ctx, boolean darkMode) {
+    public static void toggleUser(Context ctx, boolean darkMode) {
         if (ctx == null) return;
-        save(ctx, darkMode);
+        saveUser(ctx, darkMode);
+        apply(darkMode);
+    }
+
+    public static void toggleAdmin(Context ctx, boolean darkMode) {
+        if (ctx == null) return;
+        saveAdmin(ctx, darkMode);
         apply(darkMode);
         pushToSupabase(darkMode);
+    }
+
+    /** Backward-compatible toggle routed by the cached role. */
+    public static void toggle(Context ctx, boolean darkMode) {
+        if (AppSettings.isLastKnownAdminRole(ctx)) toggleAdmin(ctx, darkMode);
+        else toggleUser(ctx, darkMode);
     }
 
     // ── Supabase sync ─────────────────────────────────────────────────────
@@ -170,8 +207,49 @@ public class ThemeManager {
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
-    private static SharedPreferences prefs(Context ctx) {
+    private static boolean readRoleMode(Context ctx,
+                                        SharedPreferences rolePrefs,
+                                        String legacyPrefsName,
+                                        boolean def,
+                                        boolean alsoUseAdminSettingsFallback) {
+        if (rolePrefs.contains(KEY)) {
+            return rolePrefs.getBoolean(KEY, def);
+        }
+
+        SharedPreferences legacyPrefs = ctx.getApplicationContext()
+                .getSharedPreferences(legacyPrefsName, Context.MODE_PRIVATE);
+        if (legacyPrefs.contains(LEGACY_KEY)) {
+            boolean legacyValue = legacyPrefs.getBoolean(LEGACY_KEY, def);
+            rolePrefs.edit().putBoolean(KEY, legacyValue).apply();
+            return legacyValue;
+        }
+
+        if (!LEGACY_SHARED_PREFS_NAME.equals(legacyPrefsName)) {
+            SharedPreferences sharedPrefs = ctx.getApplicationContext()
+                    .getSharedPreferences(LEGACY_SHARED_PREFS_NAME, Context.MODE_PRIVATE);
+            if (sharedPrefs.contains(LEGACY_KEY)) {
+                boolean legacyValue = sharedPrefs.getBoolean(LEGACY_KEY, def);
+                rolePrefs.edit().putBoolean(KEY, legacyValue).apply();
+                return legacyValue;
+            }
+        }
+
+        if (alsoUseAdminSettingsFallback) {
+            boolean cached = AppSettings.isDarkMode(ctx);
+            rolePrefs.edit().putBoolean(KEY, cached).apply();
+            return cached;
+        }
+
+        return def;
+    }
+
+    private static SharedPreferences userPrefs(Context ctx) {
         return ctx.getApplicationContext()
-                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                .getSharedPreferences(USER_PREFS_NAME, Context.MODE_PRIVATE);
+    }
+
+    private static SharedPreferences adminPrefs(Context ctx) {
+        return ctx.getApplicationContext()
+                .getSharedPreferences(ADMIN_PREFS_NAME, Context.MODE_PRIVATE);
     }
 }

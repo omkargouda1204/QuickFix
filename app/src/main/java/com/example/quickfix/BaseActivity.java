@@ -33,15 +33,15 @@ public abstract class BaseActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
-        ThemeManager.applyFromPrefs(this);
-        appliedDarkMode = ThemeManager.isDarkMode(this);
+        ThemeManager.applyFromPrefs(this, isAdminThemeScreen());
+        appliedDarkMode = ThemeManager.isDarkMode(this, isAdminThemeScreen());
         super.onCreate(savedInstanceState);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        boolean currentDarkMode = ThemeManager.isDarkMode(this);
+        boolean currentDarkMode = ThemeManager.isDarkMode(this, isAdminThemeScreen());
         if (currentDarkMode != appliedDarkMode) {
             appliedDarkMode = currentDarkMode;
             if (!isFinishing() && !isDestroyed()) {
@@ -105,5 +105,13 @@ public abstract class BaseActivity extends AppCompatActivity {
         i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(i);
         finish();
+    }
+
+    /**
+     * Screens that belong to the admin interface can keep the admin theme.
+     * User-facing screens may override this to always use the user theme.
+     */
+    protected boolean isAdminThemeScreen() {
+        return AppSettings.isLastKnownAdminRole(this);
     }
 }
