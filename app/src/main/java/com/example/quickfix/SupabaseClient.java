@@ -875,11 +875,30 @@ public class SupabaseClient {
                 String encUid = java.net.URLEncoder.encode(firebaseUid.trim(), "UTF-8");
 
                 // Dependents first, then the user row.
-                deleteByFilter("business_media", "provider_id=eq." + encUid, true, failures);
-                deleteByFilter("bookings", "customer_id=eq." + encUid, true, failures);
-                deleteByFilter("bookings", "provider_id=eq." + encUid, true, failures);
-                deleteByFilter("notifications", "receiver_id=eq." + encUid, true, failures);
-                deleteByFilter("provider_applications", "firebase_uid=eq." + encUid, true, failures);
+                deleteByFilter("business_media",
+                        "or=(provider_id.eq." + encUid + ",firebase_uid.eq." + encUid + ")",
+                        true,
+                        failures);
+                deleteByFilter("bookings",
+                        "or=(customer_id.eq." + encUid + ",provider_id.eq." + encUid + ")",
+                        true,
+                        failures);
+                deleteByFilter("notifications",
+                        "or=(receiver_id.eq." + encUid + ",user_id.eq." + encUid + ",firebase_uid.eq." + encUid + ")",
+                        true,
+                        failures);
+                deleteByFilter("provider_applications",
+                        "or=(firebase_uid.eq." + encUid + ",id.eq." + encUid + ")",
+                        true,
+                        failures);
+                deleteByFilter("services",
+                        "or=(provider_id.eq." + encUid + ",firebase_uid.eq." + encUid + ")",
+                        true,
+                        failures);
+                deleteByFilter("user_fcm_tokens",
+                        "or=(user_id.eq." + encUid + ",firebase_uid.eq." + encUid + ")",
+                        true,
+                        failures);
 
                 boolean providerProfileDeleted = deleteByFilter(
                         "provider_profiles",
