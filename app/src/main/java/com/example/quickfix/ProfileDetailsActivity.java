@@ -1,6 +1,7 @@
 package com.example.quickfix;
 
 import android.Manifest;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -142,6 +143,15 @@ public class ProfileDetailsActivity extends BaseActivity {
                     openCameraCapture();
                 } else {
                     showSnack(getString(R.string.pd_camera_permission_denied));
+                }
+            });
+
+    private final ActivityResultLauncher<String> mediaPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (Boolean.TRUE.equals(granted)) {
+                    imagePickerLauncher.launch("image/*");
+                } else {
+                    showSnack(getString(R.string.pd_gallery_permission_denied));
                 }
             });
 
@@ -669,7 +679,7 @@ public class ProfileDetailsActivity extends BaseActivity {
                 .setTitle(R.string.pd_photo_source_title)
                 .setItems(items, (dialog, which) -> {
                     if (which == 0) {
-                        imagePickerLauncher.launch("image/*");
+                        requestGalleryPermissionAndOpenPicker();
                     } else {
                         requestCameraPermissionAndCapture();
                     }
@@ -681,11 +691,36 @@ public class ProfileDetailsActivity extends BaseActivity {
 
     private void requestCameraPermissionAndCapture() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                != PackageManager.PERMISSION_GRANTED) {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
             return;
         }
         openCameraCapture();
+    }
+
+    private void requestGalleryPermissionAndOpenPicker() {
+        String mediaPermission = requiredGalleryPermission();
+        if (mediaPermission == null) {
+            imagePickerLauncher.launch("image/*");
+            return;
+        }
+
+        if (ContextCompat.checkSelfPermission(this, mediaPermission) != PackageManager.PERMISSION_GRANTED) {
+            mediaPermissionLauncher.launch(mediaPermission);
+            return;
+        }
+
+        imagePickerLauncher.launch("image/*");
+    }
+
+    private String requiredGalleryPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return Manifest.permission.READ_MEDIA_IMAGES;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return Manifest.permission.READ_EXTERNAL_STORAGE;
+        }
+        return null;
     }
 
     private void openCameraCapture() {
