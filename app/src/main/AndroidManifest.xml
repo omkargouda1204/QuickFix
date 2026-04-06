@@ -231,6 +231,13 @@
             android:parentActivityName=".ProfileActivity"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Emergency Help Activity -->
+        <activity
+            android:name=".EmergencyHelpActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- User Bookings Activity -->
         <activity
             android:name=".UserBookingsActivity"

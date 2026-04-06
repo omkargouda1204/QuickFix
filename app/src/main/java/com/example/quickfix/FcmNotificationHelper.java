@@ -151,6 +151,58 @@ public final class FcmNotificationHelper {
         );
     }
 
+    /**
+     * Notify multiple nearby providers that an emergency request was created.
+     */
+    public static void notifyEmergencyProviders(List<String> providerFirebaseUids,
+                                                String title,
+                                                String body,
+                                                String referenceId) {
+        if (providerFirebaseUids == null || providerFirebaseUids.isEmpty()) return;
+
+        final String safeTitle = trimToEmpty(title).isEmpty() ? "Emergency Help" : title.trim();
+        final String safeBody = trimToEmpty(body).isEmpty()
+                ? "A nearby customer is requesting immediate assistance."
+                : body.trim();
+
+        new Thread(() -> {
+            try {
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    return;
+                }
+
+                List<String> tokens = new ArrayList<>();
+                List<String> receiverIds = new ArrayList<>();
+                List<String> receiverRoles = new ArrayList<>();
+                Set<String> seenTokens = new LinkedHashSet<>();
+
+                for (String uid : providerFirebaseUids) {
+                    String safeUid = trimToEmpty(uid);
+                    if (safeUid.isEmpty()) continue;
+
+                    UserRecipient recipient = fetchUserRecipient(safeUid);
+                    if (recipient == null || trimToEmpty(recipient.token).isEmpty()) continue;
+                    if (!seenTokens.add(recipient.token)) continue;
+
+                    tokens.add(recipient.token);
+                    receiverIds.add(recipient.userId);
+                    receiverRoles.add("provider");
+                }
+
+                if (tokens.isEmpty()) {
+                    Log.d(TAG, "notifyEmergencyProviders skipped: no provider tokens available");
+                    return;
+                }
+
+                sendViaEdgeFunction(tokens, receiverIds, receiverRoles,
+                        safeTitle, safeBody, "emergency", referenceId);
+            } catch (Exception e) {
+                Log.w(TAG, "notifyEmergencyProviders failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
     // ── Public single-token send (used by OfferManagement) ───────────────
 
     /**

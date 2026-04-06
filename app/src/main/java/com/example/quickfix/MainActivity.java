@@ -703,7 +703,7 @@ public class MainActivity extends BaseActivity {
 
     private void setupQuickActionListeners() {
         if (quickBookService != null) quickBookService.setOnClickListener(v -> { startActivity(new Intent(this, CategoriesActivity.class)); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); });
-        if (quickEmergency != null) quickEmergency.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("🚨 Emergency Help").setMessage("Do you need immediate assistance?\n\nOur team is available 24/7.").setPositiveButton("Call Now", (d, w) -> Toast.makeText(this, "Calling emergency support…", Toast.LENGTH_SHORT).show()).setNegativeButton("Cancel", null).show());
+        if (quickEmergency != null) quickEmergency.setOnClickListener(v -> { startActivity(new Intent(this, EmergencyHelpActivity.class)); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); });
         if (quickTrackBooking != null) quickTrackBooking.setOnClickListener(v -> { startActivity(new Intent(this, UserBookingsActivity.class)); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); });
     }
 
