@@ -8,6 +8,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import com.example.quickfix.api.RetrofitProvider;
+import com.example.quickfix.api.SupabaseStorageApi;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
@@ -20,6 +22,8 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
+import retrofit2.Call;
 
 /**
  * SupabaseStorageHelper — Uploads images to Supabase Storage via the REST API.
@@ -30,7 +34,11 @@ import okhttp3.Response;
  *   • Quickfix                  (business media: images and videos)
  *
  * All buckets must exist in Supabase Storage and be configured as PUBLIC or have
- * the appropriate RLS policies for INSERT from anon key.
+ * the appropriate RLS policies for the client role used by the app.
+ *
+ * NOTE: QuickFix currently uploads to Supabase with the anon key, so the
+ * profile-images bucket must allow that client role until the app migrates to a
+ * true Supabase Auth session.
  *
  * CREATE STORAGE BUCKET: provider-business-images  (public: true)
  * CREATE STORAGE BUCKET: provider-id-proofs        (public: false, admin-readable)
@@ -206,9 +214,9 @@ public class SupabaseStorageHelper {
     }
 
     /**
-     * Uploads profile image to fixed path:
-     *   profile-images/profiles/{userId}/profile.jpg
-     * Blocks upload if there is no authenticated user session.
+     * Uploads a profile image to:
+     *   profile-images/profiles/{userId}/{userId}_{timestamp}.jpg
+     * The returned public URL is stored in the users table.
      */
     public static void uploadProfileImage(Context context,
                                           Uri fileUri,
@@ -235,7 +243,7 @@ public class SupabaseStorageHelper {
 
         new Thread(() -> {
             try {
-                String storagePath = "profiles/" + uid + "/profile.jpg";
+                String storagePath = "profiles/" + uid + "/" + uid + "_" + System.currentTimeMillis() + ".jpg";
                 UploadPayload payload = buildUploadPayloadForFixedPath(context, fileUri, storagePath);
                 ResponseResult result = uploadBytes(BUCKET_PROFILE_IMAGES,
                         payload.storagePath, payload.fileBytes, payload.mimeType);
@@ -480,7 +488,7 @@ public class SupabaseStorageHelper {
         if (code == 401 || code == 403 || lower.contains("\"error\":\"unauth\"")
                 || lower.contains("\"statuscode\":\"403\"")) {
             return "Storage permission denied for bucket '" + bucket +
-                    "'. Please add Supabase Storage INSERT policy for role anon.";
+                    "'. Please add a Supabase Storage INSERT policy for the client role in use (anon for this app, or authenticated if you migrate to Supabase Auth).";
         }
 
         if (lower.contains("bucket") && lower.contains("not") && lower.contains("found")) {
@@ -548,21 +556,21 @@ public class SupabaseStorageHelper {
 
     private static ResponseResult uploadBytes(String bucket, String storagePath, byte[] fileBytes,
                                               String mimeType) throws Exception {
-        String uploadUrl = SUPABASE_URL + "/storage/v1/object/" + bucket + "/" + storagePath;
-        Request request = new Request.Builder()
-                .url(uploadUrl)
-                .post(RequestBody.create(fileBytes, MediaType.parse(mimeType)))
-                .addHeader("apikey",        ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .addHeader("Content-Type",  mimeType)
-                .addHeader("x-upsert",      "true")
-                .build();
-
         ResponseResult out = new ResponseResult();
-        try (Response response = HTTP.newCall(request).execute()) {
-            out.httpCode = response.code();
-            out.body = response.body() != null ? response.body().string() : "";
-        }
+        SupabaseStorageApi api = RetrofitProvider.get().create(SupabaseStorageApi.class);
+        Call<ResponseBody> call = api.uploadObject(
+                bucket,
+                storagePath,
+                RequestBody.create(fileBytes, MediaType.parse(mimeType)),
+                ANON_KEY,
+                "Bearer " + ANON_KEY,
+                mimeType,
+                "true"
+        );
+
+        retrofit2.Response<ResponseBody> response = call.execute();
+        out.httpCode = response.code();
+        out.body = response.body() != null ? response.body().string() : "";
         return out;
     }
 }
