@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -359,8 +360,12 @@ public class SupabaseClient {
     private static RoleInfo queryRoleByUid(String firebaseUid) {
         try {
             String encodedUid = java.net.URLEncoder.encode(firebaseUid, "UTF-8");
+            String filter = "firebase_uid=eq." + encodedUid;
+            if (looksLikeUuid(firebaseUid)) {
+                filter = "or=(firebase_uid.eq." + encodedUid + ",id.eq." + encodedUid + ")";
+            }
             String url = SUPABASE_URL + "/rest/v1/users"
-                    + "?or=(firebase_uid.eq." + encodedUid + ",id.eq." + encodedUid + ")"
+                    + "?" + filter
                     + "&select=is_user,is_service_provider,is_admin"
                     + "&limit=1";
             Request req = new Request.Builder()
@@ -686,8 +691,13 @@ public class SupabaseClient {
 
         new Thread(() -> {
             try {
-                String encodedUid = java.net.URLEncoder.encode(firebaseUid.trim(), "UTF-8");
-                JSONObject row = fetchAccountRow("or=(firebase_uid.eq." + encodedUid + ",id.eq." + encodedUid + ")&limit=1");
+                String normalizedUid = firebaseUid.trim();
+                String encodedUid = java.net.URLEncoder.encode(normalizedUid, "UTF-8");
+                String filter = "firebase_uid=eq." + encodedUid + "&limit=1";
+                if (looksLikeUuid(normalizedUid)) {
+                    filter = "or=(firebase_uid.eq." + encodedUid + ",id.eq." + encodedUid + ")&limit=1";
+                }
+                JSONObject row = fetchAccountRow(filter);
                 UserAccountStatus status = new UserAccountStatus();
                 if (row != null) populateAccountStatus(status, row);
                 MAIN.post(() -> callback.onSuccess(status));
@@ -743,10 +753,15 @@ public class SupabaseClient {
                                            String phone,
                                            Callback2 callback) {
         if (callback == null) return;
+        if (authUid == null || authUid.trim().isEmpty()) {
+            MAIN.post(() -> callback.onError("firebase_uid is required."));
+            return;
+        }
         new Thread(() -> {
             try {
+                String normalizedUid = authUid.trim();
                 JSONObject modern = new JSONObject();
-                modern.put("firebase_uid", authUid);
+                modern.put("firebase_uid", normalizedUid);
                 modern.put("name", fullName != null ? fullName.trim() : "");
                 modern.put("email", email != null ? email.trim() : "");
                 modern.put("phone", phone != null ? phone.trim() : "");
@@ -765,7 +780,7 @@ public class SupabaseClient {
                 }
 
                 JSONObject legacy = new JSONObject();
-                legacy.put("id", authUid);
+                legacy.put("id", normalizedUid);
                 legacy.put("full_name", fullName != null ? fullName.trim() : "");
                 legacy.put("email", email != null ? email.trim() : "");
                 legacy.put("phone", phone != null ? phone.trim() : "");
@@ -779,7 +794,10 @@ public class SupabaseClient {
                 if (legacyCode == 200 || legacyCode == 201 || legacyCode == 204 || legacyCode == 409) {
                     MAIN.post(callback::onSuccess);
                 } else {
-                    MAIN.post(() -> callback.onError("HTTP " + legacyCode + " " + legacyBody));
+                    Log.e(TAG, "insertUserAfterAuth failed modern=" + modernCode + " legacy=" + legacyCode
+                            + " modernBody=" + modernBody + " legacyBody=" + legacyBody);
+                    String message = buildSupabaseHttpError("insert user", legacyCode, legacyBody);
+                    MAIN.post(() -> callback.onError(message));
                 }
             } catch (Exception e) {
                 MAIN.post(() -> callback.onError(e.getMessage()));
@@ -805,6 +823,14 @@ public class SupabaseClient {
                                                     String phone,
                                                     Callback2 callback) {
         if (callback == null) return;
+        if (email == null || email.trim().isEmpty()) {
+            MAIN.post(() -> callback.onError("Email is required."));
+            return;
+        }
+        if (firebaseUid == null || firebaseUid.trim().isEmpty()) {
+            MAIN.post(() -> callback.onError("firebase_uid is required."));
+            return;
+        }
         new Thread(() -> {
             try {
                 String encoded = java.net.URLEncoder.encode(email.trim(), "UTF-8");
@@ -853,7 +879,9 @@ public class SupabaseClient {
                     if (r2.code() == 200 || r2.code() == 204) {
                         MAIN.post(callback::onSuccess);
                     } else {
-                        MAIN.post(() -> callback.onError("HTTP " + r2.code()));
+                        String body = r2.body() != null ? r2.body().string() : "";
+                        String message = buildSupabaseHttpError("restore account", r2.code(), body);
+                        MAIN.post(() -> callback.onError(message));
                     }
                 }
             } catch (Exception e) {
@@ -869,55 +897,64 @@ public class SupabaseClient {
             return;
         }
 
+        final String normalizedUid = firebaseUid.trim();
+        if (normalizedUid.contains(" ")) {
+            MAIN.post(() -> callback.onError("Invalid user uid"));
+            return;
+        }
+
         new Thread(() -> {
             List<String> failures = new ArrayList<>();
             try {
-                String encUid = java.net.URLEncoder.encode(firebaseUid.trim(), "UTF-8");
+                String encUid = java.net.URLEncoder.encode(normalizedUid, "UTF-8");
 
                 // Dependents first, then the user row.
-                deleteByFilter("business_media",
-                        "or=(provider_id.eq." + encUid + ",firebase_uid.eq." + encUid + ")",
-                        true,
-                        failures);
-                deleteByFilter("bookings",
-                        "or=(customer_id.eq." + encUid + ",provider_id.eq." + encUid + ")",
-                        true,
-                        failures);
-                deleteByFilter("notifications",
-                        "or=(receiver_id.eq." + encUid + ",user_id.eq." + encUid + ",firebase_uid.eq." + encUid + ")",
-                        true,
-                        failures);
-                deleteByFilter("provider_applications",
-                        "or=(firebase_uid.eq." + encUid + ",id.eq." + encUid + ")",
-                        true,
-                        failures);
-                deleteByFilter("services",
-                        "or=(provider_id.eq." + encUid + ",firebase_uid.eq." + encUid + ")",
-                        true,
-                        failures);
-                deleteByFilter("user_fcm_tokens",
-                        "or=(user_id.eq." + encUid + ",firebase_uid.eq." + encUid + ")",
-                        true,
-                        failures);
+                deleteWithFallbackFilters("business_media", Arrays.asList(
+                        "provider_id=eq." + encUid,
+                        "firebase_uid=eq." + encUid,
+                        "user_id=eq." + encUid
+                ), true, failures);
 
-                boolean providerProfileDeleted = deleteByFilter(
-                        "provider_profiles",
-                        "or=(firebase_uid.eq." + encUid + ",id.eq." + encUid + ")",
-                        true,
-                        failures
-                );
-                if (!providerProfileDeleted) {
-                    deleteByFilter("provider_profiles", "id=eq." + encUid, true, failures);
-                }
+                deleteWithFallbackFilters("bookings", Arrays.asList(
+                        "customer_id=eq." + encUid,
+                        "provider_id=eq." + encUid,
+                        "firebase_uid=eq." + encUid
+                ), true, failures);
 
-                boolean usersDeleted = deleteByFilter(
-                        "users",
-                        "or=(firebase_uid.eq." + encUid + ",id.eq." + encUid + ")",
-                        false,
-                        failures
-                );
-                if (!usersDeleted) {
-                    deleteByFilter("users", "id=eq." + encUid, false, failures);
+                deleteWithFallbackFilters("notifications", Arrays.asList(
+                        "receiver_id=eq." + encUid,
+                        "user_id=eq." + encUid,
+                        "firebase_uid=eq." + encUid
+                ), true, failures);
+
+                deleteWithFallbackFilters("provider_applications", Arrays.asList(
+                        "firebase_uid=eq." + encUid,
+                        looksLikeUuid(normalizedUid) ? "id=eq." + encUid : null
+                ), true, failures);
+
+                deleteWithFallbackFilters("services", Arrays.asList(
+                        "provider_id=eq." + encUid,
+                        "firebase_uid=eq." + encUid
+                ), true, failures);
+
+                deleteWithFallbackFilters("user_fcm_tokens", Arrays.asList(
+                        "user_id=eq." + encUid,
+                        "firebase_uid=eq." + encUid
+                ), true, failures);
+
+                deleteWithFallbackFilters("provider_profiles", Arrays.asList(
+                        "firebase_uid=eq." + encUid,
+                        looksLikeUuid(normalizedUid) ? "id=eq." + encUid : null
+                ), true, failures);
+
+                deleteWithFallbackFilters("users", Arrays.asList(
+                        "firebase_uid=eq." + encUid,
+                        looksLikeUuid(normalizedUid) ? "id=eq." + encUid : null
+                ), false, failures);
+
+                JSONObject remaining = fetchAccountRow("firebase_uid=eq." + encUid + "&limit=1");
+                if (remaining != null) {
+                    failures.add("users(VERIFY_EXISTS)");
                 }
 
                 if (failures.isEmpty()) {
@@ -931,44 +968,91 @@ public class SupabaseClient {
         }).start();
     }
 
+    private static void deleteWithFallbackFilters(String table,
+                                                  List<String> filters,
+                                                  boolean optional,
+                                                  List<String> failures) {
+        if (filters == null || filters.isEmpty()) {
+            failures.add(table + "(NO_FILTER)");
+            return;
+        }
+
+        boolean success = false;
+        boolean hadHardFailure = false;
+        for (String filter : filters) {
+            if (filter == null || filter.trim().isEmpty()) continue;
+            DeleteAttemptResult result = deleteByFilter(table, filter.trim(), optional, failures);
+            if (result == DeleteAttemptResult.SUCCESS) {
+                success = true;
+                break;
+            } else if (result == DeleteAttemptResult.HARD_FAILURE) {
+                hadHardFailure = true;
+            }
+        }
+
+        if (!success && !optional && !hadHardFailure) {
+            failures.add(table + "(NO_MATCH)");
+        }
+    }
+
     // Backward-compatible name used by older call sites.
     public static void softDeleteUser(String firebaseUid, Callback2 callback) {
         hardDeleteUserData(firebaseUid, callback);
     }
 
-    private static boolean deleteByFilter(String table,
-                                          String filter,
-                                          boolean optional,
-                                          List<String> failures) {
+    private enum DeleteAttemptResult {
+        SUCCESS,
+        SOFT_SKIP,
+        HARD_FAILURE
+    }
+
+    private static DeleteAttemptResult deleteByFilter(String table,
+                                                      String filter,
+                                                      boolean optional,
+                                                      List<String> failures) {
+        if (table == null || table.trim().isEmpty() || filter == null || filter.trim().isEmpty()) {
+            failures.add((table != null ? table : "unknown") + "(INVALID_FILTER)");
+            return DeleteAttemptResult.HARD_FAILURE;
+        }
+
         String url = SUPABASE_URL + "/rest/v1/" + table + "?" + filter;
         Request req = new Request.Builder()
                 .url(url)
                 .delete()
                 .addHeader("apikey", ANON_KEY)
                 .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Accept", "application/json")
                 .addHeader("Prefer", "return=minimal")
                 .build();
 
         try (Response r = HTTP.newCall(req).execute()) {
             int code = r.code();
             if (code == 200 || code == 204) {
-                return true;
+                return DeleteAttemptResult.SUCCESS;
             }
             // Optional tables/filters may legitimately fail in older schemas.
             if (optional && (code == 400 || code == 404)) {
                 Log.w(TAG, "deleteByFilter optional skip: table=" + table + " code=" + code);
-                return false;
+                return DeleteAttemptResult.SOFT_SKIP;
             }
 
             String body = r.body() != null ? r.body().string() : "";
-            Log.e(TAG, "deleteByFilter failed table=" + table + " code=" + code + " body=" + body);
-            failures.add(table + "(HTTP " + code + ")");
-            return false;
+            String parsed = parseSupabaseError(body);
+            Log.e(TAG, "deleteByFilter failed table=" + table + " filter=" + filter
+                    + " code=" + code + " error=" + parsed);
+            String failureTag = table + "(HTTP " + code + ")";
+            if (!failures.contains(failureTag)) failures.add(failureTag);
+            return DeleteAttemptResult.HARD_FAILURE;
         } catch (Exception e) {
             Log.e(TAG, "deleteByFilter exception table=" + table + " msg=" + e.getMessage());
-            failures.add(table);
-            return false;
+            if (!failures.contains(table)) failures.add(table);
+            return DeleteAttemptResult.HARD_FAILURE;
         }
+    }
+
+    private static boolean looksLikeUuid(String value) {
+        if (value == null) return false;
+        return value.trim().matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$");
     }
 
     private static String joinFailures(List<String> failures) {
@@ -1068,6 +1152,45 @@ public class SupabaseClient {
             }
         }
         return 0L;
+    }
+
+    private static String buildSupabaseHttpError(String operation, int code, String body) {
+        String parsed = parseSupabaseError(body);
+        if (code == 400) {
+            return "Bad request while trying to " + operation + ". " + parsed;
+        }
+        if (code == 404) {
+            return "Data not found while trying to " + operation + ".";
+        }
+        return "Supabase HTTP " + code + ": " + parsed;
+    }
+
+    private static String parseSupabaseError(String raw) {
+        String safeRaw = raw != null ? raw.trim() : "";
+        if (safeRaw.isEmpty()) return "No details provided.";
+
+        try {
+            JSONObject obj = new JSONObject(safeRaw);
+            String message = obj.optString("message", "").trim();
+            if (message.isEmpty()) message = obj.optString("error", "").trim();
+            String details = obj.optString("details", "").trim();
+            String hint = obj.optString("hint", "").trim();
+
+            StringBuilder sb = new StringBuilder();
+            if (!message.isEmpty()) sb.append(message);
+            if (!details.isEmpty()) {
+                if (sb.length() > 0) sb.append(" ");
+                sb.append("Details: ").append(details);
+            }
+            if (!hint.isEmpty()) {
+                if (sb.length() > 0) sb.append(" ");
+                sb.append("Hint: ").append(hint);
+            }
+
+            return sb.length() > 0 ? sb.toString() : safeRaw;
+        } catch (Exception ignored) {
+            return safeRaw;
+        }
     }
 
     private static String isoNowUtc() {

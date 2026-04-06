@@ -278,9 +278,15 @@
     <string name="settings_delete_overlay_supabase" translatable="false">Deleting account data...</string>
     <string name="settings_delete_overlay_reauth" translatable="false">Re-authenticating...</string>
     <string name="settings_delete_overlay_signout" translatable="false">Signing out...</string>
+    <string name="settings_delete_uid_missing" translatable="false">Could not determine your account ID. Please sign in again and retry.</string>
+    <string name="settings_delete_uid_mismatch" translatable="false">Account verification failed due to an ID mismatch. Please sign in again and retry.</string>
+    <string name="settings_delete_supabase_error" translatable="false">Failed to delete your data from Supabase. Please try again.
+
+%1$s</string>
     <string name="settings_delete_verify_error" translatable="false">Could not verify account creation time. Please try again.</string>
     <string name="settings_delete_cooldown_error" translatable="false">Account can be deleted only after 24 hours of creation.</string>
     <string name="settings_delete_firebase_error" translatable="false">Failed to delete account. Please try again.\n\n%1$s</string>
+    <string name="settings_delete_firebase_error_after_data_removed" translatable="false">Your app data was deleted, but Firebase account deletion failed. Please sign in again and retry account removal.\n\n%1$s</string>
     <string name="settings_delete_password_title" translatable="false">Confirm Your Password</string>
     <string name="settings_delete_password_message" translatable="false">Please enter your password to permanently delete your account.</string>
     <string name="settings_delete_password_confirm" translatable="false">Confirm and Delete</string>

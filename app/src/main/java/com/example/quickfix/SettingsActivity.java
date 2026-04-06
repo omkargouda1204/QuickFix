@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
@@ -56,6 +57,7 @@ public class SettingsActivity extends BaseActivity {
     private String pendingProfileImagePath = "";
     private String pendingDeleteUid = "";
     private boolean isDeleteInProgress = false;
+    private boolean supabaseDeleteCompleted = false;
 
     // ── Views ─────────────────────────────────────────────────────────────
     private SwitchMaterial switchPush, switchEmail, switchBookingRem;
@@ -193,25 +195,34 @@ public class SettingsActivity extends BaseActivity {
     private void beginDeleteFlow() {
         if (isDeleteInProgress) return;
         isDeleteInProgress = true;
+        supabaseDeleteCompleted = false;
 
         FirebaseUser user = mAuth.getCurrentUser();
         if (user == null) {
-            clearLocalDataAndRedirect("Your account and related data were permanently deleted.");
+            clearLocalDataAndRedirect(getString(R.string.settings_delete_success));
             return;
         }
 
         pendingDeleteUid = user.getUid() != null ? user.getUid() : "";
         if (pendingDeleteUid.isEmpty()) {
             isDeleteInProgress = false;
-            showError("Could not determine your account ID. Please sign in again and retry.");
+            showError(getString(R.string.settings_delete_uid_missing));
             return;
         }
 
-        showOverlay("Preparing account deletion...");
+        showOverlay(getString(R.string.settings_delete_overlay_checking));
         SupabaseClient.getAccountStatusByUid(pendingDeleteUid, new SupabaseClient.AccountStatusCallback() {
             @Override
             public void onSuccess(SupabaseClient.UserAccountStatus status) {
                 if (isFinishing() || isDestroyed()) return;
+
+                String serverUid = status != null ? safe(status.firebaseUid) : "";
+                if (!TextUtils.isEmpty(serverUid) && !pendingDeleteUid.equals(serverUid)) {
+                    hideOverlay();
+                    isDeleteInProgress = false;
+                    showError(getString(R.string.settings_delete_uid_mismatch));
+                    return;
+                }
 
                 pendingProfileImagePath = status != null ? safe(status.profileImagePath) : "";
                 continueDeleteFlow(user, pendingDeleteUid);
@@ -233,11 +244,11 @@ public class SettingsActivity extends BaseActivity {
         if (uid == null || uid.trim().isEmpty()) {
             hideOverlay();
             isDeleteInProgress = false;
-            showError("Could not determine your account ID. Please try again.");
+            showError(getString(R.string.settings_delete_uid_missing));
             return;
         }
 
-        updateOverlay("Removing profile image...");
+        updateOverlay(getString(R.string.settings_delete_overlay_profile_image));
         deleteProfileImageIfPresent(() -> deleteSupabaseAccountData(uid.trim(), user));
     }
 
@@ -249,6 +260,13 @@ public class SettingsActivity extends BaseActivity {
 
         new Thread(() -> {
             try {
+                if (BuildConfig.SUPABASE_URL == null || BuildConfig.SUPABASE_URL.trim().isEmpty()
+                        || BuildConfig.SUPABASE_ANON_KEY == null || BuildConfig.SUPABASE_ANON_KEY.trim().isEmpty()) {
+                    Log.w(TAG, "Supabase storage config missing, skipping profile image delete.");
+                    MAIN.post(onComplete);
+                    return;
+                }
+
                 String path = extractBucketPath(pendingProfileImagePath, SupabaseStorageHelper.BUCKET_PROFILE_IMAGES);
                 if (path.isEmpty()) {
                     Log.w(TAG, "Profile image path parse failed, continuing deletion.");
@@ -280,16 +298,16 @@ public class SettingsActivity extends BaseActivity {
     //  STEP B: DELETE user from Firebase Authentication
     // ═════════════════════════════════════════════════════════════════════
     private void deleteFirebaseUser(FirebaseUser user) {
-        updateOverlay("Deleting account from authentication...");
+        updateOverlay(getString(R.string.settings_delete_overlay_firebase));
         if (user == null) {
-            clearLocalDataAndRedirect("Your account and related data were permanently deleted.");
+            clearLocalDataAndRedirect(getString(R.string.settings_delete_success));
             return;
         }
 
         user.delete()
                 .addOnSuccessListener(unused -> {
                     Log.d(TAG, "Firebase user deleted successfully");
-                    clearLocalDataAndRedirect("Your account and related data were permanently deleted.");
+                    clearLocalDataAndRedirect(getString(R.string.settings_delete_success));
                 })
                 .addOnFailureListener(e -> {
                     String msg = e.getMessage() != null ? e.getMessage() : "";
@@ -304,16 +322,17 @@ public class SettingsActivity extends BaseActivity {
                     } else {
                         hideOverlay();
                         isDeleteInProgress = false;
-                        showError("Failed to delete account from Firebase Authentication. Please try again.\n\n" + msg);
+                        showError(buildFirebaseDeleteFailureMessage(msg));
                     }
                 });
     }
 
     private void deleteSupabaseAccountData(String uid, FirebaseUser user) {
-        updateOverlay("Deleting data from Supabase...");
+        updateOverlay(getString(R.string.settings_delete_overlay_supabase));
         SupabaseClient.hardDeleteUserData(uid, new SupabaseClient.Callback2() {
             @Override
             public void onSuccess() {
+                supabaseDeleteCompleted = true;
                 deleteFirebaseUser(user);
             }
 
@@ -322,7 +341,7 @@ public class SettingsActivity extends BaseActivity {
                 Log.w(TAG, "deleteSupabaseAccountData failed: " + message);
                 hideOverlay();
                 isDeleteInProgress = false;
-                showError("Failed to delete your data from Supabase. Please try again.\n\n" + message);
+                showError(getString(R.string.settings_delete_supabase_error, message));
             }
         });
     }
@@ -349,7 +368,7 @@ public class SettingsActivity extends BaseActivity {
 
     /** Re-authenticate Google user silently, then retry deletion. */
     private void reauthWithGoogle(FirebaseUser user) {
-        showOverlay("Re-authenticating...");
+        showOverlay(getString(R.string.settings_delete_overlay_reauth));
         mGoogleClient.silentSignIn()
                 .addOnSuccessListener(acct -> {
                     AuthCredential credential =
@@ -362,43 +381,43 @@ public class SettingsActivity extends BaseActivity {
                             .addOnFailureListener(e -> {
                                 hideOverlay();
                                 isDeleteInProgress = false;
-                                showError("Re-authentication failed. Please sign in again and retry.");
+                                showError(getString(R.string.settings_delete_reauth_failed));
                             });
                 })
                 .addOnFailureListener(e -> {
                     hideOverlay();
                     isDeleteInProgress = false;
-                    showError("Could not re-authenticate with Google. Please sign in again and retry.");
+                    showError(getString(R.string.settings_delete_google_reauth_failed));
                 });
     }
 
     /** Show password input dialog for email/password users, then retry deletion. */
     private void reauthWithPassword(FirebaseUser user) {
         EditText etPassword = new EditText(this);
-        etPassword.setHint("Enter your password to confirm");
+        etPassword.setHint(R.string.password_hint);
         etPassword.setInputType(
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         etPassword.setPadding(48, 32, 48, 32);
 
         new AlertDialog.Builder(this)
-                .setTitle("Confirm Your Password")
-                .setMessage("Please enter your password to permanently delete your account.")
+                .setTitle(R.string.settings_delete_password_title)
+                .setMessage(R.string.settings_delete_password_message)
                 .setView(etPassword)
-                .setPositiveButton("Confirm and Delete", (d, w) -> {
+                .setPositiveButton(R.string.settings_delete_password_confirm, (d, w) -> {
                     String password = etPassword.getText() != null
                             ? etPassword.getText().toString().trim() : "";
                     if (password.isEmpty()) {
-                        Toast.makeText(this, "Password cannot be empty", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, R.string.settings_delete_password_empty, Toast.LENGTH_SHORT).show();
                         isDeleteInProgress = false;
                         return;
                     }
                     String email = user.getEmail() != null ? user.getEmail() : "";
                     if (email.isEmpty()) {
                         isDeleteInProgress = false;
-                        showError("Could not retrieve account email. Please contact support.");
+                        showError(getString(R.string.settings_delete_email_missing));
                         return;
                     }
-                    showOverlay("Re-authenticating...");
+                    showOverlay(getString(R.string.settings_delete_overlay_reauth));
                     AuthCredential credential =
                             EmailAuthProvider.getCredential(email, password);
                     user.reauthenticate(credential)
@@ -409,7 +428,7 @@ public class SettingsActivity extends BaseActivity {
                             .addOnFailureListener(e -> {
                                 hideOverlay();
                                 isDeleteInProgress = false;
-                                showError("Incorrect password. Please try again.");
+                                showError(getString(R.string.settings_delete_password_incorrect));
                             });
                 })
                 .setNegativeButton(android.R.string.cancel, (d, w) -> {
@@ -424,7 +443,7 @@ public class SettingsActivity extends BaseActivity {
     //  STEP C: Clear local data + redirect to Login
     // ═════════════════════════════════════════════════════════════════════
     private void clearLocalDataAndRedirect(String completionMessage) {
-        updateOverlay("Signing out...");
+        updateOverlay(getString(R.string.settings_delete_overlay_signout));
 
         // Clear ALL SharedPreferences keys for this app
         prefs.edit().clear().apply();
@@ -454,6 +473,7 @@ public class SettingsActivity extends BaseActivity {
 
         pendingDeleteUid = "";
         pendingProfileImagePath = "";
+        supabaseDeleteCompleted = false;
 
         // Small delay so overlay is visible briefly, then navigate
         MAIN.postDelayed(() -> {
@@ -529,5 +549,15 @@ public class SettingsActivity extends BaseActivity {
 
     private String safe(String value) {
         return value != null ? value.trim() : "";
+    }
+
+    private String buildFirebaseDeleteFailureMessage(String rawMessage) {
+        String detail = rawMessage != null ? rawMessage.trim() : "";
+        if (supabaseDeleteCompleted) {
+            return getString(R.string.settings_delete_firebase_error_after_data_removed,
+                    detail.isEmpty() ? "Unknown error" : detail);
+        }
+        return getString(R.string.settings_delete_firebase_error,
+                detail.isEmpty() ? "Unknown error" : detail);
     }
 }
