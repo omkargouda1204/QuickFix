@@ -6,6 +6,8 @@ import android.util.Log;
 
 import androidx.appcompat.app.AppCompatDelegate;
 
+import com.google.firebase.auth.FirebaseAuth;
+
 import org.json.JSONObject;
 
 import java.util.concurrent.TimeUnit;
@@ -31,6 +33,7 @@ public class ThemeManager {
     private static final String USER_PREFS_NAME  = "quickfix_theme_user_prefs";
     private static final String ADMIN_PREFS_NAME = "quickfix_theme_admin_prefs";
     private static final String KEY              = "dark_mode_enabled";
+    private static final String KEY_PREFIX_USER  = "dark_mode_user_";
     private static final String LEGACY_USER_PREFS_NAME  = "quickfix_prefs";
     private static final String LEGACY_SHARED_PREFS_NAME = "quickfix_theme_prefs";
     private static final String LEGACY_ADMIN_PREFS_NAME = "quickfix_theme_prefs";
@@ -47,15 +50,22 @@ public class ThemeManager {
 
     // ── Persist ───────────────────────────────────────────────────────────
 
-    /** Save the user-facing dark mode preference locally. */
+    /** Save the user-facing dark mode preference locally (scoped by Firebase UID). */
     public static void saveUser(Context ctx, boolean darkMode) {
         if (ctx == null) return;
-        userPrefs(ctx).edit().putBoolean(KEY, darkMode).apply();
+        String key = userScopedKey(resolveCurrentUid());
+        userPrefs(ctx).edit().putBoolean(key, darkMode).apply();
         ctx.getApplicationContext()
                 .getSharedPreferences(LEGACY_USER_PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean(LEGACY_KEY, darkMode)
                 .apply();
+    }
+
+    /** Persist a server-fetched preference for a specific UID without changing admin state. */
+    public static void saveUserForUid(Context ctx, String firebaseUid, boolean darkMode) {
+        if (ctx == null || firebaseUid == null || firebaseUid.trim().isEmpty()) return;
+        userPrefs(ctx).edit().putBoolean(userScopedKey(firebaseUid), darkMode).apply();
     }
 
     /** Save the admin-facing dark mode preference locally and in the admin cache. */
@@ -73,8 +83,18 @@ public class ThemeManager {
     /** Read the user dark mode preference (default: light mode). */
     public static boolean isUserDarkMode(Context ctx) {
         if (ctx == null) return AppSettings.DEFAULT_DARK_MODE;
-        return readRoleMode(ctx, userPrefs(ctx), LEGACY_USER_PREFS_NAME, AppSettings.DEFAULT_DARK_MODE,
+        String uid = resolveCurrentUid();
+        String scopedKey = userScopedKey(uid);
+        SharedPreferences pref = userPrefs(ctx);
+        if (pref.contains(scopedKey)) {
+            return pref.getBoolean(scopedKey, AppSettings.DEFAULT_DARK_MODE);
+        }
+        boolean fallback = readRoleMode(ctx, pref, LEGACY_USER_PREFS_NAME, AppSettings.DEFAULT_DARK_MODE,
                 false);
+        if (uid != null && !uid.trim().isEmpty()) {
+            pref.edit().putBoolean(scopedKey, fallback).apply();
+        }
+        return fallback;
     }
 
     /** Read the admin dark mode preference (default: light mode). */
@@ -251,5 +271,20 @@ public class ThemeManager {
     private static SharedPreferences adminPrefs(Context ctx) {
         return ctx.getApplicationContext()
                 .getSharedPreferences(ADMIN_PREFS_NAME, Context.MODE_PRIVATE);
+    }
+
+    private static String userScopedKey(String firebaseUid) {
+        if (firebaseUid == null || firebaseUid.trim().isEmpty()) return KEY;
+        return KEY_PREFIX_USER + firebaseUid.trim();
+    }
+
+    private static String resolveCurrentUid() {
+        try {
+            if (FirebaseAuth.getInstance().getCurrentUser() == null) return "";
+            String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+            return uid != null ? uid.trim() : "";
+        } catch (Exception e) {
+            return "";
+        }
     }
 }

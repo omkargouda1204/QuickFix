@@ -108,6 +108,7 @@ public class SettingsActivity extends BaseActivity {
         bindViews();
         loadPrefs();
         setupListeners();
+        syncUserSettingsFromServer();
     }
 
     // ── View binding ──────────────────────────────────────────────────────
@@ -127,7 +128,7 @@ public class SettingsActivity extends BaseActivity {
         if (switchPush       != null) switchPush.setChecked(prefs.getBoolean(KEY_PUSH_NOTIF,  true));
         if (switchEmail      != null) switchEmail.setChecked(prefs.getBoolean(KEY_EMAIL_NOTIF, true));
         if (switchBookingRem != null) switchBookingRem.setChecked(prefs.getBoolean(KEY_BOOKING_REM, true));
-        if (switchDarkMode    != null) switchDarkMode.setChecked(ThemeManager.isUserDarkMode(this));
+        if (switchDarkMode   != null) switchDarkMode.setChecked(UserPreferenceManager.isDarkMode(this));
     }
 
     // ── Click / change listeners ──────────────────────────────────────────
@@ -145,8 +146,24 @@ public class SettingsActivity extends BaseActivity {
                     prefs.edit().putBoolean(KEY_BOOKING_REM, c).apply());
 
         if (switchDarkMode != null)
-            switchDarkMode.setOnCheckedChangeListener((v, checked) ->
-                    ThemeManager.toggleUser(this, checked));
+            switchDarkMode.setOnCheckedChangeListener((v, checked) -> {
+                UserPreferenceManager.setDarkMode(this, checked);
+                FirebaseUser current = mAuth != null ? mAuth.getCurrentUser() : null;
+                if (current != null) {
+                    SupabaseClient.updateUserSettings(
+                            current.getUid(),
+                            current.getEmail(),
+                            checked,
+                            UserPreferenceManager.getLanguageCode(this),
+                            new SupabaseClient.Callback2() {
+                                @Override public void onSuccess() { }
+                                @Override public void onError(String message) {
+                                    Log.w(TAG, "Failed to sync dark mode from SettingsActivity: " + message);
+                                }
+                            }
+                    );
+                }
+            });
 
         if (settingsChangePassword != null)
             settingsChangePassword.setOnClickListener(v ->
@@ -520,6 +537,33 @@ public class SettingsActivity extends BaseActivity {
                     .setPositiveButton(android.R.string.ok, null)
                     .show();
         });
+    }
+
+    private void syncUserSettingsFromServer() {
+        FirebaseUser current = mAuth != null ? mAuth.getCurrentUser() : null;
+        if (current == null) return;
+
+        SupabaseClient.fetchUserSettings(current.getUid(), current.getEmail(),
+                new SupabaseClient.UserSettingsCallback() {
+                    @Override
+                    public void onSuccess(SupabaseClient.UserSettings settings) {
+                        if (settings == null) return;
+                        UserPreferenceManager.applyFromServer(
+                                SettingsActivity.this,
+                                current.getUid(),
+                                settings.darkMode,
+                                settings.language
+                        );
+                        if (switchDarkMode != null) {
+                            switchDarkMode.setChecked(UserPreferenceManager.isDarkMode(SettingsActivity.this));
+                        }
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        Log.w(TAG, "syncUserSettingsFromServer failed: " + message);
+                    }
+                });
     }
 
     private String extractBucketPath(String rawPath, String bucket) {

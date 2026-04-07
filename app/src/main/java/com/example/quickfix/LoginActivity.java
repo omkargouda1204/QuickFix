@@ -2,6 +2,8 @@ package com.example.quickfix;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Patterns;
@@ -69,6 +71,9 @@ public class LoginActivity extends BaseActivity {
     private boolean isNavigating = false;
     // Guard: prevent re-entry into checkRoleAndNavigate
     private boolean isLoading    = false;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private Runnable roleLookupTimeoutRunnable;
+    private static final long ROLE_LOOKUP_TIMEOUT_MS = 12000L;
 
     // ─────────────────────────────────────────────────────────────────────
     @Override
@@ -92,6 +97,20 @@ public class LoginActivity extends BaseActivity {
                 showOverlay("Signing you in…");
                 checkRoleAndNavigate(current.getUid(), current.getEmail());
             }
+        }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (mAuth == null || isLoading || isNavigating || isFinishing()) return;
+        FirebaseUser current = mAuth.getCurrentUser();
+        if (current == null) return;
+        if (current.isEmailVerified() || isGoogleUser(current)) {
+            showOverlay("Signing you in...");
+            setButtonsEnabled(false);
+            isLoading = true;
+            checkRoleAndNavigate(current.getUid(), current.getEmail());
         }
     }
 
@@ -424,18 +443,18 @@ public class LoginActivity extends BaseActivity {
     private void checkRoleAndNavigate(String firebaseUid, String email) {
         if (isNavigating) return;
 
+        scheduleRoleLookupTimeout();
+
         // Always pass a non-null email so the email-first path in SupabaseClient works
         String safeEmail = (email != null && !email.isEmpty()) ? email : "";
         if (safeEmail.isEmpty()) {
-            // Last resort: try to get email from current Firebase user
             FirebaseUser u = mAuth.getCurrentUser();
             if (u != null && u.getEmail() != null) safeEmail = u.getEmail();
         }
-
         final String finalEmail = safeEmail;
 
         Log.d(TAG, "checkRoleAndNavigate uid=" + firebaseUid + " email=" + finalEmail);
-        updateOverlay("Checking your account…");
+        updateOverlay("Checking your account...");
 
         if (!finalEmail.isEmpty()) {
             SupabaseClient.getAccountStatusByEmail(finalEmail,
@@ -444,6 +463,7 @@ public class LoginActivity extends BaseActivity {
                         public void onSuccess(SupabaseClient.UserAccountStatus status) {
                             if (isFinishing()) return;
                             if (status != null && status.exists && status.isDeleted()) {
+                                cancelRoleLookupTimeout();
                                 try { mAuth.signOut(); } catch (Exception ignored) {}
                                 resetLoadingState();
                                 toast("This account was deleted. You can create a new account after 24 hours.");
@@ -470,6 +490,7 @@ public class LoginActivity extends BaseActivity {
                 new SupabaseClient.RoleInfoCallback() {
                     @Override
                     public void onSuccess(SupabaseClient.RoleInfo info) {
+                        cancelRoleLookupTimeout();
                         if (isNavigating || isFinishing()) return;
                         isNavigating = true;
                         hideOverlay();
@@ -503,6 +524,7 @@ public class LoginActivity extends BaseActivity {
 
                     @Override
                     public void onError(String message) {
+                        cancelRoleLookupTimeout();
                         // Do NOT navigate anywhere on error — show the problem to the user
                         if (isFinishing()) return;
                         resetLoadingState();
@@ -581,6 +603,7 @@ public class LoginActivity extends BaseActivity {
 
     /** Re-enable both buttons and hide the overlay. Call on any failure path. */
     private void resetLoadingState() {
+        cancelRoleLookupTimeout();
         isLoading = false;
         hideOverlay();
         setButtonsEnabled(true);
@@ -645,9 +668,28 @@ public class LoginActivity extends BaseActivity {
         return false;
     }
 
+    private void scheduleRoleLookupTimeout() {
+        cancelRoleLookupTimeout();
+        roleLookupTimeoutRunnable = () -> {
+            if (isFinishing() || isNavigating) return;
+            Log.w(TAG, "Role lookup timed out");
+            resetLoadingState();
+            toast("Account check timed out. Please try again.");
+        };
+        mainHandler.postDelayed(roleLookupTimeoutRunnable, ROLE_LOOKUP_TIMEOUT_MS);
+    }
+
+    private void cancelRoleLookupTimeout() {
+        if (roleLookupTimeoutRunnable != null) {
+            mainHandler.removeCallbacks(roleLookupTimeoutRunnable);
+            roleLookupTimeoutRunnable = null;
+        }
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        cancelRoleLookupTimeout();
         // Prevent window leaked if activity destroyed while loading
         hideOverlay();
     }

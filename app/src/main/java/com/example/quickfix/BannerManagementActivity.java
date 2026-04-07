@@ -157,10 +157,11 @@ public class BannerManagementActivity extends BaseActivity {
                     public void onResponse(Call<List<Banner>> call, Response<List<Banner>> response) {
                         setLoading(false);
                         swipeRefresh.setRefreshing(false);
-                        if (response.isSuccessful() && response.body() != null) {
+
+                        if (response.isSuccessful()) {
+                            List<Banner> payload = response.body() == null ? new ArrayList<>() : response.body();
                             banners.clear();
-                            banners.addAll(response.body());
-                            // Fix image URLs if they are just paths
+                            banners.addAll(payload);
                             for (Banner b : banners) {
                                 if (b.imageUrl != null && !b.imageUrl.startsWith("http")) {
                                     b.imageUrl = SupabaseStorageHelper.getPublicObjectUrl(BUCKET_BANNERS, b.imageUrl);
@@ -169,16 +170,25 @@ public class BannerManagementActivity extends BaseActivity {
                             adapter.setItems(banners);
                             updateStats();
                             showListOrEmpty();
-                        } else {
-                            showError("Failed to load banners: " + response.code());
+                            return;
                         }
+
+                        String err = "";
+                        try {
+                            err = response.errorBody() != null ? response.errorBody().string() : "";
+                        } catch (Exception ignored) {}
+                        Log.e(TAG, "loadBanners failed HTTP " + response.code() + " body=" + err);
+                        showError("Failed to load banners");
+                        showListOrEmpty();
                     }
 
                     @Override
                     public void onFailure(Call<List<Banner>> call, Throwable t) {
                         setLoading(false);
                         swipeRefresh.setRefreshing(false);
-                        showError("Network error: " + t.getMessage());
+                        Log.e(TAG, "loadBanners network error", t);
+                        showError("Network error while loading banners");
+                        showListOrEmpty();
                     }
                 });
     }
@@ -356,7 +366,7 @@ public class BannerManagementActivity extends BaseActivity {
                     public void onResponse(Call<Void> call, Response<Void> response) {
                         if (response.isSuccessful()) {
                             dialog.dismiss();
-                            Toast.makeText(BannerManagementActivity.this, "✓ Banner saved", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(BannerManagementActivity.this, "Banner saved", Toast.LENGTH_SHORT).show();
                             loadBanners();
                             return;
                         }
@@ -382,7 +392,7 @@ public class BannerManagementActivity extends BaseActivity {
                     public void onResponse(Call<Void> call, Response<Void> response) {
                         if (response.isSuccessful()) {
                             dialog.dismiss();
-                            Toast.makeText(BannerManagementActivity.this, "✓ Banner saved", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(BannerManagementActivity.this, "Banner updated", Toast.LENGTH_SHORT).show();
                             loadBanners();
                             return;
                         }
@@ -484,5 +494,11 @@ public class BannerManagementActivity extends BaseActivity {
 
     private void showErrorDialog(String title, String message) {
         new MaterialAlertDialogBuilder(this).setTitle(title).setMessage(message).setPositiveButton("OK", null).show();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadBanners();
     }
 }

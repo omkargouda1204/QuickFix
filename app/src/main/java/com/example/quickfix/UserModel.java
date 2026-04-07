@@ -19,6 +19,8 @@ public class UserModel {
     public boolean isActive;        // suspend/activate — ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE
     public String  createdAt;
     public String  updatedAt;
+    public boolean darkMode;
+    public String language;
 
     public String getRoleLabel() {
         if (isAdmin)           return "Admin";
@@ -41,6 +43,8 @@ public class UserModel {
         u.isUser = isUser; u.isServiceProvider = isServiceProvider;
         u.isAdmin = isAdmin; u.isVerified = isVerified;
         u.isActive = isActive; u.createdAt = createdAt; u.updatedAt = updatedAt;
+        u.darkMode = darkMode;
+        u.language = language;
         return u;
     }
 }

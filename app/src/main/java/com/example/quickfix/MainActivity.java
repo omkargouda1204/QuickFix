@@ -4,6 +4,7 @@ import android.Manifest;
 import android.animation.ObjectAnimator;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -13,7 +14,6 @@ import android.text.TextWatcher;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
-import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -54,6 +54,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
+import android.speech.RecognizerIntent;
+import android.speech.RecognitionListener;
+import android.speech.SpeechRecognizer;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -67,6 +70,7 @@ public class MainActivity extends BaseActivity {
     private static final String MAIN_FATAL               = "MAIN_FATAL";
     private static final int    LOCATION_PERMISSION_REQ  = 1001;
     private static final int    NOTIFICATION_PERMISSION_REQ = 1002;
+    private static final int    VOICE_PERMISSION_REQ  = 2001;
     private static final long   HOME_AUTO_REFRESH_MS = 60_000L;
 
     // ── Location ──────────────────────────────────────────────────────────
@@ -81,12 +85,16 @@ public class MainActivity extends BaseActivity {
 
     // ── Search ────────────────────────────────────────────────────────────
     private EditText     etSearch;
+    private ImageView    micBtn;
     private ImageView    btnClearSearch;
     private LinearLayout searchSuggestionsContainer;
     private RecyclerView rvSearchSuggestions;
     private SearchSuggestionsAdapter suggestionsAdapter;
     private final Handler debounce = new Handler(Looper.getMainLooper());
     private Runnable debounceRunnable;
+    private SpeechRecognizer speechRecognizer;
+    private Intent speechRecognizerIntent;
+    private boolean isVoiceListening = false;
 
     // ── Header ────────────────────────────────────────────────────────────
     private TextView     welcomeMessage;
@@ -325,6 +333,7 @@ public class MainActivity extends BaseActivity {
             locationAccuracyDot = findViewSafe(R.id.locationAccuracyDot);
             notificationIcon = findViewSafe(R.id.notificationIcon);
             etSearch = findViewSafe(R.id.etSearch);
+            micBtn = findViewSafe(R.id.micBtn);
             btnClearSearch = findViewSafe(R.id.btnClearSearch);
             searchSuggestionsContainer = findViewSafe(R.id.searchSuggestionsContainer);
             rvSearchSuggestions = findViewSafe(R.id.rvSearchSuggestions);
@@ -527,6 +536,7 @@ public class MainActivity extends BaseActivity {
         try {
             stopBannerAutoSlide();
             stopHomeAutoRefresh();
+            stopVoiceRecognition();
         } catch (Exception e) {
             Log.e(TAG, "onPause: " + e.getMessage());
         }
@@ -536,6 +546,11 @@ public class MainActivity extends BaseActivity {
     @Override
     protected void onDestroy() {
         try {
+            stopVoiceRecognition();
+            if (speechRecognizer != null) {
+                speechRecognizer.destroy();
+                speechRecognizer = null;
+            }
             for (ObjectAnimator animator : skeletonAnimators) {
                 if (animator != null) animator.cancel();
             }
@@ -591,6 +606,7 @@ public class MainActivity extends BaseActivity {
 
     private void setupSearchBar() {
         if (etSearch == null) return;
+
         if (rvSearchSuggestions != null) {
             suggestionsAdapter = new SearchSuggestionsAdapter(this, suggestion -> {
                 hideSuggestions();
@@ -617,23 +633,204 @@ public class MainActivity extends BaseActivity {
             }
         });
         etSearch.setOnEditorActionListener((v, actionId, event) -> { if (actionId == EditorInfo.IME_ACTION_SEARCH || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) { String q = etSearch.getText().toString().trim(); if (!q.isEmpty()) openSearchResults(q); hideKeyboard(etSearch); return true; } return false; });
+
+        if (micBtn != null) {
+            micBtn.setOnClickListener(v -> startVoiceSearch());
+        }
+    }
+
+    private void startVoiceSearch() {
+        try {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(
+                        this,
+                        new String[]{Manifest.permission.RECORD_AUDIO},
+                        VOICE_PERMISSION_REQ
+                );
+                return;
+            }
+
+            if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+                Toast.makeText(this, "Voice search not supported on this device", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            initSpeechRecognizer();
+            if (speechRecognizer == null || speechRecognizerIntent == null) {
+                Toast.makeText(this, "Voice search unavailable", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (isVoiceListening) {
+                stopVoiceRecognition();
+            }
+            isVoiceListening = true;
+            if (micBtn != null) {
+                micBtn.setActivated(true);
+                micBtn.setColorFilter(Color.RED);
+            }
+            Toast.makeText(this, "Listening...", Toast.LENGTH_SHORT).show();
+            speechRecognizer.startListening(speechRecognizerIntent);
+        } catch (Exception e) {
+            Log.e(TAG, "Voice search start failed: " + e.getMessage(), e);
+            Toast.makeText(this, "Voice not supported", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void initSpeechRecognizer() {
+        try {
+            if (speechRecognizer != null && speechRecognizerIntent != null) {
+                return;
+            }
+
+            if (speechRecognizer != null) {
+                speechRecognizer.destroy();
+                speechRecognizer = null;
+            }
+
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            speechRecognizer.setRecognitionListener(new RecognitionListener() {
+                @Override public void onReadyForSpeech(Bundle params) { }
+
+                @Override public void onBeginningOfSpeech() { }
+
+                @Override public void onRmsChanged(float rmsdB) { }
+
+                @Override public void onBufferReceived(byte[] buffer) { }
+
+                @Override public void onEndOfSpeech() {
+                    isVoiceListening = false;
+                    if (micBtn != null) {
+                        micBtn.setActivated(false);
+                        micBtn.clearColorFilter();
+                    }
+                }
+
+                @Override
+                public void onError(int error) {
+                    isVoiceListening = false;
+                    if (micBtn != null) {
+                        micBtn.setActivated(false);
+                        micBtn.clearColorFilter();
+                    }
+                    Log.e(TAG, "Voice recognition error: " + error);
+                    Toast.makeText(MainActivity.this, "Listening failed. Try again.", Toast.LENGTH_SHORT).show();
+                }
+
+                @Override
+                public void onResults(Bundle results) {
+                    isVoiceListening = false;
+                    if (micBtn != null) {
+                        micBtn.setActivated(false);
+                        micBtn.clearColorFilter();
+                    }
+
+                    try {
+                        if (results == null) return;
+                        ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                        if (matches == null || matches.isEmpty()) return;
+
+                        String spokenText = matches.get(0) == null ? "" : matches.get(0).trim();
+                        if (spokenText.isEmpty()) return;
+
+                        if (etSearch != null) {
+                            etSearch.setText(spokenText);
+                            etSearch.setSelection(spokenText.length());
+                        }
+
+                        hideSuggestions();
+                        hideKeyboard(etSearch);
+                        openSearchResults(spokenText);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Voice result handling failed: " + e.getMessage(), e);
+                    }
+                }
+
+                @Override public void onPartialResults(Bundle partialResults) { }
+
+                @Override public void onEvent(int eventType, Bundle params) { }
+            });
+
+            speechRecognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN");
+            speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
+            speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+            speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
+        } catch (Exception e) {
+            Log.e(TAG, "initSpeechRecognizer failed: " + e.getMessage(), e);
+            destroySpeechRecognizer();
+        }
+    }
+
+    private void stopVoiceRecognition() {
+        try {
+            isVoiceListening = false;
+            if (micBtn != null) {
+                micBtn.setActivated(false);
+                micBtn.clearColorFilter();
+            }
+            if (speechRecognizer != null) {
+                speechRecognizer.stopListening();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "stopVoiceRecognition failed: " + e.getMessage(), e);
+        }
+    }
+
+    private void destroySpeechRecognizer() {
+        try {
+            stopVoiceRecognition();
+            if (speechRecognizer != null) {
+                speechRecognizer.destroy();
+                speechRecognizer = null;
+            }
+            speechRecognizerIntent = null;
+        } catch (Exception e) {
+            Log.e(TAG, "destroySpeechRecognizer failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == VOICE_PERMISSION_REQ) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startVoiceSearch();
+            } else {
+                Toast.makeText(this, "Microphone permission required for voice search", Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
+
+        if (requestCode == LOCATION_PERMISSION_REQ) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Location permission granted", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Location permission denied", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     private void fetchSuggestions(String query) {
         new Thread(() -> {
             try {
                 List<SearchResult> list = new ArrayList<>();
-                String enc = java.net.URLEncoder.encode(query, "UTF-8");
+                String enc = java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8.name());
                 String city = locationManager != null ? locationManager.getSavedCity() : "";
                 StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
-                        .append("/rest/v1/provider_profiles?status=eq.active")
+                        .append("/rest/v1/provider_profiles?select=id,business_name,category,city")
+                        .append("&is_approved=eq.true")
                         .append("&or=(business_name.ilike.*").append(enc)
                         .append("*,category.ilike.*").append(enc)
                         .append("*,city.ilike.*").append(enc).append("*)")
-                        .append("&select=id,business_name,category,city")
                         .append("&limit=8");
                 if (!city.isEmpty()) {
-                    url.append("&city=ilike.*").append(java.net.URLEncoder.encode(city, "UTF-8")).append("*");
+                    url.append("&city=ilike.*").append(java.net.URLEncoder.encode(city, java.nio.charset.StandardCharsets.UTF_8.name())).append("*");
                 }
 
                 Request req = new Request.Builder()
@@ -772,12 +969,10 @@ public class MainActivity extends BaseActivity {
         }
 
         try {
-            bannerApi.getBanners(
+            bannerApi.getAllBanners(
                             BuildConfig.SUPABASE_ANON_KEY,
                             "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                             "*",
-                            "eq.true",
-                            null,
                             "priority.asc"
                     )
                     .enqueue(new Callback<List<Banner>>() {
@@ -786,10 +981,9 @@ public class MainActivity extends BaseActivity {
                             try {
                                 runOnUiThread(() -> {
                                     try {
-                                        if (response == null || !response.isSuccessful()) {
-                                            Log.e(TAG, "Banner API error: " + (response != null ? response.code() + " " + response.message() : "null response"));
-                                            showBannerErrorState("Failed to load banners");
-                                            markHomeSectionLoaded();
+                                        if (!response.isSuccessful()) {
+                                            Log.w(TAG, "Primary banner query failed, trying fallback");
+                                            loadHomeBannersFallback();
                                             return;
                                         }
 
@@ -797,10 +991,8 @@ public class MainActivity extends BaseActivity {
                                         homeBanners.clear();
                                         if (body != null) {
                                             for (Banner b : body) {
-                                                if (b == null || !b.isActive || !hasStarted(b.startDate) || isExpired(b.expiryDate)) continue;
-                                                if (b.imageUrl != null && !b.imageUrl.startsWith("http")) {
-                                                    b.imageUrl = SupabaseStorageHelper.getPublicObjectUrl("banner-images", b.imageUrl);
-                                                }
+                                                if (!isBannerVisible(b)) continue;
+                                                normalizeBannerImage(b);
                                                 homeBanners.add(b);
                                             }
                                         }
@@ -823,23 +1015,65 @@ public class MainActivity extends BaseActivity {
                         @Override
                         public void onFailure(Call<List<Banner>> call, Throwable t) {
                             try {
-                                Log.e(TAG, "Banner API failure: " + t.getMessage(), t);
-                                runOnUiThread(() -> {
-                                    try {
-                                        showBannerErrorState("Failed to load banners");
-                                        markHomeSectionLoaded();
-                                    } catch (Exception e) {
-                                        Log.e(TAG, "Error showing banner error state: " + e.getMessage());
-                                    }
-                                });
+                                Log.w(TAG, "Primary banner query failure, trying fallback: " + t.getMessage());
+                                runOnUiThread(MainActivity.this::loadHomeBannersFallback);
                             } catch (Exception e) {
                                 Log.e(TAG, "Error in banner failure handler: " + e.getMessage());
+                                markHomeSectionLoaded();
                             }
                         }
                     });
         } catch (Exception e) {
             Log.e(TAG, "Exception in loadHomeBanners: " + e.getMessage(), e);
-            showBannerErrorState("Error loading banners");
+            loadHomeBannersFallback();
+        }
+    }
+
+    private void loadHomeBannersFallback() {
+        try {
+            bannerApi.getAllBanners(
+                            BuildConfig.SUPABASE_ANON_KEY,
+                            "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                            "*",
+                            "priority.asc"
+                    )
+                    .enqueue(new Callback<List<Banner>>() {
+                        @Override
+                        public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
+                            runOnUiThread(() -> {
+                                try {
+                                    if (response == null || !response.isSuccessful()) {
+                                        showBannerErrorState("Failed to load banners");
+                                        markHomeSectionLoaded();
+                                        return;
+                                    }
+                                    homeBanners.clear();
+                                    List<Banner> body = response.body();
+                                    if (body != null) {
+                                        for (Banner b : body) {
+                                            if (!isBannerVisible(b)) continue;
+                                            normalizeBannerImage(b);
+                                            homeBanners.add(b);
+                                        }
+                                    }
+                                    showBannersOnHome();
+                                } catch (Exception e) {
+                                    showBannerErrorState("Failed to load banners");
+                                }
+                                markHomeSectionLoaded();
+                            });
+                        }
+
+                        @Override
+                        public void onFailure(Call<List<Banner>> call, Throwable t) {
+                            runOnUiThread(() -> {
+                                showBannerErrorState("Failed to load banners");
+                                markHomeSectionLoaded();
+                            });
+                        }
+                    });
+        } catch (Exception e) {
+            showBannerErrorState("Failed to load banners");
             markHomeSectionLoaded();
         }
     }
@@ -852,15 +1086,11 @@ public class MainActivity extends BaseActivity {
         }
 
         try {
-            String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
-            String offerExpiryFilter = "(expiry_date.is.null,expiry_date.gte." + today + ")";
-
-            offerApi.getOffers(
+            offerApi.getAllOffers(
                             BuildConfig.SUPABASE_ANON_KEY,
                             "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                             "*",
-                            "eq.true",
-                            offerExpiryFilter
+                            "created_at.desc"
                     )
                     .enqueue(new Callback<List<Offer>>() {
                         @Override
@@ -868,10 +1098,9 @@ public class MainActivity extends BaseActivity {
                             try {
                                 runOnUiThread(() -> {
                                     try {
-                                        if (response == null || !response.isSuccessful()) {
-                                            Log.e(TAG, "Offer API error: " + (response != null ? response.code() + " " + response.message() : "null response"));
-                                            showOffersErrorState("Failed to load offers");
-                                            markHomeSectionLoaded();
+                                        if (!response.isSuccessful()) {
+                                            Log.w(TAG, "Primary offers query failed, trying fallback");
+                                            loadHomeOffersFallback();
                                             return;
                                         }
 
@@ -879,7 +1108,7 @@ public class MainActivity extends BaseActivity {
                                         homeOffers.clear();
                                         if (body != null) {
                                             for (Offer o : body) {
-                                                if (o == null || !o.isActive || isExpired(o.expiryDate)) continue;
+                                                if (!isOfferVisible(o)) continue;
                                                 homeOffers.add(o);
                                             }
                                         }
@@ -902,161 +1131,208 @@ public class MainActivity extends BaseActivity {
                         @Override
                         public void onFailure(Call<List<Offer>> call, Throwable t) {
                             try {
-                                Log.e(TAG, "Offer API failure: " + t.getMessage(), t);
-                                runOnUiThread(() -> {
-                                    try {
-                                        showOffersErrorState("Failed to load offers");
-                                        markHomeSectionLoaded();
-                                    } catch (Exception e) {
-                                        Log.e(TAG, "Error showing offer error state: " + e.getMessage());
-                                    }
-                                });
+                                Log.w(TAG, "Primary offers query failure, trying fallback: " + t.getMessage());
+                                runOnUiThread(MainActivity.this::loadHomeOffersFallback);
                             } catch (Exception e) {
                                 Log.e(TAG, "Error in offer failure handler: " + e.getMessage());
+                                markHomeSectionLoaded();
                             }
                         }
                     });
         } catch (Exception e) {
             Log.e(TAG, "Exception in loadHomeOffers: " + e.getMessage(), e);
-            showOffersErrorState("Error loading offers");
+            loadHomeOffersFallback();
+        }
+    }
+
+    private void loadHomeOffersFallback() {
+        try {
+            offerApi.getAllOffers(
+                            BuildConfig.SUPABASE_ANON_KEY,
+                            "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                            "*",
+                            "created_at.desc"
+                    )
+                    .enqueue(new Callback<List<Offer>>() {
+                        @Override
+                        public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
+                            runOnUiThread(() -> {
+                                try {
+                                    if (response == null || !response.isSuccessful()) {
+                                        showOffersErrorState("Failed to load offers");
+                                        markHomeSectionLoaded();
+                                        return;
+                                    }
+                                    homeOffers.clear();
+                                    List<Offer> body = response.body();
+                                    if (body != null) {
+                                        for (Offer o : body) {
+                                            if (!isOfferVisible(o)) continue;
+                                            homeOffers.add(o);
+                                        }
+                                    }
+                                    showOffersOnHome();
+                                } catch (Exception e) {
+                                    showOffersErrorState("Failed to load offers");
+                                }
+                                markHomeSectionLoaded();
+                            });
+                        }
+
+                        @Override
+                        public void onFailure(Call<List<Offer>> call, Throwable t) {
+                            runOnUiThread(() -> {
+                                showOffersErrorState("Failed to load offers");
+                                markHomeSectionLoaded();
+                            });
+                        }
+                    });
+        } catch (Exception e) {
+            showOffersErrorState("Failed to load offers");
             markHomeSectionLoaded();
         }
     }
 
     private void markHomeSectionLoaded() {
         pendingHomeLoads = Math.max(0, pendingHomeLoads - 1);
-        if (pendingHomeLoads == 0 && homeSwipeRefresh != null) homeSwipeRefresh.setRefreshing(false);
+        if (pendingHomeLoads == 0 && homeSwipeRefresh != null) {
+            homeSwipeRefresh.setRefreshing(false);
+        }
     }
 
     private void showBannersOnHome() {
-        try {
-            if (bannersSection == null || vpBannersCarousel == null) {
-                Log.w(TAG, "Banner views not initialized");
-                return;
-            }
+        if (bannersSection == null) return;
 
-            if (homeBanners.isEmpty()) {
-                Log.d(TAG, "No banners to display");
-                bannersSection.setVisibility(View.GONE);
-                if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE);
-                if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE);
-                if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE);
-                if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE);
-                stopBannerAutoSlide();
-                return;
-            }
-
+        if (homeBanners.isEmpty()) {
             bannersSection.setVisibility(View.VISIBLE);
+            if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE);
             if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE);
-            if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE);
+            if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.VISIBLE);
             if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE);
-            if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.VISIBLE);
-            vpBannersCarousel.setVisibility(View.VISIBLE);
-
-            if (homeBannerAdapter != null) {
-                homeBannerAdapter.notifyDataSetChanged();
-            }
-
-            if (bannerDotsLayout != null) {
-                try {
-                    bannerDotsLayout.setViewPager2(vpBannersCarousel);
-                } catch (Exception e) {
-                    Log.e(TAG, "Error binding worm dots indicator: " + e.getMessage());
-                }
-            }
-
-            if (bannerPageCallback == null) {
-                bannerPageCallback = new ViewPager2.OnPageChangeCallback() {
-                    @Override
-                    public void onPageSelected(int position) {
-                        super.onPageSelected(position);
-                    }
-                };
-                vpBannersCarousel.registerOnPageChangeCallback(bannerPageCallback);
-            }
-
-
-            startBannerAutoSlide();
-            Log.d(TAG, "Banners displayed successfully");
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error in showBannersOnHome: " + e.getMessage(), e);
-            showBannerErrorState("Failed to display banners");
+            stopBannerAutoSlide();
+            return;
         }
+
+        bannersSection.setVisibility(View.VISIBLE);
+        if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE);
+        if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE);
+        if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE);
+        if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.VISIBLE);
+        if (vpBannersCarousel != null) vpBannersCarousel.setVisibility(View.VISIBLE);
+
+        if (homeBannerAdapter != null) homeBannerAdapter.notifyDataSetChanged();
+
+        if (bannerDotsLayout != null && vpBannersCarousel != null) {
+            try {
+                bannerDotsLayout.setViewPager2(vpBannersCarousel);
+            } catch (Exception e) {
+                Log.w(TAG, "Banner indicator bind failed: " + e.getMessage());
+            }
+        }
+
+        startBannerAutoSlide();
     }
 
     private void showOffersOnHome() {
-        try {
-            if (offersSection == null || rvOffersStrip == null) {
-                Log.w(TAG, "Offers views not initialized");
-                return;
-            }
+        if (offersSection == null) return;
 
-            if (homeOffers.isEmpty()) {
-                Log.d(TAG, "No offers to display");
-                offersSection.setVisibility(View.GONE);
-                if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE);
-                if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE);
-                if (offersErrorState != null) offersErrorState.setVisibility(View.GONE);
-                if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE);
-                return;
-            }
-
+        if (homeOffers.isEmpty()) {
             offersSection.setVisibility(View.VISIBLE);
+            if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE);
             if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE);
-            if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE);
+            if (offersEmptyState != null) offersEmptyState.setVisibility(View.VISIBLE);
             if (offersErrorState != null) offersErrorState.setVisibility(View.GONE);
-            if (offersContentContainer != null) offersContentContainer.setVisibility(View.VISIBLE);
-
-            if (homeOfferAdapter != null) {
-                homeOfferAdapter.notifyDataSetChanged();
-            }
-
-            Log.d(TAG, "Offers displayed successfully");
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error in showOffersOnHome: " + e.getMessage(), e);
-            showOffersErrorState("Failed to display offers");
+            return;
         }
+
+        offersSection.setVisibility(View.VISIBLE);
+        if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE);
+        if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE);
+        if (offersErrorState != null) offersErrorState.setVisibility(View.GONE);
+        if (offersContentContainer != null) offersContentContainer.setVisibility(View.VISIBLE);
+
+        if (homeOfferAdapter != null) homeOfferAdapter.notifyDataSetChanged();
     }
 
     private boolean hasStarted(String date) {
         if (date == null || date.trim().isEmpty()) return true;
+        String normalized = date.trim().length() >= 10 ? date.trim().substring(0, 10) : date.trim();
         try {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
-            sdf.setLenient(false);
-            Date start = sdf.parse(date.trim());
+            Date start = new SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(normalized);
             if (start == null) return true;
-            java.util.Calendar cStart = java.util.Calendar.getInstance();
-            cStart.setTime(start);
-            cStart.set(java.util.Calendar.HOUR_OF_DAY, 0);
-            cStart.set(java.util.Calendar.MINUTE, 0);
-            cStart.set(java.util.Calendar.SECOND, 0);
-            cStart.set(java.util.Calendar.MILLISECOND, 0);
 
-            java.util.Calendar cNow = java.util.Calendar.getInstance();
-            cNow.set(java.util.Calendar.HOUR_OF_DAY, 0);
-            cNow.set(java.util.Calendar.MINUTE, 0);
-            cNow.set(java.util.Calendar.SECOND, 0);
-            cNow.set(java.util.Calendar.MILLISECOND, 0);
+            java.util.Calendar startDay = java.util.Calendar.getInstance();
+            startDay.setTime(start);
+            startDay.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            startDay.set(java.util.Calendar.MINUTE, 0);
+            startDay.set(java.util.Calendar.SECOND, 0);
+            startDay.set(java.util.Calendar.MILLISECOND, 0);
 
-            return !cStart.after(cNow);
-        } catch (Exception e) {
-            Log.w(TAG, "hasStarted parse failed for date=" + date + ": " + e.getMessage());
+            java.util.Calendar today = java.util.Calendar.getInstance();
+            today.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            today.set(java.util.Calendar.MINUTE, 0);
+            today.set(java.util.Calendar.SECOND, 0);
+            today.set(java.util.Calendar.MILLISECOND, 0);
+
+            return !startDay.after(today);
+        } catch (Exception ignore) {
             return true;
         }
     }
 
     private boolean isExpired(String date) {
         if (date == null || date.trim().isEmpty()) return false;
+        String normalized = date.trim().length() >= 10 ? date.trim().substring(0, 10) : date.trim();
         try {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
-            sdf.setLenient(false);
-            Date expiry = sdf.parse(date.trim());
-            return expiry != null && expiry.before(new Date());
-        } catch (Exception e) {
-            Log.w(TAG, "isExpired parse failed for date=" + date + ": " + e.getMessage());
+            Date expiry = new SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(normalized);
+            if (expiry == null) return false;
+
+            java.util.Calendar expiryDay = java.util.Calendar.getInstance();
+            expiryDay.setTime(expiry);
+            expiryDay.set(java.util.Calendar.HOUR_OF_DAY, 23);
+            expiryDay.set(java.util.Calendar.MINUTE, 59);
+            expiryDay.set(java.util.Calendar.SECOND, 59);
+            expiryDay.set(java.util.Calendar.MILLISECOND, 999);
+
+            return expiryDay.getTimeInMillis() < System.currentTimeMillis();
+        } catch (Exception ignore) {
             return false;
+        }
+    }
+
+    private boolean isBannerVisible(Banner banner) {
+        if (banner == null) return false;
+        return banner.isActive && hasStarted(banner.startDate) && !isExpired(banner.expiryDate);
+    }
+
+    private boolean isOfferVisible(Offer offer) {
+        if (offer == null) return false;
+        return offer.isActive && !isExpired(offer.expiryDate);
+    }
+
+    private void normalizeBannerImage(Banner banner) {
+        if (banner == null) return;
+        if (banner.imageUrl != null && !banner.imageUrl.startsWith("http")) {
+            banner.imageUrl = SupabaseStorageHelper.getPublicObjectUrl("banner-images", banner.imageUrl);
+        }
+    }
+
+    /**
+     * Safe requestLocationPermission with rationale
+     */
+    private void requestLocationPermission() {
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_FINE_LOCATION)) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Location Permission Needed")
+                    .setMessage("This app requires location permission to provide personalized services based on your city.")
+                    .setPositiveButton("OK", (dialog, which) -> {
+                        ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, LOCATION_PERMISSION_REQ);
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .create()
+                    .show();
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, LOCATION_PERMISSION_REQ);
         }
     }
 

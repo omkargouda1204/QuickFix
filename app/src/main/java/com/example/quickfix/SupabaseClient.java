@@ -1198,4 +1198,136 @@ public class SupabaseClient {
         sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
         return sdf.format(new Date());
     }
+
+    // ── User Settings ──────────────────────────────────────────────────────
+    public interface UserSettingsCallback {
+        void onSuccess(UserSettings settings);
+        void onError(String message);
+    }
+
+    public static class UserSettings {
+        public String userId = "";
+        public boolean darkMode = false;
+        public String language = "en";
+    }
+
+    public static void fetchUserSettings(String firebaseUid, String email, UserSettingsCallback callback) {
+        if (callback == null) return;
+        if ((firebaseUid == null || firebaseUid.trim().isEmpty())
+                && (email == null || email.trim().isEmpty())) {
+            MAIN.post(() -> callback.onError("User identity is required"));
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                JSONObject row = null;
+                if (firebaseUid != null && !firebaseUid.trim().isEmpty()) {
+                    String encodedUid = java.net.URLEncoder.encode(firebaseUid.trim(), "UTF-8");
+                    row = fetchFirstUserByFilter("firebase_uid=eq." + encodedUid);
+                }
+
+                if (row == null && email != null && !email.trim().isEmpty()) {
+                    String encodedEmail = java.net.URLEncoder.encode(email.trim(), "UTF-8");
+                    row = fetchFirstUserByFilter("email=eq." + encodedEmail);
+                }
+
+                if (row == null) {
+                    MAIN.post(() -> callback.onError("User settings not found"));
+                    return;
+                }
+
+                UserSettings settings = new UserSettings();
+                settings.userId = row.optString("id", "");
+                settings.darkMode = row.optBoolean("dark_mode", false);
+                settings.language = row.optString("language", "en");
+                if (settings.language == null || settings.language.trim().isEmpty()) {
+                    settings.language = "en";
+                }
+
+                MAIN.post(() -> callback.onSuccess(settings));
+            } catch (Exception e) {
+                MAIN.post(() -> callback.onError("NETWORK_ERROR: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    public static void updateUserSettings(String firebaseUid,
+                                          String email,
+                                          boolean darkMode,
+                                          String language,
+                                          Callback2 callback) {
+        if (callback == null) return;
+        String normalizedLanguage = (language == null || language.trim().isEmpty()) ? "en" : language.trim();
+
+        if ((firebaseUid == null || firebaseUid.trim().isEmpty())
+                && (email == null || email.trim().isEmpty())) {
+            MAIN.post(() -> callback.onError("User identity is required"));
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("dark_mode", darkMode);
+                payload.put("language", normalizedLanguage);
+
+                String filter;
+                if (firebaseUid != null && !firebaseUid.trim().isEmpty()) {
+                    filter = "firebase_uid=eq." + java.net.URLEncoder.encode(firebaseUid.trim(), "UTF-8");
+                } else {
+                    filter = "email=eq." + java.net.URLEncoder.encode(email.trim(), "UTF-8");
+                }
+
+                Request request = new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/users?" + filter)
+                        .patch(RequestBody.create(payload.toString(), JSON_TYPE))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
+                        .build();
+
+                try (Response response = HTTP.newCall(request).execute()) {
+                    int code = response.code();
+                    String body = response.body() != null ? response.body().string() : "";
+                    if (code == 200 || code == 204) {
+                        MAIN.post(callback::onSuccess);
+                    } else {
+                        String error = buildSupabaseHttpError("update user settings", code, body);
+                        MAIN.post(() -> callback.onError(error));
+                    }
+                }
+            } catch (Exception e) {
+                MAIN.post(() -> callback.onError("NETWORK_ERROR: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    private static JSONObject fetchFirstUserByFilter(String filter) {
+        if (filter == null || filter.trim().isEmpty()) return null;
+        try {
+            String select = java.net.URLEncoder.encode("id,dark_mode,language", "UTF-8");
+            String url = SUPABASE_URL + "/rest/v1/users?" + filter + "&select=" + select + "&limit=1";
+            Request request = new Request.Builder()
+                    .url(url)
+                    .get()
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response response = HTTP.newCall(request).execute()) {
+                if (response.code() != 200) {
+                    return null;
+                }
+                String body = response.body() != null ? response.body().string() : "[]";
+                JSONArray arr = new JSONArray(body);
+                if (arr.length() == 0) return null;
+                return arr.getJSONObject(0);
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
 }

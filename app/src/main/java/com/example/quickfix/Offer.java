@@ -35,7 +35,7 @@ public class Offer {
     @SerializedName("expiry_date")
     public String expiryDate;      // ISO date string (YYYY-MM-DD)
 
-    @SerializedName("is_active")
+    @SerializedName(value = "is_active", alternate = {"active"})
     public boolean isActive;
 
     @SerializedName("status")

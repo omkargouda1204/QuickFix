@@ -284,7 +284,8 @@ public class SearchResultsActivity extends BaseActivity
 
         try {
             String cleanedQuery = sanitizeProviderQuery(query);
-            String enc = java.net.URLEncoder.encode(cleanedQuery, "UTF-8");
+
+            String enc = java.net.URLEncoder.encode(cleanedQuery, java.nio.charset.StandardCharsets.UTF_8.name());
             Set<String> seenIds = new HashSet<>();
 
             if (useNearby && !Double.isNaN(originLat) && !Double.isNaN(originLng)) {
@@ -332,12 +333,12 @@ public class SearchResultsActivity extends BaseActivity
         try {
             StringBuilder url = new StringBuilder(BASE_URL)
                     .append("/rest/v1/provider_profiles")
-                    .append("?status=eq.active")
+                    .append("?select=id,business_name,category,city,area,owner_name,rating,status,availability_status,is_available,")
+                    .append(latKey).append(",").append(lngKey)
+                    .append("&is_approved=eq.true")
                     .append("&or=(business_name.ilike.*").append(encQuery)
                     .append("*,category.ilike.*").append(encQuery)
                     .append("*,city.ilike.*").append(encQuery).append("*)")
-                    .append("&select=id,business_name,category,city,area,owner_name,rating,status,availability_status,is_available,")
-                    .append(latKey).append(",").append(lngKey)
                     .append("&limit=220");
 
             Request req = new Request.Builder().url(url.toString())
@@ -387,15 +388,15 @@ public class SearchResultsActivity extends BaseActivity
         try {
             StringBuilder url = new StringBuilder(BASE_URL)
                     .append("/rest/v1/provider_profiles")
-                    .append("?or=(business_name.ilike.*").append(encQuery)
+                    .append("?select=id,business_name,category,city,area,owner_name,rating,status,availability_status,is_available")
+                    .append("&is_approved=eq.true")
+                    .append("&or=(business_name.ilike.*").append(encQuery)
                     .append("*,category.ilike.*").append(encQuery)
                     .append("*,city.ilike.*").append(encQuery).append("*)")
-                    .append("&or=(is_approved.eq.true,approved.eq.true,status.eq.approved,status.eq.active,is_active.eq.true)")
-                    .append("&select=id,business_name,category,city,area,owner_name,rating,status,availability_status,is_available")
                     .append("&limit=60");
             if (!cityFilter.isEmpty()) {
                 url.append("&city=ilike.*")
-                   .append(java.net.URLEncoder.encode(cityFilter, "UTF-8")).append("*");
+                   .append(java.net.URLEncoder.encode(cityFilter, java.nio.charset.StandardCharsets.UTF_8.name())).append("*");
             }
 
             Request req = new Request.Builder().url(url.toString())
@@ -424,6 +425,7 @@ public class SearchResultsActivity extends BaseActivity
                                 resolveAvailability(o)
                         ));
                     }
+                    Log.d(TAG, "Results: " + list.size());
                 }
             }
         } catch (Exception e) {
@@ -442,6 +444,7 @@ public class SearchResultsActivity extends BaseActivity
             }
         }
         adapter.setResults(filtered);
+        Log.d(TAG, "Results: " + filtered.size());
 
         int count = filtered.size();
         tvResultCount.setText(count + " result" + (count != 1 ? "s" : ""));

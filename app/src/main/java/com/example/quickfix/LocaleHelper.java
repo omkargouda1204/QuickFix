@@ -8,6 +8,8 @@ import android.content.res.Resources;
 import android.os.Build;
 import android.util.Log;
 
+import com.google.firebase.auth.FirebaseAuth;
+
 import java.util.Locale;
 
 /**
@@ -30,6 +32,7 @@ public final class LocaleHelper {
     private static final String PREFS_NAME = "quickfix_prefs";
     private static final String KEY_LANG   = "selected_language";      // display name key (legacy)
     private static final String KEY_LOCALE = "selected_locale_code";   // BCP-47 code key
+    private static final String KEY_LOCALE_PREFIX = "selected_locale_code_user_";
 
     private LocaleHelper() {}   // utility class – no instances
 
@@ -64,29 +67,48 @@ public final class LocaleHelper {
     public static void setLocale(Context ctx, String localeCode) {
         try {
             String safe = sanitizeCode(localeCode);
-            saveLocaleCode(ctx, safe);
+            saveLocaleCode(ctx, resolveCurrentUid(), safe);
             Locale locale = new Locale(safe);
             Locale.setDefault(locale);
             applyLocale(ctx.getApplicationContext(), locale);
-            Log.d(TAG, "setLocale → " + safe);
+            Log.d(TAG, "setLocale -> " + safe);
         } catch (Exception e) {
             Log.e(TAG, "setLocale() failed: " + e.getMessage());
         }
+    }
+
+    public static void saveLocaleForUid(Context ctx, String firebaseUid, String localeCode) {
+        if (ctx == null || firebaseUid == null || firebaseUid.trim().isEmpty()) return;
+        saveLocaleCode(ctx, firebaseUid, sanitizeCode(localeCode));
     }
 
     /**
      * Returns the currently persisted BCP-47 locale code (default: "en").
      */
     public static String getSavedLocaleCode(Context ctx) {
+        return getSavedLocaleCode(ctx, resolveCurrentUid());
+    }
+
+    public static String getSavedLocaleCode(Context ctx, String firebaseUid) {
         try {
             SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-            // Prefer the new code key; fall back to converting the old display-name key
-            if (prefs.contains(KEY_LOCALE)) {
-                return sanitizeCode(prefs.getString(KEY_LOCALE, "en"));
+            String scopedKey = localeKeyForUid(firebaseUid);
+            if (prefs.contains(scopedKey)) {
+                return sanitizeCode(prefs.getString(scopedKey, "en"));
             }
-            // Legacy migration: convert stored display name → locale code
+            if (prefs.contains(KEY_LOCALE)) {
+                String value = sanitizeCode(prefs.getString(KEY_LOCALE, "en"));
+                if (firebaseUid != null && !firebaseUid.trim().isEmpty()) {
+                    prefs.edit().putString(scopedKey, value).apply();
+                }
+                return value;
+            }
             String displayName = prefs.getString(KEY_LANG, "English");
-            return displayNameToCode(displayName);
+            String value = displayNameToCode(displayName);
+            if (firebaseUid != null && !firebaseUid.trim().isEmpty()) {
+                prefs.edit().putString(scopedKey, value).apply();
+            }
+            return value;
         } catch (Exception e) {
             Log.e(TAG, "getSavedLocaleCode() failed: " + e.getMessage());
             return "en";
@@ -156,13 +178,14 @@ public final class LocaleHelper {
         }
     }
 
-    private static void saveLocaleCode(Context ctx, String code) {
+    private static void saveLocaleCode(Context ctx, String firebaseUid, String code) {
         SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String displayName = codeToDisplayName(code);
-        prefs.edit()
+        SharedPreferences.Editor editor = prefs.edit()
                 .putString(KEY_LOCALE, code)
-                .putString(KEY_LANG, displayName)   // keep legacy key in sync
-                .apply();
+                .putString(KEY_LANG, displayName);
+        String scopedKey = localeKeyForUid(firebaseUid);
+        editor.putString(scopedKey, code).apply();
     }
 
     /** Guards against null/empty/unknown codes; falls back to "en". */
@@ -177,5 +200,19 @@ public final class LocaleHelper {
             default:                     return "en";
         }
     }
-}
 
+    private static String localeKeyForUid(String firebaseUid) {
+        if (firebaseUid == null || firebaseUid.trim().isEmpty()) return KEY_LOCALE;
+        return KEY_LOCALE_PREFIX + firebaseUid.trim();
+    }
+
+    private static String resolveCurrentUid() {
+        try {
+            if (FirebaseAuth.getInstance().getCurrentUser() == null) return "";
+            String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+            return uid != null ? uid.trim() : "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+}

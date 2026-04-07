@@ -24,6 +24,17 @@ public abstract class BaseActivity extends AppCompatActivity {
 
     private boolean maintenanceCheckInFlight;
     private boolean appliedDarkMode;
+    private String appliedLanguageCode;
+
+    private final UserPreferenceManager.Listener preferenceListener = (darkMode, languageCode) -> {
+        if (isFinishing() || isDestroyed()) return;
+        if (appliedLanguageCode == null || !appliedLanguageCode.equalsIgnoreCase(languageCode)) {
+            appliedLanguageCode = languageCode;
+            recreate();
+            return;
+        }
+        appliedDarkMode = darkMode;
+    };
 
     @Override
     protected void attachBaseContext(Context base) {
@@ -33,17 +44,39 @@ public abstract class BaseActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        UserPreferenceManager.init(this);
         ThemeManager.applyFromPrefs(this, isAdminThemeScreen());
         appliedDarkMode = ThemeManager.isDarkMode(this, isAdminThemeScreen());
+        appliedLanguageCode = UserPreferenceManager.getLanguageCode(this);
         super.onCreate(savedInstanceState);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        UserPreferenceManager.addListener(preferenceListener);
+    }
+
+    @Override
+    protected void onStop() {
+        UserPreferenceManager.removeListener(preferenceListener);
+        super.onStop();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         boolean currentDarkMode = ThemeManager.isDarkMode(this, isAdminThemeScreen());
+        String currentLanguage = UserPreferenceManager.getLanguageCode(this);
         if (currentDarkMode != appliedDarkMode) {
             appliedDarkMode = currentDarkMode;
+            if (!isFinishing() && !isDestroyed()) {
+                recreate();
+            }
+            return;
+        }
+        if (appliedLanguageCode == null || !appliedLanguageCode.equalsIgnoreCase(currentLanguage)) {
+            appliedLanguageCode = currentLanguage;
             if (!isFinishing() && !isDestroyed()) {
                 recreate();
             }
