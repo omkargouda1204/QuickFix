@@ -22,7 +22,6 @@
 
             <!-- ═══════════════ GRADIENT HEADER ═══════════════ -->
             <LinearLayout
-                android:id="@+id/profileHeader"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_profile_header_gradient"
@@ -52,7 +51,6 @@
                         android:contentDescription="@string/cd_back" />
 
                     <TextView
-                        android:id="@+id/tvScreenTitle"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
@@ -81,7 +79,6 @@
 
                     <!-- Avatar (read-only) -->
                     <FrameLayout
-                        android:id="@+id/avatarFrame"
                         android:layout_width="104dp"
                         android:layout_height="104dp"
                         android:background="@drawable/bg_profile_avatar"

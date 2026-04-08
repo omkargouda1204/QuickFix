@@ -6,10 +6,8 @@
 <resources>
     <!-- App -->
     <string name="app_name">QuickFix</string>
-    <string name="welcome_text">QuickFix-ലേക്ക് സ്വാഗതം</string>
 
     <!-- Login Screen -->
-    <string name="login_title">ലോഗിൻ</string>
     <string name="welcome_back">തിരിച്ചു സ്വാഗതം!</string>
     <string name="login_subtitle">തുടരാൻ സൈൻ ഇൻ ചെയ്യുക</string>
     <string name="email_hint">ഇമെയിൽ വിലാസം</string>
@@ -23,57 +21,22 @@
 
     <!-- Forgot Password -->
     <string name="forgot_password_title">പാസ്‌വേഡ് മറന്നോ</string>
-    <string name="forgot_password_subtitle">പാസ്‌വേഡ് റീസെറ്റ് ചെയ്യാൻ ഇമെയിൽ നൽകുക</string>
-    <string name="send_otp">OTP അയക്കുക</string>
-    <string name="enter_otp">OTP നൽകുക</string>
-    <string name="verify_otp">OTP സ്ഥിരീകരിക്കുക</string>
-    <string name="new_password">പുതിയ പാസ്‌വേഡ്</string>
     <string name="confirm_password">പാസ്‌വേഡ് സ്ഥിരീകരിക്കുക</string>
-    <string name="reset_password">പാസ്‌വേഡ് റീസെറ്റ്</string>
     <string name="back_to_login">ലോഗിനിലേക്ക് മടങ്ങുക</string>
 
     <!-- Validation -->
-    <string name="error_email_required">ഇമെയിൽ ആവശ്യമാണ്</string>
-    <string name="error_invalid_email">സാധുവായ ഇമെയിൽ നൽകുക</string>
-    <string name="error_password_required">പാസ്‌വേഡ് ആവശ്യമാണ്</string>
-    <string name="error_password_length">പാസ്‌വേഡ് കുറഞ്ഞത് 6 അക്ഷരങ്ങൾ ഉണ്ടായിരിക്കണം</string>
-    <string name="error_login_failed">ലോഗിൻ പരാജയപ്പെട്ടു. വീണ്ടും ശ്രമിക്കുക</string>
-    <string name="error_network">നെറ്റ്‌വർക്ക് പിശക്. നിങ്ങളുടെ കണക്ഷൻ പരിശോധിക്കുക</string>
-    <string name="success_login">ലോഗിൻ വിജയകരമായി!</string>
-    <string name="otp_sent">നിങ്ങളുടെ ഇമെയിലിലേക്ക് OTP അയച്ചിരിക്കുന്നു</string>
-    <string name="password_reset_success">പാസ്‌വേഡ് വിജയകരമായി റീസെറ്റ് ചെയ്തു</string>
 
     <!-- OTP Verification -->
-    <string name="otp_verification_title">ഇമെയിൽ സ്ഥിരീകരിക്കുക</string>
-    <string name="otp_verification_subtitle">നിങ്ങളുടെ ഇമെയിലിലേക്ക് അയച്ച OTP നൽകുക</string>
-    <string name="otp_code_hint">6 അക്ക OTP നൽകുക</string>
-    <string name="verify_button">സ്ഥിരീകരിക്കുക</string>
-    <string name="resend_otp">OTP വീണ്ടും അയക്കുക</string>
-    <string name="otp_verified">ഇമെയിൽ വിജയകരമായി സ്ഥിരീകരിച്ചു!</string>
-    <string name="account_created">അക്കൗണ്ട് വിജയകരമായി സൃഷ്ടിച്ചു!</string>
 
     <!-- Registration -->
     <string name="registration_title">അക്കൗണ്ട് ഉണ്ടാക്കുക</string>
-    <string name="welcome_new_user">QuickFix-ലേക്ക് സ്വാഗതം!</string>
     <string name="registration_subtitle">ഞങ്ങളുടെ കമ്മ്യൂണിറ്റിയിൽ ചേരുക</string>
     <string name="full_name_hint">പൂർണ്ണ നാമം</string>
-    <string name="phone_hint">ഫോൺ നമ്പർ</string>
     <string name="signup_button">സൈൻ അപ്പ്</string>
-    <string name="google_sign_up">Google ഉപയോഗിച്ച് സൈൻ അപ്പ്</string>
     <string name="have_account">ഇതിനകം അക്കൗണ്ട് ഉണ്ടോ?</string>
     <string name="login_here">ഇവിടെ ലോഗിൻ ചെയ്യുക</string>
-    <string name="error_fullname_required">പൂർണ്ണ നാമം ആവശ്യമാണ്</string>
-    <string name="error_fullname_length">പേര് കുറഞ്ഞത് 3 അക്ഷരങ്ങൾ ഉണ്ടായിരിക്കണം</string>
-    <string name="error_phone_required">ഫോൺ നമ്പർ ആവശ്യമാണ്</string>
-    <string name="error_phone_invalid">സാധുവായ ഫോൺ നമ്പർ നൽകുക</string>
-    <string name="error_passwords_not_match">പാസ്‌വേഡുകൾ പൊരുത്തപ്പെടുന്നില്ല</string>
-    <string name="error_user_exists">ഇമെയിൽ ഇതിനകം രജിസ്റ്റർ ചെയ്തിരിക്കുന്നു. ലോഗിൻ ചെയ്യുക</string>
-    <string name="error_signup_failed">സൈൻ അപ്പ് പരാജയപ്പെട്ടു. വീണ്ടും ശ്രമിക്കുക</string>
-    <string name="error_otp_invalid">തെറ്റായ OTP. വീണ്ടും ശ്രമിക്കുക</string>
-    <string name="error_otp_expired">OTP കാലഹരണപ്പെട്ടു. പുതിയ OTP ആവശ്യപ്പെടുക</string>
 
     <!-- Home Screen -->
-    <string name="hello_user">നമസ്കാരം, %1$s! 👋</string>
     <string name="find_services">നിങ്ങളുടെ അടുത്ത് ഗൃഹ സേവനങ്ങൾ കണ്ടെത്തുക</string>
     <string name="search_hint">സേവനങ്ങൾ തിരയുക…</string>
     <string name="our_services">ഞങ്ങളുടെ സേവനങ്ങൾ</string>
@@ -106,9 +69,6 @@
     <string name="nav_profile">പ്രൊഫൈൽ</string>
     <string name="nav_dashboard">ഡാഷ്‌ബോർഡ്</string>
     <string name="nav_providers">സേവന ദാതാക്കൾ</string>
-    <string name="promo_title">ആദ്യ ബുക്കിംഗിൽ 20% കിഴിവ് നേടുക!</string>
-    <string name="promo_subtitle">ചെക്കൗട്ടിൽ QUICKFIX20 കോഡ് ഉപയോഗിക്കുക</string>
-    <string name="logout">ലോഗ് ഔട്ട്</string>
 
     <!-- List Your Business -->
     <string name="list_business_title">നിങ്ങളുടെ ബിസിനസ്സ് ലിസ്റ്റ് ചെയ്യുക</string>
@@ -116,71 +76,19 @@
     <string name="list_business_cta">ആരംഭിക്കുക</string>
 
     <!-- Bookings Screen -->
-    <string name="booking_title">എന്റെ ബുക്കിംഗ്</string>
-    <string name="booking_empty">ബുക്കിംഗുകൾ ഒന്നും കണ്ടെത്തിയില്ല</string>
-    <string name="booking_status_pending">തീർപ്പാക്കാത്തത്</string>
-    <string name="booking_status_confirmed">സ്ഥിരീകരിച്ചു</string>
-    <string name="booking_status_completed">പൂർത്തിയായി</string>
-    <string name="booking_status_cancelled">റദ്ദാക്കി</string>
-    <string name="booking_cancel">ബുക്കിംഗ് റദ്ദാക്കുക</string>
-    <string name="booking_reschedule">പുനഃക്രമീകരിക്കുക</string>
-    <string name="booking_view_details">വിശദാംശങ്ങൾ കാണുക</string>
 
     <!-- Provider Onboarding -->
-    <string name="onboarding_title">QuickFix ഉപയോഗിച്ച് നിങ്ങളുടെ ബിസിനസ്സ് വളർത്തുക</string>
-    <string name="onboarding_benefit_1">✅  അടുത്തുള്ള ഉപഭോക്താക്കളെ ലഭിക്കുക</string>
-    <string name="onboarding_benefit_2">✅  ബുക്കിംഗ് എളുപ്പത്തിൽ കൈകാര്യം ചെയ്യുക</string>
-    <string name="onboarding_benefit_3">✅  ദൃശ്യമായ സ്ഥാനം വർദ്ധിപ്പിക്കുക</string>
-    <string name="onboarding_benefit_4">✅  മുൻകൂർ ചെലവ് ഇല്ല</string>
-    <string name="onboarding_terms_title">നിബന്ധനകളും വ്യവസ്ഥകളും</string>
-    <string name="onboarding_terms_agree">നിബന്ധനകളും വ്യവസ്ഥകളും സമ്മതിക്കുന്നു</string>
-    <string name="onboarding_hint_business_name">ബിസിനസ്സ് പേര് *</string>
-    <string name="onboarding_hint_owner_name">ഉടമസ്ഥന്റെ പേര് *</string>
-    <string name="onboarding_hint_phone">ഫോൺ നമ്പർ *</string>
-    <string name="onboarding_hint_email">ഇമെയിൽ വിലാസം *</string>
-    <string name="onboarding_hint_address">ബിസിനസ്സ് വിലാസം / സ്ഥലം *</string>
-    <string name="onboarding_hint_experience">അനുഭവ വർഷങ്ങൾ *</string>
-    <string name="onboarding_hint_description">ബിസിനസ്സ് വിവരണം (ഐച്ഛികം)</string>
-    <string name="onboarding_hint_city">നഗരം *</string>
-    <string name="onboarding_service_category">സേവന വിഭാഗം *</string>
-    <string name="onboarding_section_details">ബിസിനസ്സ് വിവരങ്ങൾ</string>
-    <string name="onboarding_screen_title">സേവന ദാതാവ് ആകുക</string>
-    <string name="onboarding_screen_subtitle">നിങ്ങളുടെ ബിസിനസ്സ് സൗജന്യമായി ലിസ്റ്റ് ചെയ്യുക</string>
-    <string name="onboarding_upload_id">📎  ID / തെളിവ് അപ്‌ലോഡ് ചെയ്യുക (ആവശ്യം)</string>
-    <string name="onboarding_upload_business_img">🖼️  ബിസിനസ്സ് ചിത്രം ചേർക്കുക (ഐച്ഛികം)</string>
-    <string name="onboarding_submit">അപേക്ഷ സമർപ്പിക്കുക</string>
-    <string name="onboarding_success_title">അപേക്ഷ സമർപ്പിച്ചു! 🎉</string>
-    <string name="onboarding_success_msg">ഞങ്ങളുടെ ടീം 24–48 മണിക്കൂറിനുള്ളിൽ നിങ്ങളെ ബന്ധപ്പെടും.</string>
-    <string name="onboarding_back_home">ഹോമിലേക്ക് മടങ്ങുക</string>
 
     <!-- Provider Application Validation -->
-    <string name="error_business_name_required">ബിസിനസ്സ് പേര് ആവശ്യമാണ്</string>
-    <string name="error_owner_name_required">ഉടമസ്ഥന്റെ പേര് ആവശ്യമാണ്</string>
-    <string name="error_category_required">ഒരു സേവന വിഭാഗം തിരഞ്ഞെടുക്കുക</string>
-    <string name="error_city_required">നഗരം ആവശ്യമാണ്</string>
-    <string name="error_experience_required">അനുഭവ വർഷങ്ങൾ ആവശ്യമാണ്</string>
-    <string name="error_description_required">ബിസിനസ്സ് വിവരണം ആവശ്യമാണ്</string>
-    <string name="error_terms_not_accepted">നിബന്ധനകൾ വായിച്ച് അംഗീകരിക്കുക</string>
-    <string name="error_duplicate_application">നിങ്ങളുടെ അപേക്ഷ ഇതിനകം ലംബിതമോ അനുമതി ലഭിച്ചതോ ആണ്</string>
     <string name="error_network_retry">നെറ്റ്‌വർക്ക് പിശക്. വീണ്ടും ശ്രമിക്കുക.</string>
 
     <!-- Admin Provider Approval -->
-    <string name="admin_approval_title">സേവന ദാതാക്കളുടെ അപേക്ഷകൾ</string>
-    <string name="admin_approval_subtitle">സേവന ദാതാക്കളുടെ അഭ്യർത്ഥനകൾ അവലോകനം ചെയ്യുക</string>
     <string name="approve_success">സേവന ദാതാവിന്റെ അപേക്ഷ വിജയകരമായി അനുമതി നൽകി</string>
     <string name="reject_success">സേവന ദാതാവിന്റെ അപേക്ഷ നിരസിക്കപ്പെട്ടു</string>
     <string name="reject_dialog_title">അപേക്ഷ നിരസിക്കുക</string>
     <string name="reject_dialog_message">നിരസിക്കലിനുള്ള കാരണം നൽകുക:</string>
     <string name="reject_reason_hint">നിരസിക്കൽ കാരണം നൽകുക…</string>
     <string name="error_reject_reason_empty">നിരസിക്കൽ കാരണം ആവശ്യമാണ്</string>
-    <string name="approval_details_title">അപേക്ഷ വിശദാംശങ്ങൾ</string>
-    <string name="approval_approve_btn">അനുമതി നൽകുക</string>
-    <string name="approval_reject_btn">നിരസിക്കുക</string>
-    <string name="approval_close_btn">അടയ്ക്കുക</string>
-    <string name="approval_tap_to_view">കാണാൻ ടാപ്പ് ചെയ്യുക</string>
-    <string name="status_pending">തീർപ്പാക്കാത്തത്</string>
-    <string name="status_approved">അനുമതി ലഭിച്ചു</string>
-    <string name="status_rejected">നിരസിക്കപ്പെട്ടു</string>
 
     <!-- Profile Screen -->
     <string name="profile_title">എന്റെ പ്രൊഫൈൽ</string>
@@ -239,7 +147,5 @@
     <string name="settings_delete_account">അക്കൗണ്ട് ഇല്ലാതാക്കുക</string>
 
     <!-- Provider Dashboard -->
-    <string name="provider_app_title">സേവന ദാതാവ് ആകുക</string>
-    <string name="provider_app_subtitle">QuickFix ഉപയോഗിച്ച് സമ്പാദിക്കാൻ ആരംഭിക്കുക</string>
 </resources>
 

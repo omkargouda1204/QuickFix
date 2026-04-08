@@ -10,7 +10,6 @@
          APP BAR — gradient blue→indigo header
          ═══════════════════════════════════════════════════════════ -->
     <com.google.android.material.appbar.AppBarLayout
-        android:id="@+id/adminAppBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_admin_header_gradient"
@@ -24,7 +23,6 @@
 
             <!-- Left: App name + subtitle -->
             <LinearLayout
-                android:id="@+id/headerTitles"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -120,7 +118,6 @@
          MAIN SCROLLABLE CONTENT
          ═══════════════════════════════════════════════════════════ -->
     <androidx.core.widget.NestedScrollView
-        android:id="@+id/adminScrollView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
@@ -441,7 +438,6 @@
             </LinearLayout>
 
             <LinearLayout
-                android:id="@+id/adminContentSection"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"

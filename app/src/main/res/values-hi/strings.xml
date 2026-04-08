@@ -7,10 +7,8 @@
 <resources>
     <!-- App -->
     <string name="app_name">QuickFix</string>
-    <string name="welcome_text">QuickFix में आपका स्वागत है</string>
 
     <!-- Login Screen -->
-    <string name="login_title">लॉगिन</string>
     <string name="welcome_back">वापसी पर स्वागत है!</string>
     <string name="login_subtitle">जारी रखने के लिए साइन इन करें</string>
     <string name="email_hint">ईमेल पता</string>
@@ -24,57 +22,22 @@
 
     <!-- Forgot Password -->
     <string name="forgot_password_title">पासवर्ड भूल गए</string>
-    <string name="forgot_password_subtitle">पासवर्ड रीसेट लिंक पाने के लिए ईमेल दर्ज करें</string>
-    <string name="send_otp">OTP भेजें</string>
-    <string name="enter_otp">OTP दर्ज करें</string>
-    <string name="verify_otp">OTP सत्यापित करें</string>
-    <string name="new_password">नया पासवर्ड</string>
     <string name="confirm_password">पासवर्ड की पुष्टि करें</string>
-    <string name="reset_password">पासवर्ड रीसेट करें</string>
     <string name="back_to_login">लॉगिन पर वापस जाएं</string>
 
     <!-- Validation -->
-    <string name="error_email_required">ईमेल आवश्यक है</string>
-    <string name="error_invalid_email">वैध ईमेल दर्ज करें</string>
-    <string name="error_password_required">पासवर्ड आवश्यक है</string>
-    <string name="error_password_length">पासवर्ड कम से कम 6 अक्षर का होना चाहिए</string>
-    <string name="error_login_failed">लॉगिन विफल हुआ। पुनः प्रयास करें</string>
-    <string name="error_network">नेटवर्क त्रुटि। अपना कनेक्शन जांचें</string>
-    <string name="success_login">लॉगिन सफल!</string>
-    <string name="otp_sent">आपके ईमेल पर OTP भेजा गया</string>
-    <string name="password_reset_success">पासवर्ड सफलतापूर्वक रीसेट हुआ</string>
 
     <!-- OTP Verification -->
-    <string name="otp_verification_title">ईमेल सत्यापित करें</string>
-    <string name="otp_verification_subtitle">अपने ईमेल पर भेजा गया OTP दर्ज करें</string>
-    <string name="otp_code_hint">6 अंकों का OTP दर्ज करें</string>
-    <string name="verify_button">सत्यापित करें</string>
-    <string name="resend_otp">OTP पुनः भेजें</string>
-    <string name="otp_verified">ईमेल सफलतापूर्वक सत्यापित!</string>
-    <string name="account_created">खाता सफलतापूर्वक बनाया गया!</string>
 
     <!-- Registration -->
     <string name="registration_title">खाता बनाएं</string>
-    <string name="welcome_new_user">QuickFix में आपका स्वागत है!</string>
     <string name="registration_subtitle">हमारे समुदाय से जुड़ें</string>
     <string name="full_name_hint">पूरा नाम</string>
-    <string name="phone_hint">फोन नंबर</string>
     <string name="signup_button">साइन अप</string>
-    <string name="google_sign_up">Google से साइन अप करें</string>
     <string name="have_account">पहले से खाता है?</string>
     <string name="login_here">यहां लॉगिन करें</string>
-    <string name="error_fullname_required">पूरा नाम आवश्यक है</string>
-    <string name="error_fullname_length">नाम कम से कम 3 अक्षर का होना चाहिए</string>
-    <string name="error_phone_required">फोन नंबर आवश्यक है</string>
-    <string name="error_phone_invalid">वैध फोन नंबर दर्ज करें</string>
-    <string name="error_passwords_not_match">पासवर्ड मेल नहीं खाते</string>
-    <string name="error_user_exists">ईमेल पहले से पंजीकृत है। कृपया लॉगिन करें</string>
-    <string name="error_signup_failed">साइन अप विफल। पुनः प्रयास करें</string>
-    <string name="error_otp_invalid">अमान्य OTP। पुनः प्रयास करें</string>
-    <string name="error_otp_expired">OTP समाप्त। नया OTP मांगें</string>
 
     <!-- Home Screen -->
-    <string name="hello_user">नमस्ते, %1$s! 👋</string>
     <string name="find_services">अपने पास घरेलू सेवाएं खोजें</string>
     <string name="search_hint">सेवाएं खोजें…</string>
     <string name="our_services">हमारी सेवाएं</string>
@@ -107,9 +70,6 @@
     <string name="nav_profile">प्रोफ़ाइल</string>
     <string name="nav_dashboard">डैशबोर्ड</string>
     <string name="nav_providers">प्रदाता</string>
-    <string name="promo_title">पहली बुकिंग पर 20% की छूट पाएं!</string>
-    <string name="promo_subtitle">चेकआउट पर QUICKFIX20 कोड का उपयोग करें</string>
-    <string name="logout">लॉग आउट</string>
 
     <!-- List Your Business Card -->
     <string name="list_business_title">अपना व्यवसाय सूचीबद्ध करें</string>
@@ -117,71 +77,19 @@
     <string name="list_business_cta">शुरू करें</string>
 
     <!-- Bookings Screen -->
-    <string name="booking_title">मेरी बुकिंग</string>
-    <string name="booking_empty">कोई बुकिंग नहीं मिली</string>
-    <string name="booking_status_pending">लंबित</string>
-    <string name="booking_status_confirmed">पुष्टि हो गई</string>
-    <string name="booking_status_completed">पूर्ण हुई</string>
-    <string name="booking_status_cancelled">रद्द</string>
-    <string name="booking_cancel">बुकिंग रद्द करें</string>
-    <string name="booking_reschedule">पुनर्निर्धारित करें</string>
-    <string name="booking_view_details">विवरण देखें</string>
 
     <!-- Provider Onboarding -->
-    <string name="onboarding_title">QuickFix के साथ अपना व्यवसाय बढ़ाएं</string>
-    <string name="onboarding_benefit_1">✅  पास के ग्राहक पाएं</string>
-    <string name="onboarding_benefit_2">✅  बुकिंग आसानी से प्रबंधित करें</string>
-    <string name="onboarding_benefit_3">✅  दृश्यता बढ़ाएं</string>
-    <string name="onboarding_benefit_4">✅  कोई अग्रिम लागत नहीं</string>
-    <string name="onboarding_terms_title">नियम एवं शर्तें</string>
-    <string name="onboarding_terms_agree">मैं नियम और शर्तों से सहमत हूं</string>
-    <string name="onboarding_hint_business_name">व्यवसाय का नाम *</string>
-    <string name="onboarding_hint_owner_name">मालिक का नाम *</string>
-    <string name="onboarding_hint_phone">फोन नंबर *</string>
-    <string name="onboarding_hint_email">ईमेल पता *</string>
-    <string name="onboarding_hint_address">व्यवसाय का पता / स्थान *</string>
-    <string name="onboarding_hint_experience">अनुभव के वर्ष *</string>
-    <string name="onboarding_hint_description">व्यवसाय विवरण (वैकल्पिक)</string>
-    <string name="onboarding_hint_city">शहर *</string>
-    <string name="onboarding_service_category">सेवा श्रेणी *</string>
-    <string name="onboarding_section_details">व्यवसाय विवरण</string>
-    <string name="onboarding_screen_title">सेवा प्रदाता बनें</string>
-    <string name="onboarding_screen_subtitle">अपना व्यवसाय मुफ़्त में सूचीबद्ध करें</string>
-    <string name="onboarding_upload_id">📎  ID / प्रमाण अपलोड करें (आवश्यक)</string>
-    <string name="onboarding_upload_business_img">🖼️  व्यवसाय छवि जोड़ें (वैकल्पिक)</string>
-    <string name="onboarding_submit">आवेदन जमा करें</string>
-    <string name="onboarding_success_title">आवेदन जमा हो गया! 🎉</string>
-    <string name="onboarding_success_msg">हमारी टीम 24–48 घंटों के भीतर आपसे संपर्क करेगी।</string>
-    <string name="onboarding_back_home">होम पर वापस जाएं</string>
 
     <!-- Provider Application Validation -->
-    <string name="error_business_name_required">व्यवसाय का नाम आवश्यक है</string>
-    <string name="error_owner_name_required">मालिक का नाम आवश्यक है</string>
-    <string name="error_category_required">कृपया एक सेवा श्रेणी चुनें</string>
-    <string name="error_city_required">शहर आवश्यक है</string>
-    <string name="error_experience_required">अनुभव के वर्ष आवश्यक हैं</string>
-    <string name="error_description_required">व्यवसाय विवरण आवश्यक है</string>
-    <string name="error_terms_not_accepted">कृपया नियम और शर्तें पढ़ें और स्वीकार करें</string>
-    <string name="error_duplicate_application">आपका एक आवेदन पहले से लंबित या स्वीकृत है</string>
     <string name="error_network_retry">नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।</string>
 
     <!-- Admin Provider Approval -->
-    <string name="admin_approval_title">प्रदाता आवेदन</string>
-    <string name="admin_approval_subtitle">प्रदाता अनुरोधों की समीक्षा करें</string>
     <string name="approve_success">प्रदाता आवेदन सफलतापूर्वक स्वीकृत</string>
     <string name="reject_success">प्रदाता आवेदन अस्वीकृत</string>
     <string name="reject_dialog_title">आवेदन अस्वीकार करें</string>
     <string name="reject_dialog_message">कृपया अस्वीकृति का कारण बताएं:</string>
     <string name="reject_reason_hint">अस्वीकृति कारण दर्ज करें…</string>
     <string name="error_reject_reason_empty">अस्वीकृति कारण आवश्यक है</string>
-    <string name="approval_details_title">आवेदन विवरण</string>
-    <string name="approval_approve_btn">स्वीकार करें</string>
-    <string name="approval_reject_btn">अस्वीकार करें</string>
-    <string name="approval_close_btn">बंद करें</string>
-    <string name="approval_tap_to_view">देखने के लिए टैप करें</string>
-    <string name="status_pending">लंबित</string>
-    <string name="status_approved">अनुमोदित</string>
-    <string name="status_rejected">अस्वीकृत</string>
 
     <!-- Profile Screen -->
     <string name="profile_title">मेरी प्रोफ़ाइल</string>
@@ -240,9 +148,6 @@
     <string name="settings_delete_account">खाता हटाएं</string>
 
     <!-- Provider Dashboard -->
-    <string name="provider_app_title">सेवा प्रदाता बनें</string>
-    <string name="provider_app_subtitle">QuickFix से कमाई शुरू करें</string>
 
     <!-- Notifications -->
-    <string name="profile_notifications_sub">अपडेट और अलर्ट प्रबंधित करें</string>
 </resources>

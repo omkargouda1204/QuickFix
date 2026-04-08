@@ -5,14 +5,10 @@
     <string name="nav_dashboard">Dashboard</string>
     <string name="nav_providers">Providers</string>
 
-    <string name="welcome_text">Welcome to QuickFix</string>
-    <string name="login_screen">Login Screen</string>
-
     <!-- Google Sign-In Web Client ID -->
     <string name="default_web_client_id">355620342349-i04r9k4i8lpv91k1e7709n26q5vrhp1f.apps.googleusercontent.com</string>
 
     <!-- Login Screen -->
-    <string name="login_title">Login</string>
     <string name="welcome_back">Welcome Back!</string>
     <string name="login_subtitle">Sign in to continue</string>
     <string name="email_hint">Email Address</string>
@@ -26,25 +22,10 @@
 
     <!-- Forgot Password -->
     <string name="forgot_password_title">Forgot Password</string>
-    <string name="forgot_password_subtitle">Enter your email to receive a password reset link</string>
-    <string name="send_otp">Send OTP</string>
-    <string name="enter_otp">Enter OTP</string>
-    <string name="verify_otp">Verify OTP</string>
-    <string name="new_password">New Password</string>
     <string name="confirm_password">Confirm Password</string>
-    <string name="reset_password">Reset Password</string>
     <string name="back_to_login">Back to Login</string>
 
     <!-- Validation Messages -->
-    <string name="error_email_required">Email is required</string>
-    <string name="error_invalid_email">Please enter a valid email</string>
-    <string name="error_password_required">Password is required</string>
-    <string name="error_password_length">Password must be at least 6 characters</string>
-    <string name="error_login_failed">Login failed. Please try again</string>
-    <string name="error_network">Network error. Please check your connection</string>
-    <string name="success_login">Login successful!</string>
-    <string name="otp_sent">OTP sent to your email</string>
-    <string name="password_reset_success">Password reset successful</string>
 
     <!-- Provider Approval Strings -->
     <string name="approve_success">Provider application approved successfully</string>
@@ -53,45 +34,20 @@
     <string name="reject_dialog_message">Please provide a reason for rejection:</string>
     <string name="reject_reason_hint">Enter rejection reason…</string>
     <string name="error_reject_reason_empty">Rejection reason is required</string>
-    <string name="approval_details_title">Application Details</string>
-    <string name="approval_approve_btn">Approve</string>
-    <string name="approval_reject_btn">Reject</string>
-    <string name="approval_close_btn">Close</string>
-    <string name="approval_tap_to_view">Tap to view image</string>
 
     <!-- Registration Screen -->
     <string name="registration_title">Create Account</string>
-    <string name="welcome_new_user">Welcome to QuickFix!</string>
     <string name="registration_subtitle">Join our community</string>
     <string name="full_name_hint">Full Name</string>
-    <string name="phone_hint">Phone Number</string>
     <string name="signup_button">Sign Up</string>
-    <string name="google_sign_up">Sign up with Google</string>
     <string name="have_account">Already have an account?</string>
     <string name="login_here">Login here</string>
 
     <!-- OTP Verification -->
-    <string name="otp_verification_title">Verify Email</string>
-    <string name="otp_verification_subtitle">Enter the OTP sent to your email</string>
-    <string name="otp_code_hint">Enter 6-digit OTP</string>
-    <string name="verify_button">Verify</string>
-    <string name="resend_otp">Resend OTP</string>
-    <string name="otp_verified">Email verified successfully!</string>
-    <string name="account_created">Account created successfully!</string>
 
     <!-- Validation Messages -->
-    <string name="error_fullname_required">Full name is required</string>
-    <string name="error_fullname_length">Name must be at least 3 characters</string>
-    <string name="error_phone_required">Phone number is required</string>
-    <string name="error_phone_invalid">Please enter a valid phone number</string>
-    <string name="error_passwords_not_match">Passwords do not match</string>
-    <string name="error_user_exists">Email already registered. Please login</string>
-    <string name="error_signup_failed">Sign up failed. Please try again</string>
-    <string name="error_otp_invalid">Invalid OTP. Please try again</string>
-    <string name="error_otp_expired">OTP expired. Please request new OTP</string>
 
     <!-- Home Screen -->
-    <string name="hello_user">Hello, %1$s! 👋</string>
     <string name="find_services">Find home services near you</string>
     <string name="search_hint">Search for services…</string>
     <string name="our_services">Our Services</string>
@@ -100,22 +56,6 @@
     <string name="quick_actions">Quick Actions</string>
     <string name="book_service">Book Service</string>
     <string name="emergency_help">Emergency Help</string>
-    <string name="emergency_help_title">Emergency Help</string>
-    <string name="emergency_help_subtitle">Fast access to nearby providers when every second matters.</string>
-    <string name="emergency_quick_categories">Quick categories</string>
-    <string name="emergency_nearby_providers">Nearby providers</string>
-    <string name="emergency_location_unavailable">Location unavailable</string>
-    <string name="emergency_location_focus">focus</string>
-    <string name="emergency_assigned_prefix">Assigned:</string>
-    <string name="emergency_ready">Emergency ready</string>
-    <string name="emergency_no_providers_title">No emergency-ready providers found</string>
-    <string name="emergency_no_providers_subtitle">Try another category or widen your search area. We’ll still show the fastest available options when they appear.</string>
-    <string name="emergency_retry">Retry</string>
-    <string name="emergency_request_sent">Emergency request sent.</string>
-    <string name="emergency_call_unavailable">Phone number unavailable for this provider.</string>
-    <string name="emergency_chat_coming_soon">Chat support for emergency assistance is coming soon. You can call or book now for faster help.</string>
-    <string name="emergency_request_login_required">Please log in again to request emergency help.</string>
-    <string name="emergency_request_failed">Could not load emergency providers. Please try again.</string>
     <string name="track_booking">Track Booking</string>
     <string name="cat_plumbing">Plumbing</string>
     <string name="cat_electrical">Electrical</string>
@@ -139,8 +79,6 @@
     <string name="nav_messages">Messages</string>
     <string name="nav_profile">Profile</string>
     <string name="rating_label">4.8 ★</string>
-    <string name="promo_title">Get 20% off your first booking!</string>
-    <string name="promo_subtitle">Use code QUICKFIX20 at checkout</string>
     <string name="retry">Retry</string>
     <string name="home_banner_empty_title">No banners right now</string>
     <string name="home_banner_empty_subtitle">New promotions will appear here soon.</string>
@@ -148,7 +86,6 @@
     <string name="home_offers_empty_title">No active offers</string>
     <string name="home_offers_empty_subtitle">Check back in a while for fresh deals.</string>
     <string name="home_offers_error_message">Could not load offers. Please try again.</string>
-    <string name="home_offer_default_description">Limited time savings on your next booking.</string>
     <string name="home_offer_no_code">Code unavailable</string>
     <string name="home_offer_image">Offer image</string>
     <string name="home_offer_code_format">Code: %1$s</string>
@@ -158,7 +95,6 @@
     <string name="home_offer_code_placeholder">Code: QUICKFIX20</string>
     <string name="offer_copy_code">Copy Code</string>
     <string name="offer_code_copied">Code Copied!</string>
-    <string name="logout">Logout</string>
 
     <!-- List Your Business Card -->
     <string name="list_business_title">List Your Business</string>
@@ -166,59 +102,15 @@
     <string name="list_business_cta">Start</string>
 
     <!-- Provider Onboarding -->
-    <string name="onboarding_title">Grow your business with QuickFix</string>
-    <string name="onboarding_benefit_1">✅  Get customers near you</string>
-    <string name="onboarding_benefit_2">✅  Manage bookings easily</string>
-    <string name="onboarding_benefit_3">✅  Increase visibility</string>
-    <string name="onboarding_benefit_4">✅  No upfront cost</string>
-    <string name="onboarding_terms_title">Terms &amp; Conditions</string>
     <string name="onboarding_terms_body">TERMS AND CONDITIONS FOR SERVICE PROVIDERS\n\nLast Updated: March 1, 2026\n\nPlease read these Terms and Conditions carefully before registering as a Service Provider on the QuickFix platform. By submitting your application, you agree to be bound by these terms.\n\n━━━━━━━━━━━━━━━━━━━━━━\n1. ELIGIBILITY\n━━━━━━━━━━━━━━━━━━━━━━\n• You must be at least 18 years of age to register as a provider.\n• You must provide valid government-issued identification.\n• You must hold any licenses or certifications required for your service type.\n• You must have legal authorization to work in your jurisdiction.\n\n━━━━━━━━━━━━━━━━━━━━━━\n2. ACCURATE INFORMATION\n━━━━━━━━━━━━━━━━━━━━━━\n• All business information provided must be accurate, current, and complete.\n• You must immediately update any information that becomes outdated or inaccurate.\n• Providing false information may result in immediate account suspension or termination.\n• QuickFix reserves the right to verify all submitted information at any time.\n\n━━━━━━━━━━━━━━━━━━━━━━\n3. SERVICE QUALITY\n━━━━━━━━━━━━━━━━━━━━━━\n• You agree to deliver services as advertised and described on your profile.\n• You must maintain a professional standard of work at all times.\n• Services must be completed within the agreed timeframe with the customer.\n• You are responsible for bringing all necessary tools and materials.\n• Any substandard work must be rectified at no additional cost to the customer.\n\n━━━━━━━━━━━━━━━━━━━━━━\n4. PROFESSIONAL CONDUCT\n━━━━━━━━━━━━━━━━━━━━━━\n• Treat all customers with respect and courtesy at all times.\n• Do not engage in any form of harassment, discrimination, or abusive behavior.\n• Maintain personal hygiene and present yourself professionally.\n• Do not solicit customers for services outside the QuickFix platform.\n• Do not share customer personal data with any third party.\n\n━━━━━━━━━━━━━━━━━━━━━━\n5. COMMISSION AND PAYMENTS\n━━━━━━━━━━━━━━━━━━━━━━\n• QuickFix charges a commission on each completed booking as per the current rate card.\n• Commission rates are subject to change with 30 days advance notice.\n• Payments will be processed within 3–5 business days after service completion.\n• Any disputes regarding payments must be raised within 7 days of the transaction.\n• QuickFix is not responsible for delays caused by banking institutions.\n\n━━━━━━━━━━━━━━━━━━━━━━\n6. ACCOUNT SUSPENSION AND TERMINATION\n━━━━━━━━━━━━━━━━━━━━━━\n• QuickFix reserves the right to suspend or remove any provider account that violates these terms.\n• Repeated customer complaints may lead to account suspension pending investigation.\n• Fraudulent activity will result in immediate and permanent termination.\n• Providers may appeal suspension decisions within 14 days via support channels.\n• QuickFix may terminate any account with 30 days notice without cause.\n\n━━━━━━━━━━━━━━━━━━━━━━\n7. DATA PRIVACY\n━━━━━━━━━━━━━━━━━━━━━━\n• Your business profile and information may be displayed publicly on the platform.\n• Customer contact details shared for booking purposes must not be misused.\n• You consent to QuickFix collecting and processing your data per our Privacy Policy.\n• ID documents are stored securely and only accessible to authorized QuickFix staff.\n• You may request deletion of your data by contacting support@quickfix.app.\n\n━━━━━━━━━━━━━━━━━━━━━━\n8. EMERGENCY AND SAFETY\n━━━━━━━━━━━━━━━━━━━━━━\n• Misuse of the emergency service feature will result in immediate account removal.\n• You must ensure your own safety and the safety of customers during service delivery.\n• Any accidents on customer premises must be reported to QuickFix within 24 hours.\n• You are solely responsible for maintaining appropriate insurance coverage.\n\n━━━━━━━━━━━━━━━━━━━━━━\n9. DISPUTE RESOLUTION\n━━━━━━━━━━━━━━━━━━━━━━\n• QuickFix acts as a platform facilitator and is not liable for disputes between providers and customers.\n• All disputes should first be attempted to be resolved directly with the customer.\n• Unresolved disputes may be escalated to QuickFix support for mediation.\n• QuickFix\'s decision in mediated disputes is final and binding.\n\n━━━━━━━━━━━━━━━━━━━━━━\n10. MODIFICATIONS TO TERMS\n━━━━━━━━━━━━━━━━━━━━━━\n• QuickFix reserves the right to modify these terms at any time.\n• Continued use of the platform after changes constitutes acceptance of new terms.\n• Major changes will be communicated via email or in-app notification.\n\nBy ticking the checkbox below, you confirm that you have READ, UNDERSTOOD, and AGREE to all the Terms and Conditions stated above.\n\nFull policy: quickfix.app/terms\nSupport: support@quickfix.app</string>
-    <string name="onboarding_terms_agree">I agree to Terms &amp; Conditions</string>
-    <string name="onboarding_hint_business_name">Business Name *</string>
-    <string name="onboarding_hint_owner_name">Owner Name *</string>
-    <string name="onboarding_hint_phone">Phone Number *</string>
-    <string name="onboarding_hint_email">Email Address *</string>
-    <string name="onboarding_hint_address">Business Address / Location *</string>
-    <string name="onboarding_hint_experience">Years of Experience *</string>
-    <string name="onboarding_hint_description">Business Description (optional)</string>
-    <string name="onboarding_upload_id">📎  Upload ID / Proof (Required)</string>
-    <string name="onboarding_upload_business_img">🖼️  Add Business Image (Optional)</string>
-    <string name="onboarding_file_selected">✅  %1$s</string>
-    <string name="onboarding_img_selected">✅  %1$s</string>
-    <string name="onboarding_submit">Submit Application</string>
-    <string name="onboarding_success_title">Application Submitted! 🎉</string>
-    <string name="onboarding_success_msg">Our team will review your request and get back to you within 24–48 hours.</string>
-    <string name="onboarding_back_home">Back to Home</string>
-    <string name="onboarding_service_category">Service Category *</string>
-    <string name="onboarding_section_details">Business Details</string>
-    <string name="onboarding_success_emoji">🎉</string>
-    <string name="onboarding_hint_city">City *</string>
-    <string name="onboarding_screen_title">Become a Service Provider</string>
-    <string name="onboarding_screen_subtitle">List your business for free</string>
-    <string name="onboarding_terms_body_full">By registering as a service provider on QuickFix, you agree to the following:\n\n1. Genuine Services\n   • You must deliver genuine, high-quality services as advertised.\n   • Misrepresentation of services may result in account suspension.\n\n2. Service Quality\n   • You are fully responsible for the quality of work delivered.\n   • QuickFix is not liable for disputes between providers and customers.\n\n3. Commission Rules\n   • QuickFix may apply a platform commission on completed bookings.\n   • Commission rates will be communicated upon approval.\n\n4. Account Violations\n   • Fraudulent activity, fake reviews, or policy violations may lead to permanent removal.\n\n5. Privacy &amp; Data\n   • You must respect the privacy of customer data at all times.\n   • Do not share, sell, or misuse customer information.\n\n6. Emergency Misuse\n   • Misuse of emergency service flags will lead to immediate removal.\n\n7. Liability\n   • QuickFix platform is not liable for service disputes, damages, or losses.\n   • You accept full responsibility for your services and conduct.\n\nFull terms available at quickfix.app/terms</string>
 
     <!-- Provider Application Screen -->
-    <string name="provider_app_title">Become a Service Provider</string>
-    <string name="provider_app_subtitle">Start earning with QuickFix</string>
     <string name="provider_terms_full">PROVIDER TERMS &amp; CONDITIONS\n\nEffective Date: January 1, 2025\n\nBy submitting a provider application on QuickFix, you agree to the following terms:\n\n1. ELIGIBILITY\n   • You must be 18 years or older.\n   • You must possess the necessary skills and qualifications for the service category you apply for.\n   • You must provide accurate and truthful information in this application.\n\n2. SERVICE STANDARDS\n   • You must deliver services as described and agreed upon with customers.\n   • All work must meet professional quality standards.\n   • You must arrive on time and communicate proactively with customers.\n   • Any misrepresentation of your services may result in account suspension.\n\n3. PLATFORM COMMISSION\n   • QuickFix charges a platform commission on completed bookings.\n   • Commission rates will be communicated upon approval of your application.\n   • You agree to accept the commission structure in force at the time of booking.\n\n4. CUSTOMER DATA &amp; PRIVACY\n   • You must respect the privacy of all customer information shared with you.\n   • Customer contact details must only be used for service delivery purposes.\n   • Sharing, selling, or misusing customer data is strictly prohibited.\n\n5. PROFESSIONAL CONDUCT\n   • You must maintain professional and respectful conduct at all times.\n   • Harassment, discrimination, or abuse toward customers is grounds for immediate termination.\n   • You must not solicit customers to transact outside the QuickFix platform.\n\n6. ACCOUNT VIOLATIONS\n   • Fraudulent activity, fake reviews, or any form of deception will lead to permanent removal.\n   • Repeated complaints or low ratings may result in suspension pending review.\n   • QuickFix reserves the right to remove any provider listing that violates these guidelines.\n\n7. SAFETY &amp; LIABILITY\n   • You are responsible for your own safety and the safety of your tools and equipment.\n   • QuickFix is not liable for injuries, damages, or losses arising from your services.\n   • You agree to indemnify QuickFix against any claims arising from your conduct.\n\n8. MODIFICATIONS\n   • QuickFix may update these terms at any time.\n   • Continued use of the platform after changes constitutes acceptance of the new terms.\n\n9. TERMINATION\n   • Either party may terminate the provider relationship at any time.\n   • QuickFix may suspend or terminate accounts that violate these terms without prior notice.\n\nBy checking the agreement box, you confirm that you have read, understood, and agree to be bound by these Terms and Conditions.\n\nFor questions, contact: support@quickfix.app\nFull terms: quickfix.app/terms</string>
 
     <!-- Provider Application Validation -->
-    <string name="error_business_name_required">Business name is required</string>
-    <string name="error_owner_name_required">Owner name is required</string>
-    <string name="error_category_required">Please select a service category</string>
-    <string name="error_city_required">City is required</string>
-    <string name="error_experience_required">Years of experience is required</string>
-    <string name="error_description_required">Business description is required</string>
-    <string name="error_terms_not_accepted">Please read and accept the Terms &amp; Conditions</string>
-    <string name="error_duplicate_application">You already have a pending or approved application</string>
     <string name="error_network_retry">Network error. Please check your connection and try again.</string>
 
     <!-- Admin Provider Approval -->
-    <string name="admin_approval_title">Provider Applications</string>
-    <string name="admin_approval_subtitle">Review and manage provider requests</string>
-    <string name="status_pending">Pending</string>
-    <string name="status_approved">Approved</string>
-    <string name="status_rejected">Rejected</string>
 
     <!-- Profile Screen -->
     <string name="profile_title">My Profile</string>
@@ -232,7 +124,6 @@
     <string name="profile_list_business_sub">Start earning for FREE</string>
     <string name="profile_my_bookings">My Bookings</string>
     <string name="profile_notifications">Notifications</string>
-    <string name="profile_notifications_sub">Manage your alerts and updates</string>
     <string name="profile_language">Language</string>
     <string name="profile_dark_mode">Dark Mode</string>
     <string name="profile_help_support">Help &amp; Support</string>
@@ -247,15 +138,6 @@
     <string name="profile_version">QuickFix v1.0 · Made with ❤️</string>
 
     <!-- Bookings Screen -->
-    <string name="booking_title">My Bookings</string>
-    <string name="booking_empty">No bookings found</string>
-    <string name="booking_status_pending">Pending</string>
-    <string name="booking_status_confirmed">Confirmed</string>
-    <string name="booking_status_completed">Completed</string>
-    <string name="booking_status_cancelled">Cancelled</string>
-    <string name="booking_cancel">Cancel Booking</string>
-    <string name="booking_reschedule">Reschedule</string>
-    <string name="booking_view_details">View Details</string>
 
     <!-- Settings Screen -->
     <string name="settings_title">Settings</string>
@@ -266,12 +148,10 @@
     <string name="settings_change_password">Change Password</string>
     <string name="settings_delete_account">Delete Account</string>
     <string name="settings_delete_account_data_scope">Deletes Firebase and Supabase data</string>
-    <string name="settings_delete_account_subtitle" translatable="false">Permanent and irreversible</string>
     <string name="settings_delete_dialog_warning">This action permanently deletes your account.</string>
     <string name="settings_delete_dialog_message">The app will remove your Firebase Authentication account and all related Supabase data that belongs to this user. This cannot be undone.</string>
     <string name="settings_delete_dialog_checkbox">I understand that my account will be permanently deleted</string>
     <string name="settings_delete_dialog_title" translatable="false">Delete Account</string>
-    <string name="settings_delete_dialog_message_legacy" translatable="false">Are you sure you want to delete your account?\n\nThis action is permanent and cannot be undone.\n\n- Your profile data will be removed\n- Your bookings will be removed\n- You will be signed out immediately</string>
     <string name="settings_delete_dialog_confirm" translatable="false">Delete My Account</string>
     <string name="settings_delete_overlay_checking" translatable="false">Checking deletion eligibility...</string>
     <string name="settings_delete_overlay_profile_image" translatable="false">Deleting profile image...</string>
@@ -284,8 +164,6 @@
     <string name="settings_delete_supabase_error" translatable="false">Failed to delete your data from Supabase. Please try again.
 
 %1$s</string>
-    <string name="settings_delete_verify_error" translatable="false">Could not verify account creation time. Please try again.</string>
-    <string name="settings_delete_cooldown_error" translatable="false">Account can be deleted only after 24 hours of creation.</string>
     <string name="settings_delete_firebase_error" translatable="false">Failed to delete account. Please try again.\n\n%1$s</string>
     <string name="settings_delete_firebase_error_after_data_removed" translatable="false">Your app data was deleted, but Firebase account deletion failed. Please sign in again and retry account removal.\n\n%1$s</string>
     <string name="settings_delete_password_title" translatable="false">Confirm Your Password</string>
@@ -297,7 +175,6 @@
     <string name="settings_delete_reauth_failed" translatable="false">Re-authentication failed. Please sign in again and retry.</string>
     <string name="settings_delete_google_reauth_failed" translatable="false">Could not re-authenticate with Google. Please sign in again and retry.</string>
     <string name="settings_delete_success" translatable="false">Your account and related data were permanently deleted.</string>
-    <string name="settings_delete_partial_failure" translatable="false">Account deleted, but some app data cleanup failed. Please contact support.</string>
 
     <!-- Profile placeholders -->
     <string name="profile_avatar_initial">U</string>
@@ -317,7 +194,6 @@
     <string name="cd_back">Back</string>
     <string name="cd_edit_profile">Edit Profile</string>
     <string name="cd_profile_photo">Profile Photo</string>
-    <string name="cd_change_photo">Change photo</string>
     <string name="cd_name">Name</string>
     <string name="cd_email">Email</string>
     <string name="cd_phone">Phone</string>
@@ -344,7 +220,6 @@
     <string name="pd_change_photo_hint">Tap avatar to change photo</string>
     <string name="pd_edit_before_photo">Tap Edit Profile before changing photo.</string>
     <string name="pd_uploading_photo">Uploading photo...</string>
-    <string name="pd_photo_upload_failed">Photo upload failed. Please try again.</string>
     <string name="pd_photo_source_title">Update profile photo</string>
     <string name="pd_photo_source_gallery">Choose from gallery</string>
     <string name="pd_photo_source_camera">Take a photo</string>
@@ -353,11 +228,8 @@
     <string name="pd_camera_permission_denied">Camera permission denied. Please allow access to take a photo.</string>
     <string name="pd_camera_unavailable">Unable to open camera. Please try again.</string>
     <string name="pd_camera_capture_cancelled">Camera capture cancelled.</string>
-    <string name="pd_saving">Saving...</string>
     <string name="pd_saved_ok">Profile saved successfully.</string>
     <string name="pd_saved_with_photo_ok">Profile photo uploaded and profile updated.</string>
-    <string name="pd_save_http_error">Save failed (HTTP %1$d). Please try again.</string>
     <string name="pd_load_http_error">Could not load profile (HTTP %1$d).</string>
-    <string name="pd_network_error">Network error. Check your connection and try again.</string>
     <string name="pd_network_showing_cached">Network error. Showing cached profile data.</string>
 </resources>

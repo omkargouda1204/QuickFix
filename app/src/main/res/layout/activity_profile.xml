@@ -22,7 +22,6 @@
 
             <!-- ═══════════════════ GRADIENT HEADER ═══════════════════ -->
             <RelativeLayout
-                android:id="@+id/profileHeader"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_profile_header_gradient"

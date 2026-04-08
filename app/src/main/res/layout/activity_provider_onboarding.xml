@@ -8,7 +8,6 @@
 
     <!-- ══ GRADIENT APP BAR ══ -->
     <com.google.android.material.appbar.AppBarLayout
-        android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_onboarding_header"
@@ -454,7 +453,6 @@
 
                     <!-- ── Description (Optional) ── -->
                     <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilDescription"
                         style="@style/Widget.QuickFix.TextInputLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -760,7 +758,6 @@
                         android:layout_marginBottom="14dp">
 
                         <TextView
-                            android:id="@+id/termsTextView"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:padding="16dp"
