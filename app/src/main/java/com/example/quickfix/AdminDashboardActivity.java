@@ -6,10 +6,12 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -18,15 +20,32 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager2.widget.ViewPager2;
 
+import com.example.quickfix.adapters.HomeBannerAdapter;
+import com.example.quickfix.adapters.HomeOfferAdapter;
+import com.example.quickfix.api.BannerApi;
+import com.example.quickfix.api.OfferApi;
+import com.example.quickfix.api.RetrofitProvider;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.tbuonomo.viewpagerdotsindicator.WormDotsIndicator;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 import java.util.concurrent.TimeUnit;
 
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 import okhttp3.OkHttpClient;
 
 /**
@@ -46,6 +65,7 @@ public class AdminDashboardActivity extends BaseActivity {
 
     private static final String TAG = "AdminDashboard";
     private static final int LOCATION_PERMISSION_REQ = 2101;
+    private static final long ADMIN_BANNER_AUTO_SCROLL_MS = 3500L;
 
     // ── Header views ─────────────────────────────────────────────────────
     private TextView  welcomeText, avatarInitial;
@@ -88,6 +108,28 @@ public class AdminDashboardActivity extends BaseActivity {
     private TextView tvAdminSelectedLocation;
     private AppLocationManager locationManager;
 
+    // ── Admin content preview (banners + offers) ─────────────────────────
+    private BannerApi bannerApi;
+    private OfferApi offerApi;
+    private ViewPager2 vpAdminBanners;
+    private WormDotsIndicator adminBannerDots;
+    private RecyclerView rvAdminOffers;
+    private ProgressBar progressAdminBanners;
+    private ProgressBar progressAdminOffers;
+    private TextView tvAdminBannersEmpty;
+    private TextView tvAdminOffersEmpty;
+    private TextView tvAdminBannersError;
+    private TextView tvAdminOffersError;
+    private View layoutAdminBannersError;
+    private View layoutAdminOffersError;
+    private MaterialButton btnRetryAdminBanners;
+    private MaterialButton btnRetryAdminOffers;
+    private HomeBannerAdapter adminBannerAdapter;
+    private HomeOfferAdapter adminOfferAdapter;
+    private final List<Banner> adminBanners = new ArrayList<>();
+    private final List<Offer> adminOffers = new ArrayList<>();
+    private Runnable adminBannerAutoSlideRunnable;
+
     // ═════════════════════════════════════════════════════════════════════
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,14 +138,18 @@ public class AdminDashboardActivity extends BaseActivity {
 
         mAuth = FirebaseAuth.getInstance();
         locationManager = new AppLocationManager(this);
+        bannerApi = RetrofitProvider.get().create(BannerApi.class);
+        offerApi = RetrofitProvider.get().create(OfferApi.class);
 
         bindViews();
         setupHeaderFromIntent();
         setupClickListeners();
         setupBottomNavigation();
         setupLocationSelector();
+        setupAdminHomeContent();
         loadAdminNameFromSupabase();
         loadQuickStats();
+        refreshAdminHomeContent();
 
         // Handle back press with AndroidX dispatcher (replaces deprecated onBackPressed)
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
@@ -151,10 +197,356 @@ public class AdminDashboardActivity extends BaseActivity {
         adminLocationSelector = findViewById(R.id.adminLocationSelector);
         tvAdminSelectedLocation = findViewById(R.id.tvAdminSelectedLocation);
 
+        vpAdminBanners = findViewById(R.id.vpAdminBanners);
+        adminBannerDots = findViewById(R.id.adminBannerDots);
+        rvAdminOffers = findViewById(R.id.rvAdminOffers);
+        progressAdminBanners = findViewById(R.id.progressAdminBanners);
+        progressAdminOffers = findViewById(R.id.progressAdminOffers);
+        tvAdminBannersEmpty = findViewById(R.id.tvAdminBannersEmpty);
+        tvAdminOffersEmpty = findViewById(R.id.tvAdminOffersEmpty);
+        tvAdminBannersError = findViewById(R.id.tvAdminBannersError);
+        tvAdminOffersError = findViewById(R.id.tvAdminOffersError);
+        layoutAdminBannersError = findViewById(R.id.layoutAdminBannersError);
+        layoutAdminOffersError = findViewById(R.id.layoutAdminOffersError);
+        btnRetryAdminBanners = findViewById(R.id.btnRetryAdminBanners);
+        btnRetryAdminOffers = findViewById(R.id.btnRetryAdminOffers);
+
         // Keep badges hidden until unread counts load.
         if (notificationBadge != null) notificationBadge.setVisibility(View.GONE);
         if (providerSectionBadge != null) providerSectionBadge.setVisibility(View.GONE);
         if (userSectionBadge != null) userSectionBadge.setVisibility(View.GONE);
+    }
+
+    private void setupAdminHomeContent() {
+        adminBannerAdapter = new HomeBannerAdapter(this, adminBanners, banner -> {
+            // Dashboard preview only; management actions remain in content management screens.
+        });
+        if (vpAdminBanners != null) {
+            vpAdminBanners.setAdapter(adminBannerAdapter);
+        }
+
+        adminOfferAdapter = new HomeOfferAdapter(this, adminOffers, offer -> {
+            // Dashboard preview only.
+        });
+        if (rvAdminOffers != null) {
+            rvAdminOffers.setLayoutManager(new LinearLayoutManager(this));
+            rvAdminOffers.setAdapter(adminOfferAdapter);
+        }
+
+        if (btnRetryAdminBanners != null) {
+            btnRetryAdminBanners.setOnClickListener(v -> loadAdminBanners());
+        }
+        if (btnRetryAdminOffers != null) {
+            btnRetryAdminOffers.setOnClickListener(v -> loadAdminOffers());
+        }
+    }
+
+    private void refreshAdminHomeContent() {
+        loadAdminBanners();
+        loadAdminOffers();
+    }
+
+    private void loadAdminBanners() {
+        if (bannerApi == null) return;
+        setAdminBannersLoading(true);
+
+        bannerApi.getAllBanners(
+                BuildConfig.SUPABASE_ANON_KEY,
+                "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                "*",
+                "created_at.desc"
+        ).enqueue(new Callback<List<Banner>>() {
+            @Override
+            public void onResponse(Call<List<Banner>> call, Response<List<Banner>> response) {
+                if (!response.isSuccessful()) {
+                    showAdminBannersError("Failed to load banners");
+                    return;
+                }
+
+                List<Banner> payload = response.body() == null ? new ArrayList<>() : response.body();
+                List<Banner> filtered = filterAdminBanners(payload);
+
+                adminBanners.clear();
+                adminBanners.addAll(filtered);
+                if (adminBannerAdapter != null) adminBannerAdapter.setItems(adminBanners);
+
+                if (adminBanners.isEmpty()) {
+                    showAdminBannersEmpty();
+                } else {
+                    showAdminBannersContent();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<List<Banner>> call, Throwable t) {
+                Log.w(TAG, "loadAdminBanners failed", t);
+                showAdminBannersError("Network error while loading banners");
+            }
+        });
+    }
+
+    private void loadAdminOffers() {
+        if (offerApi == null) return;
+        setAdminOffersLoading(true);
+
+        offerApi.getAllOffers(
+                BuildConfig.SUPABASE_ANON_KEY,
+                "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                "*",
+                "created_at.desc"
+        ).enqueue(new Callback<List<Offer>>() {
+            @Override
+            public void onResponse(Call<List<Offer>> call, Response<List<Offer>> response) {
+                if (!response.isSuccessful()) {
+                    showAdminOffersError("Failed to load offers");
+                    return;
+                }
+
+                List<Offer> payload = response.body() == null ? new ArrayList<>() : response.body();
+                List<Offer> filtered = filterAdminOffers(payload);
+
+                adminOffers.clear();
+                adminOffers.addAll(filtered);
+                if (adminOfferAdapter != null) adminOfferAdapter.setItems(adminOffers);
+
+                if (adminOffers.isEmpty()) {
+                    showAdminOffersEmpty();
+                } else {
+                    showAdminOffersContent();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<List<Offer>> call, Throwable t) {
+                Log.w(TAG, "loadAdminOffers failed", t);
+                showAdminOffersError("Network error while loading offers");
+            }
+        });
+    }
+
+    private List<Banner> filterAdminBanners(List<Banner> source) {
+        List<Banner> out = new ArrayList<>();
+        FirebaseUser user = mAuth != null ? mAuth.getCurrentUser() : null;
+        String uid = user != null ? safe(user.getUid()) : "";
+        String email = user != null ? safe(user.getEmail()) : "";
+
+        for (Banner banner : source) {
+            if (!isBannerVisible(banner)) continue;
+            if (!isCreatedByCurrentAdmin(
+                    banner != null ? banner.createdBy : "",
+                    banner != null ? banner.createdByUid : "",
+                    banner != null ? banner.createdByEmail : "",
+                    uid,
+                    email
+            )) continue;
+            normalizeBannerImage(banner);
+            out.add(banner);
+        }
+        return out;
+    }
+
+    private List<Offer> filterAdminOffers(List<Offer> source) {
+        List<Offer> out = new ArrayList<>();
+        FirebaseUser user = mAuth != null ? mAuth.getCurrentUser() : null;
+        String uid = user != null ? safe(user.getUid()) : "";
+        String email = user != null ? safe(user.getEmail()) : "";
+
+        for (Offer offer : source) {
+            if (!isOfferVisible(offer)) continue;
+            if (!isCreatedByCurrentAdmin(
+                    offer != null ? offer.createdBy : "",
+                    offer != null ? offer.createdByUid : "",
+                    offer != null ? offer.createdByEmail : "",
+                    uid,
+                    email
+            )) continue;
+            out.add(offer);
+        }
+        return out;
+    }
+
+    private boolean isCreatedByCurrentAdmin(String createdBy,
+                                            String createdByUid,
+                                            String createdByEmail,
+                                            String currentUid,
+                                            String currentEmail) {
+        String by = safe(createdBy);
+        String byUid = safe(createdByUid);
+        String byEmail = safe(createdByEmail);
+
+        // Backward compatibility: older rows may not carry creator metadata.
+        if (by.isEmpty() && byUid.isEmpty() && byEmail.isEmpty()) {
+            return true;
+        }
+
+        if (!currentUid.isEmpty() && (currentUid.equalsIgnoreCase(byUid) || currentUid.equalsIgnoreCase(by))) {
+            return true;
+        }
+        if (!currentEmail.isEmpty() && (currentEmail.equalsIgnoreCase(byEmail) || currentEmail.equalsIgnoreCase(by))) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean hasStarted(String date) {
+        if (TextUtils.isEmpty(date)) return true;
+        String normalized = date.trim().length() >= 10 ? date.trim().substring(0, 10) : date.trim();
+        try {
+            Date start = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(normalized);
+            if (start == null) return true;
+
+            java.util.Calendar startDay = java.util.Calendar.getInstance();
+            startDay.setTime(start);
+            startDay.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            startDay.set(java.util.Calendar.MINUTE, 0);
+            startDay.set(java.util.Calendar.SECOND, 0);
+            startDay.set(java.util.Calendar.MILLISECOND, 0);
+
+            java.util.Calendar today = java.util.Calendar.getInstance();
+            today.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            today.set(java.util.Calendar.MINUTE, 0);
+            today.set(java.util.Calendar.SECOND, 0);
+            today.set(java.util.Calendar.MILLISECOND, 0);
+
+            return !startDay.after(today);
+        } catch (Exception ignore) {
+            return true;
+        }
+    }
+
+    private boolean isExpired(String date) {
+        if (TextUtils.isEmpty(date)) return false;
+        String normalized = date.trim().length() >= 10 ? date.trim().substring(0, 10) : date.trim();
+        try {
+            Date expiry = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(normalized);
+            if (expiry == null) return false;
+
+            java.util.Calendar expiryDay = java.util.Calendar.getInstance();
+            expiryDay.setTime(expiry);
+            expiryDay.set(java.util.Calendar.HOUR_OF_DAY, 23);
+            expiryDay.set(java.util.Calendar.MINUTE, 59);
+            expiryDay.set(java.util.Calendar.SECOND, 59);
+            expiryDay.set(java.util.Calendar.MILLISECOND, 999);
+            return expiryDay.getTimeInMillis() < System.currentTimeMillis();
+        } catch (Exception ignore) {
+            return false;
+        }
+    }
+
+    private boolean isBannerVisible(Banner banner) {
+        return banner != null && banner.isActive && hasStarted(banner.startDate) && !isExpired(banner.expiryDate);
+    }
+
+    private boolean isOfferVisible(Offer offer) {
+        return offer != null && offer.isActive && !isExpired(offer.expiryDate);
+    }
+
+    private void normalizeBannerImage(Banner banner) {
+        if (banner == null || TextUtils.isEmpty(banner.imageUrl)) return;
+        if (!banner.imageUrl.startsWith("http")) {
+            banner.imageUrl = SupabaseStorageHelper.getPublicObjectUrl("banner-images", banner.imageUrl);
+        }
+    }
+
+    private void setAdminBannersLoading(boolean loading) {
+        if (progressAdminBanners != null) progressAdminBanners.setVisibility(loading ? View.VISIBLE : View.GONE);
+        if (vpAdminBanners != null) vpAdminBanners.setVisibility(loading ? View.GONE : vpAdminBanners.getVisibility());
+        if (tvAdminBannersEmpty != null && loading) tvAdminBannersEmpty.setVisibility(View.GONE);
+        if (layoutAdminBannersError != null && loading) layoutAdminBannersError.setVisibility(View.GONE);
+        if (loading) stopAdminBannerAutoSlide();
+    }
+
+    private void setAdminOffersLoading(boolean loading) {
+        if (progressAdminOffers != null) progressAdminOffers.setVisibility(loading ? View.VISIBLE : View.GONE);
+        if (rvAdminOffers != null && loading) rvAdminOffers.setVisibility(View.GONE);
+        if (tvAdminOffersEmpty != null && loading) tvAdminOffersEmpty.setVisibility(View.GONE);
+        if (layoutAdminOffersError != null && loading) layoutAdminOffersError.setVisibility(View.GONE);
+    }
+
+    private void showAdminBannersContent() {
+        if (progressAdminBanners != null) progressAdminBanners.setVisibility(View.GONE);
+        if (layoutAdminBannersError != null) layoutAdminBannersError.setVisibility(View.GONE);
+        if (tvAdminBannersEmpty != null) tvAdminBannersEmpty.setVisibility(View.GONE);
+        if (vpAdminBanners != null) vpAdminBanners.setVisibility(View.VISIBLE);
+
+        if (adminBannerDots != null) {
+            if (adminBanners.size() > 1 && vpAdminBanners != null) {
+                adminBannerDots.setVisibility(View.VISIBLE);
+                try {
+                    adminBannerDots.setViewPager2(vpAdminBanners);
+                } catch (Exception e) {
+                    Log.w(TAG, "adminBannerDots bind failed: " + e.getMessage());
+                }
+            } else {
+                adminBannerDots.setVisibility(View.GONE);
+            }
+        }
+
+        startAdminBannerAutoSlide();
+    }
+
+    private void showAdminBannersEmpty() {
+        if (progressAdminBanners != null) progressAdminBanners.setVisibility(View.GONE);
+        if (vpAdminBanners != null) vpAdminBanners.setVisibility(View.GONE);
+        if (adminBannerDots != null) adminBannerDots.setVisibility(View.GONE);
+        if (layoutAdminBannersError != null) layoutAdminBannersError.setVisibility(View.GONE);
+        if (tvAdminBannersEmpty != null) tvAdminBannersEmpty.setVisibility(View.VISIBLE);
+        stopAdminBannerAutoSlide();
+    }
+
+    private void showAdminBannersError(String message) {
+        if (progressAdminBanners != null) progressAdminBanners.setVisibility(View.GONE);
+        if (vpAdminBanners != null) vpAdminBanners.setVisibility(View.GONE);
+        if (adminBannerDots != null) adminBannerDots.setVisibility(View.GONE);
+        if (tvAdminBannersEmpty != null) tvAdminBannersEmpty.setVisibility(View.GONE);
+        if (tvAdminBannersError != null) tvAdminBannersError.setText(TextUtils.isEmpty(message) ? "Failed to load banners" : message);
+        if (layoutAdminBannersError != null) layoutAdminBannersError.setVisibility(View.VISIBLE);
+        stopAdminBannerAutoSlide();
+    }
+
+    private void showAdminOffersContent() {
+        if (progressAdminOffers != null) progressAdminOffers.setVisibility(View.GONE);
+        if (layoutAdminOffersError != null) layoutAdminOffersError.setVisibility(View.GONE);
+        if (tvAdminOffersEmpty != null) tvAdminOffersEmpty.setVisibility(View.GONE);
+        if (rvAdminOffers != null) rvAdminOffers.setVisibility(View.VISIBLE);
+    }
+
+    private void showAdminOffersEmpty() {
+        if (progressAdminOffers != null) progressAdminOffers.setVisibility(View.GONE);
+        if (rvAdminOffers != null) rvAdminOffers.setVisibility(View.GONE);
+        if (layoutAdminOffersError != null) layoutAdminOffersError.setVisibility(View.GONE);
+        if (tvAdminOffersEmpty != null) tvAdminOffersEmpty.setVisibility(View.VISIBLE);
+    }
+
+    private void showAdminOffersError(String message) {
+        if (progressAdminOffers != null) progressAdminOffers.setVisibility(View.GONE);
+        if (rvAdminOffers != null) rvAdminOffers.setVisibility(View.GONE);
+        if (tvAdminOffersEmpty != null) tvAdminOffersEmpty.setVisibility(View.GONE);
+        if (tvAdminOffersError != null) tvAdminOffersError.setText(TextUtils.isEmpty(message) ? "Failed to load offers" : message);
+        if (layoutAdminOffersError != null) layoutAdminOffersError.setVisibility(View.VISIBLE);
+    }
+
+    private void startAdminBannerAutoSlide() {
+        stopAdminBannerAutoSlide();
+        if (vpAdminBanners == null || adminBanners.size() < 2) return;
+
+        adminBannerAutoSlideRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (vpAdminBanners == null || adminBanners.isEmpty()) return;
+                int next = (vpAdminBanners.getCurrentItem() + 1) % adminBanners.size();
+                vpAdminBanners.setCurrentItem(next, true);
+                mainH.postDelayed(this, ADMIN_BANNER_AUTO_SCROLL_MS);
+            }
+        };
+        mainH.postDelayed(adminBannerAutoSlideRunnable, ADMIN_BANNER_AUTO_SCROLL_MS);
+    }
+
+    private void stopAdminBannerAutoSlide() {
+        if (adminBannerAutoSlideRunnable != null) {
+            mainH.removeCallbacks(adminBannerAutoSlideRunnable);
+            adminBannerAutoSlideRunnable = null;
+        }
     }
 
     private void setupLocationSelector() {
@@ -522,10 +914,17 @@ public class AdminDashboardActivity extends BaseActivity {
         super.onResume();
         loadQuickStats();
         loadNotificationBadges();
+        refreshAdminHomeContent();
         if (tvAdminSelectedLocation != null) {
             String savedLabel = locationManager.getSavedLocationLabel();
             tvAdminSelectedLocation.setText(savedLabel.isEmpty() ? "All Cities" : savedLabel);
         }
+    }
+
+    @Override
+    protected void onPause() {
+        stopAdminBannerAutoSlide();
+        super.onPause();
     }
 
     @Override
@@ -570,5 +969,9 @@ public class AdminDashboardActivity extends BaseActivity {
     private String firstName(String fullName) {
         if (fullName == null || fullName.trim().isEmpty()) return "Admin";
         return fullName.trim().split("\\s+")[0];
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.trim();
     }
 }
