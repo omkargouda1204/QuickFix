@@ -8,8 +8,8 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -151,6 +151,55 @@ public final class FcmNotificationHelper {
         );
     }
 
+    /**
+     * Notify multiple providers about a new emergency request.
+     */
+    public static void notifyEmergencyProviders(List<String> providerFirebaseUids,
+                                                String title,
+                                                String body,
+                                                String requestId,
+                                                JSONObject data) {
+        List<String> targets = sanitize(providerFirebaseUids);
+        if (targets.isEmpty()) return;
+
+        new Thread(() -> {
+            try {
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    return;
+                }
+
+                List<String> tokens = new ArrayList<>();
+                Set<String> dedupeTokens = new LinkedHashSet<>();
+                for (String firebaseUid : targets) {
+                    UserRecipient recipient = fetchUserRecipient(firebaseUid);
+                    if (recipient == null || trimToEmpty(recipient.token).isEmpty()) continue;
+                    if (dedupeTokens.add(recipient.token)) {
+                        tokens.add(recipient.token);
+                    }
+                }
+
+                if (tokens.isEmpty()) {
+                    Log.d(TAG, "notifyEmergencyProviders skipped: no provider tokens found");
+                    return;
+                }
+
+                sendViaEdgeFunction(
+                        tokens,
+                        new ArrayList<>(),
+                        listOf("provider"),
+                        title,
+                        body,
+                        "emergency",
+                        requestId,
+                        data
+                );
+            } catch (Exception e) {
+                Log.w(TAG, "notifyEmergencyProviders failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
     // ── Public single-token send (used by OfferManagement) ───────────────
 
     /**
@@ -166,6 +215,7 @@ public final class FcmNotificationHelper {
                 trimToEmpty(title),
                 trimToEmpty(body),
                 "offer",
+                null,
                 null
         );
     }
@@ -211,6 +261,75 @@ public final class FcmNotificationHelper {
         notifyAdminsEvent("New Offer Created", body, "offer", offerId);
     }
 
+    /**
+     * Notify customer when provider updates booking status.
+     */
+    public static void notifyCustomerBookingStatus(String customerUserId,
+                                                   String providerName,
+                                                   String serviceName,
+                                                   String newStatus,
+                                                   String bookingId) {
+        if (trimToEmpty(customerUserId).isEmpty()) return;
+
+        String status = trimToEmpty(newStatus).toLowerCase();
+        String title;
+        String body;
+
+        switch (status) {
+            case "accepted":
+                title = "Booking Accepted";
+                body = (trimToEmpty(providerName).isEmpty() ? "Your provider" : providerName)
+                        + " accepted your booking"
+                        + (trimToEmpty(serviceName).isEmpty() ? "." : " for " + serviceName + ".");
+                break;
+            case "completed":
+                title = "Booking Completed";
+                body = "Your booking"
+                        + (trimToEmpty(serviceName).isEmpty() ? "" : " for " + serviceName)
+                        + " was marked completed.";
+                break;
+            case "cancelled":
+                title = "Booking Cancelled";
+                body = "Your booking"
+                        + (trimToEmpty(serviceName).isEmpty() ? "" : " for " + serviceName)
+                        + " was cancelled by the provider.";
+                break;
+            default:
+                title = "Booking Updated";
+                body = "Your booking status changed"
+                        + (status.isEmpty() ? "." : " to " + status + ".");
+                break;
+        }
+
+        new Thread(() -> {
+            try {
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    return;
+                }
+
+                UserRecipient recipient = fetchUserRecipientById(customerUserId);
+                if (recipient == null || trimToEmpty(recipient.token).isEmpty()) {
+                    Log.d(TAG, "notifyCustomerBookingStatus skipped: token not found for " + customerUserId);
+                    return;
+                }
+
+                sendViaEdgeFunction(
+                        listOf(recipient.token),
+                        listOf(recipient.userId),
+                        listOf("user"),
+                        title,
+                        body,
+                        "booking",
+                        bookingId,
+                        null
+                );
+            } catch (Exception e) {
+                Log.w(TAG, "notifyCustomerBookingStatus failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
     // ── Private Helpers ───────────────────────────────────────────────────
 
     private static void notifyProviderEvent(String providerFirebaseUid,
@@ -240,7 +359,8 @@ public final class FcmNotificationHelper {
                         title,
                         body,
                         type,
-                        referenceId
+                        referenceId,
+                        null
                 );
             } catch (Exception e) {
                 Log.w(TAG, "notifyProviderEvent failed: " + e.getMessage());
@@ -273,7 +393,8 @@ public final class FcmNotificationHelper {
                         title,
                         body,
                         type,
-                        referenceId
+                        referenceId,
+                        null
                 );
             } catch (Exception e) {
                 Log.w(TAG, "notifyAdminsEvent failed: " + e.getMessage());
@@ -327,10 +448,21 @@ public final class FcmNotificationHelper {
 
     private static UserRecipient fetchUserRecipient(String firebaseUid) {
         if (trimToEmpty(firebaseUid).isEmpty()) return null;
+        return fetchUserRecipientByColumn("firebase_uid", firebaseUid);
+    }
+
+    private static UserRecipient fetchUserRecipientById(String userId) {
+        if (trimToEmpty(userId).isEmpty()) return null;
+        return fetchUserRecipientByColumn("id", userId);
+    }
+
+    private static UserRecipient fetchUserRecipientByColumn(String column, String value) {
+        String safeColumn = trimToEmpty(column);
+        if (safeColumn.isEmpty() || trimToEmpty(value).isEmpty()) return null;
 
         String url = SUPABASE_URL
                 + "/rest/v1/users"
-                + "?firebase_uid=eq." + urlEncode(firebaseUid)
+                + "?" + safeColumn + "=eq." + urlEncode(value)
                 + "&fcm_token=not.is.null"
                 + "&select=id,fcm_token"
                 + "&limit=1";
@@ -346,7 +478,7 @@ public final class FcmNotificationHelper {
         try (Response resp = HTTP.newCall(req).execute()) {
             String body = resp.body() != null ? resp.body().string() : "[]";
             if (resp.code() != 200) {
-                Log.w(TAG, "fetchUserRecipient HTTP " + resp.code() + " body=" + body);
+                Log.w(TAG, "fetchUserRecipientByColumn HTTP " + resp.code() + " body=" + body);
                 return null;
             }
             JSONArray arr = new JSONArray(body);
@@ -357,7 +489,7 @@ public final class FcmNotificationHelper {
             if (id.isEmpty() || token.isEmpty()) return null;
             return new UserRecipient(id, token);
         } catch (Exception e) {
-            Log.w(TAG, "fetchUserRecipient failed: " + e.getMessage());
+            Log.w(TAG, "fetchUserRecipientByColumn failed: " + e.getMessage());
             return null;
         }
     }
@@ -368,7 +500,8 @@ public final class FcmNotificationHelper {
                                             String title,
                                             String body,
                                             String type,
-                                            String referenceId) {
+                                            String referenceId,
+                                            JSONObject data) {
         if (trimToEmpty(NOTIFY_FN_URL).isEmpty()) {
             Log.w(TAG, "SUPABASE_NOTIFY_FN_URL is not configured");
             return;
@@ -389,6 +522,10 @@ public final class FcmNotificationHelper {
             payload.put("body", trimToEmpty(body));
             payload.put("type", trimToEmpty(type).isEmpty() ? "general" : type.trim());
             payload.put("reference_id", trimToEmpty(referenceId).isEmpty() ? JSONObject.NULL : referenceId.trim());
+            JSONObject dataPayload = toStringData(data);
+            if (dataPayload.length() > 0) {
+                payload.put("data", dataPayload);
+            }
 
             Request req = new Request.Builder()
                     .url(NOTIFY_FN_URL)
@@ -433,6 +570,25 @@ public final class FcmNotificationHelper {
         return out;
     }
 
+    private static JSONObject toStringData(JSONObject data) {
+        JSONObject out = new JSONObject();
+        if (data == null) return out;
+
+        try {
+            Iterator<String> keys = data.keys();
+            while (keys.hasNext()) {
+                String key = trimToEmpty(keys.next());
+                if (key.isEmpty()) continue;
+                Object value = data.opt(key);
+                if (value == null || value == JSONObject.NULL) continue;
+                out.put(key, String.valueOf(value));
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "toStringData failed: " + e.getMessage());
+        }
+        return out;
+    }
+
     private static List<String> listOf(String value) {
         List<String> list = new ArrayList<>();
         if (!trimToEmpty(value).isEmpty()) list.add(value.trim());
@@ -444,7 +600,11 @@ public final class FcmNotificationHelper {
     }
 
     private static String urlEncode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+        try {
+            return URLEncoder.encode(value == null ? "" : value, "UTF-8");
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private static final class UserRecipient {
