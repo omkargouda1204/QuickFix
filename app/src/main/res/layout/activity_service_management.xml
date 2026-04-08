@@ -8,7 +8,6 @@
 
     <!-- ── Gradient Header ── -->
     <LinearLayout
-        android:id="@+id/headerLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_admin_header_gradient"
@@ -83,7 +82,6 @@
 
             <!-- Search -->
             <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/tilSearch"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -112,7 +110,6 @@
 
         <!-- Category Filter Dropdown -->
         <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/tilCategoryFilter"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

@@ -8,7 +8,6 @@
 
     <!-- ══════════════ APP BAR ══════════════ -->
     <com.google.android.material.appbar.AppBarLayout
-        android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
@@ -126,7 +125,6 @@
 
     <!-- ══════════════ SCROLLABLE BODY ══════════════ -->
     <androidx.core.widget.NestedScrollView
-        android:id="@+id/outerScrollView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
@@ -508,7 +506,6 @@
                         android:fadeScrollbars="false">
 
                         <TextView
-                            android:id="@+id/tvTermsContent"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:padding="14dp"

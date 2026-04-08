@@ -6,9 +6,7 @@
 
     <!-- Backgrounds -->
     <color name="screen_background">#121212</color>
-    <color name="home_bg">#121212</color>
     <color name="card_bg">#1E1E1E</color>
-    <color name="toolbar_bg">#1E1E1E</color>
     <color name="bottom_nav_bg">#1E1E1E</color>
     <color name="search_bg">#2A2A2A</color>
 
@@ -49,10 +47,8 @@
     <color name="splash_gradient_start">#1565C0</color>
     <color name="splash_gradient_center">#0D47A1</color>
     <color name="splash_gradient_end">#002171</color>
-    <color name="splash_text">#FFFFFF</color>
 
     <!-- Category icon colors — slightly brightened for dark bg -->
-    <color name="cat_plumbing">#42A5F5</color>
     <color name="cat_electrical">#FFCA28</color>
     <color name="cat_cleaning">#66BB6A</color>
     <color name="cat_repair">#EF5350</color>
@@ -65,8 +61,6 @@
     <color name="emergency_red">#EF5350</color>
 
     <!-- Featured gradient — keep the same as light -->
-    <color name="featured_gradient_start">#1565C0</color>
-    <color name="featured_gradient_end">#42A5F5</color>
 
     <!-- Shared utility colors -->
     <color name="card_icon_bg">#243142</color>
@@ -86,7 +80,6 @@
     <color name="info_bg">#1A2A3E</color>
     <color name="info_text">#90CAF9</color>
     <color name="neutral_chip_bg">#455468</color>
-    <color name="neutral_chip_text">#FFFFFF</color>
 
     <!-- Semantic/status colors used across Java + XML -->
     <color name="status_pending_text">#FFB74D</color>

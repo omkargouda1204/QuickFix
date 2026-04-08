@@ -22,7 +22,6 @@
 
         <!-- ── Coloured top accent strip ── -->
         <View
-            android:id="@+id/cardAccentStrip"
             android:layout_width="match_parent"
             android:layout_height="4dp"
             android:background="@color/primary" />

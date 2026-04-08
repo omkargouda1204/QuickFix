@@ -43,7 +43,6 @@
 
         <!-- Description -->
         <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/tilOfferDescription"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -84,7 +83,6 @@
 
         <!-- Discount Type dropdown -->
         <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/tilDiscountType"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -124,7 +122,6 @@
 
         <!-- Min Booking Amount -->
         <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/tilMinAmount"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -145,7 +142,6 @@
 
         <!-- Expiry Date -->
         <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/tilOfferExpiry"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

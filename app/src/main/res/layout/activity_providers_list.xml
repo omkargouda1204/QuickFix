@@ -66,7 +66,6 @@
 
         <!-- Location row hidden: providers page is category-only now -->
         <LinearLayout
-            android:id="@+id/providerLocationRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
