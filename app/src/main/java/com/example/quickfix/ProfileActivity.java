@@ -45,7 +45,6 @@ public class ProfileActivity extends BaseActivity {
     private static final String TAG           = "ProfileActivity";
     private static final String PREFS_NAME    = "quickfix_prefs";
     private static final String KEY_LANGUAGE  = "selected_language";
-    private static final String KEY_DARK_MODE = "dark_mode_enabled";
     private static final String KEY_NOTIF     = "notifications_enabled";
     private static final int AVATAR_SIGNED_URL_TTL_SEC = 3600;
 
@@ -62,7 +61,7 @@ public class ProfileActivity extends BaseActivity {
             menuAdminDashboard, menuProviderDashboard;
     private androidx.cardview.widget.CardView cardRoleDashboard;
 
-    // ── Toggles ───────────────────────────────────────────────────────────
+    // ── Toggles ─────���─────────────────────────────────────────────────────
     private SwitchMaterial switchNotifications, switchDarkMode;
     private TextView       tvCurrentLanguage;
     private FrameLayout    profileLoadingOverlay;
@@ -100,7 +99,6 @@ public class ProfileActivity extends BaseActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        applyDarkModeFromPrefs();
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_profile);
 
@@ -182,7 +180,7 @@ public class ProfileActivity extends BaseActivity {
             String encodedUid = java.net.URLEncoder.encode(uid, java.nio.charset.StandardCharsets.UTF_8.name());
             String url = BuildConfig.SUPABASE_URL
                     + "/rest/v1/users?firebase_uid=eq." + encodedUid
-                    + "&select=name,email,phone,profile_image,is_user,is_service_provider,is_admin&limit=1";
+                    + "&select=id,firebase_uid,name,email,phone,profile_image,is_user,is_service_provider,is_admin,dark_mode,language&limit=1";
             try (Response r = HTTP.newCall(buildGet(url)).execute()) {
                 String body = r.body() != null ? r.body().string() : "[]";
                 if (r.code() == 200) {
@@ -192,7 +190,7 @@ public class ProfileActivity extends BaseActivity {
                     // Backward compatibility for legacy column profile_image_url.
                     String legacyUrl = BuildConfig.SUPABASE_URL
                             + "/rest/v1/users?firebase_uid=eq." + encodedUid
-                            + "&select=name,email,phone,profile_image_url,is_user,is_service_provider,is_admin&limit=1";
+                            + "&select=id,firebase_uid,name,email,phone,profile_image_url,is_user,is_service_provider,is_admin,dark_mode,language&limit=1";
                     try (Response rLegacy = HTTP.newCall(buildGet(legacyUrl)).execute()) {
                         String legacyBody = rLegacy.body() != null ? rLegacy.body().string() : "[]";
                         if (rLegacy.code() == 200) {
@@ -212,7 +210,7 @@ public class ProfileActivity extends BaseActivity {
                 String enc = java.net.URLEncoder.encode(email, java.nio.charset.StandardCharsets.UTF_8.name());
                 String urlE = BuildConfig.SUPABASE_URL
                         + "/rest/v1/users?email=eq." + enc
-                        + "&select=name,email,phone,profile_image,is_user,is_service_provider,is_admin&limit=1";
+                        + "&select=id,firebase_uid,name,email,phone,profile_image,is_user,is_service_provider,is_admin,dark_mode,language&limit=1";
                 try (Response r2 = HTTP.newCall(buildGet(urlE)).execute()) {
                     String body2 = r2.body() != null ? r2.body().string() : "[]";
                     if (r2.code() == 200) {
@@ -227,6 +225,8 @@ public class ProfileActivity extends BaseActivity {
 
     private UserModel parseUser(JSONObject o) {
         UserModel m = new UserModel();
+        m.id                = o.optString("id", "");
+        m.firebaseUid       = o.optString("firebase_uid", "");
         m.name              = o.optString("name", "");
         m.email             = o.optString("email", "");
         m.phone             = o.optString("phone", "");
@@ -234,6 +234,8 @@ public class ProfileActivity extends BaseActivity {
         m.isAdmin           = o.optBoolean("is_admin", false);
         m.isServiceProvider = o.optBoolean("is_service_provider", false);
         m.isUser            = o.optBoolean("is_user", true);
+        m.darkMode          = o.optBoolean("dark_mode", false);
+        m.language          = o.optString("language", "en");
         return m;
     }
 
@@ -256,6 +258,22 @@ public class ProfileActivity extends BaseActivity {
         }
         if (isAdmin)    menuAdminDashboard.setVisibility(View.VISIBLE);
         if (isProvider) menuProviderDashboard.setVisibility(View.VISIBLE);
+
+        FirebaseUser current = mAuth != null ? mAuth.getCurrentUser() : null;
+        if (current != null) {
+            UserPreferenceManager.applyFromServer(
+                    this,
+                    current.getUid(),
+                    m.darkMode,
+                    m.language
+            );
+        }
+        if (switchDarkMode != null) {
+            switchDarkMode.setChecked(UserPreferenceManager.isDarkMode(this));
+        }
+        if (tvCurrentLanguage != null) {
+            tvCurrentLanguage.setText(LocaleHelper.codeToDisplayName(UserPreferenceManager.getLanguageCode(this)));
+        }
     }
 
     private void applyRoleBadge(String role) {
@@ -336,16 +354,26 @@ public class ProfileActivity extends BaseActivity {
         menuDarkMode.setOnClickListener(v -> {
             if (switchDarkMode != null) switchDarkMode.toggle();
         });
-        // Load current dark mode state from ThemeManager (shared across all roles)
+        // Load current dark mode state from the user-only theme preference.
         if (switchDarkMode != null) {
-            switchDarkMode.setChecked(ThemeManager.isDarkMode(this));
+            switchDarkMode.setChecked(UserPreferenceManager.isDarkMode(this));
             switchDarkMode.setEnabled(true);
             switchDarkMode.setOnCheckedChangeListener((btn, checked) -> {
-                ThemeManager.toggle(this, checked);
-                // Sync with AppSettings key for backwards compat
-                prefs.edit().putBoolean(KEY_DARK_MODE, checked).apply();
-                Toast.makeText(this, checked ? "🌙 Dark mode enabled" : "☀️ Light mode enabled",
-                        Toast.LENGTH_SHORT).show();
+                UserPreferenceManager.setDarkMode(this, checked);
+                FirebaseUser user = mAuth != null ? mAuth.getCurrentUser() : null;
+                if (user != null) {
+                    SupabaseClient.updateUserSettings(
+                            user.getUid(),
+                            user.getEmail(),
+                            checked,
+                            UserPreferenceManager.getLanguageCode(this),
+                            new SupabaseClient.Callback2() {
+                                @Override public void onSuccess() { }
+                                @Override public void onError(String message) {
+                                    Log.w(TAG, "Failed to sync dark mode: " + message);
+                                }
+                            });
+                }
             });
         }
 
@@ -433,13 +461,27 @@ public class ProfileActivity extends BaseActivity {
      * @param localeCode BCP-47 code: "en", "kn", "hi", "ta", "te", "ml"
      */
     private void applyLanguage(String localeCode) {
-        LocaleHelper.setLocale(this, localeCode);
+        UserPreferenceManager.setLanguage(this, localeCode);
         String displayName = LocaleHelper.codeToDisplayName(localeCode);
         if (tvCurrentLanguage != null) tvCurrentLanguage.setText(displayName);
+
+        FirebaseUser user = mAuth != null ? mAuth.getCurrentUser() : null;
+        if (user != null) {
+            SupabaseClient.updateUserSettings(
+                    user.getUid(),
+                    user.getEmail(),
+                    UserPreferenceManager.isDarkMode(this),
+                    localeCode,
+                    new SupabaseClient.Callback2() {
+                        @Override public void onSuccess() { }
+                        @Override public void onError(String message) {
+                            Log.w(TAG, "Failed to sync language: " + message);
+                        }
+                    });
+        }
+
         Toast.makeText(this, getString(R.string.language_changed_toast, displayName),
                 Toast.LENGTH_SHORT).show();
-        // Recreate so all strings in this Activity render in the new language instantly
-        recreate();
     }
 
     /** Update the language label from the persisted preference (called in onCreate). */
@@ -450,18 +492,22 @@ public class ProfileActivity extends BaseActivity {
 
     // ── Dark Mode ─────────────────────────────────────────────────────────
     private void applyDarkModeFromPrefs() {
-        // Use ThemeManager — shared preference for all roles
-        ThemeManager.applyFromPrefs(this);
+        ThemeManager.applyFromPrefs(this, false);
     }
 
     private void setupTogglesFromPrefs() {
         switchNotifications.setChecked(prefs.getBoolean(KEY_NOTIF, true));
-        // Load dark mode from ThemeManager
         if (switchDarkMode != null) {
-            switchDarkMode.setChecked(ThemeManager.isDarkMode(this));
+            switchDarkMode.setChecked(UserPreferenceManager.isDarkMode(this));
         }
-        String lang = prefs.getString(KEY_LANGUAGE, "English");
-        tvCurrentLanguage.setText(lang);
+        if (tvCurrentLanguage != null) {
+            tvCurrentLanguage.setText(LocaleHelper.codeToDisplayName(UserPreferenceManager.getLanguageCode(this)));
+        }
+    }
+
+    @Override
+    protected boolean isAdminThemeScreen() {
+        return false;
     }
 
     // ── Logout ────────────────────────────────────────────────────────────

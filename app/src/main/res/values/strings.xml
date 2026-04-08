@@ -100,6 +100,22 @@
     <string name="quick_actions">Quick Actions</string>
     <string name="book_service">Book Service</string>
     <string name="emergency_help">Emergency Help</string>
+    <string name="emergency_help_title">Emergency Help</string>
+    <string name="emergency_help_subtitle">Fast access to nearby providers when every second matters.</string>
+    <string name="emergency_quick_categories">Quick categories</string>
+    <string name="emergency_nearby_providers">Nearby providers</string>
+    <string name="emergency_location_unavailable">Location unavailable</string>
+    <string name="emergency_location_focus">focus</string>
+    <string name="emergency_assigned_prefix">Assigned:</string>
+    <string name="emergency_ready">Emergency ready</string>
+    <string name="emergency_no_providers_title">No emergency-ready providers found</string>
+    <string name="emergency_no_providers_subtitle">Try another category or widen your search area. We’ll still show the fastest available options when they appear.</string>
+    <string name="emergency_retry">Retry</string>
+    <string name="emergency_request_sent">Emergency request sent.</string>
+    <string name="emergency_call_unavailable">Phone number unavailable for this provider.</string>
+    <string name="emergency_chat_coming_soon">Chat support for emergency assistance is coming soon. You can call or book now for faster help.</string>
+    <string name="emergency_request_login_required">Please log in again to request emergency help.</string>
+    <string name="emergency_request_failed">Could not load emergency providers. Please try again.</string>
     <string name="track_booking">Track Booking</string>
     <string name="cat_plumbing">Plumbing</string>
     <string name="cat_electrical">Electrical</string>
@@ -249,9 +265,13 @@
     <string name="settings_dark_mode">Dark Mode</string>
     <string name="settings_change_password">Change Password</string>
     <string name="settings_delete_account">Delete Account</string>
+    <string name="settings_delete_account_data_scope">Deletes Firebase and Supabase data</string>
     <string name="settings_delete_account_subtitle" translatable="false">Permanent and irreversible</string>
+    <string name="settings_delete_dialog_warning">This action permanently deletes your account.</string>
+    <string name="settings_delete_dialog_message">The app will remove your Firebase Authentication account and all related Supabase data that belongs to this user. This cannot be undone.</string>
+    <string name="settings_delete_dialog_checkbox">I understand that my account will be permanently deleted</string>
     <string name="settings_delete_dialog_title" translatable="false">Delete Account</string>
-    <string name="settings_delete_dialog_message" translatable="false">Are you sure you want to delete your account?\n\nThis action is permanent and cannot be undone.\n\n- Your profile data will be removed\n- Your bookings will be removed\n- You will be signed out immediately</string>
+    <string name="settings_delete_dialog_message_legacy" translatable="false">Are you sure you want to delete your account?\n\nThis action is permanent and cannot be undone.\n\n- Your profile data will be removed\n- Your bookings will be removed\n- You will be signed out immediately</string>
     <string name="settings_delete_dialog_confirm" translatable="false">Delete My Account</string>
     <string name="settings_delete_overlay_checking" translatable="false">Checking deletion eligibility...</string>
     <string name="settings_delete_overlay_profile_image" translatable="false">Deleting profile image...</string>
@@ -259,9 +279,15 @@
     <string name="settings_delete_overlay_supabase" translatable="false">Deleting account data...</string>
     <string name="settings_delete_overlay_reauth" translatable="false">Re-authenticating...</string>
     <string name="settings_delete_overlay_signout" translatable="false">Signing out...</string>
+    <string name="settings_delete_uid_missing" translatable="false">Could not determine your account ID. Please sign in again and retry.</string>
+    <string name="settings_delete_uid_mismatch" translatable="false">Account verification failed due to an ID mismatch. Please sign in again and retry.</string>
+    <string name="settings_delete_supabase_error" translatable="false">Failed to delete your data from Supabase. Please try again.
+
+%1$s</string>
     <string name="settings_delete_verify_error" translatable="false">Could not verify account creation time. Please try again.</string>
     <string name="settings_delete_cooldown_error" translatable="false">Account can be deleted only after 24 hours of creation.</string>
     <string name="settings_delete_firebase_error" translatable="false">Failed to delete account. Please try again.\n\n%1$s</string>
+    <string name="settings_delete_firebase_error_after_data_removed" translatable="false">Your app data was deleted, but Firebase account deletion failed. Please sign in again and retry account removal.\n\n%1$s</string>
     <string name="settings_delete_password_title" translatable="false">Confirm Your Password</string>
     <string name="settings_delete_password_message" translatable="false">Please enter your password to permanently delete your account.</string>
     <string name="settings_delete_password_confirm" translatable="false">Confirm and Delete</string>
@@ -300,6 +326,7 @@
     <string name="pd_dash">—</string>
     <string name="pd_section_personal">Personal Information</string>
     <string name="pd_section_edit">Edit Personal Information</string>
+    <string name="pd_btn_change_photo">Change Profile Photo</string>
     <string name="pd_label_full_name">Full Name</string>
     <string name="pd_label_email_address">Email Address</string>
     <string name="pd_label_phone_number">Phone Number</string>
@@ -318,8 +345,17 @@
     <string name="pd_edit_before_photo">Tap Edit Profile before changing photo.</string>
     <string name="pd_uploading_photo">Uploading photo...</string>
     <string name="pd_photo_upload_failed">Photo upload failed. Please try again.</string>
+    <string name="pd_photo_source_title">Update profile photo</string>
+    <string name="pd_photo_source_gallery">Choose from gallery</string>
+    <string name="pd_photo_source_camera">Take a photo</string>
+    <string name="pd_photo_selected_save_hint">Photo selected. Tap Save Changes to upload.</string>
+    <string name="pd_gallery_permission_denied">Gallery permission denied. Please allow access to select a photo.</string>
+    <string name="pd_camera_permission_denied">Camera permission denied. Please allow access to take a photo.</string>
+    <string name="pd_camera_unavailable">Unable to open camera. Please try again.</string>
+    <string name="pd_camera_capture_cancelled">Camera capture cancelled.</string>
     <string name="pd_saving">Saving...</string>
     <string name="pd_saved_ok">Profile saved successfully.</string>
+    <string name="pd_saved_with_photo_ok">Profile photo uploaded and profile updated.</string>
     <string name="pd_save_http_error">Save failed (HTTP %1$d). Please try again.</string>
     <string name="pd_load_http_error">Could not load profile (HTTP %1$d).</string>
     <string name="pd_network_error">Network error. Check your connection and try again.</string>

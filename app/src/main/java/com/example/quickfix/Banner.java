@@ -28,7 +28,7 @@ public class Banner {
     @SerializedName("expiry_date")
     public String expiryDate;     // ISO date string (YYYY-MM-DD)
 
-    @SerializedName("is_active")
+    @SerializedName(value = "is_active", alternate = {"active"})
     public boolean isActive;
 
     @SerializedName("priority")
@@ -45,6 +45,15 @@ public class Banner {
 
     @SerializedName("deleted_at")
     public String deletedAt;      // For soft deletes (null if active)
+
+    @SerializedName(value = "created_by", alternate = {"created_by_uid", "created_by_firebase_uid"})
+    public String createdBy;
+
+    @SerializedName(value = "created_by_uid", alternate = {"created_by_firebase_uid"})
+    public String createdByUid;
+
+    @SerializedName("created_by_email")
+    public String createdByEmail;
 
     public Banner() {}
 

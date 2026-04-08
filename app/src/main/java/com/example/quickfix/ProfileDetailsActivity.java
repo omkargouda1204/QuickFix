@@ -1,6 +1,9 @@
 package com.example.quickfix;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -15,6 +18,8 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 
 import com.bumptech.glide.Glide;
 import com.google.android.material.button.MaterialButton;
@@ -101,6 +106,7 @@ public class ProfileDetailsActivity extends BaseActivity {
     private boolean isEditMode   = false;
     private boolean isSaving     = false;
     private Uri pendingAvatarUri = null;
+    private Uri pendingCameraUri = null;
 
     private final OkHttpClient HTTP = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -118,16 +124,34 @@ public class ProfileDetailsActivity extends BaseActivity {
     private final ActivityResultLauncher<String> imagePickerLauncher =
             registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
                 if (uri == null) return;
-                pendingAvatarUri = uri;
-                if (ivAvatar != null && tvAvatarInitial != null) {
-                    ivAvatar.setVisibility(View.VISIBLE);
-                    tvAvatarInitial.setVisibility(View.GONE);
-                    Glide.with(this)
-                            .load(uri)
-                            .circleCrop()
-                            .placeholder(R.drawable.bg_profile_avatar_inner)
-                            .error(R.drawable.bg_profile_avatar_inner)
-                            .into(ivAvatar);
+                onPhotoSelected(uri);
+            });
+
+    private final ActivityResultLauncher<Uri> cameraCaptureLauncher =
+            registerForActivityResult(new ActivityResultContracts.TakePicture(), success -> {
+                if (Boolean.TRUE.equals(success) && pendingCameraUri != null) {
+                    onPhotoSelected(pendingCameraUri);
+                } else if (pendingCameraUri != null) {
+                    showSnack(getString(R.string.pd_camera_capture_cancelled));
+                }
+                pendingCameraUri = null;
+            });
+
+    private final ActivityResultLauncher<String> cameraPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (Boolean.TRUE.equals(granted)) {
+                    openCameraCapture();
+                } else {
+                    showSnack(getString(R.string.pd_camera_permission_denied));
+                }
+            });
+
+    private final ActivityResultLauncher<String> mediaPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (Boolean.TRUE.equals(granted)) {
+                    imagePickerLauncher.launch("image/*");
+                } else {
+                    showSnack(getString(R.string.pd_gallery_permission_denied));
                 }
             });
 
@@ -216,7 +240,7 @@ public class ProfileDetailsActivity extends BaseActivity {
                     showSnack(getString(R.string.pd_edit_before_photo));
                     return;
                 }
-                imagePickerLauncher.launch("image/*");
+                showPhotoSourceDialog();
             });
         }
 
@@ -321,6 +345,7 @@ public class ProfileDetailsActivity extends BaseActivity {
         }
 
         if (pendingAvatarUri != null) {
+            showSnack(getString(R.string.pd_uploading_photo));
             SupabaseStorageHelper.uploadProfileImage(
                     this,
                     pendingAvatarUri,
@@ -328,7 +353,7 @@ public class ProfileDetailsActivity extends BaseActivity {
                     new SupabaseStorageHelper.UploadCallback() {
                         @Override
                         public void onSuccess(String publicUrl) {
-                            persistProfileUpdate(name, phone, city, addr, publicUrl);
+                            persistProfileUpdate(name, phone, city, addr, publicUrl, true);
                         }
 
                         @Override
@@ -346,10 +371,11 @@ public class ProfileDetailsActivity extends BaseActivity {
             return;
         }
 
-        persistProfileUpdate(name, phone, city, addr, cachedProfileImagePath);
+        persistProfileUpdate(name, phone, city, addr, cachedProfileImagePath, false);
     }
 
-    private void persistProfileUpdate(String name, String phone, String city, String addr, String uploadedImagePath) {
+    private void persistProfileUpdate(String name, String phone, String city, String addr,
+                                      String uploadedImagePath, boolean avatarUpdated) {
         new Thread(() -> {
             try {
                 JSONObject body = new JSONObject();
@@ -374,8 +400,10 @@ public class ProfileDetailsActivity extends BaseActivity {
                         final String finalImg = uploadedImagePath;
                         MAIN.post(() -> {
                             applyProfile(name, cachedEmail, phone, city, addr, finalImg);
+                            pendingAvatarUri = null;
                             showEditMode(false);
-                            showSnack("Profile updated.");
+                            showSnack(getString(avatarUpdated ? R.string.pd_saved_with_photo_ok
+                                    : R.string.pd_saved_ok));
                         });
                     } else {
                         MAIN.post(() -> showSnack("Save failed: " + code));
@@ -644,4 +672,86 @@ public class ProfileDetailsActivity extends BaseActivity {
     }
 
     private static String safeStr(String s) { return s != null ? s.trim() : ""; }
+
+    private void showPhotoSourceDialog() {
+        String[] items = {getString(R.string.pd_photo_source_gallery), getString(R.string.pd_photo_source_camera)};
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.pd_photo_source_title)
+                .setItems(items, (dialog, which) -> {
+                    if (which == 0) {
+                        requestGalleryPermissionAndOpenPicker();
+                    } else {
+                        requestCameraPermissionAndCapture();
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+
+    private void requestCameraPermissionAndCapture() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
+            return;
+        }
+        openCameraCapture();
+    }
+
+    private void requestGalleryPermissionAndOpenPicker() {
+        String mediaPermission = requiredGalleryPermission();
+        if (mediaPermission == null) {
+            imagePickerLauncher.launch("image/*");
+            return;
+        }
+
+        if (ContextCompat.checkSelfPermission(this, mediaPermission) != PackageManager.PERMISSION_GRANTED) {
+            mediaPermissionLauncher.launch(mediaPermission);
+            return;
+        }
+
+        imagePickerLauncher.launch("image/*");
+    }
+
+    private String requiredGalleryPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return Manifest.permission.READ_MEDIA_IMAGES;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return Manifest.permission.READ_EXTERNAL_STORAGE;
+        }
+        return null;
+    }
+
+    private void openCameraCapture() {
+        try {
+            java.io.File cameraDir = new java.io.File(getCacheDir(), "camera");
+            if (!cameraDir.exists() && !cameraDir.mkdirs()) {
+                showSnack(getString(R.string.pd_camera_unavailable));
+                return;
+            }
+            java.io.File photoFile = java.io.File.createTempFile("profile_", ".jpg", cameraDir);
+            String authority = getPackageName() + ".fileprovider";
+            pendingCameraUri = FileProvider.getUriForFile(this, authority, photoFile);
+            cameraCaptureLauncher.launch(pendingCameraUri);
+        } catch (Exception e) {
+            Log.e(TAG, "openCameraCapture", e);
+            showSnack(getString(R.string.pd_camera_unavailable));
+            pendingCameraUri = null;
+        }
+    }
+
+    private void onPhotoSelected(Uri uri) {
+        pendingAvatarUri = uri;
+        if (ivAvatar == null || tvAvatarInitial == null) return;
+        ivAvatar.setVisibility(View.VISIBLE);
+        tvAvatarInitial.setVisibility(View.GONE);
+        Glide.with(this)
+                .load(uri)
+                .circleCrop()
+                .placeholder(R.drawable.bg_profile_avatar_inner)
+                .error(R.drawable.bg_profile_avatar_inner)
+                .into(ivAvatar);
+        showSnack(getString(R.string.pd_photo_selected_save_hint));
+    }
 }

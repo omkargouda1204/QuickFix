@@ -336,4 +336,9 @@ public class AdminSettingsActivity extends BaseActivity {
     private void toast(String msg) {
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
     }
+
+    @Override
+    protected boolean isAdminThemeScreen() {
+        return true;
+    }
 }

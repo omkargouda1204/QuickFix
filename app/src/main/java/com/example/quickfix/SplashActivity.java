@@ -4,16 +4,20 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import androidx.appcompat.app.AppCompatActivity;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.auth.GoogleAuthProvider;
 
 public class SplashActivity extends BaseActivity {
 
     private static final int SPLASH_DURATION = 3000; // 3 seconds total
+    private static final String TAG = "SplashActivity";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -90,20 +94,96 @@ public class SplashActivity extends BaseActivity {
         });
         splashTagline.startAnimation(animTag);
 
-        // Auto-navigate after 3 seconds — check maintenance mode first
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            // Admin users bypass maintenance screen
-            boolean fromAdmin = getIntent().getBooleanExtra("from_admin", false);
-            if (!fromAdmin && AppSettings.isMaintenanceMode(SplashActivity.this)) {
-                // Show maintenance page to normal users/providers
-                Intent intent = new Intent(SplashActivity.this, MaintenanceActivity.class);
-                startActivity(intent);
-            } else {
-                Intent intent = new Intent(SplashActivity.this, LoginActivity.class);
-                startActivity(intent);
+        // Auto-navigate after splash delay.
+        new Handler(Looper.getMainLooper()).postDelayed(this::routeAfterSplash, SPLASH_DURATION);
+    }
+
+    private void routeAfterSplash() {
+        boolean fromAdmin = getIntent().getBooleanExtra("from_admin", false);
+        if (!fromAdmin && AppSettings.isMaintenanceMode(this)) {
+            startAndFinish(new Intent(this, MaintenanceActivity.class));
+            return;
+        }
+
+        FirebaseUser current = FirebaseAuth.getInstance().getCurrentUser();
+        if (current == null) {
+            startAndFinish(new Intent(this, LoginActivity.class));
+            return;
+        }
+
+        if (!(current.isEmailVerified() || isGoogleUser(current))) {
+            startAndFinish(new Intent(this, LoginActivity.class));
+            return;
+        }
+
+        applyUserSettingsAndRoute(current);
+    }
+
+    private void applyUserSettingsAndRoute(FirebaseUser current) {
+        final String uid = current.getUid();
+        final String email = current.getEmail() == null ? "" : current.getEmail();
+
+        SupabaseClient.fetchUserSettings(uid, email, new SupabaseClient.UserSettingsCallback() {
+            @Override
+            public void onSuccess(SupabaseClient.UserSettings settings) {
+                if (settings != null) {
+
+
+                    UserPreferenceManager.applyFromServer(
+                            SplashActivity.this,
+                            uid,
+                            settings.darkMode,
+                            settings.language
+                    );
+                }
+                routeByRole(uid, email);
             }
-            finish();
-            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
-        }, SPLASH_DURATION);
+
+            @Override
+            public void onError(String message) {
+                Log.w(TAG, "User settings fetch failed, using cached values: " + message);
+                UserPreferenceManager.init(SplashActivity.this);
+                routeByRole(uid, email);
+            }
+        });
+    }
+
+    private void routeByRole(String uid, String email) {
+        SupabaseClient.getUserRoleWithEmail(uid, email, new SupabaseClient.RoleInfoCallback() {
+            @Override
+            public void onSuccess(SupabaseClient.RoleInfo info) {
+                if (isFinishing()) return;
+                if (info.isAdmin) {
+                    startAndFinish(new Intent(SplashActivity.this, AdminDashboardActivity.class));
+                } else if (info.isServiceProvider) {
+                    startAndFinish(new Intent(SplashActivity.this, ProviderDashboardActivity.class));
+                } else {
+                    startAndFinish(new Intent(SplashActivity.this, MainActivity.class));
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                Log.w(TAG, "Role lookup failed in splash, falling back to login: " + message);
+                if (isFinishing()) return;
+                startAndFinish(new Intent(SplashActivity.this, LoginActivity.class));
+            }
+        });
+    }
+
+    private boolean isGoogleUser(FirebaseUser user) {
+        for (com.google.firebase.auth.UserInfo info : user.getProviderData()) {
+            if (GoogleAuthProvider.PROVIDER_ID.equals(info.getProviderId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void startAndFinish(Intent intent) {
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
     }
 }

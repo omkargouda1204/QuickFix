@@ -126,22 +126,33 @@ public class OfferManagementActivity extends BaseActivity {
                     public void onResponse(Call<List<Offer>> call, Response<List<Offer>> response) {
                         setLoading(false);
                         swipeRefresh.setRefreshing(false);
-                        if (response.isSuccessful() && response.body() != null) {
+
+                        if (response.isSuccessful()) {
+                            List<Offer> payload = response.body() == null ? new ArrayList<>() : response.body();
                             offers.clear();
-                            offers.addAll(response.body());
+                            offers.addAll(payload);
                             adapter.setItems(offers);
                             updateStats();
                             showListOrEmpty();
-                        } else {
-                            showError("Failed to load offers: " + response.code());
+                            return;
                         }
+
+                        String err = "";
+                        try {
+                            err = response.errorBody() != null ? response.errorBody().string() : "";
+                        } catch (Exception ignored) {}
+                        Log.e(TAG, "loadOffers failed HTTP " + response.code() + " body=" + err);
+                        showError("Failed to load offers");
+                        showListOrEmpty();
                     }
 
                     @Override
                     public void onFailure(Call<List<Offer>> call, Throwable t) {
                         setLoading(false);
                         swipeRefresh.setRefreshing(false);
-                        showError("Network error: " + t.getMessage());
+                        Log.e(TAG, "loadOffers network error", t);
+                        showError("Network error while loading offers");
+                        showListOrEmpty();
                     }
                 });
     }
@@ -242,8 +253,15 @@ public class OfferManagementActivity extends BaseActivity {
             if (code.isEmpty()) { setFieldError(dv.findViewById(R.id.tilOfferCode), "Code is required"); return; }
             if (valStr.isEmpty()) { setFieldError(dv.findViewById(R.id.tilDiscountValue), "Value is required"); return; }
 
-            double value = Double.parseDouble(valStr);
-            double minAmt = minStr.isEmpty() ? 0 : Double.parseDouble(minStr);
+            double value;
+            double minAmt;
+            try {
+                value = Double.parseDouble(valStr);
+                minAmt = minStr.isEmpty() ? 0 : Double.parseDouble(minStr);
+            } catch (Exception ex) {
+                showError("Enter valid numeric values for discount and minimum amount");
+                return;
+            }
 
             saveOffer(title, desc, code, type, value, minAmt, expiry, active, isEdit ? existing.id : null, sendNotif, dialog);
         });
@@ -355,10 +373,9 @@ public class OfferManagementActivity extends BaseActivity {
         Map<String, Object> fallback = new HashMap<>();
         fallback.put("title", source.get("title"));
         fallback.put("description", source.get("description"));
-        fallback.put("offer_code", source.get("offer_code"));
-        fallback.put("discount_type", source.get("discount_type"));
-        fallback.put("discount_value", source.get("discount_value"));
-        fallback.put("min_booking_amount", source.get("min_booking_amount"));
+        // Legacy schema compatibility: some deployments still use code/discount columns.
+        fallback.put("code", source.get("offer_code"));
+        fallback.put("discount", source.get("discount_value"));
         fallback.put("is_active", source.get("is_active"));
         fallback.put("expiry_date", source.get("expiry_date"));
         if (source.containsKey("id")) fallback.put("id", source.get("id"));
@@ -464,5 +481,11 @@ public class OfferManagementActivity extends BaseActivity {
 
     private void showErrorDialog(String title, String message) {
         new MaterialAlertDialogBuilder(this).setTitle(title).setMessage(message).setPositiveButton("OK", null).show();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadOffers();
     }
 }

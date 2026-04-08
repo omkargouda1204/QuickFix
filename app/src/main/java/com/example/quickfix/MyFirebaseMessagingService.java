@@ -139,14 +139,6 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
                 channelId      = CHANNEL_BOOKINGS;
                 targetActivity = MyBookingsActivity.class;
                 break;
-            case "booking_accepted":
-            case "booking_rejected":
-            case "booking_completed":
-            case "booking_update":
-                // Customer receives booking status updates → open User Bookings page
-                channelId      = CHANNEL_BOOKINGS;
-                targetActivity = UserBookingsActivity.class;
-                break;
             default:
                 channelId      = CHANNEL_GENERAL;
                 targetActivity = MainActivity.class;
