@@ -288,6 +288,12 @@
             android:parentActivityName=".ProviderDashboardActivity"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".ProviderEmergencyRequestActivity"
+            android:exported="false"
+            android:parentActivityName=".ProviderDashboardActivity"
+            android:windowSoftInputMode="adjustResize" />
+
 
         <!-- Earnings Activity -->
         <activity

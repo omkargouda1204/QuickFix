@@ -12,6 +12,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -158,6 +160,14 @@ public final class FcmNotificationHelper {
                                                 String title,
                                                 String body,
                                                 String referenceId) {
+        notifyEmergencyProviders(providerFirebaseUids, title, body, referenceId, null);
+    }
+
+    public static void notifyEmergencyProviders(List<String> providerFirebaseUids,
+                                                String title,
+                                                String body,
+                                                String referenceId,
+                                                JSONObject dataPayload) {
         if (providerFirebaseUids == null || providerFirebaseUids.isEmpty()) return;
 
         final String safeTitle = trimToEmpty(title).isEmpty() ? "Emergency Help" : title.trim();
@@ -195,12 +205,21 @@ public final class FcmNotificationHelper {
                     return;
                 }
 
+                Map<String, String> data = jsonToMap(dataPayload);
                 sendViaEdgeFunction(tokens, receiverIds, receiverRoles,
-                        safeTitle, safeBody, "emergency", referenceId);
+                        safeTitle, safeBody, "emergency_request", referenceId, data);
             } catch (Exception e) {
                 Log.w(TAG, "notifyEmergencyProviders failed: " + e.getMessage());
             }
         }).start();
+    }
+
+    public static void notifyEmergencyUserAssigned(String userFirebaseUid,
+                                                   String title,
+                                                   String body,
+                                                   String requestId,
+                                                   JSONObject dataPayload) {
+        notifyUserEvent(userFirebaseUid, title, body, "emergency_assigned", requestId, dataPayload);
     }
 
     // ── Public single-token send (used by OfferManagement) ───────────────
@@ -218,6 +237,7 @@ public final class FcmNotificationHelper {
                 trimToEmpty(title),
                 trimToEmpty(body),
                 "offer",
+                null,
                 null
         );
     }
@@ -292,10 +312,48 @@ public final class FcmNotificationHelper {
                         title,
                         body,
                         type,
-                        referenceId
+                        referenceId,
+                        null
                 );
             } catch (Exception e) {
                 Log.w(TAG, "notifyProviderEvent failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    private static void notifyUserEvent(String userFirebaseUid,
+                                        String title,
+                                        String body,
+                                        String type,
+                                        String referenceId,
+                                        JSONObject dataPayload) {
+        if (trimToEmpty(userFirebaseUid).isEmpty()) return;
+
+        new Thread(() -> {
+            try {
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    return;
+                }
+
+                UserRecipient recipient = fetchUserRecipient(userFirebaseUid);
+                if (recipient == null || trimToEmpty(recipient.token).isEmpty()) {
+                    Log.d(TAG, "notifyUserEvent skipped: token not found for " + userFirebaseUid);
+                    return;
+                }
+
+                sendViaEdgeFunction(
+                        listOf(recipient.token),
+                        listOf(recipient.userId),
+                        listOf("user"),
+                        title,
+                        body,
+                        type,
+                        referenceId,
+                        jsonToMap(dataPayload)
+                );
+            } catch (Exception e) {
+                Log.w(TAG, "notifyUserEvent failed: " + e.getMessage());
             }
         }).start();
     }
@@ -325,7 +383,8 @@ public final class FcmNotificationHelper {
                         title,
                         body,
                         type,
-                        referenceId
+                        referenceId,
+                        null
                 );
             } catch (Exception e) {
                 Log.w(TAG, "notifyAdminsEvent failed: " + e.getMessage());
@@ -420,7 +479,8 @@ public final class FcmNotificationHelper {
                                             String title,
                                             String body,
                                             String type,
-                                            String referenceId) {
+                                            String referenceId,
+                                            Map<String, String> data) {
         if (trimToEmpty(NOTIFY_FN_URL).isEmpty()) {
             Log.w(TAG, "SUPABASE_NOTIFY_FN_URL is not configured");
             return;
@@ -441,6 +501,7 @@ public final class FcmNotificationHelper {
             payload.put("body", trimToEmpty(body));
             payload.put("type", trimToEmpty(type).isEmpty() ? "general" : type.trim());
             payload.put("reference_id", trimToEmpty(referenceId).isEmpty() ? JSONObject.NULL : referenceId.trim());
+            payload.put("data", mapToJson(data));
 
             Request req = new Request.Builder()
                     .url(NOTIFY_FN_URL)
@@ -471,6 +532,36 @@ public final class FcmNotificationHelper {
         } catch (Exception e) {
             Log.w(TAG, "sendViaEdgeFunction exception: " + e.getMessage());
         }
+    }
+
+    private static Map<String, String> jsonToMap(JSONObject payload) {
+        Map<String, String> out = new HashMap<>();
+        if (payload == null) return out;
+        JSONArray names = payload.names();
+        if (names == null) return out;
+        for (int i = 0; i < names.length(); i++) {
+            String key = trimToEmpty(names.optString(i));
+            if (key.isEmpty()) continue;
+            Object value = payload.opt(key);
+            if (value == null || JSONObject.NULL.equals(value)) continue;
+            out.put(key, String.valueOf(value));
+        }
+        return out;
+    }
+
+    private static JSONObject mapToJson(Map<String, String> data) {
+        JSONObject obj = new JSONObject();
+        if (data == null) return obj;
+        for (Map.Entry<String, String> entry : data.entrySet()) {
+            String key = trimToEmpty(entry.getKey());
+            String value = trimToEmpty(entry.getValue());
+            if (key.isEmpty() || value.isEmpty()) continue;
+            try {
+                obj.put(key, value);
+            } catch (Exception ignored) {
+            }
+        }
+        return obj;
     }
 
     private static List<String> sanitize(List<String> values) {

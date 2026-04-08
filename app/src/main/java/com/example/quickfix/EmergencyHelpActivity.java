@@ -10,7 +10,9 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
 import android.widget.ImageView;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -24,6 +26,7 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
@@ -36,8 +39,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 
 /**
@@ -47,6 +52,10 @@ public class EmergencyHelpActivity extends BaseActivity {
 
     private static final String TAG = "EmergencyHelp";
     private static final int EMERGENCY_NOTIFY_LIMIT = 5;
+    private static final long EMERGENCY_POLL_MS = 5000L;
+    private static final long EMERGENCY_POLL_TIMEOUT_MS = 2 * 60_000L;
+    private static final float EMERGENCY_MAX_DISTANCE_KM = 30f;
+    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     private static final String[] CATEGORY_LABELS = new String[]{
             "Electrician",
@@ -79,6 +88,11 @@ public class EmergencyHelpActivity extends BaseActivity {
     private TextView tvAssigned;
     private TextView tvEmptyTitle;
     private TextView tvEmptySubtitle;
+    private TextView tvUserName;
+    private TextView tvPhone;
+    private TextView tvAddress;
+    private MaterialAutoCompleteTextView actCategory;
+    private EditText etDescription;
     private View progressBar;
     private RecyclerView rvProviders;
     private View emptyState;
@@ -91,9 +105,14 @@ public class EmergencyHelpActivity extends BaseActivity {
     private boolean isLoading = false;
     private String assignedProviderId = "";
     private String assignedProviderUid = "";
+    private String activeEmergencyRequestId = "";
+    private long pollingStartedAtMs = 0L;
     private double currentLat = Double.NaN;
     private double currentLng = Double.NaN;
     private String currentLocationLabel = "";
+    private String currentCity = "";
+    private String currentUserName = "";
+    private String currentUserPhone = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -106,10 +125,32 @@ public class EmergencyHelpActivity extends BaseActivity {
         bindViews();
         setupRecycler();
         setupCategoryChips();
+        setupCategoryDropdown();
         setupListeners();
 
         updateLocationLabel(locationManager != null ? locationManager.getSavedLocationLabel() : "");
+        bindUserContactPreview();
+        loadCurrentUserContact();
+        restoreRequestFromIntent();
         loadProviders(false);
+    }
+
+    private void restoreRequestFromIntent() {
+        Intent intent = getIntent();
+        if (intent == null) return;
+        String requestId = safe(intent.getStringExtra("request_id"));
+        if (TextUtils.isEmpty(requestId)) {
+            requestId = safe(intent.getStringExtra("reference_id"));
+        }
+        if (TextUtils.isEmpty(requestId)) return;
+
+        activeEmergencyRequestId = requestId;
+        pollingStartedAtMs = System.currentTimeMillis();
+        if (tvAssigned != null) {
+            tvAssigned.setVisibility(View.VISIBLE);
+            tvAssigned.setText("Checking emergency assignment status...");
+        }
+        pollEmergencyStatusOnce(requestId);
     }
 
     private void bindViews() {
@@ -120,10 +161,33 @@ public class EmergencyHelpActivity extends BaseActivity {
         tvAssigned = findViewById(R.id.tvAssignedProvider);
         tvEmptyTitle = findViewById(R.id.tvEmptyTitle);
         tvEmptySubtitle = findViewById(R.id.tvEmptySubtitle);
+        tvUserName = findViewById(R.id.tvEmergencyUserName);
+        tvPhone = findViewById(R.id.tvEmergencyPhone);
+        tvAddress = findViewById(R.id.tvEmergencyAddress);
+        actCategory = findViewById(R.id.actEmergencyCategory);
+        etDescription = findViewById(R.id.etEmergencyDescription);
         progressBar = findViewById(R.id.progressEmergency);
         rvProviders = findViewById(R.id.rvEmergencyProviders);
         emptyState = findViewById(R.id.layoutEmptyState);
         chipGroup = findViewById(R.id.chipGroupEmergencyCategories);
+    }
+
+    private void setupCategoryDropdown() {
+        if (actCategory == null) return;
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_dropdown_item_1line,
+                CATEGORY_LABELS
+        );
+        actCategory.setAdapter(adapter);
+        actCategory.setText(selectedCategoryLabel, false);
+        actCategory.setOnItemClickListener((parent, view, position, id) -> {
+            if (position < 0 || position >= CATEGORY_LABELS.length) return;
+            selectedCategoryIndex = position;
+            selectedCategoryLabel = CATEGORY_LABELS[position];
+            syncCategoryChips();
+            loadProviders(false);
+        });
     }
 
     private void setupRecycler() {
@@ -150,15 +214,42 @@ public class EmergencyHelpActivity extends BaseActivity {
                 if (selectedCategoryIndex == index) return;
                 selectedCategoryIndex = index;
                 selectedCategoryLabel = CATEGORY_LABELS[index];
-                for (int c = 0; c < chipGroup.getChildCount(); c++) {
-                    View child = chipGroup.getChildAt(c);
-                    if (child instanceof Chip) {
-                        ((Chip) child).setChecked(c == index);
-                    }
+                syncCategoryChips();
+                if (actCategory != null) {
+                    actCategory.setText(selectedCategoryLabel, false);
                 }
                 loadProviders(false);
             });
             chipGroup.addView(chip);
+        }
+    }
+
+    private void syncCategoryChips() {
+        if (chipGroup == null) return;
+        for (int c = 0; c < chipGroup.getChildCount(); c++) {
+            View child = chipGroup.getChildAt(c);
+            if (child instanceof Chip) {
+                ((Chip) child).setChecked(c == selectedCategoryIndex);
+            }
+        }
+    }
+
+    private void bindUserContactPreview() {
+        FirebaseUser user = auth != null ? auth.getCurrentUser() : null;
+        if (TextUtils.isEmpty(currentUserName) && user != null) {
+            currentUserName = safe(user.getDisplayName());
+        }
+        if (tvUserName != null) {
+            tvUserName.setText("Name: " + (TextUtils.isEmpty(currentUserName) ? "-" : currentUserName));
+        }
+        if (tvPhone != null) {
+            tvPhone.setText("Phone: " + (TextUtils.isEmpty(currentUserPhone) ? "-" : currentUserPhone));
+        }
+        if (tvAddress != null) {
+            String location = TextUtils.isEmpty(currentLocationLabel)
+                    ? (locationManager != null ? locationManager.getSavedLocationLabel() : "")
+                    : currentLocationLabel;
+            tvAddress.setText("Location: " + (TextUtils.isEmpty(location) ? "-" : location));
         }
     }
 
@@ -174,12 +265,76 @@ public class EmergencyHelpActivity extends BaseActivity {
         }
     }
 
+    private void loadCurrentUserContact() {
+        FirebaseUser user = auth != null ? auth.getCurrentUser() : null;
+        if (user == null) return;
+
+        if (TextUtils.isEmpty(currentUserName)) {
+            currentUserName = safe(user.getDisplayName());
+        }
+        bindUserContactPreview();
+
+        new Thread(() -> {
+            try {
+                String uid = urlEncode(user.getUid());
+                String url = BuildConfig.SUPABASE_URL + "/rest/v1/users"
+                        + "?firebase_uid=eq." + uid
+                        + "&select=name,phone&limit=1";
+
+                Request request = new Request.Builder()
+                        .url(url)
+                        .get()
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
+                try (Response response = http.newCall(request).execute()) {
+                    String body = response.body() != null ? response.body().string() : "[]";
+                    if (response.code() != 200) return;
+                    JSONArray arr = new JSONArray(body);
+                    if (arr.length() == 0) return;
+                    JSONObject row = arr.getJSONObject(0);
+                    currentUserName = safe(row.optString("name", currentUserName));
+                    currentUserPhone = safe(row.optString("phone", currentUserPhone));
+                    mainHandler.post(this::bindUserContactPreview);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "loadCurrentUserContact failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
     private void requestEmergencyHelp() {
         FirebaseUser user = auth.getCurrentUser();
         if (user == null) {
             showToast("Please log in again to request emergency help.");
             return;
         }
+
+        if (!TextUtils.isEmpty(activeEmergencyRequestId)) {
+            showToast("An emergency request is already active. Please wait for assignment.");
+            return;
+        }
+
+        String selectedFromInput = actCategory != null ? safe(actCategory.getText() != null
+                ? actCategory.getText().toString() : "") : "";
+        if (!TextUtils.isEmpty(selectedFromInput)) {
+            selectedCategoryLabel = selectedFromInput;
+            for (int i = 0; i < CATEGORY_LABELS.length; i++) {
+                if (CATEGORY_LABELS[i].equalsIgnoreCase(selectedCategoryLabel)) {
+                    selectedCategoryIndex = i;
+                    break;
+                }
+            }
+            syncCategoryChips();
+        }
+
+        if (TextUtils.isEmpty(selectedCategoryLabel)) {
+            showToast("Please select an emergency category.");
+            return;
+        }
+
         if (providers.isEmpty()) {
             loadProviders(true);
             return;
@@ -191,58 +346,24 @@ public class EmergencyHelpActivity extends BaseActivity {
         if (isLoading) return;
         isLoading = true;
         showLoading(true);
-
-        captureCurrentLocation(new LocationResult() {
-            @Override
-            public void onSuccess(String locationLabel, double lat, double lng) {
-                currentLocationLabel = locationLabel;
-                currentLat = lat;
-                currentLng = lng;
-                updateLocationLabel(locationLabel);
-                fetchProviders(triggerEmergencyFlow, lat, lng, locationLabel);
-            }
-
-            @Override
-            public void onFailure(String reason) {
-                currentLat = Double.NaN;
-                currentLng = Double.NaN;
-                currentLocationLabel = locationManager != null ? locationManager.getSavedLocationLabel() : "";
-                updateLocationLabel(currentLocationLabel);
-                Log.d(TAG, "Location fallback: " + reason);
-                fetchProviders(triggerEmergencyFlow, Double.NaN, Double.NaN, currentLocationLabel);
-            }
-        });
+        currentLocationLabel = locationManager != null ? locationManager.getSavedLocationLabel() : "";
+        currentLat = locationManager != null ? locationManager.getSavedLat() : Double.NaN;
+        currentLng = locationManager != null ? locationManager.getSavedLng() : Double.NaN;
+        currentCity = extractCity(currentLocationLabel);
+        updateLocationLabel(currentLocationLabel);
+        fetchProviders(triggerEmergencyFlow, currentLat, currentLng, currentLocationLabel, currentCity);
     }
 
-    private void captureCurrentLocation(LocationResult callback) {
-        if (locationManager == null) {
-            if (callback != null) callback.onFailure("Location manager unavailable");
-            return;
-        }
-
-        locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
-            @Override
-            public void onSuccess(String city, String area, double lat, double lng) {
-                String label = AppLocationManager.composeLocationLabel(city, area);
-                if (TextUtils.isEmpty(label)) {
-                    label = city != null ? city : "";
-                }
-                if (callback != null) callback.onSuccess(label, lat, lng);
-            }
-
-            @Override
-            public void onFailure(String reason) {
-                if (callback != null) callback.onFailure(reason);
-            }
-        });
-    }
-
-    private void fetchProviders(boolean triggerEmergencyFlow, double lat, double lng, String locationLabel) {
+    private void fetchProviders(boolean triggerEmergencyFlow,
+                                double lat,
+                                double lng,
+                                String locationLabel,
+                                String city) {
         new Thread(() -> {
             try {
-                List<EmergencyProviderItem> fetched = queryProviders(selectedCategoryLabel, lat, lng, locationLabel);
+                List<EmergencyProviderItem> fetched = queryProviders(selectedCategoryLabel, lat, lng, locationLabel, city);
                 if (fetched.isEmpty()) {
-                    fetched = queryProviders("", lat, lng, locationLabel);
+                    fetched = queryProviders("", lat, lng, locationLabel, city);
                 }
 
                 List<EmergencyProviderItem> finalFetched = fetched;
@@ -275,12 +396,18 @@ public class EmergencyHelpActivity extends BaseActivity {
     private List<EmergencyProviderItem> queryProviders(String categoryLabel,
                                                        double lat,
                                                        double lng,
-                                                       String locationLabel) throws Exception {
+                                                       String locationLabel,
+                                                       String city) throws Exception {
         StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
                 .append("/rest/v1/provider_profiles?select=id,firebase_uid,business_name,owner_name,category,city,address,phone,email,description,experience_yrs,rating,is_available,availability_status,is_verified,status,is_approved,approved,lat,lng,latitude,longitude,business_image_url,review_count")
                 .append("&or=(is_approved.eq.true,approved.eq.true,status.eq.active,status.eq.approved,is_active.eq.true)")
+                .append("&is_available=eq.true")
                 .append("&limit=180")
                 .append("&order=rating.desc");
+
+        if (!TextUtils.isEmpty(city)) {
+            url.append("&city=ilike.*").append(urlEncode(city)).append("*");
+        }
 
         String queryFilter = buildEmergencyFilter(categoryLabel);
         if (!TextUtils.isEmpty(queryFilter)) {
@@ -313,6 +440,9 @@ public class EmergencyHelpActivity extends BaseActivity {
                 if (Double.isNaN(lat) || Double.isNaN(lng)) {
                     distance = -1f;
                 }
+                if (distance >= 0f && distance > EMERGENCY_MAX_DISTANCE_KM) {
+                    continue;
+                }
 
                 EmergencyProviderItem item = new EmergencyProviderItem(profile, distance);
                 out.add(item);
@@ -333,7 +463,6 @@ public class EmergencyHelpActivity extends BaseActivity {
             conditions.add("business_name.ilike.*" + safe + "*");
             conditions.add("category.ilike.*" + safe + "*");
             conditions.add("description.ilike.*" + safe + "*");
-            conditions.add("city.ilike.*" + safe + "*");
             conditions.add("owner_name.ilike.*" + safe + "*");
         }
         return "(" + String.join(",", conditions) + ")";
@@ -454,37 +583,227 @@ public class EmergencyHelpActivity extends BaseActivity {
             return;
         }
 
-        EmergencyProviderItem assigned = null;
-        for (EmergencyProviderItem item : list) {
-            if (item != null && item.isEmergencyReady()) {
-                assigned = item;
-                break;
-            }
-        }
-        if (assigned == null) {
-            assigned = list.get(0);
+        FirebaseUser user = auth.getCurrentUser();
+        if (user == null) {
+            showToast("Session expired. Please log in again.");
+            return;
         }
 
-        assignedProviderId = assigned.provider.id;
-        assignedProviderUid = assigned.provider.firebaseUid;
-        updateAssignedProvider(assigned);
-
-        List<String> firebaseUids = new ArrayList<>();
-        for (EmergencyProviderItem item : notifyTargets) {
-            firebaseUids.add(item.provider.firebaseUid);
-        }
-
+        String description = etDescription != null && etDescription.getText() != null
+                ? etDescription.getText().toString().trim()
+                : "";
         String location = TextUtils.isEmpty(currentLocationLabel)
                 ? (locationManager != null ? locationManager.getSavedLocationLabel() : "")
                 : currentLocationLabel;
-        String title = selectedCategoryLabel + " Emergency Help";
-        String body = "A nearby customer needs immediate " + selectedCategoryLabel.toLowerCase(Locale.getDefault())
-                + (TextUtils.isEmpty(location) ? " assistance." : " help near " + location + ".");
+        final String phone = TextUtils.isEmpty(currentUserPhone) ? "" : currentUserPhone;
+        final String name = TextUtils.isEmpty(currentUserName)
+                ? safe(user.getDisplayName())
+                : currentUserName;
 
-        FcmNotificationHelper.notifyEmergencyProviders(firebaseUids, title, body, assignedProviderId);
+        showLoading(true);
+        new Thread(() -> {
+            try {
+                String requestId = insertEmergencyRequest(
+                        user.getUid(),
+                        name,
+                        phone,
+                        selectedCategoryLabel,
+                        description,
+                        location,
+                        currentLat,
+                        currentLng
+                );
 
-        showToast("Emergency request sent. Assigning " + safe(assigned.provider.businessName) + ".");
-        openAssignedProvider(assigned);
+                List<String> firebaseUids = new ArrayList<>();
+                for (EmergencyProviderItem item : notifyTargets) {
+                    firebaseUids.add(item.provider.firebaseUid);
+                }
+
+                String title = "Emergency Request";
+                String body = "New urgent " + selectedCategoryLabel + " job near "
+                        + (TextUtils.isEmpty(location) ? "your area" : location);
+
+                JSONObject data = new JSONObject();
+                data.put("request_id", requestId);
+                data.put("user_name", TextUtils.isEmpty(name) ? "Customer" : name);
+                data.put("phone", phone);
+                data.put("address", TextUtils.isEmpty(location) ? "N/A" : location);
+                data.put("category", selectedCategoryLabel);
+                data.put("description", TextUtils.isEmpty(description) ? "Not specified" : description);
+
+                FcmNotificationHelper.notifyEmergencyProviders(firebaseUids, title, body, requestId, data);
+
+                mainHandler.post(() -> {
+                    activeEmergencyRequestId = requestId;
+                    pollingStartedAtMs = System.currentTimeMillis();
+                    showLoading(false);
+                    tvAssigned.setVisibility(View.VISIBLE);
+                    tvAssigned.setText("Emergency request sent. Waiting for provider acceptance...");
+                    showToast("Emergency request sent to nearby providers.");
+                    startEmergencyStatusPolling(requestId);
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "handleEmergencyRequest failed", e);
+                mainHandler.post(() -> {
+                    showLoading(false);
+                    showToast("Could not send emergency request. Please try again.");
+                });
+            }
+        }).start();
+    }
+
+    private String insertEmergencyRequest(String userUid,
+                                          String userName,
+                                          String phone,
+                                          String category,
+                                          String description,
+                                          String address,
+                                          double lat,
+                                          double lng) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("user_id", safe(userUid));
+        body.put("user_name", safe(userName));
+        body.put("phone", safe(phone));
+        body.put("category", safe(category));
+        body.put("description", safe(description));
+        body.put("address", safe(address));
+        body.put("latitude", Double.isNaN(lat) ? JSONObject.NULL : lat);
+        body.put("longitude", Double.isNaN(lng) ? JSONObject.NULL : lng);
+        body.put("status", "pending");
+
+        Request request = new Request.Builder()
+                .url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests")
+                .post(RequestBody.create(body.toString(), JSON))
+                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "return=representation")
+                .build();
+
+        try (Response response = http.newCall(request).execute()) {
+            String resp = response.body() != null ? response.body().string() : "[]";
+            if (response.code() != 200 && response.code() != 201) {
+                throw new IllegalStateException("Emergency request failed: HTTP " + response.code() + " " + resp);
+            }
+            JSONArray arr = new JSONArray(resp);
+            if (arr.length() == 0) throw new IllegalStateException("Emergency request id missing");
+            String id = arr.getJSONObject(0).optString("id", "");
+            if (TextUtils.isEmpty(id)) throw new IllegalStateException("Emergency request id missing");
+            return id;
+        }
+    }
+
+    private void startEmergencyStatusPolling(String requestId) {
+        if (TextUtils.isEmpty(requestId)) return;
+        mainHandler.postDelayed(() -> pollEmergencyStatusOnce(requestId), EMERGENCY_POLL_MS);
+    }
+
+    private void pollEmergencyStatusOnce(String requestId) {
+        if (!requestId.equals(activeEmergencyRequestId)) return;
+
+        new Thread(() -> {
+            try {
+                JSONObject request = fetchEmergencyRequestById(requestId);
+                String status = safe(request.optString("status", "pending")).toLowerCase(Locale.getDefault());
+                if ("accepted".equals(status)) {
+                    String providerId = safe(request.optString("assigned_provider_id", ""));
+                    JSONObject provider = fetchProviderById(providerId);
+                    EmergencyProviderItem assigned = providerToEmergencyItem(provider);
+
+                    mainHandler.post(() -> {
+                        activeEmergencyRequestId = "";
+                        assignedProviderId = providerId;
+                        assignedProviderUid = safe(provider.optString("firebase_uid", ""));
+                        updateAssignedProvider(assigned);
+                        showToast("Provider assigned successfully.");
+                        openAssignedProvider(assigned);
+                    });
+                    return;
+                }
+
+                if ("cancelled".equals(status) || "expired".equals(status) || "rejected".equals(status)) {
+                    mainHandler.post(() -> {
+                        activeEmergencyRequestId = "";
+                        showToast("Emergency request ended. Please try again.");
+                        updateAssignedProvider(null);
+                    });
+                    return;
+                }
+
+                long elapsed = System.currentTimeMillis() - pollingStartedAtMs;
+                if (elapsed > EMERGENCY_POLL_TIMEOUT_MS) {
+                    mainHandler.post(() -> {
+                        activeEmergencyRequestId = "";
+                        showToast("No provider accepted yet. Please retry emergency request.");
+                    });
+                    return;
+                }
+
+                mainHandler.postDelayed(() -> pollEmergencyStatusOnce(requestId), EMERGENCY_POLL_MS);
+            } catch (Exception e) {
+                Log.w(TAG, "pollEmergencyStatusOnce: " + e.getMessage());
+                mainHandler.postDelayed(() -> pollEmergencyStatusOnce(requestId), EMERGENCY_POLL_MS);
+            }
+        }).start();
+    }
+
+    private JSONObject fetchEmergencyRequestById(String requestId) throws Exception {
+        Request request = new Request.Builder()
+                .url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?id=eq." + urlEncode(requestId)
+                        + "&select=id,status,assigned_provider_id,accepted_at,user_id,user_name,phone,category,address,description&limit=1")
+                .get()
+                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .build();
+
+        try (Response response = http.newCall(request).execute()) {
+            String body = response.body() != null ? response.body().string() : "[]";
+            if (response.code() != 200) {
+                throw new IllegalStateException("fetchEmergencyRequestById HTTP " + response.code());
+            }
+            JSONArray arr = new JSONArray(body);
+            if (arr.length() == 0) throw new IllegalStateException("Emergency request not found");
+            return arr.getJSONObject(0);
+        }
+    }
+
+    private JSONObject fetchProviderById(String providerId) throws Exception {
+        if (TextUtils.isEmpty(providerId)) return new JSONObject();
+        Request request = new Request.Builder()
+                .url(BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles?id=eq." + urlEncode(providerId)
+                        + "&select=id,firebase_uid,business_name,owner_name,category,city,address,phone,email,description,experience_yrs,rating,is_available,status,is_verified,business_image_url,lat,lng,latitude,longitude&limit=1")
+                .get()
+                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .build();
+        try (Response response = http.newCall(request).execute()) {
+            String body = response.body() != null ? response.body().string() : "[]";
+            if (response.code() != 200) return new JSONObject();
+            JSONArray arr = new JSONArray(body);
+            return arr.length() > 0 ? arr.getJSONObject(0) : new JSONObject();
+        }
+    }
+
+    private EmergencyProviderItem providerToEmergencyItem(JSONObject providerRow) {
+        ProviderProfile profile = parseProvider(providerRow != null ? providerRow : new JSONObject());
+        if (profile == null) {
+            profile = new ProviderProfile();
+            profile.businessName = "Provider";
+        }
+        float distance = computeDistanceKm(currentLat, currentLng, profile.lat, profile.lng);
+        return new EmergencyProviderItem(profile, distance);
+    }
+
+    private String extractCity(String locationLabel) {
+        String normalized = safe(locationLabel);
+        if (TextUtils.isEmpty(normalized)) {
+            return locationManager != null ? safe(locationManager.getSavedCity()) : "";
+        }
+        int comma = normalized.indexOf(',');
+        if (comma <= 0) return normalized;
+        return normalized.substring(0, comma).trim();
     }
 
     private void updateAssignedProvider(EmergencyProviderItem assigned) {
@@ -497,8 +816,13 @@ public class EmergencyHelpActivity extends BaseActivity {
         String distance = assigned.distanceKm >= 0f
                 ? String.format(Locale.getDefault(), "%.1f km away", assigned.distanceKm)
                 : "Distance unavailable";
+        String eta = assigned.distanceKm >= 0f
+                ? String.format(Locale.getDefault(), "ETA %d mins", Math.max(5, Math.round(assigned.distanceKm * 4)))
+                : "ETA updating";
         tvAssigned.setVisibility(View.VISIBLE);
-        tvAssigned.setText("Assigned: " + safe(assigned.provider.businessName) + " • " + distance);
+        tvAssigned.setText("Assigned: " + safe(assigned.provider.businessName)
+                + "\nPhone: " + safe(assigned.provider.phone)
+                + "\n" + distance + " • " + eta);
         adapter.setAssignedProviderId(assigned.provider.id);
     }
 
@@ -581,6 +905,7 @@ public class EmergencyHelpActivity extends BaseActivity {
         if (tvLocation == null) return;
         String base = TextUtils.isEmpty(label) ? "Location unavailable" : label;
         tvLocation.setText(base + " • " + selectedCategoryLabel + " focus");
+        bindUserContactPreview();
     }
 
     private void showLoading(boolean show) {
@@ -637,6 +962,13 @@ public class EmergencyHelpActivity extends BaseActivity {
             case 3: return R.drawable.ic_emergency;
             default: return R.drawable.ic_emergency;
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        activeEmergencyRequestId = "";
+        mainHandler.removeCallbacksAndMessages(null);
+        super.onDestroy();
     }
 
     private final class EmergencyProviderAdapter extends RecyclerView.Adapter<EmergencyProviderAdapter.VH> {
@@ -766,9 +1098,5 @@ public class EmergencyHelpActivity extends BaseActivity {
         }
     }
 
-    private interface LocationResult {
-        void onSuccess(String locationLabel, double lat, double lng);
-        void onFailure(String reason);
-    }
 }
 
