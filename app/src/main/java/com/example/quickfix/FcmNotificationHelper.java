@@ -200,6 +200,45 @@ public final class FcmNotificationHelper {
         }).start();
     }
 
+    /**
+     * Notify a user that an emergency provider has been assigned.
+     */
+    public static void notifyEmergencyUserAssigned(String userFirebaseUid,
+                                                   String title,
+                                                   String body,
+                                                   String requestId,
+                                                   JSONObject data) {
+        if (trimToEmpty(userFirebaseUid).isEmpty()) return;
+
+        new Thread(() -> {
+            try {
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    return;
+                }
+
+                UserRecipient recipient = fetchUserRecipient(userFirebaseUid);
+                if (recipient == null || trimToEmpty(recipient.token).isEmpty()) {
+                    Log.d(TAG, "notifyEmergencyUserAssigned skipped: token not found for " + userFirebaseUid);
+                    return;
+                }
+
+                sendViaEdgeFunction(
+                        listOf(recipient.token),
+                        listOf(recipient.userId),
+                        listOf("user"),
+                        title,
+                        body,
+                        "emergency",
+                        requestId,
+                        data
+                );
+            } catch (Exception e) {
+                Log.w(TAG, "notifyEmergencyUserAssigned failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
     // ── Public single-token send (used by OfferManagement) ───────────────
 
     /**

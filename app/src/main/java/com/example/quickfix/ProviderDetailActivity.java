@@ -407,8 +407,7 @@ public class ProviderDetailActivity extends BaseActivity {
                                 FcmNotificationHelper.notifyProviderNewBooking(
                                         providerFirebaseUid,
                                         bookingBody.optString("customer_name", "Customer"),
-                                        bookingBody.optString("service_name", "Service"),
-                                        null
+                                        bookingBody.optString("service_name", "Service")
                                 );
                                 Toast.makeText(ProviderDetailActivity.this,
                                         "Booking submitted successfully!",
