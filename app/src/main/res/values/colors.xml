@@ -29,6 +29,7 @@
     <color name="text_primary">#1A1A2E</color>
     <color name="text_secondary">#6B7280</color>
     <color name="divider">#E5E7EB</color>
+    <color name="outline">#79747E</color>
     <color name="bottom_nav_bg">#FFFFFF</color>
     <color name="toolbar_bg">#FFFFFF</color>
     <color name="search_bg">#F0F4FF</color>
