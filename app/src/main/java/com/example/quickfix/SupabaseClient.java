@@ -14,8 +14,10 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -907,53 +909,56 @@ public class SupabaseClient {
             List<String> failures = new ArrayList<>();
             try {
                 String encUid = java.net.URLEncoder.encode(normalizedUid, "UTF-8");
+                JSONObject accountRow = fetchAccountRow("firebase_uid=eq." + encUid + "&limit=1");
+                String userRowId = accountRow != null ? safeJson(accountRow.optString("id", "")) : "";
+
+                List<String> identityIds = collectIdentityIds(normalizedUid, userRowId);
+                List<String> encodedIds = encodeValues(identityIds);
 
                 // Dependents first, then the user row.
-                deleteWithFallbackFilters("business_media", Arrays.asList(
-                        "provider_id=eq." + encUid,
-                        "firebase_uid=eq." + encUid,
-                        "user_id=eq." + encUid
-                ), true, failures);
+                deleteWithFallbackFilters("business_media",
+                        buildIdentityFilters(encodedIds, "provider_id", "firebase_uid", "user_id"),
+                        true, failures);
 
-                deleteWithFallbackFilters("bookings", Arrays.asList(
-                        "customer_id=eq." + encUid,
-                        "provider_id=eq." + encUid,
-                        "firebase_uid=eq." + encUid
-                ), true, failures);
+                deleteWithFallbackFilters("bookings",
+                        buildIdentityFilters(encodedIds, "customer_id", "provider_id", "firebase_uid"),
+                        true, failures);
 
-                deleteWithFallbackFilters("notifications", Arrays.asList(
-                        "receiver_id=eq." + encUid,
-                        "user_id=eq." + encUid,
-                        "firebase_uid=eq." + encUid
-                ), true, failures);
+                deleteWithFallbackFilters("notifications",
+                        buildIdentityFilters(encodedIds, "receiver_id", "user_id", "firebase_uid"),
+                        true, failures);
 
-                deleteWithFallbackFilters("provider_applications", Arrays.asList(
-                        "firebase_uid=eq." + encUid,
-                        looksLikeUuid(normalizedUid) ? "id=eq." + encUid : null
-                ), true, failures);
+                deleteWithFallbackFilters("emergency_requests",
+                        buildIdentityFilters(encodedIds, "user_id", "assigned_provider_id"),
+                        true, failures);
 
-                deleteWithFallbackFilters("services", Arrays.asList(
-                        "provider_id=eq." + encUid,
-                        "firebase_uid=eq." + encUid
-                ), true, failures);
+                deleteWithFallbackFilters("provider_applications",
+                        buildIdentityFilters(encodedIds, "firebase_uid", "id"),
+                        true, failures);
 
-                deleteWithFallbackFilters("user_fcm_tokens", Arrays.asList(
-                        "user_id=eq." + encUid,
-                        "firebase_uid=eq." + encUid
-                ), true, failures);
+                deleteWithFallbackFilters("services",
+                        buildIdentityFilters(encodedIds, "provider_id", "firebase_uid"),
+                        true, failures);
 
-                deleteWithFallbackFilters("provider_profiles", Arrays.asList(
-                        "firebase_uid=eq." + encUid,
-                        looksLikeUuid(normalizedUid) ? "id=eq." + encUid : null
-                ), true, failures);
+                deleteWithFallbackFilters("user_fcm_tokens",
+                        buildIdentityFilters(encodedIds, "user_id", "firebase_uid"),
+                        true, failures);
 
-                deleteWithFallbackFilters("users", Arrays.asList(
-                        "firebase_uid=eq." + encUid,
-                        looksLikeUuid(normalizedUid) ? "id=eq." + encUid : null
-                ), false, failures);
+                deleteWithFallbackFilters("provider_profiles",
+                        buildIdentityFilters(encodedIds, "firebase_uid", "id"),
+                        true, failures);
 
-                JSONObject remaining = fetchAccountRow("firebase_uid=eq." + encUid + "&limit=1");
-                if (remaining != null) {
+                deleteWithFallbackFilters("users",
+                        buildIdentityFilters(encodedIds, "firebase_uid", "id"),
+                        false, failures);
+
+                boolean stillExists = fetchAccountRow("firebase_uid=eq." + encUid + "&limit=1") != null;
+                if (!stillExists && !userRowId.isEmpty()) {
+                    String encRowId = java.net.URLEncoder.encode(userRowId, "UTF-8");
+                    stillExists = fetchAccountRow("id=eq." + encRowId + "&limit=1") != null;
+                }
+
+                if (stillExists) {
                     failures.add("users(VERIFY_EXISTS)");
                 }
 
@@ -966,6 +971,42 @@ public class SupabaseClient {
                 MAIN.post(() -> callback.onError(e.getMessage()));
             }
         }).start();
+    }
+
+    private static List<String> collectIdentityIds(String firebaseUid, String userRowId) {
+        Set<String> dedupe = new LinkedHashSet<>();
+        if (firebaseUid != null && !firebaseUid.trim().isEmpty()) {
+            dedupe.add(firebaseUid.trim());
+        }
+        if (userRowId != null && !userRowId.trim().isEmpty()) {
+            dedupe.add(userRowId.trim());
+        }
+        return new ArrayList<>(dedupe);
+    }
+
+    private static List<String> encodeValues(List<String> values) throws Exception {
+        List<String> out = new ArrayList<>();
+        if (values == null) return out;
+        for (String value : values) {
+            if (value == null || value.trim().isEmpty()) continue;
+            out.add(java.net.URLEncoder.encode(value.trim(), "UTF-8"));
+        }
+        return out;
+    }
+
+    private static List<String> buildIdentityFilters(List<String> encodedIds, String... columns) {
+        List<String> filters = new ArrayList<>();
+        if (encodedIds == null || encodedIds.isEmpty() || columns == null || columns.length == 0) {
+            return filters;
+        }
+        for (String column : columns) {
+            if (column == null || column.trim().isEmpty()) continue;
+            for (String encId : encodedIds) {
+                if (encId == null || encId.trim().isEmpty()) continue;
+                filters.add(column.trim() + "=eq." + encId.trim());
+            }
+        }
+        return filters;
     }
 
     private static void deleteWithFallbackFilters(String table,
@@ -1062,6 +1103,10 @@ public class SupabaseClient {
             sb.append(failures.get(i));
         }
         return sb.toString();
+    }
+
+    private static String safeJson(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private static JSONObject fetchAccountRow(String filterQuery) throws Exception {

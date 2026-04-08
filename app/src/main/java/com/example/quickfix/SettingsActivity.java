@@ -25,6 +25,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.EmailAuthProvider;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.android.material.appbar.MaterialToolbar;
@@ -331,7 +332,8 @@ public class SettingsActivity extends BaseActivity {
                     Log.w(TAG, "Firebase delete failed: " + msg);
 
                     // Firebase requires a recent login before deleting the account
-                    if (msg.contains("REQUIRES_RECENT_LOGIN")
+                    if (e instanceof FirebaseAuthRecentLoginRequiredException
+                            || msg.contains("REQUIRES_RECENT_LOGIN")
                             || msg.contains("requires-recent-login")) {
                         hideOverlay();
                         isDeleteInProgress = false;
@@ -421,6 +423,9 @@ public class SettingsActivity extends BaseActivity {
                 .setMessage(R.string.settings_delete_password_message)
                 .setView(etPassword)
                 .setPositiveButton(R.string.settings_delete_password_confirm, (d, w) -> {
+                    if (isDeleteInProgress) return;
+                    isDeleteInProgress = true;
+
                     String password = etPassword.getText() != null
                             ? etPassword.getText().toString().trim() : "";
                     if (password.isEmpty()) {

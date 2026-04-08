@@ -265,6 +265,7 @@
     <string name="settings_dark_mode">Dark Mode</string>
     <string name="settings_change_password">Change Password</string>
     <string name="settings_delete_account">Delete Account</string>
+    <string name="settings_delete_account_data_scope">Deletes Firebase and Supabase data</string>
     <string name="settings_delete_account_subtitle" translatable="false">Permanent and irreversible</string>
     <string name="settings_delete_dialog_warning">This action permanently deletes your account.</string>
     <string name="settings_delete_dialog_message">The app will remove your Firebase Authentication account and all related Supabase data that belongs to this user. This cannot be undone.</string>
