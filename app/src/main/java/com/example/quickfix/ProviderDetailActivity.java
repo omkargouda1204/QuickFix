@@ -11,6 +11,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -18,6 +19,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.content.ContextCompat;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
@@ -101,6 +103,37 @@ public class ProviderDetailActivity extends BaseActivity {
         String createdAt;
     }
 
+    private static class BusinessMediaItem {
+        String id;
+        String providerId;
+        String mediaUrl;
+        String mediaType;
+        String thumbnailUrl;
+        int displayOrder;
+        String createdAt;
+        String updatedAt;
+
+        static BusinessMediaItem fromJson(JSONObject json) {
+            if (json == null) return null;
+            BusinessMediaItem item = new BusinessMediaItem();
+            item.id = json.optString("id", "");
+            item.providerId = json.optString("provider_id", "");
+            item.mediaUrl = json.optString("media_url", "");
+            item.mediaType = json.optString("media_type", "");
+            item.thumbnailUrl = json.optString("thumbnail_url", "");
+            item.displayOrder = json.optInt("display_order", 0);
+            item.createdAt = json.optString("created_at", "");
+            item.updatedAt = json.optString("updated_at", "");
+            return item;
+        }
+
+        boolean isVideo() {
+            return "video".equalsIgnoreCase(mediaType);
+        }
+    }
+
+    private static final int MAX_SHOWCASE_ITEMS = 8;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -141,6 +174,7 @@ public class ProviderDetailActivity extends BaseActivity {
         bindViews(businessName, ownerName, providerCategory, providerCity, phone,
                   email, description, experience, imageUrl, isVerified, rating);
         loadRecentReviews();
+        loadShowcaseMedia();
 
         // When opened from lightweight provider search suggestions, fetch complete profile.
         if (providerIdForBooking != null && !providerIdForBooking.trim().isEmpty()) {
@@ -561,106 +595,145 @@ public class ProviderDetailActivity extends BaseActivity {
         }
     }
 
-    private int dp(int value) {
-        float density = getResources().getDisplayMetrics().density;
-        return Math.round(value * density);
+    private void loadShowcaseMedia() {
+        final String providerProfileId = providerIdForBooking != null ? providerIdForBooking.trim() : "";
+        final String providerUid = providerFirebaseUid != null ? providerFirebaseUid.trim() : "";
+
+        if (providerProfileId.isEmpty() && providerUid.isEmpty()) {
+            showShowcaseMedia(new ArrayList<>());
+            return;
+        }
+
+        new Thread(() -> {
+            List<BusinessMediaItem> items = new ArrayList<>();
+            try {
+                String url = SUPABASE_URL + "/rest/v1/business_media"
+                        + "?select=id,provider_id,media_url,media_type,thumbnail_url,display_order,created_at,updated_at"
+                        + "&order=display_order.asc,created_at.desc"
+                        + "&limit=" + MAX_SHOWCASE_ITEMS;
+
+                if (!providerProfileId.isEmpty() && !providerUid.isEmpty() && !providerProfileId.equals(providerUid)) {
+                    url += "&or=(provider_id.eq." + Uri.encode(providerProfileId)
+                            + ",provider_id.eq." + Uri.encode(providerUid) + ")";
+                } else if (!providerUid.isEmpty()) {
+                    url += "&provider_id=eq." + Uri.encode(providerUid);
+                } else {
+                    url += "&provider_id=eq." + Uri.encode(providerProfileId);
+                }
+
+                Request req = new Request.Builder().url(url)
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
+                try (Response r = httpClient.newCall(req).execute()) {
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    if (r.code() == 200) {
+                        JSONArray arr = new JSONArray(body);
+                        for (int i = 0; i < arr.length(); i++) {
+                            BusinessMediaItem item = BusinessMediaItem.fromJson(arr.getJSONObject(i));
+                            if (item == null || safe(item.mediaUrl).isEmpty()) continue;
+                            items.add(item);
+                        }
+                    } else {
+                        Log.w(TAG, "loadShowcaseMedia HTTP " + r.code() + " | " + body);
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "loadShowcaseMedia failed: " + e.getMessage());
+            }
+
+            mainHandler.post(() -> showShowcaseMedia(items));
+        }).start();
     }
 
-    private String safe(String value) {
-        return value == null ? "" : value.trim();
+    private void showShowcaseMedia(List<BusinessMediaItem> items) {
+        View card = findViewById(R.id.cardShowcaseMedia);
+        LinearLayout container = findViewById(R.id.layoutShowcaseMedia);
+        TextView tvEmpty = findViewById(R.id.tvShowcaseEmpty);
+        View scroll = findViewById(R.id.scrollShowcase);
+
+        if (card == null || container == null || tvEmpty == null || scroll == null) return;
+
+        container.removeAllViews();
+        card.setVisibility(View.VISIBLE);
+
+        if (items == null || items.isEmpty()) {
+            tvEmpty.setVisibility(View.VISIBLE);
+            scroll.setVisibility(View.GONE);
+            return;
+        }
+
+        tvEmpty.setVisibility(View.GONE);
+        scroll.setVisibility(View.VISIBLE);
+
+        for (BusinessMediaItem item : items) {
+            FrameLayout tile = new FrameLayout(this);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(120), dp(120));
+            lp.rightMargin = dp(10);
+            tile.setLayoutParams(lp);
+            tile.setBackgroundColor(0xFFF2F2F2);
+
+            ImageView preview = new ImageView(this);
+            preview.setLayoutParams(new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+            ));
+            preview.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            tile.addView(preview);
+
+            String loadUrl = item.isVideo() && !safe(item.thumbnailUrl).isEmpty()
+                    ? item.thumbnailUrl
+                    : item.mediaUrl;
+
+            Glide.with(this)
+                    .load(loadUrl)
+                    .placeholder(R.drawable.ic_launcher_foreground)
+                    .error(R.drawable.ic_launcher_foreground)
+                    .centerCrop()
+                    .into(preview);
+
+            if (item.isVideo()) {
+                TextView badge = new TextView(this);
+                FrameLayout.LayoutParams badgeLp = new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                );
+                badgeLp.leftMargin = dp(8);
+                badgeLp.topMargin = dp(8);
+                badge.setLayoutParams(badgeLp);
+                badge.setText("VIDEO");
+                badge.setTextSize(10f);
+                badge.setTextColor(0xFFFFFFFF);
+                badge.setBackgroundColor(0xAA000000);
+                badge.setPadding(dp(6), dp(2), dp(6), dp(2));
+                tile.addView(badge);
+            }
+
+            tile.setOnClickListener(v -> openShowcaseMedia(item));
+            container.addView(tile);
+        }
     }
 
-    private String fetchProviderProfileIdByFirebaseUid(String firebaseUid) {
+    private void openShowcaseMedia(BusinessMediaItem item) {
+        if (item == null || safe(item.mediaUrl).isEmpty()) return;
+
         try {
-            String url = SUPABASE_URL + "/rest/v1/provider_profiles"
-                    + "?firebase_uid=eq." + Uri.encode(firebaseUid)
-                    + "&select=id&limit=1";
-
-            Request request = new Request.Builder().url(url)
-                    .addHeader("apikey", ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Accept", "application/json")
-                    .build();
-
-            try (Response response = httpClient.newCall(request).execute()) {
-                String body = response.body() != null ? response.body().string() : "[]";
-                if (response.code() != 200) return "";
-                JSONArray arr = new JSONArray(body);
-                if (arr.length() == 0) return "";
-                return arr.getJSONObject(0).optString("id", "");
+            if (item.isVideo()) {
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setDataAndType(Uri.parse(item.mediaUrl), "video/*");
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            } else {
+                Intent intent = new Intent(this, FullScreenImageActivity.class);
+                intent.putExtra(FullScreenImageActivity.EXTRA_IMAGE_URL, item.mediaUrl);
+                intent.putExtra(FullScreenImageActivity.EXTRA_TITLE, "Business Showcase");
+                startActivity(intent);
             }
         } catch (Exception e) {
-            Log.e(TAG, "fetchProviderProfileIdByFirebaseUid: " + e.getMessage());
-            return "";
+            Toast.makeText(this, "Unable to open media", Toast.LENGTH_SHORT).show();
         }
-    }
-
-    private UserMeta fetchUserByFirebaseUid(String firebaseUid) {
-        if (firebaseUid == null || firebaseUid.trim().isEmpty()) return null;
-        String encoded = Uri.encode(firebaseUid.trim());
-        String url = SUPABASE_URL + "/rest/v1/users"
-                + "?firebase_uid=eq." + encoded
-                + "&select=id,name,phone&limit=1";
-        return fetchUserMeta(url);
-    }
-
-    private UserMeta fetchUserMeta(String url) {
-        try {
-            Request req = new Request.Builder().url(url)
-                    .addHeader("apikey", ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Accept", "application/json")
-                    .build();
-
-            try (Response r = httpClient.newCall(req).execute()) {
-                String body = r.body() != null ? r.body().string() : "[]";
-                if (r.code() != 200) return null;
-                JSONArray arr = new JSONArray(body);
-                if (arr.length() == 0) return null;
-
-                JSONObject o = arr.getJSONObject(0);
-                UserMeta meta = new UserMeta();
-                meta.id = o.optString("id", "");
-                meta.name = o.optString("name", "");
-                meta.phone = o.optString("phone", "");
-                return meta;
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "fetchUserMeta failed: " + e.getMessage());
-            return null;
-        }
-    }
-
-    private String extractSupabaseError(String body) {
-        if (body == null || body.trim().isEmpty()) return "HTTP error";
-        try {
-            JSONObject obj = new JSONObject(body);
-            String message = obj.optString("message", "");
-            String details = obj.optString("details", "");
-            String hint = obj.optString("hint", "");
-            String merged = (message + " " + details + " " + hint).trim();
-            return merged.isEmpty() ? body : merged;
-        } catch (Exception ignored) {
-            return body;
-        }
-    }
-
-    private void setText(int viewId, String text) {
-        TextView tv = findViewById(viewId);
-        if (tv != null) tv.setText(text != null ? text : "-");
-    }
-
-    private String notEmpty(String val, String fallback) {
-        return (val != null && !val.trim().isEmpty()) ? val.trim() : fallback;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == android.R.id.home) {
-            finish();
-            return true;
-        }
-        return super.onOptionsItemSelected(item);
     }
 
     private void fetchProviderDetailsById(String providerId) {
@@ -691,6 +764,7 @@ public class ProviderDetailActivity extends BaseActivity {
                             (float) finalData.optDouble("rating", 0d)
                     );
                     loadRecentReviews();
+                    loadShowcaseMedia();
                 });
             } catch (Exception e) {
                 Log.e(TAG, "fetchProviderDetailsById: " + e.getMessage());
@@ -758,5 +832,96 @@ public class ProviderDetailActivity extends BaseActivity {
         Calendar c = Calendar.getInstance();
         c.setTimeInMillis(ms);
         return startOfDayMillis(c);
+    }
+
+    private UserMeta fetchUserByFirebaseUid(String firebaseUid) {
+        if (firebaseUid == null || firebaseUid.trim().isEmpty()) return null;
+        String encoded = Uri.encode(firebaseUid.trim());
+        String url = SUPABASE_URL + "/rest/v1/users"
+                + "?firebase_uid=eq." + encoded
+                + "&select=id,name,phone&limit=1";
+        return fetchUserMeta(url);
+    }
+
+    private UserMeta fetchUserMeta(String url) {
+        try {
+            Request req = new Request.Builder().url(url)
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response r = httpClient.newCall(req).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                if (r.code() != 200) return null;
+
+                JSONArray arr = new JSONArray(body);
+                if (arr.length() == 0) return null;
+
+                JSONObject o = arr.getJSONObject(0);
+                UserMeta meta = new UserMeta();
+                meta.id = o.optString("id", "");
+                meta.name = o.optString("name", "");
+                meta.phone = o.optString("phone", "");
+                return meta;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "fetchUserMeta failed: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private String fetchProviderProfileIdByFirebaseUid(String firebaseUid) {
+        if (firebaseUid == null || firebaseUid.trim().isEmpty()) return "";
+        try {
+            String url = SUPABASE_URL + "/rest/v1/provider_profiles"
+                    + "?firebase_uid=eq." + Uri.encode(firebaseUid.trim())
+                    + "&select=id&limit=1";
+
+            Request request = new Request.Builder().url(url)
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                String body = response.body() != null ? response.body().string() : "[]";
+                if (response.code() != 200) return "";
+
+                JSONArray arr = new JSONArray(body);
+                if (arr.length() == 0) return "";
+                return arr.getJSONObject(0).optString("id", "");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "fetchProviderProfileIdByFirebaseUid: " + e.getMessage());
+            return "";
+        }
+    }
+
+    private void setText(int viewId, String text) {
+        TextView tv = findViewById(viewId);
+        if (tv != null) tv.setText(text != null ? text : "-");
+    }
+
+    private String notEmpty(String val, String fallback) {
+        return (val != null && !val.trim().isEmpty()) ? val.trim() : fallback;
+    }
+
+    private int dp(int value) {
+        float density = getResources().getDisplayMetrics().density;
+        return Math.round(value * density);
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            finish();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 }
