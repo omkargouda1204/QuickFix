@@ -339,7 +339,7 @@ public class BusinessProfileActivity extends BaseActivity {
                 String description = profile.optString("description", "");
                 String category = profile.optString("category", "");
                 lockedCategory = category;
-                String experience = profile.optString("experience", "");
+                String experience = profile.optString("experience_yrs", profile.optString("experience", ""));
                 String address = profile.optString("address", "");
                 String city = profile.optString("city", "");
                 String phone = profile.optString("phone", "");
@@ -500,6 +500,18 @@ public class BusinessProfileActivity extends BaseActivity {
             return;
         }
 
+        if (!experience.isEmpty()) {
+            try {
+                Integer.parseInt(experience);
+            } catch (NumberFormatException nfe) {
+                if (etExperience != null) {
+                    etExperience.setError("Experience must be a number (years)");
+                    etExperience.requestFocus();
+                }
+                return;
+            }
+        }
+
         // Category is immutable after onboarding and must already exist.
         if (lockedCategory == null || lockedCategory.trim().isEmpty()) {
             Toast.makeText(this, "Category is locked and cannot be changed here.", Toast.LENGTH_SHORT).show();
@@ -555,56 +567,71 @@ public class BusinessProfileActivity extends BaseActivity {
             return;
         }
 
-        AtomicInteger completed = new AtomicInteger(0);
-        AtomicInteger success = new AtomicInteger(0);
-        AtomicInteger failed = new AtomicInteger(0);
-        final String[] firstError = {null};
-        int total = pendingUploads.size();
+        uploadPendingMediaSequential(pendingUploads, 0, 0, 0, null, onComplete);
+    }
 
-        for (Uri uri : pendingUploads) {
-            String mediaType = isVideo(uri) ? "video" : "image";
-            String bucket = SupabaseStorageHelper.BUCKET_QUICKFIX;
-            String prefix = "provider_" + providerId + "_gallery";
-
-            SupabaseStorageHelper.uploadFile(this, uri, bucket, prefix,
-                    new SupabaseStorageHelper.UploadCallback() {
-                        @Override
-                        public void onSuccess(String publicUrl) {
-                            saveMediaToDatabase(publicUrl, mediaType, (dbSuccess, dbError) -> {
-                                if (dbSuccess) {
-                                    success.incrementAndGet();
-                                    if (mediaAdapter != null) {
-                                        mediaAdapter.removeLocalMedia(uri);
-                                        updateMediaCount();
-                                    }
-                                } else {
-                                    failed.incrementAndGet();
-                                    if (firstError[0] == null) {
-                                        firstError[0] = dbError;
-                                    }
-                                }
-
-                                if (completed.incrementAndGet() >= total) {
-                                    loadBusinessMedia();
-                                    onComplete.onComplete(success.get(), failed.get(), firstError[0]);
-                                }
-                            });
-                        }
-
-                        @Override
-                        public void onError(String error) {
-                            Log.e(TAG, "Media upload failed: " + error);
-                            failed.incrementAndGet();
-                            if (firstError[0] == null) {
-                                firstError[0] = error;
-                            }
-                            if (completed.incrementAndGet() >= total) {
-                                loadBusinessMedia();
-                                onComplete.onComplete(success.get(), failed.get(), firstError[0]);
-                            }
-                        }
-                    });
+    private void uploadPendingMediaSequential(List<Uri> pendingUploads,
+                                              int index,
+                                              int successCount,
+                                              int failedCount,
+                                              String firstError,
+                                              PendingMediaUploadCallback onComplete) {
+        if (index >= pendingUploads.size()) {
+            loadBusinessMedia();
+            onComplete.onComplete(successCount, failedCount, firstError);
+            return;
         }
+
+        Uri uri = pendingUploads.get(index);
+        String mediaType = isVideo(uri) ? "video" : "image";
+        String bucket = SupabaseStorageHelper.BUCKET_QUICKFIX;
+        String prefix = "provider_" + providerId + "_gallery";
+
+        SupabaseStorageHelper.uploadFile(this, uri, bucket, prefix,
+                new SupabaseStorageHelper.UploadCallback() {
+                    @Override
+                    public void onSuccess(String publicUrl) {
+                        saveMediaToDatabase(publicUrl, mediaType, (dbSuccess, dbError) -> {
+                            int nextSuccess = successCount;
+                            int nextFailed = failedCount;
+                            String nextFirstError = firstError;
+
+                            if (dbSuccess) {
+                                nextSuccess++;
+                                if (mediaAdapter != null) {
+                                    mediaAdapter.removeLocalMedia(uri);
+                                    updateMediaCount();
+                                }
+                            } else {
+                                nextFailed++;
+                                if (nextFirstError == null) nextFirstError = dbError;
+                            }
+
+                            uploadPendingMediaSequential(
+                                    pendingUploads,
+                                    index + 1,
+                                    nextSuccess,
+                                    nextFailed,
+                                    nextFirstError,
+                                    onComplete
+                            );
+                        });
+                    }
+
+                    @Override
+                    public void onError(String error) {
+                        Log.e(TAG, "Media upload failed: " + error);
+                        String nextFirstError = firstError == null ? error : firstError;
+                        uploadPendingMediaSequential(
+                                pendingUploads,
+                                index + 1,
+                                successCount,
+                                failedCount + 1,
+                                nextFirstError,
+                                onComplete
+                        );
+                    }
+                });
     }
 
     private boolean isVideo(Uri uri) {
@@ -650,7 +677,10 @@ public class BusinessProfileActivity extends BaseActivity {
                             onComplete.onComplete(true, null);
                         } else {
                             Log.e(TAG, "Save media DB HTTP " + code + " | " + resp);
-                            onComplete.onComplete(false, "Media DB save failed: HTTP " + code);
+                            String detail = resp == null || resp.trim().isEmpty()
+                                    ? ("HTTP " + code)
+                                    : ("HTTP " + code + ": " + resp);
+                            onComplete.onComplete(false, "Media DB save failed: " + detail);
                         }
                     });
                 }
@@ -702,11 +732,16 @@ public class BusinessProfileActivity extends BaseActivity {
             JSONObject body = new JSONObject();
             body.put("business_name", businessName != null ? businessName : "");
             body.put("description", description != null ? description : "");
-            body.put("experience", experience != null ? experience : "");
             body.put("address", address != null ? address : "");
             body.put("city", city != null ? city : "");
             body.put("phone", phone != null ? phone : "");
             body.put("is_available", isAvailable);
+
+            String exp = experience != null ? experience.trim() : "";
+            if (!exp.isEmpty()) {
+                body.put("experience_yrs", Integer.parseInt(exp));
+            }
+
             if (imageUrl != null && !imageUrl.isEmpty()) {
                 body.put("business_image_url", imageUrl);
             }
@@ -759,13 +794,16 @@ public class BusinessProfileActivity extends BaseActivity {
                                     "Profile updated successfully!",
                                     Toast.LENGTH_SHORT).show();
                             selectedImageUri = null;
+                            if (imageUrl != null && !imageUrl.isEmpty()) {
+                                currentImageUrl = imageUrl;
+                            }
                             setEditMode(false);
                             loadProfile();
                         } else {
                             Log.e(TAG, "Profile update HTTP " + code + " | " + resp);
                             Toast.makeText(BusinessProfileActivity.this,
-                                    "Update failed: HTTP " + code,
-                                    Toast.LENGTH_SHORT).show();
+                                    "Update failed: HTTP " + code + " - " + parseSupabaseError(resp),
+                                    Toast.LENGTH_LONG).show();
                         }
                     });
                 }
@@ -782,6 +820,23 @@ public class BusinessProfileActivity extends BaseActivity {
                 btnEditProfile.setEnabled(true);
             }
             Toast.makeText(this, "Error updating profile", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private String parseSupabaseError(String body) {
+        if (body == null || body.trim().isEmpty()) return "Unknown error";
+        try {
+            JSONObject obj = new JSONObject(body);
+            String message = obj.optString("message", "").trim();
+            String details = obj.optString("details", "").trim();
+            String hint = obj.optString("hint", "").trim();
+
+            String out = message;
+            if (!details.isEmpty()) out += (out.isEmpty() ? "" : " | ") + details;
+            if (!hint.isEmpty()) out += (out.isEmpty() ? "" : " | ") + hint;
+            return out.isEmpty() ? body : out;
+        } catch (Exception ignore) {
+            return body;
         }
     }
 

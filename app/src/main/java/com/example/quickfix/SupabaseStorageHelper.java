@@ -79,6 +79,8 @@ public class SupabaseStorageHelper {
     private static final int BANNER_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;  // 2 MB
     private static final int PROFILE_MAX_SOURCE_BYTES = 10 * 1024 * 1024; // 10 MB
     private static final int PROFILE_MAX_UPLOAD_BYTES = 1024 * 1024;      // 1 MB
+    private static final int MEDIA_IMAGE_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;  // 2 MB
+    private static final int MEDIA_VIDEO_MAX_SOURCE_BYTES = 30 * 1024 * 1024; // 30 MB
 
     /**
      * Upload a file from a Uri to a Supabase Storage bucket.
@@ -565,14 +567,29 @@ public class SupabaseStorageHelper {
 
         String mimeType = context.getContentResolver().getType(fileUri);
         if (mimeType == null) mimeType = "application/octet-stream";
-        payload.mimeType = mimeType;
 
-        String ext = mimeTypeToExtension(mimeType);
-        String uniqueId = UUID.randomUUID().toString().replace("-", "");
         String safePrefix = prefix == null ? "user" : prefix.trim();
         if (safePrefix.isEmpty()) safePrefix = "user";
-        payload.storagePath = safePrefix + "/" + uniqueId + ext;
 
+        String uniqueId = UUID.randomUUID().toString().replace("-", "");
+
+        if (mimeType.startsWith("image/")) {
+            byte[] source = readUriBytes(context, fileUri, BANNER_MAX_SOURCE_BYTES);
+            payload.fileBytes = compressBannerBytes(source, MEDIA_IMAGE_MAX_UPLOAD_BYTES);
+            payload.mimeType = "image/jpeg";
+            payload.storagePath = safePrefix + "/" + uniqueId + ".jpg";
+            return payload;
+        }
+
+        if (mimeType.startsWith("video/")) {
+            payload.fileBytes = readUriBytes(context, fileUri, MEDIA_VIDEO_MAX_SOURCE_BYTES);
+            payload.mimeType = mimeType;
+            payload.storagePath = safePrefix + "/" + uniqueId + mimeTypeToExtension(mimeType);
+            return payload;
+        }
+
+        payload.mimeType = mimeType;
+        payload.storagePath = safePrefix + "/" + uniqueId + mimeTypeToExtension(mimeType);
         try (InputStream is = context.getContentResolver().openInputStream(fileUri)) {
             if (is == null) throw new IllegalStateException("Cannot read file");
             payload.fileBytes = readAllBytes(is);
