@@ -482,7 +482,7 @@ public class SupabaseStorageHelper {
     }
 
     private static String formatUploadError(int code, String body, String bucket) {
-        String safeBody = body == null ? "" : body;
+        String safeBody = body == null ? "" : body.trim();
         String lower = safeBody.toLowerCase();
 
         if (code == 401 || code == 403 || lower.contains("\"error\":\"unauth\"")
@@ -495,6 +495,9 @@ public class SupabaseStorageHelper {
             return "Bucket '" + bucket + "' not found in Supabase Storage.";
         }
 
+        if (safeBody.isEmpty()) {
+            return "Upload failed HTTP " + code + ". Supabase returned an empty error body.";
+        }
         return "Upload failed HTTP " + code + ": " + safeBody;
     }
 
@@ -570,7 +573,18 @@ public class SupabaseStorageHelper {
 
         retrofit2.Response<ResponseBody> response = call.execute();
         out.httpCode = response.code();
-        out.body = response.body() != null ? response.body().string() : "";
+
+        if (response.isSuccessful()) {
+            out.body = response.body() != null ? response.body().string() : "";
+        } else {
+            out.body = response.errorBody() != null ? response.errorBody().string() : "";
+        }
+
+        if (!response.isSuccessful()) {
+            Log.w(TAG, "uploadBytes failed HTTP " + out.httpCode + " | bucket=" + bucket
+                    + " | path=" + storagePath + " | body=" + out.body);
+        }
+
         return out;
     }
 }

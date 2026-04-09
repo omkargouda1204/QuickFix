@@ -4,21 +4,22 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.RatingBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.quickfix.adapters.UserBookingsAdapter;
-import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
@@ -26,7 +27,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -43,17 +46,21 @@ import okhttp3.Response;
 public class UserBookingsActivity extends BaseActivity
         implements UserBookingsAdapter.BookingActionListener {
 
-    private static final String TAG      = "UserBookings";
+    private static final String TAG = "UserBookings";
     private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
     private static final String BASE_URL = BuildConfig.SUPABASE_URL;
+    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
-    private RecyclerView         recyclerView;
-    private UserBookingsAdapter  adapter;
-    private SwipeRefreshLayout   swipeRefresh;
-    private ProgressBar          progressBar;
-    private LinearLayout         emptyState;
-    private TextView             tvEmptyMessage, tvBookingCount;
-    private ChipGroup            chipGroupFilters;
+    private static final int REVIEW_MAX_CHARS = 500;
+
+    private RecyclerView recyclerView;
+    private UserBookingsAdapter adapter;
+    private SwipeRefreshLayout swipeRefresh;
+    private ProgressBar progressBar;
+    private LinearLayout emptyState;
+    private TextView tvEmptyMessage;
+    private TextView tvBookingCount;
+    private ChipGroup chipGroupFilters;
 
     private String currentFilter = "all";
     private List<Booking> allBookings = new ArrayList<>();
@@ -72,7 +79,10 @@ public class UserBookingsActivity extends BaseActivity
         setContentView(R.layout.activity_user_bookings);
 
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null) { finish(); return; }
+        if (user == null) {
+            finish();
+            return;
+        }
         userId = user.getUid();
 
         bindViews();
@@ -83,13 +93,13 @@ public class UserBookingsActivity extends BaseActivity
     }
 
     private void bindViews() {
-        recyclerView    = findViewById(R.id.recyclerView);
-        swipeRefresh    = findViewById(R.id.swipeRefresh);
-        progressBar     = findViewById(R.id.progressBar);
-        emptyState      = findViewById(R.id.emptyState);
-        tvEmptyMessage  = findViewById(R.id.tvEmptyMessage);
-        tvBookingCount  = findViewById(R.id.tvBookingCount);
-        chipGroupFilters= findViewById(R.id.chipGroupFilters);
+        recyclerView = findViewById(R.id.recyclerView);
+        swipeRefresh = findViewById(R.id.swipeRefresh);
+        progressBar = findViewById(R.id.progressBar);
+        emptyState = findViewById(R.id.emptyState);
+        tvEmptyMessage = findViewById(R.id.tvEmptyMessage);
+        tvBookingCount = findViewById(R.id.tvBookingCount);
+        chipGroupFilters = findViewById(R.id.chipGroupFilters);
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
     }
 
@@ -104,8 +114,8 @@ public class UserBookingsActivity extends BaseActivity
         chipGroupFilters.setOnCheckedStateChangeListener((group, checkedIds) -> {
             if (checkedIds.isEmpty()) return;
             int id = checkedIds.get(0);
-            if      (id == R.id.chipAll)       currentFilter = "all";
-            else if (id == R.id.chipUpcoming)  currentFilter = "upcoming";
+            if (id == R.id.chipAll) currentFilter = "all";
+            else if (id == R.id.chipUpcoming) currentFilter = "upcoming";
             else if (id == R.id.chipCompleted) currentFilter = "completed";
             else if (id == R.id.chipCancelled) currentFilter = "cancelled";
             applyFilter();
@@ -135,9 +145,9 @@ public class UserBookingsActivity extends BaseActivity
                         + "/rest/v1/bookings?or=(customer_id.eq." + uid + ",customer_id.eq." + dbId + ")"
                         + "&select=*&order=created_at.desc";
                 Request req = new Request.Builder().url(url)
-                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept",        "application/json")
+                        .addHeader("Accept", "application/json")
                         .build();
                 try (Response r = HTTP.newCall(req).execute()) {
                     String body = r.body() != null ? r.body().string() : "[]";
@@ -149,19 +159,84 @@ public class UserBookingsActivity extends BaseActivity
                             Booking b = Booking.fromJson(arr.getJSONObject(i));
                             if (b != null) list.add(b);
                         }
+
+                        try {
+                            attachReviewData(list);
+                        } catch (Exception reviewErr) {
+                            Log.w(TAG, "attachReviewData skipped: " + reviewErr.getMessage());
+                        }
+
                         allBookings = list;
-                        MAIN.post(() -> { showLoading(false); applyFilter(); });
+                        MAIN.post(() -> {
+                            showLoading(false);
+                            applyFilter();
+                        });
                     } else {
-                        MAIN.post(() -> { showLoading(false);
-                            Toast.makeText(this, "Failed to load bookings", Toast.LENGTH_SHORT).show(); });
+                        MAIN.post(() -> {
+                            showLoading(false);
+                            Toast.makeText(this, "Failed to load bookings", Toast.LENGTH_SHORT).show();
+                        });
                     }
                 }
             } catch (Exception e) {
                 Log.e(TAG, "loadBookings: " + e.getMessage());
-                MAIN.post(() -> { showLoading(false);
-                    Toast.makeText(this, "Network error", Toast.LENGTH_SHORT).show(); });
+                MAIN.post(() -> {
+                    showLoading(false);
+                    Toast.makeText(this, "Network error", Toast.LENGTH_SHORT).show();
+                });
             }
         }).start();
+    }
+
+    private void attachReviewData(List<Booking> bookings) throws Exception {
+        if (bookings == null || bookings.isEmpty()) return;
+
+        String uid = userId != null ? userId.trim() : "";
+        String dbId = userDbId != null ? userDbId.trim() : "";
+
+        String url = BASE_URL + "/rest/v1/provider_reviews"
+                + "?select=id,booking_id,customer_id,rating,comment,updated_at,created_at"
+                + "&order=created_at.desc";
+
+        if (!uid.isEmpty() && !dbId.isEmpty() && !uid.equals(dbId)) {
+            url += "&or=(customer_id.eq." + android.net.Uri.encode(uid)
+                    + ",customer_id.eq." + android.net.Uri.encode(dbId) + ")";
+        } else if (!dbId.isEmpty()) {
+            url += "&customer_id=eq." + android.net.Uri.encode(dbId);
+        } else if (!uid.isEmpty()) {
+            url += "&customer_id=eq." + android.net.Uri.encode(uid);
+        }
+
+        Request req = new Request.Builder().url(url)
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .build();
+
+        try (Response r = HTTP.newCall(req).execute()) {
+            if (r.code() != 200) return;
+            String body = r.body() != null ? r.body().string() : "[]";
+            JSONArray arr = new JSONArray(body);
+            Map<String, JSONObject> byBookingId = new HashMap<>();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject row = arr.getJSONObject(i);
+                String bookingId = clean(row.optString("booking_id", ""));
+                if (bookingId.isEmpty() || byBookingId.containsKey(bookingId)) continue;
+                byBookingId.put(bookingId, row);
+            }
+
+            for (Booking booking : bookings) {
+                JSONObject row = byBookingId.get(clean(booking.id));
+                if (row == null) continue;
+                booking.reviewId = clean(row.optString("id", ""));
+                booking.reviewRating = row.optInt("rating", 0);
+                booking.reviewComment = clean(row.optString("comment", ""));
+                booking.reviewUpdatedAt = clean(row.optString("updated_at", ""));
+                if (booking.reviewUpdatedAt.isEmpty()) {
+                    booking.reviewUpdatedAt = clean(row.optString("created_at", ""));
+                }
+            }
+        }
     }
 
     private void resolveUserDbIdAndLoad() {
@@ -205,8 +280,8 @@ public class UserBookingsActivity extends BaseActivity
         } else if ("upcoming".equals(currentFilter)) {
             filtered = allBookings.stream()
                     .filter(b -> "pending".equalsIgnoreCase(b.status)
-                              || "accepted".equalsIgnoreCase(b.status)
-                              || "confirmed".equalsIgnoreCase(b.status))
+                            || "accepted".equalsIgnoreCase(b.status)
+                            || "confirmed".equalsIgnoreCase(b.status))
                     .collect(Collectors.toList());
         } else {
             filtered = allBookings.stream()
@@ -214,8 +289,20 @@ public class UserBookingsActivity extends BaseActivity
                     .collect(Collectors.toList());
         }
         adapter.setBookings(filtered);
-        if (tvBookingCount != null)
-            tvBookingCount.setText(filtered.size() + " booking" + (filtered.size() != 1 ? "s" : ""));
+        if (tvBookingCount != null) {
+            int size = filtered.size();
+            tvBookingCount.setText(getString(
+                    size == 1 ? R.string.booking_count_singular : R.string.booking_count_plural,
+                    size
+            ));
+        }
+        if (tvEmptyMessage != null) {
+            if (filtered.isEmpty() && !"all".equals(currentFilter)) {
+                tvEmptyMessage.setText("No " + currentFilter + " bookings found");
+            } else {
+                tvEmptyMessage.setText("No bookings found");
+            }
+        }
         emptyState.setVisibility(filtered.isEmpty() ? View.VISIBLE : View.GONE);
         recyclerView.setVisibility(filtered.isEmpty() ? View.GONE : View.VISIBLE);
     }
@@ -233,6 +320,143 @@ public class UserBookingsActivity extends BaseActivity
                 .setPositiveButton("Yes, Cancel", (d, w) -> cancelBooking(booking))
                 .setNegativeButton("No", null)
                 .show();
+    }
+
+    @Override
+    public void onWriteReview(Booking booking) {
+        if (booking == null) return;
+        if (!"completed".equalsIgnoreCase(clean(booking.status))) {
+            Toast.makeText(this, getString(R.string.review_only_completed), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        showReviewDialog(booking);
+    }
+
+    private void showReviewDialog(Booking booking) {
+        View content = LayoutInflater.from(this).inflate(R.layout.dialog_provider_review, null, false);
+        TextView tvReviewTarget = content.findViewById(R.id.tvReviewTarget);
+        RatingBar ratingBar = content.findViewById(R.id.ratingBar);
+        TextInputEditText etReviewComment = content.findViewById(R.id.etReviewComment);
+
+        String providerName = clean(booking.providerName).isEmpty() ? "provider" : booking.providerName.trim();
+        tvReviewTarget.setText("How was your service with " + providerName + "?");
+
+        if (booking.reviewRating > 0) ratingBar.setRating(booking.reviewRating);
+        if (!clean(booking.reviewComment).isEmpty()) {
+            etReviewComment.setText(booking.reviewComment);
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(booking.reviewRating > 0 ? getString(R.string.review_edit_button) : getString(R.string.review_write_button))
+                .setView(content)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save", null)
+                .create();
+
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            int rating = Math.round(ratingBar.getRating());
+            String comment = clean(etReviewComment.getText() == null ? "" : etReviewComment.getText().toString());
+
+            if (rating < 1 || rating > 5) {
+                Toast.makeText(this, getString(R.string.review_rating_required), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (comment.length() > REVIEW_MAX_CHARS) {
+                Toast.makeText(this, getString(R.string.review_too_long), Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            dialog.dismiss();
+            submitReview(booking, rating, comment);
+        }));
+
+        dialog.show();
+    }
+
+    private void submitReview(Booking booking, int rating, String comment) {
+        showLoading(true);
+        new Thread(() -> {
+            try {
+                String activeCustomerId = clean(userDbId);
+                if (activeCustomerId.isEmpty()) activeCustomerId = clean(userId);
+                if (activeCustomerId.isEmpty()) {
+                    throw new IllegalStateException("Missing customer identity");
+                }
+
+                JSONObject body = new JSONObject();
+                body.put("booking_id", clean(booking.id));
+                body.put("provider_id", clean(booking.providerId));
+                body.put("customer_id", activeCustomerId);
+                body.put("customer_name", clean(booking.customerName));
+                body.put("rating", rating);
+                body.put("comment", comment);
+
+                boolean updateExisting = !clean(booking.reviewId).isEmpty();
+                String url;
+                Request.Builder requestBuilder;
+                if (updateExisting) {
+                    url = BASE_URL + "/rest/v1/provider_reviews?id=eq." + android.net.Uri.encode(booking.reviewId);
+                    requestBuilder = new Request.Builder().url(url)
+                            .patch(RequestBody.create(body.toString(), JSON));
+                } else {
+                    url = BASE_URL + "/rest/v1/provider_reviews";
+                    requestBuilder = new Request.Builder().url(url)
+                            .post(RequestBody.create(body.toString(), JSON));
+                }
+
+                Request request = requestBuilder
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Accept", "application/json")
+                        .addHeader("Prefer", "return=representation")
+                        .build();
+
+                try (Response response = HTTP.newCall(request).execute()) {
+                    String responseBody = response.body() != null ? response.body().string() : "[]";
+                    int code = response.code();
+                    if (code == 200 || code == 201) {
+                        JSONArray arr = new JSONArray(responseBody);
+                        if (arr.length() > 0) {
+                            JSONObject row = arr.getJSONObject(0);
+                            booking.reviewId = clean(row.optString("id", booking.reviewId));
+                            booking.reviewRating = row.optInt("rating", rating);
+                            booking.reviewComment = clean(row.optString("comment", comment));
+                            booking.reviewUpdatedAt = clean(row.optString("updated_at", ""));
+                            if (booking.reviewUpdatedAt.isEmpty()) {
+                                booking.reviewUpdatedAt = clean(row.optString("created_at", ""));
+                            }
+                        } else {
+                            booking.reviewRating = rating;
+                            booking.reviewComment = comment;
+                        }
+
+                        MAIN.post(() -> {
+                            showLoading(false);
+                            adapter.notifyDataSetChanged();
+                            Toast.makeText(this, getString(R.string.review_saved), Toast.LENGTH_SHORT).show();
+                            loadBookings();
+                        });
+                    } else {
+                        String apiError = parseSupabaseError(responseBody);
+                        Log.w(TAG, "submitReview failed HTTP " + code + " | " + apiError + " | raw=" + responseBody);
+                        String toastMsg = (code == 401 || code == 403)
+                                ? "Review permission denied. Check provider_reviews RLS/policies."
+                                : "Failed to save review (HTTP " + code + ")";
+                        MAIN.post(() -> {
+                            showLoading(false);
+                            Toast.makeText(this, toastMsg, Toast.LENGTH_LONG).show();
+                        });
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "submitReview: " + e.getMessage());
+                MAIN.post(() -> {
+                    showLoading(false);
+                    Toast.makeText(this, getString(R.string.review_failed_save), Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
     }
 
     private void cancelBooking(Booking booking) {
@@ -258,10 +482,10 @@ public class UserBookingsActivity extends BaseActivity
                 }
                 Request req = new Request.Builder().url(url)
                         .patch(RequestBody.create(body.toString(), MediaType.get("application/json")))
-                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "return=minimal")
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
                         .build();
                 try (Response r = HTTP.newCall(req).execute()) {
                     MAIN.post(() -> {
@@ -283,13 +507,19 @@ public class UserBookingsActivity extends BaseActivity
     }
 
     private void showBookingDetails(Booking b) {
-        String msg = "Service: "  + (b.serviceName.isEmpty()  ? "—" : b.serviceName)  + "\n"
-                   + "Provider: " + (b.providerName.isEmpty() ? "—" : b.providerName) + "\n"
-                   + "Date: "     + (b.bookingDate.isEmpty()  ? "—" : b.bookingDate)  + "\n"
-                   + "Time: "     + (b.bookingTime.isEmpty()  ? "—" : b.bookingTime)  + "\n"
-                   + "Address: "  + (b.address.isEmpty()      ? "—" : b.address)      + "\n"
-                   + "Status: "   + b.status.toUpperCase()                             + "\n"
-                   + "Price: ₹"  + String.format("%.0f", b.price);
+        String reviewLine = (b.reviewRating > 0)
+                ? ("\nReview: " + b.reviewRating + "/5"
+                + (clean(b.reviewComment).isEmpty() ? "" : " - " + b.reviewComment))
+                : "";
+
+        String msg = "Service: " + (b.serviceName.isEmpty() ? "-" : b.serviceName) + "\n"
+                + "Provider: " + (b.providerName.isEmpty() ? "-" : b.providerName) + "\n"
+                + "Date: " + (b.bookingDate.isEmpty() ? "-" : b.bookingDate) + "\n"
+                + "Time: " + (b.bookingTime.isEmpty() ? "-" : b.bookingTime) + "\n"
+                + "Address: " + (b.address.isEmpty() ? "-" : b.address) + "\n"
+                + "Status: " + b.status.toUpperCase() + "\n"
+                + "Price: ₹" + String.format("%.0f", b.price)
+                + reviewLine;
         new AlertDialog.Builder(this)
                 .setTitle("Booking Details")
                 .setMessage(msg)
@@ -303,5 +533,24 @@ public class UserBookingsActivity extends BaseActivity
             return;
         }
         if (progressBar != null) progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+
+    private String parseSupabaseError(String responseBody) {
+        try {
+            JSONObject o = new JSONObject(responseBody == null ? "{}" : responseBody);
+            String message = clean(o.optString("message", ""));
+            String details = clean(o.optString("details", ""));
+            String hint = clean(o.optString("hint", ""));
+            String merged = message;
+            if (!details.isEmpty()) merged += (merged.isEmpty() ? "" : " | ") + details;
+            if (!hint.isEmpty()) merged += (merged.isEmpty() ? "" : " | ") + hint;
+            return merged.isEmpty() ? "Unknown Supabase error" : merged;
+        } catch (Exception ignore) {
+            return clean(responseBody);
+        }
+    }
+
+    private String clean(String value) {
+        return value == null ? "" : value.trim();
     }
 }

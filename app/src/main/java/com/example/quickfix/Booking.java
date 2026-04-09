@@ -1,5 +1,6 @@
 package com.example.quickfix;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
@@ -24,6 +25,12 @@ public class Booking {
     public String createdAt;
     public String completedAt;
     public String description;
+
+    // Optional provider review payload (joined or mapped after fetch)
+    public String reviewId;
+    public int reviewRating;
+    public String reviewComment;
+    public String reviewUpdatedAt;
 
     public static Booking fromJson(JSONObject o) {
         if (o == null) return null;
@@ -50,6 +57,31 @@ public class Booking {
         b.createdAt = s(o, "created_at");
         b.completedAt = s(o, "completed_at");
         b.description = s(o, "description");
+
+        // Read review if API includes an embedded relation or flat columns.
+        JSONObject reviewObj = null;
+        Object nested = o.opt("provider_reviews");
+        if (nested instanceof JSONObject) {
+            reviewObj = (JSONObject) nested;
+        } else if (nested instanceof JSONArray) {
+            JSONArray arr = (JSONArray) nested;
+            if (arr.length() > 0) reviewObj = arr.optJSONObject(0);
+        }
+
+        if (reviewObj != null) {
+            b.reviewId = s(reviewObj, "id");
+            b.reviewRating = reviewObj.optInt("rating", 0);
+            b.reviewComment = s(reviewObj, "comment");
+            b.reviewUpdatedAt = s(reviewObj, "updated_at");
+            if (b.reviewUpdatedAt.isEmpty()) {
+                b.reviewUpdatedAt = s(reviewObj, "created_at");
+            }
+        } else {
+            b.reviewId = s(o, "review_id");
+            b.reviewRating = o.optInt("review_rating", 0);
+            b.reviewComment = s(o, "review_comment");
+            b.reviewUpdatedAt = s(o, "review_updated_at");
+        }
         return b;
     }
 

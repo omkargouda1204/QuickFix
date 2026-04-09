@@ -32,8 +32,10 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
@@ -92,6 +94,13 @@ public class ProviderDetailActivity extends BaseActivity {
         String phone;
     }
 
+    private static class ReviewItem {
+        String customerName;
+        int rating;
+        String comment;
+        String createdAt;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -131,6 +140,7 @@ public class ProviderDetailActivity extends BaseActivity {
 
         bindViews(businessName, ownerName, providerCategory, providerCity, phone,
                   email, description, experience, imageUrl, isVerified, rating);
+        loadRecentReviews();
 
         // When opened from lightweight provider search suggestions, fetch complete profile.
         if (providerIdForBooking != null && !providerIdForBooking.trim().isEmpty()) {
@@ -414,7 +424,7 @@ public class ProviderDetailActivity extends BaseActivity {
                                         Toast.LENGTH_LONG).show();
                             } else {
                                 Log.e(TAG, "BOOKING_ERROR HTTP " + code + " | " + resp);
-                                String msg = (resp == null || resp.trim().isEmpty()) ? ("HTTP " + code) : resp;
+                                String msg = resp.trim().isEmpty() ? ("HTTP " + code) : resp;
                                 Toast.makeText(ProviderDetailActivity.this,
                                         "Booking failed: " + msg,
                                         Toast.LENGTH_LONG).show();
@@ -431,6 +441,133 @@ public class ProviderDetailActivity extends BaseActivity {
                                 Toast.LENGTH_SHORT).show());
             }
         }).start();
+    }
+
+    private void loadRecentReviews() {
+        final String providerId = providerIdForBooking != null ? providerIdForBooking.trim() : "";
+        final String firebaseUid = providerFirebaseUid != null ? providerFirebaseUid.trim() : "";
+        if (providerId.isEmpty() && firebaseUid.isEmpty()) {
+            showRecentReviews(new ArrayList<>());
+            return;
+        }
+
+        new Thread(() -> {
+            List<ReviewItem> reviews = new ArrayList<>();
+            try {
+                String url = SUPABASE_URL + "/rest/v1/provider_reviews"
+                        + "?select=customer_name,rating,comment,created_at"
+                        + "&order=created_at.desc&limit=5";
+
+                if (!providerId.isEmpty() && !firebaseUid.isEmpty() && !providerId.equals(firebaseUid)) {
+                    url += "&or=(provider_id.eq." + Uri.encode(providerId)
+                            + ",provider_id.eq." + Uri.encode(firebaseUid) + ")";
+                } else if (!providerId.isEmpty()) {
+                    url += "&provider_id=eq." + Uri.encode(providerId);
+                } else {
+                    url += "&provider_id=eq." + Uri.encode(firebaseUid);
+                }
+
+                Request request = new Request.Builder().url(url)
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
+                try (Response response = httpClient.newCall(request).execute()) {
+                    String body = response.body() != null ? response.body().string() : "[]";
+                    if (response.code() == 200) {
+                        JSONArray arr = new JSONArray(body);
+                        for (int i = 0; i < arr.length(); i++) {
+                            JSONObject o = arr.getJSONObject(i);
+                            String comment = safe(o.optString("comment", ""));
+                            if (comment.isEmpty()) continue;
+
+                            ReviewItem item = new ReviewItem();
+                            item.customerName = safe(o.optString("customer_name", "Customer"));
+                            if (item.customerName.isEmpty()) item.customerName = "Customer";
+                            item.rating = o.optInt("rating", 0);
+                            item.comment = comment;
+                            item.createdAt = safe(o.optString("created_at", ""));
+                            reviews.add(item);
+                        }
+                    } else {
+                        Log.w(TAG, "loadRecentReviews HTTP " + response.code() + " | " + body);
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "loadRecentReviews failed: " + e.getMessage());
+            }
+
+            List<ReviewItem> finalReviews = reviews;
+            mainHandler.post(() -> showRecentReviews(finalReviews));
+        }).start();
+    }
+
+    private void showRecentReviews(List<ReviewItem> reviews) {
+        View card = findViewById(R.id.cardRecentReviews);
+        LinearLayout container = findViewById(R.id.layoutRecentReviews);
+        TextView tvEmpty = findViewById(R.id.tvRecentReviewsEmpty);
+        TextView tvCount = findViewById(R.id.tvRecentReviewsCount);
+
+        if (card == null || container == null || tvEmpty == null || tvCount == null) return;
+
+        container.removeAllViews();
+
+        if (reviews == null || reviews.isEmpty()) {
+            card.setVisibility(View.VISIBLE);
+            tvCount.setText("");
+            tvEmpty.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        card.setVisibility(View.VISIBLE);
+        tvEmpty.setVisibility(View.GONE);
+        tvCount.setText(reviews.size() + " review" + (reviews.size() == 1 ? "" : "s"));
+
+        for (int i = 0; i < reviews.size(); i++) {
+            ReviewItem item = reviews.get(i);
+
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(0, i == 0 ? 0 : dp(10), 0, 0);
+
+            TextView header = new TextView(this);
+            header.setText(item.customerName + " • " + item.rating + "/5");
+            header.setTextColor(getResources().getColor(R.color.text_primary));
+            header.setTextSize(13f);
+            header.setTypeface(header.getTypeface(), android.graphics.Typeface.BOLD);
+            row.addView(header);
+
+            TextView comment = new TextView(this);
+            comment.setText(item.comment);
+            comment.setTextColor(getResources().getColor(R.color.text_secondary));
+            comment.setTextSize(13f);
+            comment.setPadding(0, dp(3), 0, 0);
+            row.addView(comment);
+
+            container.addView(row);
+
+            if (i < reviews.size() - 1) {
+                View divider = new View(this);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        dp(1)
+                );
+                lp.topMargin = dp(10);
+                divider.setLayoutParams(lp);
+                divider.setBackgroundColor(0xFFEAEAEA);
+                container.addView(divider);
+            }
+        }
+    }
+
+    private int dp(int value) {
+        float density = getResources().getDisplayMetrics().density;
+        return Math.round(value * density);
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private String fetchProviderProfileIdByFirebaseUid(String firebaseUid) {
@@ -463,15 +600,6 @@ public class ProviderDetailActivity extends BaseActivity {
         String encoded = Uri.encode(firebaseUid.trim());
         String url = SUPABASE_URL + "/rest/v1/users"
                 + "?firebase_uid=eq." + encoded
-                + "&select=id,name,phone&limit=1";
-        return fetchUserMeta(url);
-    }
-
-    private UserMeta fetchUserById(String userId) {
-        if (userId == null || userId.trim().isEmpty()) return null;
-        String encoded = Uri.encode(userId.trim());
-        String url = SUPABASE_URL + "/rest/v1/users"
-                + "?id=eq." + encoded
                 + "&select=id,name,phone&limit=1";
         return fetchUserMeta(url);
     }
@@ -519,7 +647,7 @@ public class ProviderDetailActivity extends BaseActivity {
 
     private void setText(int viewId, String text) {
         TextView tv = findViewById(viewId);
-        if (tv != null) tv.setText(text != null ? text : "—");
+        if (tv != null) tv.setText(text != null ? text : "-");
     }
 
     private String notEmpty(String val, String fallback) {
@@ -528,7 +656,10 @@ public class ProviderDetailActivity extends BaseActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == android.R.id.home) { finish(); return true; }
+        if (item.getItemId() == android.R.id.home) {
+            finish();
+            return true;
+        }
         return super.onOptionsItemSelected(item);
     }
 
@@ -559,6 +690,7 @@ public class ProviderDetailActivity extends BaseActivity {
                             finalData.optBoolean("is_verified", false),
                             (float) finalData.optDouble("rating", 0d)
                     );
+                    loadRecentReviews();
                 });
             } catch (Exception e) {
                 Log.e(TAG, "fetchProviderDetailsById: " + e.getMessage());

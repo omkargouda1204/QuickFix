@@ -232,4 +232,17 @@
     <string name="pd_saved_with_photo_ok">Profile photo uploaded and profile updated.</string>
     <string name="pd_load_http_error">Could not load profile (HTTP %1$d).</string>
     <string name="pd_network_showing_cached">Network error. Showing cached profile data.</string>
+
+    <!-- Bookings + Reviews -->
+    <string name="booking_count_singular" translatable="false">%1$d booking</string>
+    <string name="booking_count_plural" translatable="false">%1$d bookings</string>
+    <string name="review_rate_experience" translatable="false">Rate your experience</string>
+    <string name="review_write_hint" translatable="false">Write your review</string>
+    <string name="review_write_button" translatable="false">Write Review</string>
+    <string name="review_edit_button" translatable="false">Edit Review</string>
+    <string name="review_saved" translatable="false">Review saved</string>
+    <string name="review_failed_save" translatable="false">Could not save review</string>
+    <string name="review_rating_required" translatable="false">Please select a rating from 1 to 5</string>
+    <string name="review_too_long" translatable="false">Review is too long</string>
+    <string name="review_only_completed" translatable="false">You can review only completed bookings</string>
 </resources>
