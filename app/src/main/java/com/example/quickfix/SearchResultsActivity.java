@@ -193,7 +193,9 @@ public class SearchResultsActivity extends BaseActivity
     // ── Search ─────────────────────────────────────────────────────────────
 
     private void performSearch(String query) {
-        queryText = query == null ? "" : query.trim();
+        queryText = normalizeSearchQuery(query);
+        Log.d("SEARCH_QUERY", queryText);
+        Log.d("SEARCH_INPUT", queryText);
         showLoading(true);
         allResults.clear();
         filtered.clear();
@@ -250,6 +252,7 @@ public class SearchResultsActivity extends BaseActivity
             results.addAll(searchProviders(query, userLat, userLng, useNearby));
             MAIN.post(() -> {
                 allResults = results;
+                Log.d("RESULT_SIZE", String.valueOf(results.size()));
                 applyFilter();
                 showLoading(false);
             });
@@ -264,11 +267,19 @@ public class SearchResultsActivity extends BaseActivity
 
     private String sanitizeProviderQuery(String query) {
         if (query == null) return "";
-        String cleaned = query.toLowerCase(Locale.getDefault())
+        String cleaned = normalizeSearchQuery(query)
                 .replace("nearby", "")
                 .replace("near me", "")
                 .trim();
         return cleaned.isEmpty() ? "service" : cleaned;
+    }
+
+    private String normalizeSearchQuery(String input) {
+        String query = input == null ? "" : input.toLowerCase(Locale.US).trim();
+        query = query.replaceAll("\\s+", " ");
+        if (query.contains("ac")) query = "ac";
+        if (query.contains("repair")) query = "repair";
+        return query;
     }
 
     /**
@@ -391,13 +402,8 @@ public class SearchResultsActivity extends BaseActivity
                     .append("?select=id,business_name,category,city,area,owner_name,rating,status,availability_status,is_available")
                     .append("&is_approved=eq.true")
                     .append("&or=(business_name.ilike.*").append(encQuery)
-                    .append("*,category.ilike.*").append(encQuery)
-                    .append("*,city.ilike.*").append(encQuery).append("*)")
+                    .append("*,category.ilike.*").append(encQuery).append("*)")
                     .append("&limit=60");
-            if (!cityFilter.isEmpty()) {
-                url.append("&city=ilike.*")
-                   .append(java.net.URLEncoder.encode(cityFilter, java.nio.charset.StandardCharsets.UTF_8.name())).append("*");
-            }
 
             Request req = new Request.Builder().url(url.toString())
                     .addHeader("apikey", ANON_KEY)

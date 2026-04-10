@@ -55,8 +55,6 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import android.speech.RecognizerIntent;
-import android.speech.RecognitionListener;
-import android.speech.SpeechRecognizer;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -71,7 +69,10 @@ public class MainActivity extends BaseActivity {
     private static final int    LOCATION_PERMISSION_REQ  = 1001;
     private static final int    NOTIFICATION_PERMISSION_REQ = 1002;
     private static final int    VOICE_PERMISSION_REQ  = 2001;
+    private static final int    VOICE_SEARCH_REQ = 1;
     private static final long   HOME_AUTO_REFRESH_MS = 60_000L;
+    private static final String SEARCH_PREFS = "home_search_prefs";
+    private static final String KEY_LAST_SEARCH_QUERY = "last_search_query";
 
     // ── Location ──────────────────────────────────────────────────────────
     private LinearLayout        locationSelector;
@@ -92,9 +93,7 @@ public class MainActivity extends BaseActivity {
     private SearchSuggestionsAdapter suggestionsAdapter;
     private final Handler debounce = new Handler(Looper.getMainLooper());
     private Runnable debounceRunnable;
-    private SpeechRecognizer speechRecognizer;
-    private Intent speechRecognizerIntent;
-    private boolean isVoiceListening = false;
+    private String lastSearchQuery = "";
 
     // ── Header ────────────────────────────────────────────────────────────
     private TextView     welcomeMessage;
@@ -442,8 +441,7 @@ public class MainActivity extends BaseActivity {
             if (btnRetryBannerLoad != null) {
                 btnRetryBannerLoad.setOnClickListener(v -> {
                     try {
-                        setBannerLoadingState();
-                        loadHomeBanners();
+                        refreshHomeContent(false);
                     } catch (Exception e) {
                         Log.e(TAG, "Retry banner click failed: " + e.getMessage());
                     }
@@ -453,8 +451,7 @@ public class MainActivity extends BaseActivity {
             if (btnRetryOffersLoad != null) {
                 btnRetryOffersLoad.setOnClickListener(v -> {
                     try {
-                        setOffersLoadingState();
-                        loadHomeOffers();
+                        refreshHomeContent(false);
                     } catch (Exception e) {
                         Log.e(TAG, "Retry offers click failed: " + e.getMessage());
                     }
@@ -523,7 +520,13 @@ public class MainActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         try {
-            refreshHomeContent(false);
+            restoreLastSearchQuery();
+            if (etSearch != null && lastSearchQuery != null && !lastSearchQuery.isEmpty()) {
+                etSearch.setText(lastSearchQuery);
+                etSearch.setSelection(lastSearchQuery.length());
+            }
+            fetchBanners();
+            fetchOffers();
             startBannerAutoSlide();
             startHomeAutoRefresh();
         } catch (Exception e) {
@@ -536,7 +539,6 @@ public class MainActivity extends BaseActivity {
         try {
             stopBannerAutoSlide();
             stopHomeAutoRefresh();
-            stopVoiceRecognition();
         } catch (Exception e) {
             Log.e(TAG, "onPause: " + e.getMessage());
         }
@@ -546,11 +548,6 @@ public class MainActivity extends BaseActivity {
     @Override
     protected void onDestroy() {
         try {
-            stopVoiceRecognition();
-            if (speechRecognizer != null) {
-                speechRecognizer.destroy();
-                speechRecognizer = null;
-            }
             for (ObjectAnimator animator : skeletonAnimators) {
                 if (animator != null) animator.cancel();
             }
@@ -632,7 +629,7 @@ public class MainActivity extends BaseActivity {
                 debounce.postDelayed(debounceRunnable, 350);
             }
         });
-        etSearch.setOnEditorActionListener((v, actionId, event) -> { if (actionId == EditorInfo.IME_ACTION_SEARCH || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) { String q = etSearch.getText().toString().trim(); if (!q.isEmpty()) openSearchResults(q); hideKeyboard(etSearch); return true; } return false; });
+        etSearch.setOnEditorActionListener((v, actionId, event) -> { if (actionId == EditorInfo.IME_ACTION_SEARCH || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) { String q = etSearch.getText().toString().trim(); if (!q.isEmpty()) searchServices(q); hideKeyboard(etSearch); return true; } return false; });
 
         if (micBtn != null) {
             micBtn.setOnClickListener(v -> startVoiceSearch());
@@ -643,184 +640,71 @@ public class MainActivity extends BaseActivity {
         try {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                     != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(
-                        this,
+                ActivityCompat.requestPermissions(this,
                         new String[]{Manifest.permission.RECORD_AUDIO},
-                        VOICE_PERMISSION_REQ
-                );
+                        VOICE_PERMISSION_REQ);
                 return;
             }
 
-            if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-                Toast.makeText(this, "Voice search not supported on this device", Toast.LENGTH_SHORT).show();
-                return;
-            }
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN");
+            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
 
-            initSpeechRecognizer();
-            if (speechRecognizer == null || speechRecognizerIntent == null) {
-                Toast.makeText(this, "Voice search unavailable", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            if (isVoiceListening) {
-                stopVoiceRecognition();
-            }
-            isVoiceListening = true;
             if (micBtn != null) {
                 micBtn.setActivated(true);
                 micBtn.setColorFilter(Color.RED);
             }
-            Toast.makeText(this, "Listening...", Toast.LENGTH_SHORT).show();
-            speechRecognizer.startListening(speechRecognizerIntent);
+            startActivityForResult(intent, VOICE_SEARCH_REQ);
         } catch (Exception e) {
             Log.e(TAG, "Voice search start failed: " + e.getMessage(), e);
+            stopVoiceRecognition();
             Toast.makeText(this, "Voice not supported", Toast.LENGTH_SHORT).show();
         }
     }
 
-    private void initSpeechRecognizer() {
-        try {
-            if (speechRecognizer != null && speechRecognizerIntent != null) {
-                return;
-            }
-
-            if (speechRecognizer != null) {
-                speechRecognizer.destroy();
-                speechRecognizer = null;
-            }
-
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
-            speechRecognizer.setRecognitionListener(new RecognitionListener() {
-                @Override public void onReadyForSpeech(Bundle params) { }
-
-                @Override public void onBeginningOfSpeech() { }
-
-                @Override public void onRmsChanged(float rmsdB) { }
-
-                @Override public void onBufferReceived(byte[] buffer) { }
-
-                @Override public void onEndOfSpeech() {
-                    isVoiceListening = false;
-                    if (micBtn != null) {
-                        micBtn.setActivated(false);
-                        micBtn.clearColorFilter();
-                    }
-                }
-
-                @Override
-                public void onError(int error) {
-                    isVoiceListening = false;
-                    if (micBtn != null) {
-                        micBtn.setActivated(false);
-                        micBtn.clearColorFilter();
-                    }
-                    Log.e(TAG, "Voice recognition error: " + error);
-                    Toast.makeText(MainActivity.this, "Listening failed. Try again.", Toast.LENGTH_SHORT).show();
-                }
-
-                @Override
-                public void onResults(Bundle results) {
-                    isVoiceListening = false;
-                    if (micBtn != null) {
-                        micBtn.setActivated(false);
-                        micBtn.clearColorFilter();
-                    }
-
-                    try {
-                        if (results == null) return;
-                        ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                        if (matches == null || matches.isEmpty()) return;
-
-                        String spokenText = matches.get(0) == null ? "" : matches.get(0).trim();
-                        if (spokenText.isEmpty()) return;
-
-                        if (etSearch != null) {
-                            etSearch.setText(spokenText);
-                            etSearch.setSelection(spokenText.length());
-                        }
-
-                        hideSuggestions();
-                        hideKeyboard(etSearch);
-                        openSearchResults(spokenText);
-                    } catch (Exception e) {
-                        Log.e(TAG, "Voice result handling failed: " + e.getMessage(), e);
-                    }
-                }
-
-                @Override public void onPartialResults(Bundle partialResults) { }
-
-                @Override public void onEvent(int eventType, Bundle params) { }
-            });
-
-            speechRecognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-            speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN");
-            speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
-            speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
-            speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
-        } catch (Exception e) {
-            Log.e(TAG, "initSpeechRecognizer failed: " + e.getMessage(), e);
-            destroySpeechRecognizer();
-        }
-    }
-
     private void stopVoiceRecognition() {
-        try {
-            isVoiceListening = false;
-            if (micBtn != null) {
-                micBtn.setActivated(false);
-                micBtn.clearColorFilter();
-            }
-            if (speechRecognizer != null) {
-                speechRecognizer.stopListening();
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "stopVoiceRecognition failed: " + e.getMessage(), e);
-        }
-    }
-
-    private void destroySpeechRecognizer() {
-        try {
-            stopVoiceRecognition();
-            if (speechRecognizer != null) {
-                speechRecognizer.destroy();
-                speechRecognizer = null;
-            }
-            speechRecognizerIntent = null;
-        } catch (Exception e) {
-            Log.e(TAG, "destroySpeechRecognizer failed: " + e.getMessage(), e);
+        if (micBtn != null) {
+            micBtn.setActivated(false);
+            micBtn.clearColorFilter();
         }
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == VOICE_PERMISSION_REQ) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                startVoiceSearch();
-            } else {
-                Toast.makeText(this, "Microphone permission required for voice search", Toast.LENGTH_SHORT).show();
-            }
+        if (requestCode != VOICE_SEARCH_REQ) {
             return;
         }
 
-        if (requestCode == LOCATION_PERMISSION_REQ) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Location permission granted", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, "Location permission denied", Toast.LENGTH_SHORT).show();
+        stopVoiceRecognition();
+        if (resultCode == RESULT_OK && data != null) {
+            ArrayList<String> results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+            if (results != null && !results.isEmpty()) {
+                String text = results.get(0) == null ? "" : results.get(0).toLowerCase(Locale.US).trim();
+                if (!text.isEmpty()) {
+                    if (etSearch != null) {
+                        etSearch.setText(text);
+                        etSearch.setSelection(text.length());
+                    }
+                    searchServices(text);
+                    return;
+                }
             }
+            Toast.makeText(this, "Speak clearly", Toast.LENGTH_SHORT).show();
+            return;
         }
+        Toast.makeText(this, "Listening failed. Try again.", Toast.LENGTH_SHORT).show();
     }
 
     private void fetchSuggestions(String query) {
         new Thread(() -> {
             try {
                 List<SearchResult> list = new ArrayList<>();
-                String enc = java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8.name());
+                String normalizedQuery = normalizeSearchInput(query);
+                String enc = java.net.URLEncoder.encode(normalizedQuery, java.nio.charset.StandardCharsets.UTF_8.name());
                 String city = locationManager != null ? locationManager.getSavedCity() : "";
                 StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
                         .append("/rest/v1/provider_profiles?select=id,business_name,category,city")
@@ -869,6 +753,44 @@ public class MainActivity extends BaseActivity {
         }).start();
     }
 
+    private String normalizeSearchInput(String input) {
+        String query = input == null ? "" : input.toLowerCase(Locale.US).trim();
+        query = query.replaceAll("\\s+", " ");
+        if (query.contains("ac")) query = "ac";
+        if (query.contains("repair")) query = "repair";
+        return query;
+    }
+
+    private void searchServices(String input) {
+        String query = normalizeSearchInput(input);
+        Log.d("SEARCH_QUERY", query);
+        lastSearchQuery = query;
+        persistLastSearchQuery(query);
+        hideSuggestions();
+        hideKeyboard(etSearch);
+        openSearchResults(query);
+    }
+
+    private void restoreLastSearchQuery() {
+        if (lastSearchQuery != null && !lastSearchQuery.isEmpty()) return;
+        try {
+            lastSearchQuery = getSharedPreferences(SEARCH_PREFS, MODE_PRIVATE)
+                    .getString(KEY_LAST_SEARCH_QUERY, "");
+        } catch (Exception ignored) {
+            lastSearchQuery = "";
+        }
+    }
+
+    private void persistLastSearchQuery(String query) {
+        try {
+            getSharedPreferences(SEARCH_PREFS, MODE_PRIVATE)
+                    .edit()
+                    .putString(KEY_LAST_SEARCH_QUERY, query == null ? "" : query)
+                    .apply();
+        } catch (Exception ignored) {
+        }
+    }
+
     private void openProviderDetailFromSuggestion(SearchResult suggestion) {
         Intent intent = new Intent(this, ProviderDetailActivity.class);
         intent.putExtra(ProviderDetailActivity.EXTRA_PROVIDER_ID, suggestion.id);
@@ -879,14 +801,56 @@ public class MainActivity extends BaseActivity {
         overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
     }
 
-    private void hideSuggestions() { if (searchSuggestionsContainer != null) searchSuggestionsContainer.setVisibility(View.GONE); }
-    private void openSearchResults(String query) { hideSuggestions(); Intent intent = new Intent(this, SearchResultsActivity.class); intent.putExtra(SearchResultsActivity.EXTRA_QUERY, query == null ? "" : query.trim()); intent.putExtra(SearchResultsActivity.EXTRA_CITY, locationManager != null ? locationManager.getSavedCity() : ""); if (locationManager != null) { intent.putExtra(SearchResultsActivity.EXTRA_LAT, locationManager.getSavedLat()); intent.putExtra(SearchResultsActivity.EXTRA_LNG, locationManager.getSavedLng()); } startActivity(intent); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); }
-    private void hideKeyboard(View v) { if (v == null) return; InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE); if (imm != null) imm.hideSoftInputFromWindow(v.getWindowToken(), 0); }
+    private void hideSuggestions() {
+        if (searchSuggestionsContainer != null) searchSuggestionsContainer.setVisibility(View.GONE);
+    }
+
+    private void openSearchResults(String query) {
+        hideSuggestions();
+        Intent intent = new Intent(this, SearchResultsActivity.class);
+        intent.putExtra(SearchResultsActivity.EXTRA_QUERY, query == null ? "" : query.trim());
+        intent.putExtra(SearchResultsActivity.EXTRA_CITY, locationManager != null ? locationManager.getSavedCity() : "");
+        if (locationManager != null) {
+            intent.putExtra(SearchResultsActivity.EXTRA_LAT, locationManager.getSavedLat());
+            intent.putExtra(SearchResultsActivity.EXTRA_LNG, locationManager.getSavedLng());
+        }
+        startActivity(intent);
+        overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+    }
+
+    private void hideKeyboard(View v) {
+        if (v == null) return;
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+    }
 
     private void setupCategoryClickListeners() {
-        View.OnClickListener providerClick = v -> { String cat = ""; int id = v.getId(); if (id == R.id.catPlumbing) cat = "Plumbing"; else if (id == R.id.catElectrical) cat = "Electrical"; else if (id == R.id.catCleaning) cat = "Cleaning"; else if (id == R.id.catRepair) cat = "Repair"; else if (id == R.id.catAC) cat = "AC Service"; else if (id == R.id.catPainting) cat = "Painting"; else if (id == R.id.catCarpentry) cat = "Carpentry"; if (!cat.isEmpty()) openProvidersList(cat); };
-        if (catPlumbing != null) catPlumbing.setOnClickListener(providerClick); if (catElectrical != null) catElectrical.setOnClickListener(providerClick); if (catCleaning != null) catCleaning.setOnClickListener(providerClick); if (catRepair != null) catRepair.setOnClickListener(providerClick); if (catAC != null) catAC.setOnClickListener(providerClick); if (catPainting != null) catPainting.setOnClickListener(providerClick); if (catCarpentry != null) catCarpentry.setOnClickListener(providerClick);
-        if (catMore != null) catMore.setOnClickListener(v -> { startActivity(new Intent(this, CategoriesActivity.class)); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); });
+        View.OnClickListener providerClick = v -> {
+            String cat = "";
+            int id = v.getId();
+            if (id == R.id.catPlumbing) cat = "Plumbing";
+            else if (id == R.id.catElectrical) cat = "Electrical";
+            else if (id == R.id.catCleaning) cat = "Cleaning";
+            else if (id == R.id.catRepair) cat = "Repair";
+            else if (id == R.id.catAC) cat = "AC Service";
+            else if (id == R.id.catPainting) cat = "Painting";
+            else if (id == R.id.catCarpentry) cat = "Carpentry";
+            if (!cat.isEmpty()) openProvidersList(cat);
+        };
+
+        if (catPlumbing != null) catPlumbing.setOnClickListener(providerClick);
+        if (catElectrical != null) catElectrical.setOnClickListener(providerClick);
+        if (catCleaning != null) catCleaning.setOnClickListener(providerClick);
+        if (catRepair != null) catRepair.setOnClickListener(providerClick);
+        if (catAC != null) catAC.setOnClickListener(providerClick);
+        if (catPainting != null) catPainting.setOnClickListener(providerClick);
+        if (catCarpentry != null) catCarpentry.setOnClickListener(providerClick);
+        if (catMore != null) {
+            catMore.setOnClickListener(v -> {
+                startActivity(new Intent(this, CategoriesActivity.class));
+                overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+            });
+        }
     }
 
     private void openProvidersList(String category) {
@@ -899,9 +863,24 @@ public class MainActivity extends BaseActivity {
     }
 
     private void setupQuickActionListeners() {
-        if (quickBookService != null) quickBookService.setOnClickListener(v -> { startActivity(new Intent(this, CategoriesActivity.class)); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); });
-        if (quickEmergency != null) quickEmergency.setOnClickListener(v -> { startActivity(new Intent(this, EmergencyHelpActivity.class)); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); });
-        if (quickTrackBooking != null) quickTrackBooking.setOnClickListener(v -> { startActivity(new Intent(this, UserBookingsActivity.class)); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); });
+        if (quickBookService != null) {
+            quickBookService.setOnClickListener(v -> {
+                startActivity(new Intent(this, CategoriesActivity.class));
+                overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+            });
+        }
+        if (quickEmergency != null) {
+            quickEmergency.setOnClickListener(v -> {
+                startActivity(new Intent(this, EmergencyHelpActivity.class));
+                overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+            });
+        }
+        if (quickTrackBooking != null) {
+            quickTrackBooking.setOnClickListener(v -> {
+                startActivity(new Intent(this, UserBookingsActivity.class));
+                overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+            });
+        }
     }
 
     private void setupFeaturedCardListeners() {
@@ -913,30 +892,67 @@ public class MainActivity extends BaseActivity {
     private void setupBottomNav() {
         setNavSelected(0);
         if (navHome != null) navHome.setOnClickListener(v -> setNavSelected(0));
-        if (navBookings != null) navBookings.setOnClickListener(v -> { setNavSelected(1); startActivity(new Intent(this, UserBookingsActivity.class)); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); });
-        if (navMessages != null) navMessages.setOnClickListener(v -> { setNavSelected(2); startActivity(new Intent(this, MessagesActivity.class)); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); });
-        if (navProfile != null) navProfile.setOnClickListener(v -> { setNavSelected(3); startActivity(new Intent(this, ProfileActivity.class)); overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); });
+        if (navBookings != null) {
+            navBookings.setOnClickListener(v -> {
+                setNavSelected(1);
+                startActivity(new Intent(this, UserBookingsActivity.class));
+                overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+            });
+        }
+        if (navMessages != null) {
+            navMessages.setOnClickListener(v -> {
+                setNavSelected(2);
+                startActivity(new Intent(this, MessagesActivity.class));
+                overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+            });
+        }
+        if (navProfile != null) {
+            navProfile.setOnClickListener(v -> {
+                setNavSelected(3);
+                startActivity(new Intent(this, ProfileActivity.class));
+                overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+            });
+        }
     }
 
     private void setNavSelected(int index) {
-        int active = ContextCompat.getColor(this, R.color.primary); int inactive = ContextCompat.getColor(this, R.color.text_secondary);
+        int active = ContextCompat.getColor(this, R.color.primary);
+        int inactive = ContextCompat.getColor(this, R.color.text_secondary);
         if (navHomeIcon != null) navHomeIcon.setImageTintList(android.content.res.ColorStateList.valueOf(inactive));
         if (navBookingsIcon != null) navBookingsIcon.setImageTintList(android.content.res.ColorStateList.valueOf(inactive));
         if (navMessagesIcon != null) navMessagesIcon.setImageTintList(android.content.res.ColorStateList.valueOf(inactive));
         if (navProfileIcon != null) navProfileIcon.setImageTintList(android.content.res.ColorStateList.valueOf(inactive));
-        if (navHomeText != null) navHomeText.setTextColor(inactive); if (navBookingsText != null) navBookingsText.setTextColor(inactive); if (navMessagesText != null) navMessagesText.setTextColor(inactive); if (navProfileText != null) navProfileText.setTextColor(inactive);
+        if (navHomeText != null) navHomeText.setTextColor(inactive);
+        if (navBookingsText != null) navBookingsText.setTextColor(inactive);
+        if (navMessagesText != null) navMessagesText.setTextColor(inactive);
+        if (navProfileText != null) navProfileText.setTextColor(inactive);
         switch (index) {
-            case 0: if (navHomeIcon != null) navHomeIcon.setImageTintList(android.content.res.ColorStateList.valueOf(active)); if (navHomeText != null) navHomeText.setTextColor(active); break;
-            case 1: if (navBookingsIcon != null) navBookingsIcon.setImageTintList(android.content.res.ColorStateList.valueOf(active)); if (navBookingsText != null) navBookingsText.setTextColor(active); break;
-            case 2: if (navMessagesIcon != null) navMessagesIcon.setImageTintList(android.content.res.ColorStateList.valueOf(active)); if (navMessagesText != null) navMessagesText.setTextColor(active); break;
-            case 3: if (navProfileIcon != null) navProfileIcon.setImageTintList(android.content.res.ColorStateList.valueOf(active)); if (navProfileText != null) navProfileText.setTextColor(active); break;
+            case 0:
+                if (navHomeIcon != null) navHomeIcon.setImageTintList(android.content.res.ColorStateList.valueOf(active));
+                if (navHomeText != null) navHomeText.setTextColor(active);
+                break;
+            case 1:
+                if (navBookingsIcon != null) navBookingsIcon.setImageTintList(android.content.res.ColorStateList.valueOf(active));
+                if (navBookingsText != null) navBookingsText.setTextColor(active);
+                break;
+            case 2:
+                if (navMessagesIcon != null) navMessagesIcon.setImageTintList(android.content.res.ColorStateList.valueOf(active));
+                if (navMessagesText != null) navMessagesText.setTextColor(active);
+                break;
+            case 3:
+                if (navProfileIcon != null) navProfileIcon.setImageTintList(android.content.res.ColorStateList.valueOf(active));
+                if (navProfileText != null) navProfileText.setTextColor(active);
+                break;
+            default:
+                break;
         }
     }
 
     private void setupListBusinessCard(FirebaseUser user) {
         if (listBusinessSection == null || btnListBusinessStart == null || user == null) return;
         listBusinessSection.setVisibility(View.GONE);
-        String uid = user.getUid(); String email = user.getEmail() != null ? user.getEmail() : "";
+        String uid = user.getUid();
+        String email = user.getEmail() != null ? user.getEmail() : "";
         RoleManager.checkAdminRole(uid, new RoleManager.RoleCheckCallback() {
             @Override public void onAdminVerified(String adminRoleId, String roleName) { runOnUiThread(() -> { if (listBusinessSection != null) listBusinessSection.setVisibility(View.GONE); }); }
             @Override public void onNotAdmin() { checkProviderProfile(uid, email); }
@@ -944,9 +960,60 @@ public class MainActivity extends BaseActivity {
         });
     }
 
-    private void checkProviderProfile(String uid, String email) { ProviderApplicationRepository.checkProviderByEmail(email, new ProviderApplicationRepository.ProviderExistsCallback() { @Override public void onExists() { runOnUiThread(() -> { if (listBusinessSection != null) listBusinessSection.setVisibility(View.GONE); }); } @Override public void onNotExists() { checkExistingApplication(uid); } @Override public void onError(String msg) { checkExistingApplication(uid); } }); }
-    private void checkExistingApplication(String uid) { ProviderApplicationRepository.checkApplicationStatus(uid, new ProviderApplicationRepository.StatusCallback() { @Override public void onFound(String status) { runOnUiThread(() -> { if (status == null) { showListBusinessCard(false); return; } switch (status.toLowerCase(Locale.US)) { case "approved": if (listBusinessSection != null) listBusinessSection.setVisibility(View.GONE); break; case "pending": case "rejected": showListBusinessCard(true); break; default: showListBusinessCard(false); break; } }); } @Override public void onNotFound() { runOnUiThread(() -> showListBusinessCard(false)); } @Override public void onError(String message) { runOnUiThread(() -> showListBusinessCard(false)); } }); }
-    private void showListBusinessCard(boolean hasExistingApplication) { if (listBusinessSection == null) return; listBusinessSection.setVisibility(View.VISIBLE); listBusinessSection.setAlpha(0f); listBusinessSection.animate().alpha(1f).setDuration(400).start(); if (btnListBusinessStart != null) { btnListBusinessStart.startAnimation(AnimationUtils.loadAnimation(this, R.anim.pulse)); btnListBusinessStart.setOnClickListener(v -> { if (hasExistingApplication) { startActivity(new Intent(this, ApplicationStatusActivity.class)); } else { startActivity(new Intent(this, ProviderOnboardingActivity.class)); } overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out); }); if (listBusinessSection.getChildCount() > 0) { listBusinessSection.getChildAt(0).setOnClickListener(v -> btnListBusinessStart.performClick()); } } }
+    private void checkProviderProfile(String uid, String email) {
+        ProviderApplicationRepository.checkProviderByEmail(email, new ProviderApplicationRepository.ProviderExistsCallback() {
+            @Override public void onExists() { runOnUiThread(() -> { if (listBusinessSection != null) listBusinessSection.setVisibility(View.GONE); }); }
+            @Override public void onNotExists() { checkExistingApplication(uid); }
+            @Override public void onError(String msg) { checkExistingApplication(uid); }
+        });
+    }
+
+    private void checkExistingApplication(String uid) {
+        ProviderApplicationRepository.checkApplicationStatus(uid, new ProviderApplicationRepository.StatusCallback() {
+            @Override
+            public void onFound(String status) {
+                runOnUiThread(() -> {
+                    if (status == null) { showListBusinessCard(false); return; }
+                    switch (status.toLowerCase(Locale.US)) {
+                        case "approved":
+                            if (listBusinessSection != null) listBusinessSection.setVisibility(View.GONE);
+                            break;
+                        case "pending":
+                        case "rejected":
+                            showListBusinessCard(true);
+                            break;
+                        default:
+                            showListBusinessCard(false);
+                            break;
+                    }
+                });
+            }
+
+            @Override public void onNotFound() { runOnUiThread(() -> showListBusinessCard(false)); }
+            @Override public void onError(String message) { runOnUiThread(() -> showListBusinessCard(false)); }
+        });
+    }
+
+    private void showListBusinessCard(boolean hasExistingApplication) {
+        if (listBusinessSection == null) return;
+        listBusinessSection.setVisibility(View.VISIBLE);
+        listBusinessSection.setAlpha(0f);
+        listBusinessSection.animate().alpha(1f).setDuration(400).start();
+        if (btnListBusinessStart != null) {
+            btnListBusinessStart.startAnimation(AnimationUtils.loadAnimation(this, R.anim.pulse));
+            btnListBusinessStart.setOnClickListener(v -> {
+                if (hasExistingApplication) {
+                    startActivity(new Intent(this, ApplicationStatusActivity.class));
+                } else {
+                    startActivity(new Intent(this, ProviderOnboardingActivity.class));
+                }
+                overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+            });
+            if (listBusinessSection.getChildCount() > 0) {
+                listBusinessSection.getChildAt(0).setOnClickListener(v -> btnListBusinessStart.performClick());
+            }
+        }
+    }
 
     private void refreshHomeContent(boolean fromSwipe) {
         try {
@@ -954,110 +1021,62 @@ public class MainActivity extends BaseActivity {
             setBannerLoadingState();
             setOffersLoadingState();
             if (fromSwipe && homeSwipeRefresh != null) homeSwipeRefresh.setRefreshing(true);
-            loadHomeBanners();
-            loadHomeOffers();
+            fetchBanners();
+            fetchOffers();
         } catch (Exception e) {
             Log.e(MAIN_CRASH, "refreshHomeContent: " + e.toString());
         }
+    }
+
+    private void fetchBanners() {
+        loadHomeBanners();
+    }
+
+    private void fetchOffers() {
+        loadHomeOffers();
     }
 
     private void loadHomeBanners() {
         if (bannerApi == null) {
             Log.e(TAG, "Banner API is null");
             showBannerErrorState("Service unavailable");
+            markHomeSectionLoaded();
             return;
         }
 
         try {
-            bannerApi.getAllBanners(
+            bannerApi.getActiveBanners(
                             BuildConfig.SUPABASE_ANON_KEY,
                             "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                             "*",
-                            "priority.asc"
-                    )
-                    .enqueue(new Callback<List<Banner>>() {
-                        @Override
-                        public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
-                            try {
-                                runOnUiThread(() -> {
-                                    try {
-                                        if (!response.isSuccessful()) {
-                                            Log.w(TAG, "Primary banner query failed, trying fallback");
-                                            loadHomeBannersFallback();
-                                            return;
-                                        }
-
-                                        List<Banner> body = response.body();
-                                        homeBanners.clear();
-                                        if (body != null) {
-                                            for (Banner b : body) {
-                                                if (!isBannerVisible(b)) continue;
-                                                normalizeBannerImage(b);
-                                                homeBanners.add(b);
-                                            }
-                                        }
-
-                                        Log.d("BANNER_SIZE", String.valueOf(homeBanners.size()));
-                                        showBannersOnHome();
-                                        Log.d(TAG, "Loaded " + homeBanners.size() + " banners");
-                                    } catch (Exception e) {
-                                        Log.e(TAG, "Error processing banners: " + e.getMessage(), e);
-                                        showBannerErrorState("Processing error");
-                                    }
-                                    markHomeSectionLoaded();
-                                });
-                            } catch (Exception e) {
-                                Log.e(TAG, "Error in banner response runOnUiThread: " + e.getMessage(), e);
-                                markHomeSectionLoaded();
-                            }
-                        }
-
-                        @Override
-                        public void onFailure(Call<List<Banner>> call, Throwable t) {
-                            try {
-                                Log.w(TAG, "Primary banner query failure, trying fallback: " + t.getMessage());
-                                runOnUiThread(MainActivity.this::loadHomeBannersFallback);
-                            } catch (Exception e) {
-                                Log.e(TAG, "Error in banner failure handler: " + e.getMessage());
-                                markHomeSectionLoaded();
-                            }
-                        }
-                    });
-        } catch (Exception e) {
-            Log.e(TAG, "Exception in loadHomeBanners: " + e.getMessage(), e);
-            loadHomeBannersFallback();
-        }
-    }
-
-    private void loadHomeBannersFallback() {
-        try {
-            bannerApi.getAllBanners(
-                            BuildConfig.SUPABASE_ANON_KEY,
-                            "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
-                            "*",
-                            "priority.asc"
+                            "eq.true",
+                            "created_at.desc"
                     )
                     .enqueue(new Callback<List<Banner>>() {
                         @Override
                         public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
                             runOnUiThread(() -> {
                                 try {
-                                    if (response == null || !response.isSuccessful()) {
+                                    Log.d("BANNERS_API", String.valueOf(response));
+                                    if (!response.isSuccessful()) {
                                         showBannerErrorState("Failed to load banners");
-                                        markHomeSectionLoaded();
+                                        return;
+                                    }
+
+                                    List<Banner> body = response.body();
+                                    if (body == null) {
+                                        showBannerErrorState("Failed to load banners");
                                         return;
                                     }
                                     homeBanners.clear();
-                                    List<Banner> body = response.body();
-                                    if (body != null) {
-                                        for (Banner b : body) {
-                                            if (!isBannerVisible(b)) continue;
-                                            normalizeBannerImage(b);
-                                            homeBanners.add(b);
-                                        }
+                                    for (Banner b : body) {
+                                        if (!isBannerVisible(b)) continue;
+                                        normalizeBannerImage(b);
+                                        homeBanners.add(b);
                                     }
                                     showBannersOnHome();
                                 } catch (Exception e) {
+                                    Log.e(TAG, "Error processing banners: " + e.getMessage(), e);
                                     showBannerErrorState("Failed to load banners");
                                 }
                                 markHomeSectionLoaded();
@@ -1073,6 +1092,7 @@ public class MainActivity extends BaseActivity {
                         }
                     });
         } catch (Exception e) {
+            Log.e(TAG, "Exception in loadHomeBanners: " + e.getMessage(), e);
             showBannerErrorState("Failed to load banners");
             markHomeSectionLoaded();
         }
@@ -1082,75 +1102,16 @@ public class MainActivity extends BaseActivity {
         if (offerApi == null) {
             Log.e(TAG, "Offer API is null");
             showOffersErrorState("Service unavailable");
+            markHomeSectionLoaded();
             return;
         }
 
         try {
-            offerApi.getAllOffers(
+            offerApi.getActiveOffers(
                             BuildConfig.SUPABASE_ANON_KEY,
                             "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                             "*",
-                            "created_at.desc"
-                    )
-                    .enqueue(new Callback<List<Offer>>() {
-                        @Override
-                        public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
-                            try {
-                                runOnUiThread(() -> {
-                                    try {
-                                        if (!response.isSuccessful()) {
-                                            Log.w(TAG, "Primary offers query failed, trying fallback");
-                                            loadHomeOffersFallback();
-                                            return;
-                                        }
-
-                                        List<Offer> body = response.body();
-                                        homeOffers.clear();
-                                        if (body != null) {
-                                            for (Offer o : body) {
-                                                if (!isOfferVisible(o)) continue;
-                                                homeOffers.add(o);
-                                            }
-                                        }
-
-                                        Log.d("OFFER_SIZE", String.valueOf(homeOffers.size()));
-                                        showOffersOnHome();
-                                        Log.d(TAG, "Loaded " + homeOffers.size() + " offers");
-                                    } catch (Exception e) {
-                                        Log.e(TAG, "Error processing offers: " + e.getMessage(), e);
-                                        showOffersErrorState("Processing error");
-                                    }
-                                    markHomeSectionLoaded();
-                                });
-                            } catch (Exception e) {
-                                Log.e(TAG, "Error in offer response runOnUiThread: " + e.getMessage(), e);
-                                markHomeSectionLoaded();
-                            }
-                        }
-
-                        @Override
-                        public void onFailure(Call<List<Offer>> call, Throwable t) {
-                            try {
-                                Log.w(TAG, "Primary offers query failure, trying fallback: " + t.getMessage());
-                                runOnUiThread(MainActivity.this::loadHomeOffersFallback);
-                            } catch (Exception e) {
-                                Log.e(TAG, "Error in offer failure handler: " + e.getMessage());
-                                markHomeSectionLoaded();
-                            }
-                        }
-                    });
-        } catch (Exception e) {
-            Log.e(TAG, "Exception in loadHomeOffers: " + e.getMessage(), e);
-            loadHomeOffersFallback();
-        }
-    }
-
-    private void loadHomeOffersFallback() {
-        try {
-            offerApi.getAllOffers(
-                            BuildConfig.SUPABASE_ANON_KEY,
-                            "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
-                            "*",
+                            "eq.true",
                             "created_at.desc"
                     )
                     .enqueue(new Callback<List<Offer>>() {
@@ -1158,21 +1119,25 @@ public class MainActivity extends BaseActivity {
                         public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
                             runOnUiThread(() -> {
                                 try {
-                                    if (response == null || !response.isSuccessful()) {
+                                    Log.d("OFFERS_API", String.valueOf(response));
+                                    if (!response.isSuccessful()) {
                                         showOffersErrorState("Failed to load offers");
-                                        markHomeSectionLoaded();
+                                        return;
+                                    }
+
+                                    List<Offer> body = response.body();
+                                    if (body == null) {
+                                        showOffersErrorState("Failed to load offers");
                                         return;
                                     }
                                     homeOffers.clear();
-                                    List<Offer> body = response.body();
-                                    if (body != null) {
-                                        for (Offer o : body) {
-                                            if (!isOfferVisible(o)) continue;
-                                            homeOffers.add(o);
-                                        }
+                                    for (Offer o : body) {
+                                        if (!isOfferVisible(o)) continue;
+                                        homeOffers.add(o);
                                     }
                                     showOffersOnHome();
                                 } catch (Exception e) {
+                                    Log.e(TAG, "Error processing offers: " + e.getMessage(), e);
                                     showOffersErrorState("Failed to load offers");
                                 }
                                 markHomeSectionLoaded();
@@ -1188,6 +1153,7 @@ public class MainActivity extends BaseActivity {
                         }
                     });
         } catch (Exception e) {
+            Log.e(TAG, "Exception in loadHomeOffers: " + e.getMessage(), e);
             showOffersErrorState("Failed to load offers");
             markHomeSectionLoaded();
         }
@@ -1204,12 +1170,7 @@ public class MainActivity extends BaseActivity {
         if (bannersSection == null) return;
 
         if (homeBanners.isEmpty()) {
-            bannersSection.setVisibility(View.VISIBLE);
-            if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE);
-            if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE);
-            if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.VISIBLE);
-            if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE);
-            stopBannerAutoSlide();
+            showBannerEmptyState();
             return;
         }
 
@@ -1237,11 +1198,7 @@ public class MainActivity extends BaseActivity {
         if (offersSection == null) return;
 
         if (homeOffers.isEmpty()) {
-            offersSection.setVisibility(View.VISIBLE);
-            if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE);
-            if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE);
-            if (offersEmptyState != null) offersEmptyState.setVisibility(View.VISIBLE);
-            if (offersErrorState != null) offersErrorState.setVisibility(View.GONE);
+            showOffersEmptyState();
             return;
         }
 
@@ -1339,8 +1296,10 @@ public class MainActivity extends BaseActivity {
     private void requestNotificationPermission() { if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) { if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) { ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQ); } } }
 
     private void setBannerLoadingState() { if (bannersSection != null) bannersSection.setVisibility(View.VISIBLE); if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE); if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE); if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE); if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.VISIBLE); }
+    private void showBannerEmptyState() { if (bannersSection != null) bannersSection.setVisibility(View.VISIBLE); if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE); if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE); if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE); if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.VISIBLE); stopBannerAutoSlide(); }
     private void showBannerErrorState(String message) { if (bannersSection != null) bannersSection.setVisibility(View.VISIBLE); if (tvBannerErrorMessage != null) tvBannerErrorMessage.setText(message == null || message.trim().isEmpty() ? getString(R.string.home_banner_error_message) : message); if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE); if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE); if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE); if (bannerErrorState != null) bannerErrorState.setVisibility(View.VISIBLE); stopBannerAutoSlide(); }
     private void setOffersLoadingState() { if (offersSection != null) offersSection.setVisibility(View.VISIBLE); if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE); if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE); if (offersErrorState != null) offersErrorState.setVisibility(View.GONE); if (offersLoadingState != null) offersLoadingState.setVisibility(View.VISIBLE); }
+    private void showOffersEmptyState() { if (offersSection != null) offersSection.setVisibility(View.VISIBLE); if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE); if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE); if (offersErrorState != null) offersErrorState.setVisibility(View.GONE); if (offersEmptyState != null) offersEmptyState.setVisibility(View.VISIBLE); }
     private void showOffersErrorState(String message) { if (offersSection != null) offersSection.setVisibility(View.VISIBLE); if (tvOffersErrorMessage != null) tvOffersErrorMessage.setText(message == null || message.trim().isEmpty() ? getString(R.string.home_offers_error_message) : message); if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE); if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE); if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE); if (offersErrorState != null) offersErrorState.setVisibility(View.VISIBLE); }
 
     private void startBannerAutoSlide() {

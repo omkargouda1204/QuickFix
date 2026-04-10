@@ -278,7 +278,6 @@ public class ProvidersListActivity extends BaseActivity
                     if (p == null) continue;
                     if (!isProviderEligible(p)) continue;
                     if (!matchesCategory(category, p.category)) continue;
-                    if (!matchesCity(cityFilter, p.city)) continue;
                     list.add(p);
                 }
                 return list;
@@ -361,7 +360,8 @@ public class ProvidersListActivity extends BaseActivity
 
     // ── Filter + Search ───────────────────────────────────────────────────
     private void applyFilterAndSearch() {
-        String q = searchQuery.toLowerCase(Locale.getDefault()).trim();
+        String q = normalizeSearchQuery(searchQuery);
+        Log.d("SEARCH_QUERY", q);
 
         if (q.contains("nearby")) {
             applyNearbyFilterFromGps(q.replace("nearby", "").replace("near me", "").trim());
@@ -400,6 +400,14 @@ public class ProvidersListActivity extends BaseActivity
         }
 
         renderProviderList(filtered);
+    }
+
+    private String normalizeSearchQuery(String input) {
+        String query = input == null ? "" : input.toLowerCase(Locale.US).trim();
+        query = query.replaceAll("\\s+", " ");
+        if (query.contains("ac")) query = "ac";
+        if (query.contains("repair")) query = "repair";
+        return query;
     }
 
     private void applyNearbyFilterFromGps(String cleanedQuery) {
@@ -471,6 +479,7 @@ public class ProvidersListActivity extends BaseActivity
     }
 
     private void renderProviderList(List<ProviderProfile> filtered) {
+        Log.d("RESULT_SIZE", String.valueOf(filtered == null ? 0 : filtered.size()));
         adapter.setProviders(filtered);
         adapter.notifyDataSetChanged();
 
