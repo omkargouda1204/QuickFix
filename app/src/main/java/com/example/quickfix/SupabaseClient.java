@@ -908,14 +908,23 @@ public class SupabaseClient {
         new Thread(() -> {
             List<String> failures = new ArrayList<>();
             try {
+                Log.d(TAG, "Starting account deletion for uid: " + normalizedUid);
+                
                 String encUid = java.net.URLEncoder.encode(normalizedUid, "UTF-8");
                 JSONObject accountRow = fetchAccountRow("firebase_uid=eq." + encUid + "&limit=1");
                 String userRowId = accountRow != null ? safeJson(accountRow.optString("id", "")) : "";
+                
+                Log.d(TAG, "Account lookup result - firebase_uid found: " + (accountRow != null) 
+                    + ", user_row_id: " + (userRowId.isEmpty() ? "NOT_FOUND" : "FOUND"));
 
                 List<String> identityIds = collectIdentityIds(normalizedUid, userRowId);
                 List<String> encodedIds = encodeValues(identityIds);
+                
+                Log.d(TAG, "Identity IDs to delete: " + identityIds.size() + " entries");
 
                 // Dependents first, then the user row.
+                Log.d(TAG, "Deleting dependent records...");
+                
                 deleteWithFallbackFilters("business_media",
                         buildIdentityFilters(encodedIds, "provider_id", "firebase_uid", "user_id"),
                         true, failures);
@@ -948,10 +957,13 @@ public class SupabaseClient {
                         buildIdentityFilters(encodedIds, "firebase_uid", "id"),
                         true, failures);
 
+                Log.d(TAG, "Deleting user record...");
                 deleteWithFallbackFilters("users",
                         buildIdentityFilters(encodedIds, "firebase_uid", "id"),
                         false, failures);
 
+                // Verify deletion
+                Log.d(TAG, "Verifying account deletion...");
                 boolean stillExists = fetchAccountRow("firebase_uid=eq." + encUid + "&limit=1") != null;
                 if (!stillExists && !userRowId.isEmpty()) {
                     String encRowId = java.net.URLEncoder.encode(userRowId, "UTF-8");
@@ -959,16 +971,24 @@ public class SupabaseClient {
                 }
 
                 if (stillExists) {
+                    Log.w(TAG, "User account still exists after deletion attempt");
                     failures.add("users(VERIFY_EXISTS)");
+                } else {
+                    Log.d(TAG, "User account successfully verified as deleted");
                 }
 
                 if (failures.isEmpty()) {
+                    Log.i(TAG, "Account deletion completed successfully for uid: " + normalizedUid);
                     MAIN.post(callback::onSuccess);
                 } else {
-                    MAIN.post(() -> callback.onError("Failed to remove data from: " + joinFailures(failures)));
+                    String failureMsg = "Failed to remove data from: " + joinFailures(failures);
+                    Log.e(TAG, "Account deletion incomplete: " + failureMsg);
+                    MAIN.post(() -> callback.onError(failureMsg));
                 }
             } catch (Exception e) {
-                MAIN.post(() -> callback.onError(e.getMessage()));
+                String errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown error";
+                Log.e(TAG, "Account deletion exception: " + errorMsg, e);
+                MAIN.post(() -> callback.onError(errorMsg));
             }
         }).start();
     }
@@ -1069,6 +1089,7 @@ public class SupabaseClient {
         try (Response r = HTTP.newCall(req).execute()) {
             int code = r.code();
             if (code == 200 || code == 204) {
+                Log.d(TAG, "deleteByFilter SUCCESS: table=" + table + " filter=" + filter + " code=" + code);
                 return DeleteAttemptResult.SUCCESS;
             }
             // Optional tables/filters may legitimately fail in older schemas.
