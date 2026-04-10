@@ -351,13 +351,17 @@ public class SettingsActivity extends BaseActivity {
         SupabaseClient.hardDeleteUserData(uid, new SupabaseClient.Callback2() {
             @Override
             public void onSuccess() {
+                Log.d(TAG, "Supabase data deletion successful for uid: " + uid);
                 supabaseDeleteCompleted = true;
                 deleteFirebaseUser(user);
             }
 
             @Override
             public void onError(String message) {
-                Log.w(TAG, "deleteSupabaseAccountData failed: " + message);
+                Log.e(TAG, "deleteSupabaseAccountData failed: " + message);
+                // Log detailed error for debugging
+                logDetailedDeletionError("Supabase deletion failed", message);
+                
                 hideOverlay();
                 isDeleteInProgress = false;
                 showError(getString(R.string.settings_delete_supabase_error, message));
@@ -608,5 +612,33 @@ public class SettingsActivity extends BaseActivity {
         }
         return getString(R.string.settings_delete_firebase_error,
                 detail.isEmpty() ? "Unknown error" : detail);
+    }
+
+    /**
+     * Logs detailed deletion error for debugging.
+     * This helps identify which tables/operations failed during account deletion.
+     */
+    private void logDetailedDeletionError(String context, String errorMessage) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("═══ ACCOUNT DELETION ERROR LOG ═══\n");
+        sb.append("Context: ").append(context).append("\n");
+        sb.append("Timestamp: ").append(new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", 
+            java.util.Locale.US).format(new java.util.Date())).append("\n");
+        sb.append("User ID: ").append(pendingDeleteUid).append("\n");
+        sb.append("Error: ").append(errorMessage).append("\n");
+        sb.append("Has profile image: ").append(!pendingProfileImagePath.isEmpty()).append("\n");
+        sb.append("Supabase delete completed: ").append(supabaseDeleteCompleted).append("\n");
+        sb.append("═══════════════════════════════════\n");
+        
+        Log.e(TAG, sb.toString());
+        
+        // Also log to Android's crash reporting if available
+        try {
+            if (android.util.Log.isLoggable(TAG, android.util.Log.DEBUG)) {
+                android.util.Log.d(TAG, "Full deletion error context: " + sb.toString());
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Could not log detailed error: " + e.getMessage());
+        }
     }
 }

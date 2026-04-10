@@ -46,7 +46,6 @@ public class ProfileActivity extends BaseActivity {
     private static final String PREFS_NAME    = "quickfix_prefs";
     private static final String KEY_LANGUAGE  = "selected_language";
     private static final String KEY_NOTIF     = "notifications_enabled";
-    private static final int AVATAR_SIGNED_URL_TTL_SEC = 3600;
 
     // ── Header ────────────────────────────────────────────────────────────
     private TextView  tvAvatarInitial, tvUserName, tvUserEmail, tvRoleBadge;
@@ -551,39 +550,18 @@ public class ProfileActivity extends BaseActivity {
         if (!TextUtils.isEmpty(imagePath)) {
             ivHeaderAvatar.setVisibility(View.VISIBLE);
             tvAvatarInitial.setVisibility(View.GONE);
-            if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
-                Glide.with(this)
-                        .load(imagePath)
-                        .circleCrop()
-                        .placeholder(R.drawable.bg_profile_avatar_inner)
-                        .error(R.drawable.bg_profile_avatar_inner)
-                        .into(ivHeaderAvatar);
-                return;
-            }
-
-            SupabaseStorageHelper.getSignedUrl(
+            String loadUrl = imagePath.startsWith("http://") || imagePath.startsWith("https://")
+                    ? imagePath
+                    : SupabaseStorageHelper.getPublicObjectUrl(
                     SupabaseStorageHelper.BUCKET_PROFILE_IMAGES,
-                    imagePath,
-                    AVATAR_SIGNED_URL_TTL_SEC,
-                    new SupabaseStorageHelper.SignedUrlCallback() {
-                        @Override
-                        public void onSuccess(String signedUrl) {
-                            if (isFinishing() || isDestroyed()) return;
-                            Glide.with(ProfileActivity.this)
-                                    .load(signedUrl)
-                                    .circleCrop()
-                                    .placeholder(R.drawable.bg_profile_avatar_inner)
-                                    .error(R.drawable.bg_profile_avatar_inner)
-                                    .into(ivHeaderAvatar);
-                        }
-
-                        @Override
-                        public void onError(String message) {
-                            Log.w(TAG, "applyAvatar signed URL failed: " + message);
-                            showInitial(name, email);
-                        }
-                    }
+                    imagePath
             );
+            Glide.with(this)
+                    .load(loadUrl)
+                    .circleCrop()
+                    .placeholder(R.drawable.bg_profile_avatar_inner)
+                    .error(R.drawable.bg_profile_avatar_inner)
+                    .into(ivHeaderAvatar);
             return;
         }
 

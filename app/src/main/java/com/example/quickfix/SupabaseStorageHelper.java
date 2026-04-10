@@ -225,6 +225,10 @@ public class SupabaseStorageHelper {
                                           String userId,
                                           UploadCallback callback) {
         if (callback == null) return;
+        if (context == null || fileUri == null) {
+            MAIN.post(() -> callback.onError("Please choose a valid image before uploading."));
+            return;
+        }
 
         FirebaseUser current = FirebaseAuth.getInstance().getCurrentUser();
         if (current == null) {
@@ -245,6 +249,15 @@ public class SupabaseStorageHelper {
 
         new Thread(() -> {
             try {
+                String mimeType = context.getContentResolver().getType(fileUri);
+                if (mimeType == null || mimeType.trim().isEmpty()) mimeType = "image/jpeg";
+                if (!isSupportedProfileMime(mimeType)) {
+                    String finalMimeType = mimeType;
+                    MAIN.post(() -> callback.onError("Unsupported profile image type: " + finalMimeType
+                            + ". Use JPG, PNG, WEBP, or HEIC."));
+                    return;
+                }
+
                 String storagePath = "profiles/" + uid + "/" + uid + "_" + System.currentTimeMillis() + ".jpg";
                 UploadPayload payload = buildUploadPayloadForFixedPath(context, fileUri, storagePath);
                 ResponseResult result = uploadBytes(BUCKET_PROFILE_IMAGES,
@@ -264,6 +277,17 @@ public class SupabaseStorageHelper {
                 MAIN.post(() -> callback.onError("Upload error: " + e.getMessage()));
             }
         }).start();
+    }
+
+    private static boolean isSupportedProfileMime(String mimeType) {
+        if (mimeType == null) return false;
+        String safe = mimeType.trim().toLowerCase();
+        return "image/jpeg".equals(safe)
+                || "image/jpg".equals(safe)
+                || "image/png".equals(safe)
+                || "image/webp".equals(safe)
+                || "image/heic".equals(safe)
+                || "image/heif".equals(safe);
     }
 
     /**

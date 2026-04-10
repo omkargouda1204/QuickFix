@@ -2,6 +2,7 @@ package com.example.quickfix;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -31,6 +32,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.concurrent.TimeUnit;
@@ -59,7 +61,7 @@ import okhttp3.Response;
 public class ProfileDetailsActivity extends BaseActivity {
 
     private static final String TAG = "ProfileDetails";
-    private static final int AVATAR_SIGNED_URL_TTL_SEC = 3600;
+    private static final long MAX_PROFILE_SOURCE_BYTES = 10L * 1024L * 1024L;
 
     // ── Intent extras (passed by ProfileActivity for instant pre-fill) ────
     public static final String EXTRA_NAME  = "extra_profile_name";
@@ -353,6 +355,15 @@ public class ProfileDetailsActivity extends BaseActivity {
                     new SupabaseStorageHelper.UploadCallback() {
                         @Override
                         public void onSuccess(String publicUrl) {
+                            if (TextUtils.isEmpty(publicUrl)
+                                    || (!publicUrl.startsWith("http://") && !publicUrl.startsWith("https://"))) {
+                                MAIN.post(() -> {
+                                    showSnack(getString(R.string.pd_photo_invalid_url));
+                                    isSaving = false;
+                                    showLoading(false);
+                                });
+                                return;
+                            }
                             persistProfileUpdate(name, phone, city, addr, publicUrl, true);
                         }
 
@@ -385,18 +396,32 @@ public class ProfileDetailsActivity extends BaseActivity {
                 body.put("address", addr);
                 body.put("profile_image", uploadedImagePath);
 
+                String encodedUid = java.net.URLEncoder.encode(
+                        firebaseUid,
+                        java.nio.charset.StandardCharsets.UTF_8.name()
+                );
+
                 Request req = new Request.Builder()
-                        .url(BuildConfig.SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + firebaseUid)
+                        .url(BuildConfig.SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + encodedUid)
                         .patch(RequestBody.create(body.toString(), MediaType.get("application/json; charset=utf-8")))
                         .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Content-Type", "application/json")
-                        .addHeader("Prefer", "return=minimal")
+                        .addHeader("Prefer", "return=representation")
                         .build();
 
                 try (Response r = HTTP.newCall(req).execute()) {
                     final int code = r.code();
+                    final String raw = r.body() != null ? r.body().string() : "";
+
                     if (code == 200 || code == 204) {
+                        if (code == 200 && !patchAffectedAnyRows(raw)) {
+                            boolean upserted = upsertProfileRow(name, phone, city, addr, uploadedImagePath);
+                            if (!upserted) {
+                                MAIN.post(() -> showSnack(getString(R.string.pd_save_no_user_row)));
+                                return;
+                            }
+                        }
                         final String finalImg = uploadedImagePath;
                         MAIN.post(() -> {
                             applyProfile(name, cachedEmail, phone, city, addr, finalImg);
@@ -406,12 +431,13 @@ public class ProfileDetailsActivity extends BaseActivity {
                                     : R.string.pd_saved_ok));
                         });
                     } else {
-                        MAIN.post(() -> showSnack("Save failed: " + code));
+                        final String parsed = parseSupabaseError(raw);
+                        MAIN.post(() -> showSnack(getString(R.string.pd_save_failed_http, code, parsed)));
                     }
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Save error", e);
-                MAIN.post(() -> showSnack("Error: " + e.getMessage()));
+                MAIN.post(() -> showSnack(getString(R.string.pd_save_exception, e.getMessage())));
             } finally {
                 MAIN.post(() -> {
                     isSaving = false;
@@ -419,6 +445,75 @@ public class ProfileDetailsActivity extends BaseActivity {
                 });
             }
         }).start();
+    }
+
+    private boolean patchAffectedAnyRows(String rawBody) {
+        if (TextUtils.isEmpty(rawBody)) return true;
+        try {
+            JSONArray arr = new JSONArray(rawBody);
+            return arr.length() > 0;
+        } catch (JSONException parseErr) {
+            Log.w(TAG, "Could not parse PATCH body; treating as updated. body=" + rawBody, parseErr);
+            return true;
+        }
+    }
+
+    private boolean upsertProfileRow(String name, String phone, String city,
+                                     String addr, String uploadedImagePath) {
+        try {
+            JSONObject upsertBody = new JSONObject();
+            upsertBody.put("firebase_uid", firebaseUid);
+            upsertBody.put("name", safeStr(name));
+            upsertBody.put("email", safeStr(cachedEmail));
+            upsertBody.put("phone", safeStr(phone));
+            upsertBody.put("city", safeStr(city));
+            upsertBody.put("address", safeStr(addr));
+            upsertBody.put("profile_image", safeStr(uploadedImagePath));
+            upsertBody.put("is_user", true);
+
+            Request req = new Request.Builder()
+                    .url(BuildConfig.SUPABASE_URL + "/rest/v1/users")
+                    .post(RequestBody.create(
+                            upsertBody.toString(),
+                            MediaType.get("application/json; charset=utf-8")
+                    ))
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "resolution=merge-duplicates,return=minimal")
+                    .build();
+
+            try (Response r = HTTP.newCall(req).execute()) {
+                int code = r.code();
+                String body = r.body() != null ? r.body().string() : "";
+                if (code == 200 || code == 201 || code == 204) return true;
+                Log.e(TAG, "upsertProfileRow failed HTTP " + code + " | body=" + body);
+                return false;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "upsertProfileRow exception", e);
+            return false;
+        }
+    }
+
+    private String parseSupabaseError(String rawBody) {
+        if (TextUtils.isEmpty(rawBody)) return "Unknown error";
+        try {
+            JSONObject obj = new JSONObject(rawBody);
+            String message = obj.optString("message", "");
+            String details = obj.optString("details", "");
+            String hint = obj.optString("hint", "");
+
+            if (!TextUtils.isEmpty(message)) {
+                StringBuilder out = new StringBuilder(message);
+                if (!TextUtils.isEmpty(details)) out.append(" (").append(details).append(")");
+                if (!TextUtils.isEmpty(hint)) out.append(". ").append(hint);
+                return out.toString();
+            }
+        } catch (JSONException ignored) {
+            // Keep raw fallback below.
+        }
+        return rawBody;
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -574,36 +669,18 @@ public class ProfileDetailsActivity extends BaseActivity {
         if (!TextUtils.isEmpty(imagePath)) {
             ivAvatar.setVisibility(View.VISIBLE);
             tvAvatarInitial.setVisibility(View.GONE);
-            if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
-                Glide.with(this).load(imagePath).circleCrop()
-                        .placeholder(R.drawable.bg_profile_avatar_inner)
-                        .error(R.drawable.bg_profile_avatar_inner)
-                        .into(ivAvatar);
-                return;
-            }
-            SupabaseStorageHelper.getSignedUrl(
+            String loadUrl = imagePath.startsWith("http://") || imagePath.startsWith("https://")
+                    ? imagePath
+                    : SupabaseStorageHelper.getPublicObjectUrl(
                     SupabaseStorageHelper.BUCKET_PROFILE_IMAGES,
-                    imagePath,
-                    AVATAR_SIGNED_URL_TTL_SEC,
-                    new SupabaseStorageHelper.SignedUrlCallback() {
-                        @Override
-                        public void onSuccess(String signedUrl) {
-                            if (isFinishing() || isDestroyed()) return;
-                            Glide.with(ProfileDetailsActivity.this)
-                                    .load(signedUrl)
-                                    .circleCrop()
-                                    .placeholder(R.drawable.bg_profile_avatar_inner)
-                                    .error(R.drawable.bg_profile_avatar_inner)
-                                    .into(ivAvatar);
-                        }
-
-                        @Override
-                        public void onError(String message) {
-                            Log.w(TAG, "Signed URL failed: " + message);
-                            showInitialAvatar(name);
-                        }
-                    }
+                    imagePath
             );
+            Glide.with(this)
+                    .load(loadUrl)
+                    .circleCrop()
+                    .placeholder(R.drawable.bg_profile_avatar_inner)
+                    .error(R.drawable.bg_profile_avatar_inner)
+                    .into(ivAvatar);
         } else {
             showInitialAvatar(name);
         }
@@ -742,6 +819,12 @@ public class ProfileDetailsActivity extends BaseActivity {
     }
 
     private void onPhotoSelected(Uri uri) {
+        String validationError = validateImageSelection(uri);
+        if (!TextUtils.isEmpty(validationError)) {
+            showSnack(validationError);
+            return;
+        }
+
         pendingAvatarUri = uri;
         if (ivAvatar == null || tvAvatarInitial == null) return;
         ivAvatar.setVisibility(View.VISIBLE);
@@ -753,5 +836,35 @@ public class ProfileDetailsActivity extends BaseActivity {
                 .error(R.drawable.bg_profile_avatar_inner)
                 .into(ivAvatar);
         showSnack(getString(R.string.pd_photo_selected_save_hint));
+    }
+
+    private String validateImageSelection(Uri uri) {
+        if (uri == null) return getString(R.string.pd_photo_invalid_selection);
+
+        String mimeType = getContentResolver().getType(uri);
+        if (TextUtils.isEmpty(mimeType)) mimeType = "image/jpeg";
+        String safeMime = mimeType.toLowerCase();
+        boolean supported = "image/jpeg".equals(safeMime)
+                || "image/jpg".equals(safeMime)
+                || "image/png".equals(safeMime)
+                || "image/webp".equals(safeMime)
+                || "image/heic".equals(safeMime)
+                || "image/heif".equals(safeMime);
+        if (!supported) {
+            return getString(R.string.pd_photo_invalid_type, mimeType);
+        }
+
+        try (AssetFileDescriptor afd = getContentResolver().openAssetFileDescriptor(uri, "r")) {
+            if (afd != null) {
+                long length = afd.getLength();
+                if (length > MAX_PROFILE_SOURCE_BYTES) {
+                    return getString(R.string.pd_photo_too_large_mb, 10);
+                }
+            }
+        } catch (Exception ignored) {
+            // Length is not always available for all providers; upload helper re-checks.
+        }
+
+        return "";
     }
 }
