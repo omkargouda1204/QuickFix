@@ -26,9 +26,15 @@ import com.google.android.material.chip.ChipGroup;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -230,6 +236,9 @@ public class ProvidersListActivity extends BaseActivity
                 final List<ProviderProfile> finalList = list;
                 allProviders = new ArrayList<>(finalList);
 
+                // Enrich provider images from users table
+                enrichProviderImagesFromUsers(allProviders);
+
                 MAIN.post(() -> {
                     showLoading(false);
                     applyFilterAndSearch();
@@ -355,6 +364,67 @@ public class ProvidersListActivity extends BaseActivity
             return Double.parseDouble(String.valueOf(raw));
         } catch (Exception ignored) {
             return Double.NaN;
+        }
+    }
+
+    private void enrichProviderImagesFromUsers(List<ProviderProfile> providers) {
+        if (providers == null || providers.isEmpty()) return;
+
+        try {
+            Set<String> uidSet = new LinkedHashSet<>();
+            for (ProviderProfile p : providers) {
+                if (p == null || p.firebaseUid == null) continue;
+                String uid = p.firebaseUid.trim();
+                if (!uid.isEmpty()) uidSet.add(uid);
+            }
+            if (uidSet.isEmpty()) return;
+
+            StringBuilder in = new StringBuilder();
+            for (String uid : uidSet) {
+                if (in.length() > 0) in.append(",");
+                in.append(URLEncoder.encode(uid, StandardCharsets.UTF_8.name()));
+            }
+
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/users"
+                    + "?select=firebase_uid,profile_image"
+                    + "&firebase_uid=in.(" + in + ")";
+
+            Request req = new Request.Builder()
+                    .url(url)
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response r = HTTP.newCall(req).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                if (!r.isSuccessful()) {
+                    Log.w(TAG, "Image enrichment HTTP " + r.code());
+                    return;
+                }
+
+                JSONArray arr = new JSONArray(body);
+                Map<String, String> imageByUid = new HashMap<>();
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject u = arr.getJSONObject(i);
+                    String uid = u.optString("firebase_uid", "").trim();
+                    String image = u.optString("profile_image", "").trim();
+                    if (!uid.isEmpty() && !image.isEmpty()) {
+                        imageByUid.put(uid, SupabaseStorageHelper.getPublicObjectUrl(
+                                SupabaseStorageHelper.BUCKET_PROFILE_IMAGES, image));
+                    }
+                }
+
+                for (ProviderProfile p : providers) {
+                    if (p == null || p.firebaseUid == null) continue;
+                    String image = imageByUid.get(p.firebaseUid.trim());
+                    if (image != null && !image.isEmpty()) {
+                        p.businessImageUrl = image;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to enrich provider images: " + e.getMessage());
         }
     }
 

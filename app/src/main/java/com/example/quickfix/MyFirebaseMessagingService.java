@@ -9,7 +9,6 @@ import android.graphics.Color;
 import android.os.Build;
 import android.util.Log;
 
-import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -22,11 +21,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * MyFirebaseMessagingService
+ *
  * Responsibilities:
  *  1. onNewToken()         — save fresh FCM token to Supabase silently.
  *  2. onMessageReceived()  — show system notification when app is FOREGROUND.
  *                            When app is in background/killed, the OS handles
  *                            the notification payload automatically.
+ *
  * Notification channels:
  *  - provider_apps  : Provider application events (admin + provider)
  *  - general        : All other push messages
@@ -50,7 +51,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
      * Automatically stores the updated token in the database.
      */
     @Override
-    public void onNewToken(@NonNull String token) {
+    public void onNewToken(String token) {
         super.onNewToken(token);
         Log.d(TAG, "FCM token refreshed — saving to DB silently");
 
@@ -72,7 +73,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
      * using the notification payload (title + body) — no code needed.
      */
     @Override
-    public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
+    public void onMessageReceived(RemoteMessage remoteMessage) {
         super.onMessageReceived(remoteMessage);
         Log.d(TAG, "onMessageReceived from: " + remoteMessage.getFrom());
 
@@ -91,7 +92,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         // ── 2. Data payload (custom key-value pairs) ──────────────────────
         Map<String, String> data = remoteMessage.getData();
         if (!data.isEmpty()) {
-            Log.d(TAG, "data payload: " + data);
+            Log.d(TAG, "data payload: " + data.toString());
             // Data payload can override or supplement notification payload
             if (title == null) title = data.get("title");
             if (body  == null) body  = data.get("body");
@@ -138,16 +139,6 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
                 channelId      = CHANNEL_BOOKINGS;
                 targetActivity = MyBookingsActivity.class;
                 break;
-            case "emergency_request":
-                // Provider receives this → open emergency accept/reject screen
-                channelId = CHANNEL_BOOKINGS;
-                targetActivity = ProviderEmergencyRequestActivity.class;
-                break;
-            case "emergency_assigned":
-                // User receives this → open emergency booking status
-                channelId = CHANNEL_BOOKINGS;
-                targetActivity = EmergencyHelpActivity.class;
-                break;
             default:
                 channelId      = CHANNEL_GENERAL;
                 targetActivity = MainActivity.class;
@@ -169,7 +160,9 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
                 this,
                 requestCode,
                 intent,
-                PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
+                PendingIntent.FLAG_ONE_SHOT
+                        | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                        ? PendingIntent.FLAG_IMMUTABLE : 0));
 
         // Build notification
         NotificationCompat.Builder builder =

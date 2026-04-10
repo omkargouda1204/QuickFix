@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+pastimport { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 type NotifyPayload = {
   token?: string;
@@ -290,6 +290,12 @@ async function sendFcmV1(
     ...args.data,
   };
 
+  const channelId = bookingLikeType(args.type)
+    ? "bookings"
+    : providerLikeType(args.type)
+      ? "provider_apps"
+      : "general";
+
   return await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
     method: "POST",
     headers: {
@@ -308,12 +314,32 @@ async function sendFcmV1(
           priority: "high",
           notification: {
             sound: "default",
-            channel_id: "general",
+            channel_id: channelId,
           },
         },
       },
     }),
   });
+}
+
+function bookingLikeType(type: string): boolean {
+  return [
+    "booking_request",
+    "booking_accepted",
+    "booking_rejected",
+    "booking_completed",
+    "booking_update",
+    "booking",
+  ].includes((type ?? "").trim());
+}
+
+function providerLikeType(type: string): boolean {
+  return [
+    "provider_application",
+    "provider_status",
+    "provider_approved",
+    "provider_rejected",
+  ].includes((type ?? "").trim());
 }
 
 function json(data: unknown, status = 200): Response {

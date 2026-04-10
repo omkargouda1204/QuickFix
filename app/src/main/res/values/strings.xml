@@ -224,12 +224,32 @@
     <string name="pd_photo_source_gallery">Choose from gallery</string>
     <string name="pd_photo_source_camera">Take a photo</string>
     <string name="pd_photo_selected_save_hint">Photo selected. Tap Save Changes to upload.</string>
+    <string name="pd_photo_invalid_selection">Please choose a valid image file.</string>
+    <string name="pd_photo_invalid_type">Unsupported image type: %1$s. Use JPG, PNG, WEBP, or HEIC.</string>
+    <string name="pd_photo_too_large_mb">Selected image is too large. Please choose a photo under %1$d MB.</string>
+    <string name="pd_photo_invalid_url">Profile photo uploaded, but the returned URL was invalid. Please retry.</string>
     <string name="pd_gallery_permission_denied">Gallery permission denied. Please allow access to select a photo.</string>
     <string name="pd_camera_permission_denied">Camera permission denied. Please allow access to take a photo.</string>
     <string name="pd_camera_unavailable">Unable to open camera. Please try again.</string>
     <string name="pd_camera_capture_cancelled">Camera capture cancelled.</string>
     <string name="pd_saved_ok">Profile saved successfully.</string>
     <string name="pd_saved_with_photo_ok">Profile photo uploaded and profile updated.</string>
+    <string name="pd_save_no_user_row">Could not find your profile row. Please retry in a few seconds.</string>
+    <string name="pd_save_failed_http">Profile save failed (HTTP %1$d): %2$s</string>
+    <string name="pd_save_exception">Could not save profile: %1$s</string>
     <string name="pd_load_http_error">Could not load profile (HTTP %1$d).</string>
     <string name="pd_network_showing_cached">Network error. Showing cached profile data.</string>
+
+    <!-- Bookings + Reviews -->
+    <string name="booking_count_singular" translatable="false">%1$d booking</string>
+    <string name="booking_count_plural" translatable="false">%1$d bookings</string>
+    <string name="review_rate_experience" translatable="false">Rate your experience</string>
+    <string name="review_write_hint" translatable="false">Write your review</string>
+    <string name="review_write_button" translatable="false">Write Review</string>
+    <string name="review_edit_button" translatable="false">Edit Review</string>
+    <string name="review_saved" translatable="false">Review saved</string>
+    <string name="review_failed_save" translatable="false">Could not save review</string>
+    <string name="review_rating_required" translatable="false">Please select a rating from 1 to 5</string>
+    <string name="review_too_long" translatable="false">Review is too long</string>
+    <string name="review_only_completed" translatable="false">You can review only completed bookings</string>
 </resources>

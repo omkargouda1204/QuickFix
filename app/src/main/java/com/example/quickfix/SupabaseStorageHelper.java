@@ -79,6 +79,8 @@ public class SupabaseStorageHelper {
     private static final int BANNER_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;  // 2 MB
     private static final int PROFILE_MAX_SOURCE_BYTES = 10 * 1024 * 1024; // 10 MB
     private static final int PROFILE_MAX_UPLOAD_BYTES = 1024 * 1024;      // 1 MB
+    private static final int MEDIA_IMAGE_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;  // 2 MB
+    private static final int MEDIA_VIDEO_MAX_SOURCE_BYTES = 30 * 1024 * 1024; // 30 MB
 
     /**
      * Upload a file from a Uri to a Supabase Storage bucket.
@@ -223,6 +225,10 @@ public class SupabaseStorageHelper {
                                           String userId,
                                           UploadCallback callback) {
         if (callback == null) return;
+        if (context == null || fileUri == null) {
+            MAIN.post(() -> callback.onError("Please choose a valid image before uploading."));
+            return;
+        }
 
         FirebaseUser current = FirebaseAuth.getInstance().getCurrentUser();
         if (current == null) {
@@ -243,6 +249,15 @@ public class SupabaseStorageHelper {
 
         new Thread(() -> {
             try {
+                String mimeType = context.getContentResolver().getType(fileUri);
+                if (mimeType == null || mimeType.trim().isEmpty()) mimeType = "image/jpeg";
+                if (!isSupportedProfileMime(mimeType)) {
+                    String finalMimeType = mimeType;
+                    MAIN.post(() -> callback.onError("Unsupported profile image type: " + finalMimeType
+                            + ". Use JPG, PNG, WEBP, or HEIC."));
+                    return;
+                }
+
                 String storagePath = "profiles/" + uid + "/" + uid + "_" + System.currentTimeMillis() + ".jpg";
                 UploadPayload payload = buildUploadPayloadForFixedPath(context, fileUri, storagePath);
                 ResponseResult result = uploadBytes(BUCKET_PROFILE_IMAGES,
@@ -262,6 +277,17 @@ public class SupabaseStorageHelper {
                 MAIN.post(() -> callback.onError("Upload error: " + e.getMessage()));
             }
         }).start();
+    }
+
+    private static boolean isSupportedProfileMime(String mimeType) {
+        if (mimeType == null) return false;
+        String safe = mimeType.trim().toLowerCase();
+        return "image/jpeg".equals(safe)
+                || "image/jpg".equals(safe)
+                || "image/png".equals(safe)
+                || "image/webp".equals(safe)
+                || "image/heic".equals(safe)
+                || "image/heif".equals(safe);
     }
 
     /**
@@ -482,7 +508,7 @@ public class SupabaseStorageHelper {
     }
 
     private static String formatUploadError(int code, String body, String bucket) {
-        String safeBody = body == null ? "" : body;
+        String safeBody = body == null ? "" : body.trim();
         String lower = safeBody.toLowerCase();
 
         if (code == 401 || code == 403 || lower.contains("\"error\":\"unauth\"")
@@ -495,6 +521,9 @@ public class SupabaseStorageHelper {
             return "Bucket '" + bucket + "' not found in Supabase Storage.";
         }
 
+        if (safeBody.isEmpty()) {
+            return "Upload failed HTTP " + code + ". Supabase returned an empty error body.";
+        }
         return "Upload failed HTTP " + code + ": " + safeBody;
     }
 
@@ -538,14 +567,29 @@ public class SupabaseStorageHelper {
 
         String mimeType = context.getContentResolver().getType(fileUri);
         if (mimeType == null) mimeType = "application/octet-stream";
-        payload.mimeType = mimeType;
 
-        String ext = mimeTypeToExtension(mimeType);
-        String uniqueId = UUID.randomUUID().toString().replace("-", "");
         String safePrefix = prefix == null ? "user" : prefix.trim();
         if (safePrefix.isEmpty()) safePrefix = "user";
-        payload.storagePath = safePrefix + "/" + uniqueId + ext;
 
+        String uniqueId = UUID.randomUUID().toString().replace("-", "");
+
+        if (mimeType.startsWith("image/")) {
+            byte[] source = readUriBytes(context, fileUri, BANNER_MAX_SOURCE_BYTES);
+            payload.fileBytes = compressBannerBytes(source, MEDIA_IMAGE_MAX_UPLOAD_BYTES);
+            payload.mimeType = "image/jpeg";
+            payload.storagePath = safePrefix + "/" + uniqueId + ".jpg";
+            return payload;
+        }
+
+        if (mimeType.startsWith("video/")) {
+            payload.fileBytes = readUriBytes(context, fileUri, MEDIA_VIDEO_MAX_SOURCE_BYTES);
+            payload.mimeType = mimeType;
+            payload.storagePath = safePrefix + "/" + uniqueId + mimeTypeToExtension(mimeType);
+            return payload;
+        }
+
+        payload.mimeType = mimeType;
+        payload.storagePath = safePrefix + "/" + uniqueId + mimeTypeToExtension(mimeType);
         try (InputStream is = context.getContentResolver().openInputStream(fileUri)) {
             if (is == null) throw new IllegalStateException("Cannot read file");
             payload.fileBytes = readAllBytes(is);
@@ -570,7 +614,18 @@ public class SupabaseStorageHelper {
 
         retrofit2.Response<ResponseBody> response = call.execute();
         out.httpCode = response.code();
-        out.body = response.body() != null ? response.body().string() : "";
+
+        if (response.isSuccessful()) {
+            out.body = response.body() != null ? response.body().string() : "";
+        } else {
+            out.body = response.errorBody() != null ? response.errorBody().string() : "";
+        }
+
+        if (!response.isSuccessful()) {
+            Log.w(TAG, "uploadBytes failed HTTP " + out.httpCode + " | bucket=" + bucket
+                    + " | path=" + storagePath + " | body=" + out.body);
+        }
+
         return out;
     }
 }

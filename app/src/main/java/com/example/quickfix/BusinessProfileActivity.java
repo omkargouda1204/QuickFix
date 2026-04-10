@@ -48,7 +48,7 @@ public class BusinessProfileActivity extends BaseActivity {
     private static final int MAX_MEDIA_ITEMS = 10;
 
     private ImageView ivBusinessImage;
-    private TextInputEditText etBusinessName, etDescription, etExperience, 
+    private TextInputEditText etBusinessName, etDescription, etExperience,
                               etAddress, etCity, etPhone;
     private AutoCompleteTextView acCategory;
     private SwitchCompat switchAvailability;
@@ -66,7 +66,7 @@ public class BusinessProfileActivity extends BaseActivity {
     private List<BusinessMediaItem> uploadedMedia = new ArrayList<>();
 
     private final String[] categories = {
-            "Plumbing", "Electrical", "Carpentry", "Painting", 
+            "Plumbing", "Electrical", "Carpentry", "Painting",
             "Cleaning", "AC Repair", "Appliance Repair", "Pest Control"
     };
 
@@ -88,6 +88,10 @@ public class BusinessProfileActivity extends BaseActivity {
     }
 
     private interface MediaDbSaveCallback {
+        void onComplete(boolean success, String error);
+    }
+
+    private interface UserImageUpdateCallback {
         void onComplete(boolean success, String error);
     }
     @Override
@@ -306,7 +310,7 @@ public class BusinessProfileActivity extends BaseActivity {
                         progressBar.setVisibility(View.GONE);
                     }
                     Toast.makeText(BusinessProfileActivity.this,
-                            "Failed to load profile: " + e.getMessage(), 
+                            "Failed to load profile: " + e.getMessage(),
                             Toast.LENGTH_SHORT).show();
                 });
             }
@@ -316,15 +320,77 @@ public class BusinessProfileActivity extends BaseActivity {
                 int code = response.code();
                 response.close();
                 mainHandler.post(() -> {
+                    if (code == 200) {
+                        parseProfile(body);
+                        loadUserProfileImage();
+                    } else {
+                        if (progressBar != null) {
+                            progressBar.setVisibility(View.GONE);
+                        }
+                        Toast.makeText(BusinessProfileActivity.this,
+                                "Error: HTTP " + code,
+                                Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        });
+    }
+
+    private void loadUserProfileImage() {
+        String url = SUPABASE_URL + "/rest/v1/users" +
+                "?firebase_uid=eq." + providerId +
+                "&select=profile_image" +
+                "&limit=1";
+
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                mainHandler.post(() -> {
                     if (progressBar != null) {
                         progressBar.setVisibility(View.GONE);
                     }
-                    if (code == 200) {
-                        parseProfile(body);
-                    } else {
-                        Toast.makeText(BusinessProfileActivity.this, 
-                                "Error: HTTP " + code, 
-                                Toast.LENGTH_SHORT).show();
+                    Log.w(TAG, "Failed to load users.profile_image: " + e.getMessage());
+                });
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                String body = response.body() != null ? response.body().string() : "[]";
+                int code = response.code();
+                response.close();
+
+                mainHandler.post(() -> {
+                    if (progressBar != null) {
+                        progressBar.setVisibility(View.GONE);
+                    }
+
+                    if (code != 200) {
+                        Log.w(TAG, "users.profile_image load HTTP " + code);
+                        return;
+                    }
+
+                    try {
+                        JSONArray arr = new JSONArray(body);
+                        if (arr.length() == 0) return;
+                        String profileImage = arr.getJSONObject(0).optString("profile_image", "");
+                        if (profileImage == null || profileImage.trim().isEmpty()) return;
+
+                        currentImageUrl = profileImage;
+                        if (ivBusinessImage != null) {
+                            Glide.with(BusinessProfileActivity.this)
+                                    .load(currentImageUrl)
+                                    .placeholder(R.drawable.ic_launcher_foreground)
+                                    .into(ivBusinessImage);
+                        }
+                    } catch (Exception e) {
+                        Log.w(TAG, "Failed parsing users.profile_image: " + e.getMessage());
                     }
                 });
             }
@@ -339,10 +405,11 @@ public class BusinessProfileActivity extends BaseActivity {
                 String description = profile.optString("description", "");
                 String category = profile.optString("category", "");
                 lockedCategory = category;
-                String experience = profile.optString("experience", "");
+                String experience = profile.optString("experience_yrs", profile.optString("experience", ""));
                 String address = profile.optString("address", "");
                 String city = profile.optString("city", "");
                 String phone = profile.optString("phone", "");
+                // Legacy fallback only; current schema stores image in users.profile_image.
                 currentImageUrl = profile.optString("business_image_url", "");
                 boolean isAvailable = profile.optBoolean("is_available", true);
                 if (etBusinessName != null) etBusinessName.setText(businessName);
@@ -500,6 +567,18 @@ public class BusinessProfileActivity extends BaseActivity {
             return;
         }
 
+        if (!experience.isEmpty()) {
+            try {
+                Integer.parseInt(experience);
+            } catch (NumberFormatException nfe) {
+                if (etExperience != null) {
+                    etExperience.setError("Experience must be a number (years)");
+                    etExperience.requestFocus();
+                }
+                return;
+            }
+        }
+
         // Category is immutable after onboarding and must already exist.
         if (lockedCategory == null || lockedCategory.trim().isEmpty()) {
             Toast.makeText(this, "Category is locked and cannot be changed here.", Toast.LENGTH_SHORT).show();
@@ -555,56 +634,71 @@ public class BusinessProfileActivity extends BaseActivity {
             return;
         }
 
-        AtomicInteger completed = new AtomicInteger(0);
-        AtomicInteger success = new AtomicInteger(0);
-        AtomicInteger failed = new AtomicInteger(0);
-        final String[] firstError = {null};
-        int total = pendingUploads.size();
+        uploadPendingMediaSequential(pendingUploads, 0, 0, 0, null, onComplete);
+    }
 
-        for (Uri uri : pendingUploads) {
-            String mediaType = isVideo(uri) ? "video" : "image";
-            String bucket = SupabaseStorageHelper.BUCKET_QUICKFIX;
-            String prefix = "provider_" + providerId + "_gallery";
-
-            SupabaseStorageHelper.uploadFile(this, uri, bucket, prefix,
-                    new SupabaseStorageHelper.UploadCallback() {
-                        @Override
-                        public void onSuccess(String publicUrl) {
-                            saveMediaToDatabase(publicUrl, mediaType, (dbSuccess, dbError) -> {
-                                if (dbSuccess) {
-                                    success.incrementAndGet();
-                                    if (mediaAdapter != null) {
-                                        mediaAdapter.removeLocalMedia(uri);
-                                        updateMediaCount();
-                                    }
-                                } else {
-                                    failed.incrementAndGet();
-                                    if (firstError[0] == null) {
-                                        firstError[0] = dbError;
-                                    }
-                                }
-
-                                if (completed.incrementAndGet() >= total) {
-                                    loadBusinessMedia();
-                                    onComplete.onComplete(success.get(), failed.get(), firstError[0]);
-                                }
-                            });
-                        }
-
-                        @Override
-                        public void onError(String error) {
-                            Log.e(TAG, "Media upload failed: " + error);
-                            failed.incrementAndGet();
-                            if (firstError[0] == null) {
-                                firstError[0] = error;
-                            }
-                            if (completed.incrementAndGet() >= total) {
-                                loadBusinessMedia();
-                                onComplete.onComplete(success.get(), failed.get(), firstError[0]);
-                            }
-                        }
-                    });
+    private void uploadPendingMediaSequential(List<Uri> pendingUploads,
+                                              int index,
+                                              int successCount,
+                                              int failedCount,
+                                              String firstError,
+                                              PendingMediaUploadCallback onComplete) {
+        if (index >= pendingUploads.size()) {
+            loadBusinessMedia();
+            onComplete.onComplete(successCount, failedCount, firstError);
+            return;
         }
+
+        Uri uri = pendingUploads.get(index);
+        String mediaType = isVideo(uri) ? "video" : "image";
+        String bucket = SupabaseStorageHelper.BUCKET_QUICKFIX;
+        String prefix = "provider_" + providerId + "_gallery";
+
+        SupabaseStorageHelper.uploadFile(this, uri, bucket, prefix,
+                new SupabaseStorageHelper.UploadCallback() {
+                    @Override
+                    public void onSuccess(String publicUrl) {
+                        saveMediaToDatabase(publicUrl, mediaType, (dbSuccess, dbError) -> {
+                            int nextSuccess = successCount;
+                            int nextFailed = failedCount;
+                            String nextFirstError = firstError;
+
+                            if (dbSuccess) {
+                                nextSuccess++;
+                                if (mediaAdapter != null) {
+                                    mediaAdapter.removeLocalMedia(uri);
+                                    updateMediaCount();
+                                }
+                            } else {
+                                nextFailed++;
+                                if (nextFirstError == null) nextFirstError = dbError;
+                            }
+
+                            uploadPendingMediaSequential(
+                                    pendingUploads,
+                                    index + 1,
+                                    nextSuccess,
+                                    nextFailed,
+                                    nextFirstError,
+                                    onComplete
+                            );
+                        });
+                    }
+
+                    @Override
+                    public void onError(String error) {
+                        Log.e(TAG, "Media upload failed: " + error);
+                        String nextFirstError = firstError == null ? error : firstError;
+                        uploadPendingMediaSequential(
+                                pendingUploads,
+                                index + 1,
+                                successCount,
+                                failedCount + 1,
+                                nextFirstError,
+                                onComplete
+                        );
+                    }
+                });
     }
 
     private boolean isVideo(Uri uri) {
@@ -650,7 +744,10 @@ public class BusinessProfileActivity extends BaseActivity {
                             onComplete.onComplete(true, null);
                         } else {
                             Log.e(TAG, "Save media DB HTTP " + code + " | " + resp);
-                            onComplete.onComplete(false, "Media DB save failed: HTTP " + code);
+                            String detail = resp == null || resp.trim().isEmpty()
+                                    ? ("HTTP " + code)
+                                    : ("HTTP " + code + ": " + resp);
+                            onComplete.onComplete(false, "Media DB save failed: " + detail);
                         }
                     });
                 }
@@ -702,16 +799,16 @@ public class BusinessProfileActivity extends BaseActivity {
             JSONObject body = new JSONObject();
             body.put("business_name", businessName != null ? businessName : "");
             body.put("description", description != null ? description : "");
-            body.put("experience", experience != null ? experience : "");
             body.put("address", address != null ? address : "");
             body.put("city", city != null ? city : "");
             body.put("phone", phone != null ? phone : "");
             body.put("is_available", isAvailable);
-            if (imageUrl != null && !imageUrl.isEmpty()) {
-                body.put("business_image_url", imageUrl);
+
+            String exp = experience != null ? experience.trim() : "";
+            if (!exp.isEmpty()) {
+                body.put("experience_yrs", Integer.parseInt(exp));
             }
 
-            // Update existing profile row only; do not allow category mutation in this flow.
             String url = SUPABASE_URL + "/rest/v1/provider_profiles?firebase_uid=eq." + providerId;
             Request request = new Request.Builder()
                     .url(url)
@@ -745,27 +842,35 @@ public class BusinessProfileActivity extends BaseActivity {
                     String resp = response.body() != null ? response.body().string() : "";
                     response.close();
                     mainHandler.post(() -> {
-                        if (progressBar != null) {
-                            progressBar.setVisibility(View.GONE);
-                        }
-                        if (btnSave != null) {
-                            btnSave.setEnabled(true);
-                        }
-                        if (btnEditProfile != null) {
-                            btnEditProfile.setEnabled(true);
-                        }
                         if (code == 200 || code == 204) {
-                            Toast.makeText(BusinessProfileActivity.this,
-                                    "Profile updated successfully!",
-                                    Toast.LENGTH_SHORT).show();
-                            selectedImageUri = null;
-                            setEditMode(false);
-                            loadProfile();
+                            if (imageUrl != null && !imageUrl.isEmpty()) {
+                                updateUserProfileImage(imageUrl, (ok, err) -> {
+                                    if (ok) {
+                                        completeProfileSaveSuccess(imageUrl);
+                                    } else {
+                                        completeProfileSaveSuccess(currentImageUrl);
+                                        Toast.makeText(BusinessProfileActivity.this,
+                                                "Profile updated, but image save failed: " + err,
+                                                Toast.LENGTH_LONG).show();
+                                    }
+                                });
+                            } else {
+                                completeProfileSaveSuccess(currentImageUrl);
+                            }
                         } else {
+                            if (progressBar != null) {
+                                progressBar.setVisibility(View.GONE);
+                            }
+                            if (btnSave != null) {
+                                btnSave.setEnabled(true);
+                            }
+                            if (btnEditProfile != null) {
+                                btnEditProfile.setEnabled(true);
+                            }
                             Log.e(TAG, "Profile update HTTP " + code + " | " + resp);
                             Toast.makeText(BusinessProfileActivity.this,
-                                    "Update failed: HTTP " + code,
-                                    Toast.LENGTH_SHORT).show();
+                                    "Update failed: HTTP " + code + " - " + parseSupabaseError(resp),
+                                    Toast.LENGTH_LONG).show();
                         }
                     });
                 }
@@ -782,6 +887,85 @@ public class BusinessProfileActivity extends BaseActivity {
                 btnEditProfile.setEnabled(true);
             }
             Toast.makeText(this, "Error updating profile", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void updateUserProfileImage(String imageUrl, UserImageUpdateCallback callback) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("profile_image", imageUrl);
+
+            String url = SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + providerId;
+            Request request = new Request.Builder()
+                    .url(url)
+                    .patch(RequestBody.create(body.toString(), JSON))
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "return=minimal")
+                    .build();
+
+            httpClient.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    mainHandler.post(() -> callback.onComplete(false, e.getMessage()));
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    int code = response.code();
+                    String resp = response.body() != null ? response.body().string() : "";
+                    response.close();
+                    mainHandler.post(() -> {
+                        if (code == 200 || code == 204) {
+                            callback.onComplete(true, null);
+                        } else {
+                            callback.onComplete(false, "HTTP " + code + " - " + parseSupabaseError(resp));
+                        }
+                    });
+                }
+            });
+        } catch (Exception e) {
+            callback.onComplete(false, e.getMessage());
+        }
+    }
+
+    private void completeProfileSaveSuccess(String imageUrl) {
+        if (progressBar != null) {
+            progressBar.setVisibility(View.GONE);
+        }
+        if (btnSave != null) {
+            btnSave.setEnabled(true);
+        }
+        if (btnEditProfile != null) {
+            btnEditProfile.setEnabled(true);
+        }
+
+        Toast.makeText(BusinessProfileActivity.this,
+                "Profile updated successfully!",
+                Toast.LENGTH_SHORT).show();
+        selectedImageUri = null;
+        if (imageUrl != null && !imageUrl.isEmpty()) {
+            currentImageUrl = imageUrl;
+        }
+        setEditMode(false);
+        loadProfile();
+    }
+
+    private String parseSupabaseError(String body) {
+        if (body == null || body.trim().isEmpty()) return "Unknown error";
+        try {
+            JSONObject obj = new JSONObject(body);
+            String message = obj.optString("message", "").trim();
+            String details = obj.optString("details", "").trim();
+            String hint = obj.optString("hint", "").trim();
+
+            String out = message;
+            if (!details.isEmpty()) out += (out.isEmpty() ? "" : " | ") + details;
+            if (!hint.isEmpty()) out += (out.isEmpty() ? "" : " | ") + hint;
+            return out.isEmpty() ? body : out;
+        } catch (Exception ignore) {
+            return body;
         }
     }
 

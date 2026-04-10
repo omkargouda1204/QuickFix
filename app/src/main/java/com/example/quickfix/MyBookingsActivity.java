@@ -48,7 +48,6 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
-    private static final long BOOKING_SYNC_INTERVAL_MS = 15_000L;
 
     private RecyclerView recyclerView;
     private BookingsAdapter adapter;
@@ -60,7 +59,6 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
     private Chip chipAll, chipPending, chipAccepted, chipCompleted, chipCancelled;
 
     private FirebaseAuth mAuth;
-    private String firebaseUid;
     private String providerId;
     private String currentFilter = "all";
     private List<Booking> allBookings = new ArrayList<>();
@@ -71,7 +69,6 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
             .build();
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private Runnable bookingsSyncRunnable;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,27 +81,13 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
             finish();
             return;
         }
-        firebaseUid = user.getUid();
-        Log.d("USER", firebaseUid);
+        providerId = user.getUid();
 
         setupToolbar();
         initViews();
         setupRecyclerView();
         setupFilters();
-        resolveProviderIdThenLoadBookings();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
         loadBookings();
-        startBookingsSync();
-    }
-
-    @Override
-    protected void onPause() {
-        stopBookingsSync();
-        super.onPause();
     }
 
     private void setupToolbar() {
@@ -155,90 +138,15 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
     }
 
     private void loadBookings() {
-        if (providerId == null || providerId.trim().isEmpty()) {
-            resolveProviderIdThenLoadBookings();
-            return;
-        }
-
         showLoading(true);
 
-        loadBookingsWithProviderId();
-    }
-
-    private void resolveProviderIdThenLoadBookings() {
-        if (firebaseUid == null || firebaseUid.trim().isEmpty()) {
+        if (providerId == null || providerId.isEmpty()) {
             showLoading(false);
             Toast.makeText(this, "Provider ID not available", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        String url = SUPABASE_URL + "/rest/v1/provider_profiles"
-                + "?firebase_uid=eq." + firebaseUid
-                + "&select=id,firebase_uid&limit=1";
-
-        Request request = new Request.Builder()
-                .url(url)
-                .get()
-                .addHeader("apikey", ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .addHeader("Accept", "application/json")
-                .build();
-
-        httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                mainHandler.post(() -> {
-                    Log.w(TAG, "Provider profile lookup failed, using firebase uid: " + e.getMessage());
-                    providerId = firebaseUid;
-                    loadBookings();
-                });
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                String body = response.body() != null ? response.body().string() : "[]";
-                int code = response.code();
-                response.close();
-
-                mainHandler.post(() -> {
-                    try {
-                        if (code == 200) {
-                            JSONArray arr = new JSONArray(body);
-                            if (arr.length() > 0) {
-                                providerId = arr.getJSONObject(0).optString("id", firebaseUid);
-                            } else {
-                                providerId = firebaseUid;
-                            }
-                        } else {
-                            providerId = firebaseUid;
-                        }
-                        Log.d(TAG, "Resolved providerId=" + providerId + " for firebaseUid=" + firebaseUid);
-                    } catch (Exception e) {
-                        providerId = firebaseUid;
-                    }
-                    loadBookings();
-                });
-            }
-        });
-    }
-
-    private void startBookingsSync() {
-        stopBookingsSync();
-        bookingsSyncRunnable = new Runnable() {
-            @Override
-            public void run() {
-                loadBookings();
-                mainHandler.postDelayed(this, BOOKING_SYNC_INTERVAL_MS);
-            }
-        };
-        mainHandler.postDelayed(bookingsSyncRunnable, BOOKING_SYNC_INTERVAL_MS);
-    }
-
-    private void stopBookingsSync() {
-        if (bookingsSyncRunnable != null) {
-            mainHandler.removeCallbacks(bookingsSyncRunnable);
-            bookingsSyncRunnable = null;
-        }
+        loadBookingsWithProviderId();
     }
 
     // Keep method for call-site compatibility.
@@ -279,7 +187,6 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
                 response.close();
 
                 Log.d(TAG, "loadBookingsWithProviderId response: HTTP " + code + " | Body: " + body);
-                Log.d("BOOKINGS", body);
 
                 mainHandler.post(() -> {
                     showLoading(false);
@@ -388,9 +295,6 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         try {
             JSONObject body = new JSONObject();
             body.put("status", newStatus);
-            if ("accepted".equals(newStatus) && providerId != null && !providerId.isEmpty()) {
-                body.put("provider_id", providerId);
-            }
             // Note: completed_at column may not exist in basic schema
             // Only add it for completed status if your DB has this column
             // if ("completed".equals(newStatus)) {
