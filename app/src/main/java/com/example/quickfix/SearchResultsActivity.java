@@ -46,7 +46,7 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 /**
- * SearchResultsActivity — full-screen provider search filtered by query + city.
+ * SearchResultsActivity — full-screen provider search using a simple category query.
  * Queries Supabase provider_profiles only.
  */
 public class SearchResultsActivity extends BaseActivity
@@ -206,11 +206,7 @@ public class SearchResultsActivity extends BaseActivity
             return;
         }
 
-        if (isNearbyQuery(queryText)) {
-            ensureLocationThenSearch(queryText);
-        } else {
-            executeSearch(queryText, false);
-        }
+        executeSearch(queryText, false);
     }
 
     private void ensureLocationThenSearch(String query) {
@@ -277,15 +273,14 @@ public class SearchResultsActivity extends BaseActivity
     private String normalizeSearchQuery(String input) {
         String query = input == null ? "" : input.toLowerCase(Locale.US).trim();
         query = query.replaceAll("\\s+", " ");
-        if (query.contains("ac")) query = "ac";
-        if (query.contains("repair")) query = "repair";
+        if (query.matches(".*\\bac\\b.*") && !query.contains("ac service")) {
+            return "ac service";
+        }
+        if (query.contains("repairing") || query.contains("repair")) return "repair";
+        if (query.contains("clean")) return "cleaning";
         return query;
     }
 
-    /**
-     * Query nearby providers only when user explicitly searched by nearby keyword.
-     * Otherwise use normal city-based search.
-     */
     private List<SearchResult> searchProviders(String query,
                                                double originLat,
                                                double originLng,
@@ -298,33 +293,6 @@ public class SearchResultsActivity extends BaseActivity
 
             String enc = java.net.URLEncoder.encode(cleanedQuery, java.nio.charset.StandardCharsets.UTF_8.name());
             Set<String> seenIds = new HashSet<>();
-
-            if (useNearby && !Double.isNaN(originLat) && !Double.isNaN(originLng)) {
-                list.addAll(fetchNearbyFromProfiles(enc, "latitude", "longitude",
-                        originLat, originLng, NEARBY_RADIUS_PRIMARY_KM, seenIds));
-                if (list.isEmpty()) {
-                    list.addAll(fetchNearbyFromProfiles(enc, "lat", "lng",
-                            originLat, originLng, NEARBY_RADIUS_PRIMARY_KM, seenIds));
-                }
-
-                // Expand radius to 25km if no nearby result in 20km.
-                if (list.isEmpty()) {
-                    list.addAll(fetchNearbyFromProfiles(enc, "latitude", "longitude",
-                            originLat, originLng, NEARBY_RADIUS_SECONDARY_KM, seenIds));
-                    if (list.isEmpty()) {
-                        list.addAll(fetchNearbyFromProfiles(enc, "lat", "lng",
-                                originLat, originLng, NEARBY_RADIUS_SECONDARY_KM, seenIds));
-                    }
-                }
-
-                // Final fallback: city-based text search when no nearby providers are found.
-                if (list.isEmpty()) {
-                    list.addAll(fetchTextProviders(enc, seenIds));
-                } else {
-                    list.sort((a, b) -> Float.compare(a.distanceKm, b.distanceKm));
-                }
-                return list;
-            }
 
             list.addAll(fetchTextProviders(enc, seenIds));
         } catch (Exception e) {
@@ -344,11 +312,12 @@ public class SearchResultsActivity extends BaseActivity
         try {
             StringBuilder url = new StringBuilder(BASE_URL)
                     .append("/rest/v1/provider_profiles")
-                    .append("?select=id,business_name,category,city,area,owner_name,rating,status,availability_status,is_available,")
+                    .append("?select=id,business_name,category,description,profile_image,business_image_url,city,area,owner_name,rating,status,availability_status,is_available,")
                     .append(latKey).append(",").append(lngKey)
                     .append("&is_approved=eq.true")
                     .append("&or=(business_name.ilike.*").append(encQuery)
                     .append("*,category.ilike.*").append(encQuery)
+                    .append("*,description.ilike.*").append(encQuery)
                     .append("*,city.ilike.*").append(encQuery).append("*)")
                     .append("&limit=220");
 
@@ -399,10 +368,9 @@ public class SearchResultsActivity extends BaseActivity
         try {
             StringBuilder url = new StringBuilder(BASE_URL)
                     .append("/rest/v1/provider_profiles")
-                    .append("?select=id,business_name,category,city,area,owner_name,rating,status,availability_status,is_available")
+                    .append("?select=id,business_name,category,description,profile_image,business_image_url,city,area,owner_name,rating,status")
                     .append("&is_approved=eq.true")
-                    .append("&or=(business_name.ilike.*").append(encQuery)
-                    .append("*,category.ilike.*").append(encQuery).append("*)")
+                    .append("&category=ilike.*").append(encQuery).append("*")
                     .append("&limit=60");
 
             Request req = new Request.Builder().url(url.toString())
@@ -536,7 +504,11 @@ public class SearchResultsActivity extends BaseActivity
         intent.putExtra(ProviderDetailActivity.EXTRA_DESCRIPTION, o.optString("description"));
         intent.putExtra(ProviderDetailActivity.EXTRA_EXPERIENCE,
                 o.optString("experience_yrs", o.optString("experience", "")));
-        intent.putExtra(ProviderDetailActivity.EXTRA_IMAGE_URL, o.optString("business_image_url"));
+        String profileImage = o.optString("profile_image", "");
+        if (profileImage == null || profileImage.trim().isEmpty()) {
+            profileImage = o.optString("business_image_url", "");
+        }
+        intent.putExtra(ProviderDetailActivity.EXTRA_IMAGE_URL, profileImage);
         intent.putExtra(ProviderDetailActivity.EXTRA_IS_VERIFIED, o.optBoolean("is_verified", false));
         intent.putExtra(ProviderDetailActivity.EXTRA_RATING, (float) o.optDouble("rating", 0));
         startActivity(intent);

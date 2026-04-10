@@ -196,16 +196,19 @@ public class ProviderDetailActivity extends BaseActivity {
                            String description, String experience,
                            String imageUrl, boolean isVerified, float rating) {
 
-        // Business image
+         // Business/profile image
         ImageView ivImage = findViewById(R.id.ivDetailBusinessImage);
-        if (imageUrl != null && !imageUrl.isEmpty()) {
+        String resolvedImageUrl = resolveProviderImageUrl(imageUrl);
+        if (resolvedImageUrl != null && !resolvedImageUrl.isEmpty()) {
             Glide.with(this)
-                .load(imageUrl)
+                .load(resolvedImageUrl)
                 .transition(DrawableTransitionOptions.withCrossFade())
                 .placeholder(R.drawable.bg_profile_header_gradient)
                 .error(R.drawable.bg_profile_header_gradient)
                 .centerCrop()
                 .into(ivImage);
+        } else if (ivImage != null) {
+            ivImage.setImageResource(R.drawable.bg_profile_header_gradient);
         }
 
         // Text fields
@@ -759,7 +762,7 @@ public class ProviderDetailActivity extends BaseActivity {
                             finalData.optString("email", ""),
                             finalData.optString("description", ""),
                             finalData.optString("experience_yrs", finalData.optString("experience", "")),
-                            finalData.optString("business_image_url", ""),
+                            resolveProviderImageCandidate(finalData),
                             finalData.optBoolean("is_verified", false),
                             (float) finalData.optDouble("rating", 0d)
                     );
@@ -914,6 +917,22 @@ public class ProviderDetailActivity extends BaseActivity {
 
     private String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String resolveProviderImageCandidate(JSONObject data) {
+        if (data == null) return "";
+        String profileImage = data.optString("profile_image", "");
+        if (profileImage != null && !profileImage.trim().isEmpty()) {
+            return profileImage.trim();
+        }
+        return data.optString("business_image_url", "").trim();
+    }
+
+    private String resolveProviderImageUrl(String image) {
+        String raw = image == null ? "" : image.trim();
+        if (raw.isEmpty()) return "";
+        if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+        return SupabaseStorageHelper.getPublicObjectUrl(SupabaseStorageHelper.BUCKET_PROFILE_IMAGES, raw);
     }
 
     @Override

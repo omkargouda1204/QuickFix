@@ -60,6 +60,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
 
     private FirebaseAuth mAuth;
     private String providerId;
+    private String providerFirebaseUid;
     private String currentFilter = "all";
     private List<Booking> allBookings = new ArrayList<>();
 
@@ -81,7 +82,9 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
             finish();
             return;
         }
-        providerId = user.getUid();
+        providerFirebaseUid = user.getUid();
+        providerId = providerFirebaseUid;
+        Log.d("UID", providerFirebaseUid);
 
         setupToolbar();
         initViews();
@@ -137,26 +140,91 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         });
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadBookings();
+    }
+
     private void loadBookings() {
         showLoading(true);
 
-        if (providerId == null || providerId.isEmpty()) {
+        if (providerFirebaseUid == null || providerFirebaseUid.isEmpty()) {
             showLoading(false);
             Toast.makeText(this, "Provider ID not available", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        loadBookingsWithProviderId();
+        resolveProviderIdAndLoadBookings();
     }
 
-    // Keep method for call-site compatibility.
-    private void getProviderNameAndLoadBookings() {
-        loadBookingsWithProviderId();
+    private void resolveProviderIdAndLoadBookings() {
+        String uid = java.net.URLEncoder.encode(providerFirebaseUid, java.nio.charset.StandardCharsets.UTF_8);
+        String url = SUPABASE_URL + "/rest/v1/provider_profiles"
+                + "?firebase_uid=eq." + uid
+                + "&select=id,firebase_uid"
+                + "&limit=1";
+
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.w(TAG, "resolveProviderId failed, using firebase uid directly: " + e.getMessage());
+                providerId = providerFirebaseUid;
+                loadBookingsWithProviderId();
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                String body = response.body() != null ? response.body().string() : "[]";
+                int code = response.code();
+                response.close();
+
+                if (code == 200) {
+                    try {
+                        JSONArray arr = new JSONArray(body);
+                        if (arr.length() > 0) {
+                            String profileId = arr.getJSONObject(0).optString("id", "").trim();
+                            if (!profileId.isEmpty()) {
+                                providerId = profileId;
+                            } else {
+                                providerId = providerFirebaseUid;
+                            }
+                        } else {
+                            providerId = providerFirebaseUid;
+                        }
+                    } catch (Exception e) {
+                        providerId = providerFirebaseUid;
+                    }
+                } else {
+                    providerId = providerFirebaseUid;
+                }
+
+                loadBookingsWithProviderId();
+            }
+        });
     }
 
     private void loadBookingsWithProviderId() {
+        String filter;
+        String encodedProviderId = java.net.URLEncoder.encode(providerId, java.nio.charset.StandardCharsets.UTF_8);
+        String encodedUid = java.net.URLEncoder.encode(providerFirebaseUid, java.nio.charset.StandardCharsets.UTF_8);
+
+        if (providerId != null && !providerId.isEmpty() && !providerId.equals(providerFirebaseUid)) {
+            filter = "or=(provider_id.eq." + encodedProviderId + ",provider_id.eq." + encodedUid + ")";
+        } else {
+            filter = "provider_id=eq." + encodedUid;
+        }
+
         String url = SUPABASE_URL + "/rest/v1/bookings"
-                + "?provider_id=eq." + providerId
+                + "?" + filter
                 + "&order=created_at.desc"
                 + "&select=*";
 
@@ -295,12 +363,13 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         try {
             JSONObject body = new JSONObject();
             body.put("status", newStatus);
-            // Note: completed_at column may not exist in basic schema
-            // Only add it for completed status if your DB has this column
-            // if ("completed".equals(newStatus)) {
-            //     body.put("completed_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")
-            //             .format(new java.util.Date()));
-            // }
+            if ("accepted".equalsIgnoreCase(newStatus)) {
+                if (providerId != null && !providerId.trim().isEmpty()) {
+                    body.put("provider_id", providerId.trim());
+                } else if (providerFirebaseUid != null && !providerFirebaseUid.trim().isEmpty()) {
+                    body.put("provider_id", providerFirebaseUid.trim());
+                }
+            }
 
             String url = SUPABASE_URL + "/rest/v1/bookings?id=eq." + bookingId;
 
@@ -347,4 +416,3 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         }
     }
 }
-

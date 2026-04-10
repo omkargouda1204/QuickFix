@@ -330,7 +330,11 @@ public class ProvidersListActivity extends BaseActivity
             p.description      = o.optString("description");
             p.experienceYrs    = o.optString("experience_yrs");
             p.businessImageUrl = o.optString("business_image_url");
-            p.isVerified       = o.optBoolean("is_verified", false);
+            p.profileImageUrl = o.optString("profile_image");
+            if ((p.profileImageUrl == null || p.profileImageUrl.trim().isEmpty())
+                    && p.businessImageUrl != null && !p.businessImageUrl.trim().isEmpty()) {
+                p.profileImageUrl = p.businessImageUrl;
+            }
 
             String status      = o.optString("status", "");
             if (status.isEmpty() && (o.optBoolean("is_approved", false) || o.optBoolean("approved", false))) {
@@ -419,7 +423,17 @@ public class ProvidersListActivity extends BaseActivity
                     if (p == null || p.firebaseUid == null) continue;
                     String image = imageByUid.get(p.firebaseUid.trim());
                     if (image != null && !image.isEmpty()) {
+                        p.profileImageUrl = image;
                         p.businessImageUrl = image;
+                    } else {
+                        String providerProfileImage = p.profileImageUrl == null ? "" : p.profileImageUrl.trim();
+                        if (!providerProfileImage.isEmpty()) {
+                            String resolved = providerProfileImage.startsWith("http")
+                                    ? providerProfileImage
+                                    : SupabaseStorageHelper.getPublicObjectUrl(SupabaseStorageHelper.BUCKET_PROFILE_IMAGES, providerProfileImage);
+                            p.profileImageUrl = resolved;
+                            p.businessImageUrl = resolved;
+                        }
                     }
                 }
             }
@@ -475,8 +489,11 @@ public class ProvidersListActivity extends BaseActivity
     private String normalizeSearchQuery(String input) {
         String query = input == null ? "" : input.toLowerCase(Locale.US).trim();
         query = query.replaceAll("\\s+", " ");
-        if (query.contains("ac")) query = "ac";
-        if (query.contains("repair")) query = "repair";
+        if (query.contains("repairing")) query = query.replace("repairing", "repair");
+        if (query.contains("clean")) query = query.replace("clean", "cleaning");
+        if (query.matches(".*\\bac\\b.*") && !query.contains("ac service")) {
+            query = query.replaceAll("\\bac\\b", "ac service");
+        }
         return query;
     }
 

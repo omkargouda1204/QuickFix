@@ -1,4 +1,4 @@
-package com.example.quickfix;
+package com.example.quickfix.adapters;
 
 import android.content.Context;
 import android.util.Log;
@@ -10,19 +10,21 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
-import androidx.cardview.widget.CardView;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.example.quickfix.Banner;
+import com.example.quickfix.R;
+import com.example.quickfix.SupabaseStorageHelper;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * BannerAdapter — Vertical RecyclerView adapter for displaying banners in admin/management screens.
+ * BannerAdapterEnhanced — Vertical RecyclerView adapter for displaying banners in admin/management screens.
  * Used in BannerManagementActivity for admin to manage banners.
  */
-public class BannerAdapter extends RecyclerView.Adapter<BannerAdapter.VH> {
+public class BannerAdapterEnhanced extends RecyclerView.Adapter<BannerAdapterEnhanced.VH> {
 
     public interface Listener {
         void onEdit(Banner banner);
@@ -30,12 +32,12 @@ public class BannerAdapter extends RecyclerView.Adapter<BannerAdapter.VH> {
         void onToggleActive(Banner banner, boolean active);
     }
 
-    private static final String TAG = "BannerAdapter";
+    private static final String TAG = "BannerAdapterEnhanced";
     private final Context ctx;
     private final List<Banner> items;
     private final Listener listener;
 
-    public BannerAdapter(Context ctx, List<Banner> items, Listener listener) {
+    public BannerAdapterEnhanced(Context ctx, List<Banner> items, Listener listener) {
         this.ctx = ctx;
         this.items = items != null ? items : new ArrayList<>();
         this.listener = listener;
@@ -164,9 +166,8 @@ public class BannerAdapter extends RecyclerView.Adapter<BannerAdapter.VH> {
                 btnDelete = v.findViewById(R.id.btnDelete);
                 toggleActive = v.findViewById(R.id.toggleActive);
             } catch (Exception e) {
-                Log.e("BannerAdapter.VH", "Error in ViewHolder: " + e.getMessage());
+                Log.e("BannerAdapterEnhanced.VH", "Error in ViewHolder: " + e.getMessage());
             }
         }
     }
 }
-

@@ -520,13 +520,12 @@ public class MainActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         try {
-            restoreLastSearchQuery();
-            if (etSearch != null && lastSearchQuery != null && !lastSearchQuery.isEmpty()) {
-                etSearch.setText(lastSearchQuery);
-                etSearch.setSelection(lastSearchQuery.length());
+            lastSearchQuery = "";
+            if (etSearch != null) {
+                etSearch.setText("");
             }
-            fetchBanners();
-            fetchOffers();
+            hideSuggestions();
+            refreshHomeContent(false);
             startBannerAutoSlide();
             startHomeAutoRefresh();
         } catch (Exception e) {
@@ -689,6 +688,8 @@ public class MainActivity extends BaseActivity {
                         etSearch.setText(text);
                         etSearch.setSelection(text.length());
                     }
+                    lastSearchQuery = text;
+                    persistLastSearchQuery(text);
                     searchServices(text);
                     return;
                 }
@@ -705,17 +706,13 @@ public class MainActivity extends BaseActivity {
                 List<SearchResult> list = new ArrayList<>();
                 String normalizedQuery = normalizeSearchInput(query);
                 String enc = java.net.URLEncoder.encode(normalizedQuery, java.nio.charset.StandardCharsets.UTF_8.name());
-                String city = locationManager != null ? locationManager.getSavedCity() : "";
                 StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
-                        .append("/rest/v1/provider_profiles?select=id,business_name,category,city")
+                        .append("/rest/v1/provider_profiles?select=id,business_name,category,description")
                         .append("&is_approved=eq.true")
                         .append("&or=(business_name.ilike.*").append(enc)
                         .append("*,category.ilike.*").append(enc)
-                        .append("*,city.ilike.*").append(enc).append("*)")
+                        .append("*,description.ilike.*").append(enc).append("*)")
                         .append("&limit=8");
-                if (!city.isEmpty()) {
-                    url.append("&city=ilike.*").append(java.net.URLEncoder.encode(city, java.nio.charset.StandardCharsets.UTF_8.name())).append("*");
-                }
 
                 Request req = new Request.Builder()
                         .url(url.toString())
@@ -756,14 +753,17 @@ public class MainActivity extends BaseActivity {
     private String normalizeSearchInput(String input) {
         String query = input == null ? "" : input.toLowerCase(Locale.US).trim();
         query = query.replaceAll("\\s+", " ");
-        if (query.contains("ac")) query = "ac";
-        if (query.contains("repair")) query = "repair";
+        if (query.matches(".*\\bac\\b.*") && !query.contains("ac service")) {
+            return "ac service";
+        }
+        if (query.contains("repairing") || query.contains("repair")) return "repair";
+        if (query.contains("clean")) return "cleaning";
         return query;
     }
 
     private void searchServices(String input) {
         String query = normalizeSearchInput(input);
-        Log.d("SEARCH_QUERY", query);
+        Log.d("SEARCH", query);
         lastSearchQuery = query;
         persistLastSearchQuery(query);
         hideSuggestions();
@@ -1057,35 +1057,56 @@ public class MainActivity extends BaseActivity {
                         public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
                             runOnUiThread(() -> {
                                 try {
-                                    Log.d("BANNERS_API", String.valueOf(response));
+                                    Log.d("BANNER_RESPONSE", "code=" + response.code()
+                                            + " success=" + response.isSuccessful()
+                                            + " message=" + response.message()
+                                            + " error=" + readErrorBody(response)
+                                            + " raw=" + response);
+
                                     if (!response.isSuccessful()) {
-                                        showBannerErrorState("Failed to load banners");
+                                        loadAllBannersFallback();
                                         return;
                                     }
 
                                     List<Banner> body = response.body();
                                     if (body == null) {
-                                        showBannerErrorState("Failed to load banners");
+                                        showBannerErrorState("API error");
+                                        markHomeSectionLoaded();
                                         return;
                                     }
+
+                                    if (body.isEmpty()) {
+                                        // Temporary fallback without active filter to diagnose/filter mismatches.
+                                        loadAllBannersFallback();
+                                        return;
+                                    }
+
                                     homeBanners.clear();
                                     for (Banner b : body) {
                                         if (!isBannerVisible(b)) continue;
                                         normalizeBannerImage(b);
                                         homeBanners.add(b);
                                     }
+
+                                    if (homeBanners.isEmpty()) {
+                                        // Data exists but visibility rules filtered all rows; retry with relaxed source.
+                                        loadAllBannersFallback();
+                                        return;
+                                    }
+
                                     showBannersOnHome();
                                 } catch (Exception e) {
                                     Log.e(TAG, "Error processing banners: " + e.getMessage(), e);
                                     showBannerErrorState("Failed to load banners");
+                                    markHomeSectionLoaded();
                                 }
-                                markHomeSectionLoaded();
                             });
                         }
 
                         @Override
                         public void onFailure(Call<List<Banner>> call, Throwable t) {
                             runOnUiThread(() -> {
+                                Log.e(TAG, "loadHomeBanners failure: " + t.getMessage(), t);
                                 showBannerErrorState("Failed to load banners");
                                 markHomeSectionLoaded();
                             });
@@ -1096,6 +1117,74 @@ public class MainActivity extends BaseActivity {
             showBannerErrorState("Failed to load banners");
             markHomeSectionLoaded();
         }
+    }
+
+    private void loadAllBannersFallback() {
+        if (bannerApi == null) {
+            showBannerErrorState("Service unavailable");
+            markHomeSectionLoaded();
+            return;
+        }
+
+        bannerApi.getAllBanners(
+                        BuildConfig.SUPABASE_ANON_KEY,
+                        "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                        "*",
+                        "priority.asc,created_at.desc"
+                )
+                .enqueue(new Callback<List<Banner>>() {
+                    @Override
+                    public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
+                        runOnUiThread(() -> {
+                            try {
+                                Log.d("BANNER_RESPONSE", "fallback code=" + response.code()
+                                        + " success=" + response.isSuccessful()
+                                        + " message=" + response.message()
+                                        + " error=" + readErrorBody(response)
+                                        + " raw=" + response);
+
+                                if (!response.isSuccessful()) {
+                                    showBannerErrorState("API error");
+                                    return;
+                                }
+
+                                List<Banner> body = response.body();
+                                if (body == null) {
+                                    showBannerErrorState("API error");
+                                    return;
+                                }
+
+                                homeBanners.clear();
+                                for (Banner b : body) {
+                                    if (b == null) continue;
+                                    // Keep minimum checks in fallback mode to confirm data is renderable.
+                                    if (b.imageUrl == null || b.imageUrl.trim().isEmpty()) continue;
+                                    normalizeBannerImage(b);
+                                    homeBanners.add(b);
+                                }
+
+                                if (homeBanners.isEmpty()) {
+                                    showBannerEmptyState();
+                                } else {
+                                    showBannersOnHome();
+                                }
+                            } catch (Exception e) {
+                                Log.e(TAG, "Error in banner fallback: " + e.getMessage(), e);
+                                showBannerErrorState("Failed to load banners");
+                            }
+                            markHomeSectionLoaded();
+                        });
+                    }
+
+                    @Override
+                    public void onFailure(Call<List<Banner>> call, Throwable t) {
+                        runOnUiThread(() -> {
+                            Log.e(TAG, "loadAllBannersFallback failure: " + t.getMessage(), t);
+                            showBannerErrorState("Failed to load banners");
+                            markHomeSectionLoaded();
+                        });
+                    }
+                });
     }
 
     private void loadHomeOffers() {
@@ -1119,34 +1208,53 @@ public class MainActivity extends BaseActivity {
                         public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
                             runOnUiThread(() -> {
                                 try {
-                                    Log.d("OFFERS_API", String.valueOf(response));
+                                    Log.d("OFFERS_RESPONSE", "code=" + response.code()
+                                            + " success=" + response.isSuccessful()
+                                            + " message=" + response.message()
+                                            + " error=" + readErrorBody(response)
+                                            + " raw=" + response);
+
                                     if (!response.isSuccessful()) {
-                                        showOffersErrorState("Failed to load offers");
+                                        loadAllOffersFallback();
                                         return;
                                     }
 
                                     List<Offer> body = response.body();
                                     if (body == null) {
-                                        showOffersErrorState("Failed to load offers");
+                                        showOffersErrorState("API error");
+                                        markHomeSectionLoaded();
                                         return;
                                     }
+
+                                    if (body.isEmpty()) {
+                                        loadAllOffersFallback();
+                                        return;
+                                    }
+
                                     homeOffers.clear();
                                     for (Offer o : body) {
                                         if (!isOfferVisible(o)) continue;
                                         homeOffers.add(o);
                                     }
+
+                                    if (homeOffers.isEmpty()) {
+                                        loadAllOffersFallback();
+                                        return;
+                                    }
+
                                     showOffersOnHome();
                                 } catch (Exception e) {
                                     Log.e(TAG, "Error processing offers: " + e.getMessage(), e);
                                     showOffersErrorState("Failed to load offers");
+                                    markHomeSectionLoaded();
                                 }
-                                markHomeSectionLoaded();
                             });
                         }
 
                         @Override
                         public void onFailure(Call<List<Offer>> call, Throwable t) {
                             runOnUiThread(() -> {
+                                Log.e(TAG, "loadHomeOffers failure: " + t.getMessage(), t);
                                 showOffersErrorState("Failed to load offers");
                                 markHomeSectionLoaded();
                             });
@@ -1157,6 +1265,71 @@ public class MainActivity extends BaseActivity {
             showOffersErrorState("Failed to load offers");
             markHomeSectionLoaded();
         }
+    }
+
+    private void loadAllOffersFallback() {
+        if (offerApi == null) {
+            showOffersErrorState("Service unavailable");
+            markHomeSectionLoaded();
+            return;
+        }
+
+        offerApi.getAllOffers(
+                        BuildConfig.SUPABASE_ANON_KEY,
+                        "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                        "*",
+                        "created_at.desc"
+                )
+                .enqueue(new Callback<List<Offer>>() {
+                    @Override
+                    public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
+                        runOnUiThread(() -> {
+                            try {
+                                Log.d("OFFERS_RESPONSE", "fallback code=" + response.code()
+                                        + " success=" + response.isSuccessful()
+                                        + " message=" + response.message()
+                                        + " error=" + readErrorBody(response)
+                                        + " raw=" + response);
+
+                                if (!response.isSuccessful()) {
+                                    showOffersErrorState("API error");
+                                    return;
+                                }
+
+                                List<Offer> body = response.body();
+                                if (body == null) {
+                                    showOffersErrorState("API error");
+                                    return;
+                                }
+
+                                homeOffers.clear();
+                                for (Offer o : body) {
+                                    if (o == null) continue;
+                                    homeOffers.add(o);
+                                }
+
+                                if (homeOffers.isEmpty()) {
+                                    showOffersEmptyState();
+                                } else {
+                                    showOffersOnHome();
+                                }
+                            } catch (Exception e) {
+                                Log.e(TAG, "Error in offers fallback: " + e.getMessage(), e);
+                                showOffersErrorState("Failed to load offers");
+                            }
+                            markHomeSectionLoaded();
+                        });
+                    }
+
+                    @Override
+                    public void onFailure(Call<List<Offer>> call, Throwable t) {
+                        runOnUiThread(() -> {
+                            Log.e(TAG, "loadAllOffersFallback failure: " + t.getMessage(), t);
+                            showOffersErrorState("Failed to load offers");
+                            markHomeSectionLoaded();
+                        });
+                    }
+                });
     }
 
     private void markHomeSectionLoaded() {
@@ -1259,12 +1432,25 @@ public class MainActivity extends BaseActivity {
 
     private boolean isBannerVisible(Banner banner) {
         if (banner == null) return false;
-        return banner.isActive && hasStarted(banner.startDate) && !isExpired(banner.expiryDate);
+        String status = banner.status == null ? "" : banner.status.trim().toLowerCase(Locale.US);
+        boolean active = banner.isActive || "active".equals(status);
+        return active && !isExpired(banner.expiryDate);
     }
 
     private boolean isOfferVisible(Offer offer) {
         if (offer == null) return false;
-        return offer.isActive && !isExpired(offer.expiryDate);
+        String status = offer.status == null ? "" : offer.status.trim().toLowerCase(Locale.US);
+        boolean active = offer.isActive || "active".equals(status);
+        return active && !isExpired(offer.expiryDate);
+    }
+
+    private String readErrorBody(retrofit2.Response<?> response) {
+        if (response == null || response.errorBody() == null) return "";
+        try {
+            return response.errorBody().string();
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     private void normalizeBannerImage(Banner banner) {
@@ -1294,6 +1480,18 @@ public class MainActivity extends BaseActivity {
     }
 
     private void requestNotificationPermission() { if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) { if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) { ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQ); } } }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == VOICE_PERMISSION_REQ) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startVoiceSearch();
+            } else {
+                Toast.makeText(this, "Microphone permission denied", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
 
     private void setBannerLoadingState() { if (bannersSection != null) bannersSection.setVisibility(View.VISIBLE); if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE); if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE); if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE); if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.VISIBLE); }
     private void showBannerEmptyState() { if (bannersSection != null) bannersSection.setVisibility(View.VISIBLE); if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE); if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE); if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE); if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.VISIBLE); stopBannerAutoSlide(); }

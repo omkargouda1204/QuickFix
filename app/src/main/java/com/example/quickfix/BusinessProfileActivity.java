@@ -409,8 +409,11 @@ public class BusinessProfileActivity extends BaseActivity {
                 String address = profile.optString("address", "");
                 String city = profile.optString("city", "");
                 String phone = profile.optString("phone", "");
-                // Legacy fallback only; current schema stores image in users.profile_image.
-                currentImageUrl = profile.optString("business_image_url", "");
+                // Legacy fallback only; prefer profile_image/users.profile_image in current schema.
+                currentImageUrl = profile.optString("profile_image", "");
+                if (currentImageUrl == null || currentImageUrl.trim().isEmpty()) {
+                    currentImageUrl = profile.optString("business_image_url", "");
+                }
                 boolean isAvailable = profile.optBoolean("is_available", true);
                 if (etBusinessName != null) etBusinessName.setText(businessName);
                 if (etDescription != null) etDescription.setText(description);
@@ -807,6 +810,10 @@ public class BusinessProfileActivity extends BaseActivity {
             String exp = experience != null ? experience.trim() : "";
             if (!exp.isEmpty()) {
                 body.put("experience_yrs", Integer.parseInt(exp));
+            }
+
+            if (imageUrl != null && !imageUrl.trim().isEmpty()) {
+                body.put("profile_image", imageUrl.trim());
             }
 
             String url = SUPABASE_URL + "/rest/v1/provider_profiles?firebase_uid=eq." + providerId;

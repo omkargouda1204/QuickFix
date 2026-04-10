@@ -324,7 +324,7 @@ public class AdminSettingsActivity extends BaseActivity {
                 .setMessage("Are you sure you want to logout from the admin panel?")
                 .setPositiveButton("Logout", (d, w) -> {
                     if (mAuth != null) mAuth.signOut();
-                    Intent i = new Intent(this, AdminLoginActivity.class);
+                    Intent i = new Intent(this, LoginActivity.class);
                     i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                     startActivity(i);
                     finish();

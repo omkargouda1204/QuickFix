@@ -1,4 +1,4 @@
-package com.example.quickfix;
+package com.example.quickfix.adapters;
 
 import android.content.Context;
 import android.util.Log;
@@ -10,19 +10,20 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
-import androidx.cardview.widget.CardView;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.example.quickfix.Offer;
+import com.example.quickfix.R;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * OfferAdapter — Vertical RecyclerView adapter for displaying offers in admin/management screens.
+ * OfferAdapterEnhanced — Vertical RecyclerView adapter for displaying offers in admin/management screens.
  * Used in OfferManagementActivity for admin to manage discount offers.
  */
-public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
+public class OfferAdapterEnhanced extends RecyclerView.Adapter<OfferAdapterEnhanced.VH> {
 
     public interface Listener {
         void onEdit(Offer offer);
@@ -30,12 +31,12 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
         void onToggleActive(Offer offer, boolean active);
     }
 
-    private static final String TAG = "OfferAdapter";
+    private static final String TAG = "OfferAdapterEnhanced";
     private final Context ctx;
     private final List<Offer> items;
     private final Listener listener;
 
-    public OfferAdapter(Context ctx, List<Offer> items, Listener listener) {
+    public OfferAdapterEnhanced(Context ctx, List<Offer> items, Listener listener) {
         this.ctx = ctx;
         this.items = items != null ? items : new ArrayList<>();
         this.listener = listener;
@@ -56,7 +57,7 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
 
             // Title
             if (holder.tvTitle != null) {
-                String title = offer.getTitle() != null ? offer.getTitle().trim() : "Untitled Offer";
+                String title = offer.title != null ? offer.title.trim() : "Untitled Offer";
                 holder.tvTitle.setText(title.isEmpty() ? "Untitled Offer" : title);
             }
 
@@ -70,7 +71,7 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
 
             // Offer code
             if (holder.tvCode != null) {
-                String code = offer.getOfferCode() != null ? offer.getOfferCode().trim().toUpperCase() : "";
+                String code = offer.offerCode != null ? offer.offerCode.trim().toUpperCase() : "";
                 if (code.isEmpty()) {
                     holder.tvCode.setVisibility(View.GONE);
                 } else {
@@ -96,13 +97,13 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
 
             // Offer image
             if (holder.ivOfferImage != null) {
-                String imageUrl = offer.getImageUrl() != null ? offer.getImageUrl().trim() : "";
+                String imageUrl = offer.imageUrl != null ? offer.imageUrl.trim() : "";
                 if (!imageUrl.isEmpty()) {
                     holder.ivOfferImage.setVisibility(View.VISIBLE);
                     Glide.with(ctx)
                             .load(imageUrl)
-                            .placeholder(R.drawable.placeholder)
-                            .error(R.drawable.placeholder)
+                            .placeholder(R.drawable.bg_promo_card)
+                            .error(R.drawable.bg_promo_card)
                             .centerCrop()
                             .into(holder.ivOfferImage);
                 } else {
@@ -186,9 +187,8 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
                 btnDelete = v.findViewById(R.id.btnDelete);
                 toggleActive = v.findViewById(R.id.toggleActive);
             } catch (Exception e) {
-                Log.e("OfferAdapter.VH", "Error in ViewHolder: " + e.getMessage());
+                Log.e("OfferAdapterEnhanced.VH", "Error in ViewHolder: " + e.getMessage());
             }
         }
     }
 }
-

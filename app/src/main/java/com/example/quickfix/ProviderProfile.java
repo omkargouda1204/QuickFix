@@ -14,6 +14,7 @@ public class ProviderProfile {
     public String description;
     public String experienceYrs;
     public String businessImageUrl;
+    public String profileImageUrl;
     public String idProofUrl;
     public boolean isVerified;
     public boolean isApproved;
