@@ -20,19 +20,10 @@ public interface OfferApi {
     Call<List<Offer>> getOffers(
             @Header("apikey") String apiKey,
             @Header("Authorization") String bearer,
-            @Query("select") String select,
-            @Query("is_active") String isActive,
-            @Query("or") String orExpiry
-    );
-
-    @GET("rest/v1/offers")
-    Call<List<Offer>> getActiveOffers(
-            @Header("apikey") String apiKey,
-            @Header("Authorization") String bearer,
-            @Query("select") String select,
-            @Query("is_active") String isActive,
+            @Query("is_active") String active,
             @Query("order") String order
     );
+
 
     @GET("rest/v1/offers")
     Call<List<Offer>> getAllOffers(

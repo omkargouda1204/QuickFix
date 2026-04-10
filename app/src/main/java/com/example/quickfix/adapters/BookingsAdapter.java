@@ -108,6 +108,7 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
                     tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_approved_text));
                     break;
                 case "cancelled":
+                case "rejected":
                     tvStatus.setBackgroundResource(R.drawable.badge_cancelled);
                     tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_rejected_text));
                     break;

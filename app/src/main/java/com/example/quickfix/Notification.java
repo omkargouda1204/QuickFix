@@ -7,6 +7,7 @@ import org.json.JSONObject;
  */
 public class Notification {
     public String id;
+    public String userId;
     public String receiverId;
     public String receiverRole;
     public String title;
@@ -20,6 +21,7 @@ public class Notification {
         if (o == null) return null;
         Notification n = new Notification();
         n.id           = s(o, "id");
+        n.userId       = s(o, "user_id");
         n.receiverId   = firstNonEmpty(s(o, "receiver_id"), s(o, "user_id"), s(o, "firebase_uid"));
         n.receiverRole = s(o, "receiver_role");
         n.title        = s(o, "title");

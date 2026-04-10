@@ -520,10 +520,6 @@ public class MainActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         try {
-            lastSearchQuery = "";
-            if (etSearch != null) {
-                etSearch.setText("");
-            }
             hideSuggestions();
             refreshHomeContent(false);
             startBannerAutoSlide();
@@ -707,11 +703,11 @@ public class MainActivity extends BaseActivity {
                 String normalizedQuery = normalizeSearchInput(query);
                 String enc = java.net.URLEncoder.encode(normalizedQuery, java.nio.charset.StandardCharsets.UTF_8.name());
                 StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
-                        .append("/rest/v1/provider_profiles?select=id,business_name,category,description")
-                        .append("&is_approved=eq.true")
+                        .append("/rest/v1/provider_applications?select=id,firebase_uid,business_name,category,city,status")
+                        .append("&status=eq.approved")
                         .append("&or=(business_name.ilike.*").append(enc)
                         .append("*,category.ilike.*").append(enc)
-                        .append("*,description.ilike.*").append(enc).append("*)")
+                        .append("*,city.ilike.*").append(enc).append("*)")
                         .append("&limit=8");
 
                 Request req = new Request.Builder()
@@ -726,8 +722,10 @@ public class MainActivity extends BaseActivity {
                         JSONArray arr = new JSONArray(r.body().string());
                         for (int i = 0; i < arr.length(); i++) {
                             JSONObject o = arr.getJSONObject(i);
+                            String firebaseUid = o.optString("firebase_uid", "").trim();
+                            String resultId = firebaseUid.isEmpty() ? o.optString("id") : firebaseUid;
                             list.add(new SearchResult(
-                                    o.optString("id"),
+                                    resultId,
                                     o.optString("business_name", ""),
                                     o.optString("category", ""),
                                     o.optString("city", ""),
@@ -1045,77 +1043,142 @@ public class MainActivity extends BaseActivity {
         }
 
         try {
-            bannerApi.getActiveBanners(
-                            BuildConfig.SUPABASE_ANON_KEY,
-                            "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
-                            "*",
-                            "eq.true",
-                            "created_at.desc"
-                    )
-                    .enqueue(new Callback<List<Banner>>() {
-                        @Override
-                        public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
-                            runOnUiThread(() -> {
-                                try {
-                                    Log.d("BANNER_RESPONSE", "code=" + response.code()
-                                            + " success=" + response.isSuccessful()
-                                            + " message=" + response.message()
-                                            + " error=" + readErrorBody(response)
-                                            + " raw=" + response);
-
-                                    if (!response.isSuccessful()) {
-                                        loadAllBannersFallback();
-                                        return;
-                                    }
-
-                                    List<Banner> body = response.body();
-                                    if (body == null) {
-                                        showBannerErrorState("API error");
-                                        markHomeSectionLoaded();
-                                        return;
-                                    }
-
-                                    if (body.isEmpty()) {
-                                        // Temporary fallback without active filter to diagnose/filter mismatches.
-                                        loadAllBannersFallback();
-                                        return;
-                                    }
-
-                                    homeBanners.clear();
-                                    for (Banner b : body) {
-                                        if (!isBannerVisible(b)) continue;
-                                        normalizeBannerImage(b);
-                                        homeBanners.add(b);
-                                    }
-
-                                    if (homeBanners.isEmpty()) {
-                                        // Data exists but visibility rules filtered all rows; retry with relaxed source.
-                                        loadAllBannersFallback();
-                                        return;
-                                    }
-
-                                    showBannersOnHome();
-                                } catch (Exception e) {
-                                    Log.e(TAG, "Error processing banners: " + e.getMessage(), e);
-                                    showBannerErrorState("Failed to load banners");
-                                    markHomeSectionLoaded();
-                                }
-                            });
-                        }
-
-                        @Override
-                        public void onFailure(Call<List<Banner>> call, Throwable t) {
-                            runOnUiThread(() -> {
-                                Log.e(TAG, "loadHomeBanners failure: " + t.getMessage(), t);
-                                showBannerErrorState("Failed to load banners");
-                                markHomeSectionLoaded();
-                            });
+            bannerApi.getBanners(
+                    BuildConfig.SUPABASE_ANON_KEY,
+                    "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                    "eq.true",
+                    "priority.asc"
+            ).enqueue(new Callback<List<Banner>>() {
+                @Override
+                public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
+                    runOnUiThread(() -> {
+                        if (response.isSuccessful()) {
+                            try {
+                                Log.d("API_SUCCESS", String.valueOf(response.body()));
+                            } catch (Exception ignored) {
+                            }
+                            tryHandleBannerResponse(response, false);
+                        } else {
+                            Log.e("API_ERROR", readErrorBody(response));
+                            showBannerErrorState("API error " + response.code());
+                            markHomeSectionLoaded();
                         }
                     });
+                }
+
+                @Override
+                public void onFailure(Call<List<Banner>> call, Throwable t) {
+                    runOnUiThread(() -> {
+                        Log.e(TAG, "loadHomeBanners failure", t);
+                        showBannerErrorState("Failed to load banners");
+                        markHomeSectionLoaded();
+                    });
+                }
+            });
         } catch (Exception e) {
             Log.e(TAG, "Exception in loadHomeBanners: " + e.getMessage(), e);
-            showBannerErrorState("Failed to load banners");
+            showBannerErrorState("Failed to load banners: " + e.getMessage());
             markHomeSectionLoaded();
+        }
+    }
+
+    private void loadVisibleBanners(
+            ProviderCallFactory<Banner> primary,
+            ProviderCallFactory<Banner> legacy
+    ) {
+        try {
+            primary.create().enqueue(new Callback<List<Banner>>() {
+                @Override
+                public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
+                    runOnUiThread(() -> {
+                        if (tryHandleBannerResponse(response, false)) return;
+                        if (response.code() == 400 || response.code() == 404) {
+                            loadVisibleBannersFallback(legacy);
+                        } else {
+                            showBannerErrorState("API error " + response.code() + ": " + readErrorBody(response));
+                            markHomeSectionLoaded();
+                        }
+                    });
+                }
+
+                @Override
+                public void onFailure(Call<List<Banner>> call, Throwable t) {
+                    runOnUiThread(() -> {
+                        Log.e(TAG, "loadVisibleBanners failure: " + t.getMessage(), t);
+                        loadVisibleBannersFallback(legacy);
+                    });
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "loadVisibleBanners exception: " + e.getMessage(), e);
+            loadVisibleBannersFallback(legacy);
+        }
+    }
+
+    private void loadVisibleBannersFallback(ProviderCallFactory<Banner> legacy) {
+        try {
+            legacy.create().enqueue(new Callback<List<Banner>>() {
+                @Override
+                public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
+                    runOnUiThread(() -> {
+                        if (tryHandleBannerResponse(response, true)) return;
+                        showBannerErrorState("API error " + response.code() + ": " + readErrorBody(response));
+                        markHomeSectionLoaded();
+                    });
+                }
+
+                @Override
+                public void onFailure(Call<List<Banner>> call, Throwable t) {
+                    runOnUiThread(() -> {
+                        Log.e(TAG, "loadVisibleBannersFallback failure: " + t.getMessage(), t);
+                        showBannerErrorState("Failed to load banners: " + t.getMessage());
+                        markHomeSectionLoaded();
+                    });
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "loadVisibleBannersFallback exception: " + e.getMessage(), e);
+            showBannerErrorState("Failed to load banners: " + e.getMessage());
+            markHomeSectionLoaded();
+        }
+    }
+
+    private boolean tryHandleBannerResponse(retrofit2.Response<List<Banner>> response, boolean fromLegacyQuery) {
+        try {
+            Log.d("BANNER_RESPONSE", "legacy=" + fromLegacyQuery
+                    + " code=" + response.code()
+                    + " success=" + response.isSuccessful()
+                    + " message=" + response.message()
+                    + " error=" + readErrorBody(response)
+                    + " raw=" + response);
+
+            if (!response.isSuccessful()) return false;
+            List<Banner> body = response.body();
+            if (body == null) {
+                showBannerErrorState("API error: null body");
+                markHomeSectionLoaded();
+                return true;
+            }
+
+            homeBanners.clear();
+            for (Banner b : body) {
+                if (!isBannerVisible(b)) continue;
+                normalizeBannerImage(b);
+                homeBanners.add(b);
+            }
+
+            if (homeBanners.isEmpty()) {
+                showBannerEmptyState();
+            } else {
+                showBannersOnHome();
+            }
+            markHomeSectionLoaded();
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "tryHandleBannerResponse failed", e);
+            showBannerErrorState("Failed to load banners: " + e.getMessage());
+            markHomeSectionLoaded();
+            return true;
         }
     }
 
@@ -1144,13 +1207,13 @@ public class MainActivity extends BaseActivity {
                                         + " raw=" + response);
 
                                 if (!response.isSuccessful()) {
-                                    showBannerErrorState("API error");
+                                    showBannerErrorState("API error " + response.code() + ": " + readErrorBody(response));
                                     return;
                                 }
 
                                 List<Banner> body = response.body();
                                 if (body == null) {
-                                    showBannerErrorState("API error");
+                                    showBannerErrorState("API error: null body");
                                     return;
                                 }
 
@@ -1170,7 +1233,7 @@ public class MainActivity extends BaseActivity {
                                 }
                             } catch (Exception e) {
                                 Log.e(TAG, "Error in banner fallback: " + e.getMessage(), e);
-                                showBannerErrorState("Failed to load banners");
+                                showBannerErrorState("Failed to load banners: " + e.getMessage());
                             }
                             markHomeSectionLoaded();
                         });
@@ -1180,7 +1243,7 @@ public class MainActivity extends BaseActivity {
                     public void onFailure(Call<List<Banner>> call, Throwable t) {
                         runOnUiThread(() -> {
                             Log.e(TAG, "loadAllBannersFallback failure: " + t.getMessage(), t);
-                            showBannerErrorState("Failed to load banners");
+                            showBannerErrorState("Failed to load banners: " + t.getMessage());
                             markHomeSectionLoaded();
                         });
                     }
@@ -1196,74 +1259,141 @@ public class MainActivity extends BaseActivity {
         }
 
         try {
-            offerApi.getActiveOffers(
-                            BuildConfig.SUPABASE_ANON_KEY,
-                            "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
-                            "*",
-                            "eq.true",
-                            "created_at.desc"
-                    )
-                    .enqueue(new Callback<List<Offer>>() {
-                        @Override
-                        public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
-                            runOnUiThread(() -> {
-                                try {
-                                    Log.d("OFFERS_RESPONSE", "code=" + response.code()
-                                            + " success=" + response.isSuccessful()
-                                            + " message=" + response.message()
-                                            + " error=" + readErrorBody(response)
-                                            + " raw=" + response);
-
-                                    if (!response.isSuccessful()) {
-                                        loadAllOffersFallback();
-                                        return;
-                                    }
-
-                                    List<Offer> body = response.body();
-                                    if (body == null) {
-                                        showOffersErrorState("API error");
-                                        markHomeSectionLoaded();
-                                        return;
-                                    }
-
-                                    if (body.isEmpty()) {
-                                        loadAllOffersFallback();
-                                        return;
-                                    }
-
-                                    homeOffers.clear();
-                                    for (Offer o : body) {
-                                        if (!isOfferVisible(o)) continue;
-                                        homeOffers.add(o);
-                                    }
-
-                                    if (homeOffers.isEmpty()) {
-                                        loadAllOffersFallback();
-                                        return;
-                                    }
-
-                                    showOffersOnHome();
-                                } catch (Exception e) {
-                                    Log.e(TAG, "Error processing offers: " + e.getMessage(), e);
-                                    showOffersErrorState("Failed to load offers");
-                                    markHomeSectionLoaded();
-                                }
-                            });
-                        }
-
-                        @Override
-                        public void onFailure(Call<List<Offer>> call, Throwable t) {
-                            runOnUiThread(() -> {
-                                Log.e(TAG, "loadHomeOffers failure: " + t.getMessage(), t);
-                                showOffersErrorState("Failed to load offers");
-                                markHomeSectionLoaded();
-                            });
+            offerApi.getOffers(
+                    BuildConfig.SUPABASE_ANON_KEY,
+                    "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                    "eq.true",
+                    "created_at.desc"
+            ).enqueue(new Callback<List<Offer>>() {
+                @Override
+                public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
+                    runOnUiThread(() -> {
+                        if (response.isSuccessful()) {
+                            try {
+                                Log.d("API_SUCCESS", String.valueOf(response.body()));
+                            } catch (Exception ignored) {
+                            }
+                            tryHandleOfferResponse(response, false);
+                        } else {
+                            Log.e("API_ERROR", readErrorBody(response));
+                            showOffersErrorState("API error " + response.code());
+                            markHomeSectionLoaded();
                         }
                     });
+                }
+
+                @Override
+                public void onFailure(Call<List<Offer>> call, Throwable t) {
+                    runOnUiThread(() -> {
+                        Log.e(TAG, "loadHomeOffers failure", t);
+                        showOffersErrorState("Failed to load offers");
+                        markHomeSectionLoaded();
+                    });
+                }
+            });
         } catch (Exception e) {
             Log.e(TAG, "Exception in loadHomeOffers: " + e.getMessage(), e);
-            showOffersErrorState("Failed to load offers");
+            showOffersErrorState("Failed to load offers: " + e.getMessage());
             markHomeSectionLoaded();
+        }
+    }
+
+    private void loadVisibleOffers(
+            ProviderCallFactory<Offer> primary,
+            ProviderCallFactory<Offer> legacy
+    ) {
+        try {
+            primary.create().enqueue(new Callback<List<Offer>>() {
+                @Override
+                public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
+                    runOnUiThread(() -> {
+                        if (tryHandleOfferResponse(response, false)) return;
+                        if (response.code() == 400 || response.code() == 404) {
+                            loadVisibleOffersFallback(legacy);
+                        } else {
+                            showOffersErrorState("API error " + response.code() + ": " + readErrorBody(response));
+                            markHomeSectionLoaded();
+                        }
+                    });
+                }
+
+                @Override
+                public void onFailure(Call<List<Offer>> call, Throwable t) {
+                    runOnUiThread(() -> {
+                        Log.e(TAG, "loadVisibleOffers failure: " + t.getMessage(), t);
+                        loadVisibleOffersFallback(legacy);
+                    });
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "loadVisibleOffers exception: " + e.getMessage(), e);
+            loadVisibleOffersFallback(legacy);
+        }
+    }
+
+    private void loadVisibleOffersFallback(ProviderCallFactory<Offer> legacy) {
+        try {
+            legacy.create().enqueue(new Callback<List<Offer>>() {
+                @Override
+                public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
+                    runOnUiThread(() -> {
+                        if (tryHandleOfferResponse(response, true)) return;
+                        showOffersErrorState("API error " + response.code() + ": " + readErrorBody(response));
+                        markHomeSectionLoaded();
+                    });
+                }
+
+                @Override
+                public void onFailure(Call<List<Offer>> call, Throwable t) {
+                    runOnUiThread(() -> {
+                        Log.e(TAG, "loadVisibleOffersFallback failure: " + t.getMessage(), t);
+                        showOffersErrorState("Failed to load offers: " + t.getMessage());
+                        markHomeSectionLoaded();
+                    });
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "loadVisibleOffersFallback exception: " + e.getMessage(), e);
+            showOffersErrorState("Failed to load offers: " + e.getMessage());
+            markHomeSectionLoaded();
+        }
+    }
+
+    private boolean tryHandleOfferResponse(retrofit2.Response<List<Offer>> response, boolean fromLegacyQuery) {
+        try {
+            Log.d("OFFERS_RESPONSE", "legacy=" + fromLegacyQuery
+                    + " code=" + response.code()
+                    + " success=" + response.isSuccessful()
+                    + " message=" + response.message()
+                    + " error=" + readErrorBody(response)
+                    + " raw=" + response);
+
+            if (!response.isSuccessful()) return false;
+            List<Offer> body = response.body();
+            if (body == null) {
+                showOffersErrorState("API error: null body");
+                markHomeSectionLoaded();
+                return true;
+            }
+
+            homeOffers.clear();
+            for (Offer o : body) {
+                if (!isOfferVisible(o)) continue;
+                homeOffers.add(o);
+            }
+
+            if (homeOffers.isEmpty()) {
+                showOffersEmptyState();
+            } else {
+                showOffersOnHome();
+            }
+            markHomeSectionLoaded();
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "tryHandleOfferResponse failed", e);
+            showOffersErrorState("Failed to load offers: " + e.getMessage());
+            markHomeSectionLoaded();
+            return true;
         }
     }
 
@@ -1292,13 +1422,13 @@ public class MainActivity extends BaseActivity {
                                         + " raw=" + response);
 
                                 if (!response.isSuccessful()) {
-                                    showOffersErrorState("API error");
+                                    showOffersErrorState("API error " + response.code() + ": " + readErrorBody(response));
                                     return;
                                 }
 
                                 List<Offer> body = response.body();
                                 if (body == null) {
-                                    showOffersErrorState("API error");
+                                    showOffersErrorState("API error: null body");
                                     return;
                                 }
 
@@ -1315,7 +1445,7 @@ public class MainActivity extends BaseActivity {
                                 }
                             } catch (Exception e) {
                                 Log.e(TAG, "Error in offers fallback: " + e.getMessage(), e);
-                                showOffersErrorState("Failed to load offers");
+                                showOffersErrorState("Failed to load offers: " + e.getMessage());
                             }
                             markHomeSectionLoaded();
                         });
@@ -1325,7 +1455,7 @@ public class MainActivity extends BaseActivity {
                     public void onFailure(Call<List<Offer>> call, Throwable t) {
                         runOnUiThread(() -> {
                             Log.e(TAG, "loadAllOffersFallback failure: " + t.getMessage(), t);
-                            showOffersErrorState("Failed to load offers");
+                            showOffersErrorState("Failed to load offers: " + t.getMessage());
                             markHomeSectionLoaded();
                         });
                     }
@@ -1434,7 +1564,7 @@ public class MainActivity extends BaseActivity {
         if (banner == null) return false;
         String status = banner.status == null ? "" : banner.status.trim().toLowerCase(Locale.US);
         boolean active = banner.isActive || "active".equals(status);
-        return active && !isExpired(banner.expiryDate);
+        return active && hasStarted(banner.startDate) && !isExpired(banner.expiryDate);
     }
 
     private boolean isOfferVisible(Offer offer) {
@@ -1442,6 +1572,10 @@ public class MainActivity extends BaseActivity {
         String status = offer.status == null ? "" : offer.status.trim().toLowerCase(Locale.US);
         boolean active = offer.isActive || "active".equals(status);
         return active && !isExpired(offer.expiryDate);
+    }
+
+    private interface ProviderCallFactory<T> {
+        Call<List<T>> create();
     }
 
     private String readErrorBody(retrofit2.Response<?> response) {

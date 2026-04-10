@@ -92,6 +92,12 @@ public class UserBookingsActivity extends BaseActivity
         loadBookings();
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadBookings();
+    }
+
     private void bindViews() {
         recyclerView = findViewById(R.id.recyclerView);
         swipeRefresh = findViewById(R.id.swipeRefresh);

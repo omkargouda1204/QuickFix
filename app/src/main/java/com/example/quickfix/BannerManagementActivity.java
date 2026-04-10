@@ -160,6 +160,7 @@ public class BannerManagementActivity extends BaseActivity {
 
                         if (response.isSuccessful()) {
                             List<Banner> payload = response.body() == null ? new ArrayList<>() : response.body();
+                            Log.d("API", "BANNERS load success size=" + payload.size());
                             banners.clear();
                             banners.addAll(payload);
                             for (Banner b : banners) {
@@ -178,6 +179,7 @@ public class BannerManagementActivity extends BaseActivity {
                             err = response.errorBody() != null ? response.errorBody().string() : "";
                         } catch (Exception ignored) {}
                         Log.e(TAG, "loadBanners failed HTTP " + response.code() + " body=" + err);
+                        Log.e("API_ERROR", err);
                         showError("Failed to load banners");
                         showListOrEmpty();
                     }
@@ -458,9 +460,13 @@ public class BannerManagementActivity extends BaseActivity {
                     @Override
                     public void onResponse(Call<Void> call, Response<Void> response) {
                         if (response.isSuccessful()) {
+                            Log.d("API", "BANNERS delete success id=" + banner.id);
                             Toast.makeText(BannerManagementActivity.this, "✓ Deleted", Toast.LENGTH_SHORT).show();
                             loadBanners();
                         } else {
+                            String err = "";
+                            try { err = response.errorBody() != null ? response.errorBody().string() : ""; } catch (Exception ignored) {}
+                            Log.e("API_ERROR", err);
                             showError("Delete failed: " + response.code());
                         }
                     }

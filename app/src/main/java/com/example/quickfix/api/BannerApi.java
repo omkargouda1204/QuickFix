@@ -20,20 +20,10 @@ public interface BannerApi {
     Call<List<Banner>> getBanners(
             @Header("apikey") String apiKey,
             @Header("Authorization") String bearer,
-            @Query("select") String select,
-            @Query("is_active") String isActive,
-            @Query("or") String orExpiry,
+            @Query("is_active") String active,
             @Query("order") String order
     );
 
-    @GET("rest/v1/banners")
-    Call<List<Banner>> getActiveBanners(
-            @Header("apikey") String apiKey,
-            @Header("Authorization") String bearer,
-            @Query("select") String select,
-            @Query("is_active") String isActive,
-            @Query("order") String order
-    );
 
     @GET("rest/v1/banners")
     Call<List<Banner>> getAllBanners(

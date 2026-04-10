@@ -129,6 +129,7 @@ public class OfferManagementActivity extends BaseActivity {
 
                         if (response.isSuccessful()) {
                             List<Offer> payload = response.body() == null ? new ArrayList<>() : response.body();
+                            Log.d("API", "OFFERS load success size=" + payload.size());
                             offers.clear();
                             offers.addAll(payload);
                             adapter.setItems(offers);
@@ -142,6 +143,7 @@ public class OfferManagementActivity extends BaseActivity {
                             err = response.errorBody() != null ? response.errorBody().string() : "";
                         } catch (Exception ignored) {}
                         Log.e(TAG, "loadOffers failed HTTP " + response.code() + " body=" + err);
+                        Log.e("API_ERROR", err);
                         showError("Failed to load offers");
                         showListOrEmpty();
                     }
@@ -445,9 +447,13 @@ public class OfferManagementActivity extends BaseActivity {
                     @Override
                     public void onResponse(Call<Void> call, Response<Void> response) {
                         if (response.isSuccessful()) {
+                            Log.d("API", "OFFERS delete success id=" + offer.id);
                             Toast.makeText(OfferManagementActivity.this, "✓ Deleted", Toast.LENGTH_SHORT).show();
                             loadOffers();
                         } else {
+                            String err = "";
+                            try { err = response.errorBody() != null ? response.errorBody().string() : ""; } catch (Exception ignored) {}
+                            Log.e("API_ERROR", err);
                             showError("Delete failed: " + response.code());
                         }
                     }

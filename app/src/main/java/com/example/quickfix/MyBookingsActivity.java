@@ -18,6 +18,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.quickfix.adapters.BookingsAdapter;
+import com.example.quickfix.api.BookingApi;
+import com.example.quickfix.api.RetrofitProvider;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.google.firebase.auth.FirebaseAuth;
@@ -28,15 +30,16 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
 import okhttp3.Callback;
-import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.RequestBody;
 import okhttp3.Response;
 
 /**
@@ -47,7 +50,6 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
     private static final String TAG = "MyBookingsActivity";
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
-    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     private RecyclerView recyclerView;
     private BookingsAdapter adapter;
@@ -70,6 +72,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
             .build();
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private BookingApi bookingApi;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,6 +87,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         }
         providerFirebaseUid = user.getUid();
         providerId = providerFirebaseUid;
+        bookingApi = RetrofitProvider.get().create(BookingApi.class);
         Log.d("UID", providerFirebaseUid);
 
         setupToolbar();
@@ -134,7 +138,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
             else if (checkedId == R.id.chipPending) currentFilter = "pending";
             else if (checkedId == R.id.chipAccepted) currentFilter = "accepted";
             else if (checkedId == R.id.chipCompleted) currentFilter = "completed";
-            else if (checkedId == R.id.chipCancelled) currentFilter = "cancelled";
+             else if (checkedId == R.id.chipCancelled) currentFilter = "cancelled";
 
             filterBookings();
         });
@@ -159,7 +163,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
     }
 
     private void resolveProviderIdAndLoadBookings() {
-        String uid = java.net.URLEncoder.encode(providerFirebaseUid, java.nio.charset.StandardCharsets.UTF_8);
+        String uid = encodeValue(providerFirebaseUid);
         String url = SUPABASE_URL + "/rest/v1/provider_profiles"
                 + "?firebase_uid=eq." + uid
                 + "&select=id,firebase_uid"
@@ -214,8 +218,8 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
 
     private void loadBookingsWithProviderId() {
         String filter;
-        String encodedProviderId = java.net.URLEncoder.encode(providerId, java.nio.charset.StandardCharsets.UTF_8);
-        String encodedUid = java.net.URLEncoder.encode(providerFirebaseUid, java.nio.charset.StandardCharsets.UTF_8);
+        String encodedProviderId = encodeValue(providerId);
+        String encodedUid = encodeValue(providerFirebaseUid);
 
         if (providerId != null && !providerId.isEmpty() && !providerId.equals(providerFirebaseUid)) {
             filter = "or=(provider_id.eq." + encodedProviderId + ",provider_id.eq." + encodedUid + ")";
@@ -303,7 +307,10 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         List<Booking> filtered = new ArrayList<>();
 
         for (Booking b : allBookings) {
-            if ("all".equals(currentFilter) || currentFilter.equals(b.status)) {
+            String status = b.status == null ? "" : b.status.toLowerCase(Locale.US);
+            boolean matchesCancelledGroup = "cancelled".equals(currentFilter)
+                    && ("cancelled".equals(status) || "rejected".equals(status));
+            if ("all".equals(currentFilter) || currentFilter.equals(status) || matchesCancelledGroup) {
                 filtered.add(b);
             }
         }
@@ -361,8 +368,19 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
 
     private void updateBookingStatus(String bookingId, String newStatus) {
         try {
-            JSONObject body = new JSONObject();
-            body.put("status", newStatus);
+            if (bookingId == null || bookingId.trim().isEmpty()) {
+                Toast.makeText(this, "Invalid booking id", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (!("accepted".equalsIgnoreCase(newStatus)
+                    || "cancelled".equalsIgnoreCase(newStatus)
+                    || "completed".equalsIgnoreCase(newStatus))) {
+                Toast.makeText(this, "Invalid booking status", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("status", newStatus.toLowerCase());
             if ("accepted".equalsIgnoreCase(newStatus)) {
                 if (providerId != null && !providerId.trim().isEmpty()) {
                     body.put("provider_id", providerId.trim());
@@ -371,40 +389,42 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
                 }
             }
 
-            String url = SUPABASE_URL + "/rest/v1/bookings?id=eq." + bookingId;
-
-            Request request = new Request.Builder()
-                    .url(url)
-                    .patch(RequestBody.create(body.toString(), JSON))
-                    .addHeader("apikey", ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Prefer", "return=minimal")
-                    .build();
-
-            httpClient.newCall(request).enqueue(new Callback() {
+            bookingApi.updateBookingStatus(
+                            ANON_KEY,
+                            "Bearer " + ANON_KEY,
+                            "eq." + bookingId.trim(),
+                            body
+                    )
+                    .enqueue(new retrofit2.Callback<Void>() {
                 @Override
-                public void onFailure(Call call, IOException e) {
+                public void onFailure(retrofit2.Call<Void> call, Throwable t) {
                     mainHandler.post(() ->
                             Toast.makeText(MyBookingsActivity.this,
-                                    "Update failed: " + e.getMessage(),
+                                    "Update failed: " + (t.getMessage() == null ? "network error" : t.getMessage()),
                                     Toast.LENGTH_SHORT).show());
                 }
 
                 @Override
-                public void onResponse(Call call, Response response) throws IOException {
+                public void onResponse(retrofit2.Call<Void> call, retrofit2.Response<Void> response) {
                     int code = response.code();
-                    response.close();
+                    String responseBody = "";
+                    try {
+                        if (response.errorBody() != null) {
+                            responseBody = response.errorBody().string();
+                        }
+                    } catch (Exception ignored) {
+                    }
+                    Log.d("BOOKING_UPDATE", "HTTP " + code + " body=" + responseBody);
 
                     mainHandler.post(() -> {
-                        if (code == 200 || code == 204) {
+                        if (response.isSuccessful()) {
                             Toast.makeText(MyBookingsActivity.this,
-                                    "Status updated successfully",
+                                    "Updated",
                                     Toast.LENGTH_SHORT).show();
                             loadBookings();
                         } else {
                             Toast.makeText(MyBookingsActivity.this,
-                                    "Update failed: HTTP " + code,
+                                    "Update failed",
                                     Toast.LENGTH_SHORT).show();
                         }
                     });
@@ -413,6 +433,14 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         } catch (Exception e) {
             Log.e(TAG, "Update error: " + e.getMessage());
             Toast.makeText(this, "Error updating status", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private String encodeValue(String value) {
+        try {
+            return java.net.URLEncoder.encode(value == null ? "" : value, "UTF-8");
+        } catch (Exception ignored) {
+            return value == null ? "" : value;
         }
     }
 }

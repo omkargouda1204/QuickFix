@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.quickfix.R;
 import com.example.quickfix.SearchResult;
+import com.bumptech.glide.Glide;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +38,11 @@ public class SearchResultsAdapter extends RecyclerView.Adapter<SearchResultsAdap
         notifyDataSetChanged();
     }
 
+    public void clear() {
+        items = new ArrayList<>();
+        notifyDataSetChanged();
+    }
+
     @NonNull @Override
     public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View v = LayoutInflater.from(ctx).inflate(R.layout.item_search_result, parent, false);
@@ -48,15 +54,24 @@ public class SearchResultsAdapter extends RecyclerView.Adapter<SearchResultsAdap
         SearchResult r = items.get(pos);
         h.tvName.setText(r.name);
 
-        String category = r.subtitle != null ? r.subtitle.trim() : "";
-        String city = r.city != null ? r.city.trim() : "";
-        h.tvSubtitle.setText(!category.isEmpty() && !city.isEmpty() ? category + " • " + city : (!category.isEmpty() ? category : city));
-        h.tvCity.setVisibility(View.GONE);
+        h.tvSubtitle.setText(r.subtitle == null ? "" : r.subtitle);
+        String city = r.city == null ? "" : r.city.trim();
+        h.tvCity.setText(city);
+        h.tvCity.setVisibility(city.isEmpty() ? View.GONE : View.VISIBLE);
 
-        h.ivIcon.setImageResource(R.drawable.ic_business);
+        if (r.profileImage != null && !r.profileImage.trim().isEmpty()) {
+            Glide.with(ctx)
+                    .load(r.profileImage)
+                    .placeholder(R.drawable.ic_business)
+                    .error(R.drawable.ic_business)
+                    .into(h.ivIcon);
+        } else {
+            h.ivIcon.setImageResource(R.drawable.ic_business);
+        }
+
         h.tvType.setBackgroundResource(R.drawable.bg_role_badge_provider);
         h.tvType.setTextColor(0xFF2E7D32);
-        h.tvType.setText("Provider");
+        h.tvType.setText("Approved");
 
         h.tvAvailability.setVisibility(View.VISIBLE);
         h.tvDistance.setVisibility(View.VISIBLE);

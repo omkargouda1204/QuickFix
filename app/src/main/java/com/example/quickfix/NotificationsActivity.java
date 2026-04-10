@@ -175,7 +175,8 @@ public class NotificationsActivity extends BaseActivity
 
                 String url = BASE_URL
                         + "/rest/v1/notifications?select=*"
-                        + "&or=(receiver_id.eq." + URLEncoder.encode(resolvedUserId, StandardCharsets.UTF_8.name())
+                        + "&or=(user_id.eq." + URLEncoder.encode(resolvedUserId, StandardCharsets.UTF_8.name())
+                        + ",receiver_id.eq." + URLEncoder.encode(resolvedUserId, StandardCharsets.UTF_8.name())
                         + ",receiver_role.eq." + URLEncoder.encode(roleFilter, StandardCharsets.UTF_8.name()) + ")"
                         + "&order=created_at.desc";
                 Request req = new Request.Builder().url(url)
@@ -304,9 +305,12 @@ public class NotificationsActivity extends BaseActivity
                         : currentUserId.trim();
                 JSONObject body = new JSONObject();
                 body.put("is_read", true);
-                String url = BASE_URL + "/rest/v1/notifications?receiver_id=eq."
-                        + URLEncoder.encode(resolvedUserId, StandardCharsets.UTF_8.name())
-                        + "&is_read=eq.false";
+                String encodedUserId = URLEncoder.encode(resolvedUserId, StandardCharsets.UTF_8.name());
+                String url = BASE_URL + "/rest/v1/notifications?or=(receiver_id.eq."
+                        + encodedUserId
+                        + ",user_id.eq."
+                        + encodedUserId
+                        + ")&is_read=eq.false";
                 Request req = new Request.Builder().url(url)
                         .patch(RequestBody.create(body.toString(), MediaType.get("application/json")))
                         .addHeader("apikey",        ANON_KEY)
@@ -318,7 +322,8 @@ public class NotificationsActivity extends BaseActivity
                     MAIN.post(() -> {
                         if (r.code() == 200 || r.code() == 204) {
                             for (Notification n : allNotifications) {
-                                if (resolvedUserId.equals(n.receiverId)) {
+                                if (resolvedUserId.equals(n.receiverId)
+                                        || resolvedUserId.equals(n.userId)) {
                                     n.isRead = true;
                                 }
                             }

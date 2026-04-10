@@ -50,7 +50,7 @@ public class Offer {
     @SerializedName("deleted_at")
     public String deletedAt;       // For soft deletes (null if active)
 
-    @SerializedName(value = "created_by", alternate = {"created_by_uid", "created_by_firebase_uid"})
+    @SerializedName("created_by")
     public String createdBy;
 
     @SerializedName(value = "created_by_uid", alternate = {"created_by_firebase_uid"})

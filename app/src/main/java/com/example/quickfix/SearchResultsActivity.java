@@ -1,6 +1,7 @@
 package com.example.quickfix;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -46,8 +47,8 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 /**
- * SearchResultsActivity — full-screen provider search using a simple category query.
- * Queries Supabase provider_profiles only.
+ * SearchResultsActivity — full-screen provider search.
+ * Queries approved providers from Supabase.
  */
 public class SearchResultsActivity extends BaseActivity
         implements SearchResultsAdapter.OnResultClickListener {
@@ -113,9 +114,15 @@ public class SearchResultsActivity extends BaseActivity
         setupRecycler();
         setupListeners();
 
-        // Pre-fill search bar
-        etSearch.setText(queryText);
-        etSearch.setSelection(queryText.length());
+        // Prefill only when this screen was opened with an explicit query.
+        if (getIntent().hasExtra(EXTRA_QUERY) && queryText != null && !queryText.trim().isEmpty()) {
+            etSearch.setText(queryText);
+            etSearch.setSelection(queryText.length());
+            btnClear.setVisibility(View.VISIBLE);
+        } else {
+            queryText = "";
+            btnClear.setVisibility(View.GONE);
+        }
 
         updateLocationLabel();
         performSearch(queryText);
@@ -146,6 +153,7 @@ public class SearchResultsActivity extends BaseActivity
 
         btnClear.setOnClickListener(v -> {
             etSearch.setText("");
+            clearDisplayedResults();
             btnClear.setVisibility(View.GONE);
         });
 
@@ -155,9 +163,14 @@ public class SearchResultsActivity extends BaseActivity
                 btnClear.setVisibility(s.length() > 0 ? View.VISIBLE : View.GONE);
                 if (debounceRunnable != null) debounce.removeCallbacks(debounceRunnable);
                 debounceRunnable = () -> performSearch(s.toString().trim());
-                debounce.postDelayed(debounceRunnable, 400);
+                debounce.postDelayed(debounceRunnable, 300);
             }
-            @Override public void afterTextChanged(Editable s) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (s == null || s.toString().trim().isEmpty()) {
+                    clearDisplayedResults();
+                }
+            }
         });
 
         etSearch.setOnEditorActionListener((v, actionId, event) -> {
@@ -193,20 +206,21 @@ public class SearchResultsActivity extends BaseActivity
     // ── Search ─────────────────────────────────────────────────────────────
 
     private void performSearch(String query) {
-        queryText = normalizeSearchQuery(query);
-        Log.d("SEARCH_QUERY", queryText);
+        queryText = query == null ? "" : query.trim();
+        String normalizedQuery = normalizeSearchQuery(queryText);
+        Log.d("SEARCH_QUERY", normalizedQuery);
         Log.d("SEARCH_INPUT", queryText);
         showLoading(true);
         allResults.clear();
         filtered.clear();
 
-        if (queryText.isEmpty()) {
+        if (normalizedQuery.isEmpty()) {
             showLoading(false);
             applyFilter();
             return;
         }
 
-        executeSearch(queryText, false);
+        executeSearch(normalizedQuery, false);
     }
 
     private void ensureLocationThenSearch(String query) {
@@ -273,6 +287,7 @@ public class SearchResultsActivity extends BaseActivity
     private String normalizeSearchQuery(String input) {
         String query = input == null ? "" : input.toLowerCase(Locale.US).trim();
         query = query.replaceAll("\\s+", " ");
+        if (query.isEmpty()) return "";
         if (query.matches(".*\\bac\\b.*") && !query.contains("ac service")) {
             return "ac service";
         }
@@ -290,13 +305,66 @@ public class SearchResultsActivity extends BaseActivity
 
         try {
             String cleanedQuery = sanitizeProviderQuery(query);
-
-            String enc = java.net.URLEncoder.encode(cleanedQuery, java.nio.charset.StandardCharsets.UTF_8.name());
             Set<String> seenIds = new HashSet<>();
 
-            list.addAll(fetchTextProviders(enc, seenIds));
+            list.addAll(fetchProvidersTable(cleanedQuery, seenIds));
         } catch (Exception e) {
             Log.e(TAG, "searchProviders: " + e.getMessage());
+        }
+        return list;
+    }
+
+    private List<SearchResult> fetchProvidersTable(String rawQuery, Set<String> seenIds) {
+        List<SearchResult> list = new ArrayList<>();
+        try {
+            String safeQuery = rawQuery == null ? "" : rawQuery.trim();
+            String query = "(business_name.ilike.%" + safeQuery + "%,description.ilike.%" + safeQuery + "%,category.ilike.%" + safeQuery + "%)";
+            String url = BASE_URL + "/rest/v1/provider_applications"
+                    + "?select=id,firebase_uid,business_name,category,city,status,description,profile_image,phone"
+                    + "&status=eq.approved"
+                    + "&or=" + Uri.encode(query)
+                    + "&limit=60";
+
+            Request req = new Request.Builder().url(url)
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response r = HTTP.newCall(req).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                if (r.code() != 200) {
+                    Log.e("API_ERROR", body);
+                    return list;
+                }
+
+                Log.d("API_SUCCESS", body);
+
+                JSONArray arr = new JSONArray(body);
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject o = arr.getJSONObject(i);
+                    String firebaseUid = o.optString("firebase_uid", "").trim();
+                    String id = firebaseUid.isEmpty() ? o.optString("id", "").trim() : firebaseUid;
+                    if (id.isEmpty() || seenIds.contains(id)) continue;
+                    seenIds.add(id);
+                    list.add(new SearchResult(
+                            id,
+                            o.optString("business_name", "-"),
+                            o.optString("category", ""),
+                            o.optString("city", ""),
+                            SearchResult.TYPE_PROVIDER,
+                            (float) o.optDouble("rating", 0d),
+                            -1f,
+                            "Approved",
+                            o.optString("description", ""),
+                            o.optString("phone", ""),
+                            o.optString("profile_image", ""),
+                            o.optString("status", "approved")
+                    ));
+                }
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "fetchProvidersTable: " + e.getMessage());
         }
         return list;
     }
@@ -366,14 +434,16 @@ public class SearchResultsActivity extends BaseActivity
     private List<SearchResult> fetchTextProviders(String encQuery, Set<String> seenIds) {
         List<SearchResult> list = new ArrayList<>();
         try {
-            StringBuilder url = new StringBuilder(BASE_URL)
-                    .append("/rest/v1/provider_profiles")
-                    .append("?select=id,business_name,category,description,profile_image,business_image_url,city,area,owner_name,rating,status")
-                    .append("&is_approved=eq.true")
-                    .append("&category=ilike.*").append(encQuery).append("*")
-                    .append("&limit=60");
+            String url = BASE_URL + "/rest/v1/provider_profiles"
+                    + "?select=id,business_name,category,description,profile_image,business_image_url,city,area,owner_name,rating,status"
+                    + "&is_approved=eq.true"
+                    + "&or=(business_name.ilike.*" + encQuery
+                    + "*,category.ilike.*" + encQuery
+                    + "*,description.ilike.*" + encQuery
+                    + "*,city.ilike.*" + encQuery + "*)"
+                    + "&limit=60";
 
-            Request req = new Request.Builder().url(url.toString())
+            Request req = new Request.Builder().url(url)
                     .addHeader("apikey", ANON_KEY)
                     .addHeader("Authorization", "Bearer " + ANON_KEY)
                     .addHeader("Accept", "application/json")
@@ -381,6 +451,7 @@ public class SearchResultsActivity extends BaseActivity
 
             try (Response r = HTTP.newCall(req).execute()) {
                 String body = r.body() != null ? r.body().string() : "[]";
+                Log.d("SEARCH_API", "HTTP " + r.code() + " body=" + body);
                 if (r.code() == 200) {
                     JSONArray arr = new JSONArray(body);
                     for (int i = 0; i < arr.length(); i++) {
@@ -409,6 +480,16 @@ public class SearchResultsActivity extends BaseActivity
     }
 
     // Provider-only results: services lookup intentionally disabled.
+
+    private void clearDisplayedResults() {
+        queryText = "";
+        allResults.clear();
+        filtered.clear();
+        if (adapter != null) {
+            adapter.clear();
+        }
+        applyFilter();
+    }
 
     private void applyFilter() {
         filtered.clear();
@@ -450,8 +531,9 @@ public class SearchResultsActivity extends BaseActivity
         showLoading(true);
         new Thread(() -> {
             try {
+                String encodedProviderId = android.net.Uri.encode(providerId == null ? "" : providerId.trim());
                 String url = BASE_URL + "/rest/v1/provider_profiles"
-                        + "?id=eq." + providerId
+                        + "?or=(id.eq." + encodedProviderId + ",firebase_uid.eq." + encodedProviderId + ")"
                         + "&select=*&limit=1";
 
                 Request req = new Request.Builder().url(url)
