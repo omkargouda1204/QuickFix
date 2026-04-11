@@ -120,15 +120,15 @@ public class OfferManagementActivity extends BaseActivity {
 
     private void loadOffers() {
         setLoading(true);
-        offerApi.getAllOffers(ANON_KEY, "Bearer " + ANON_KEY, "*", "created_at.desc")
+        offerApi.getOffers()
                 .enqueue(new Callback<List<Offer>>() {
                     @Override
                     public void onResponse(Call<List<Offer>> call, Response<List<Offer>> response) {
                         setLoading(false);
                         swipeRefresh.setRefreshing(false);
 
-                        if (response.isSuccessful()) {
-                            List<Offer> payload = response.body() == null ? new ArrayList<>() : response.body();
+                        if (response.isSuccessful() && response.body() != null) {
+                            List<Offer> payload = response.body();
                             Log.d("API", "OFFERS load success size=" + payload.size());
                             offers.clear();
                             offers.addAll(payload);

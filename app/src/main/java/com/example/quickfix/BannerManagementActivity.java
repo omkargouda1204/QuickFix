@@ -151,15 +151,15 @@ public class BannerManagementActivity extends BaseActivity {
 
     private void loadBanners() {
         setLoading(true);
-        bannerApi.getAllBanners(ANON_KEY, "Bearer " + ANON_KEY, "*", "created_at.desc")
+        bannerApi.getBanners()
                 .enqueue(new Callback<List<Banner>>() {
                     @Override
                     public void onResponse(Call<List<Banner>> call, Response<List<Banner>> response) {
                         setLoading(false);
                         swipeRefresh.setRefreshing(false);
 
-                        if (response.isSuccessful()) {
-                            List<Banner> payload = response.body() == null ? new ArrayList<>() : response.body();
+                        if (response.isSuccessful() && response.body() != null) {
+                            List<Banner> payload = response.body();
                             Log.d("API", "BANNERS load success size=" + payload.size());
                             banners.clear();
                             banners.addAll(payload);

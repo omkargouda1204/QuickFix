@@ -17,12 +17,15 @@ import retrofit2.http.Query;
 public interface BannerApi {
 
     @GET("rest/v1/banners")
-    Call<List<Banner>> getBanners(
+    Call<List<Banner>> getActiveBanners(
             @Header("apikey") String apiKey,
             @Header("Authorization") String bearer,
             @Query("is_active") String active,
             @Query("order") String order
     );
+
+    @GET("rest/v1/banners?select=*&order=created_at.desc")
+    Call<List<Banner>> getBanners();
 
 
     @GET("rest/v1/banners")

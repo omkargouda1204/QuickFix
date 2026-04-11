@@ -1043,7 +1043,7 @@ public class MainActivity extends BaseActivity {
         }
 
         try {
-            bannerApi.getBanners(
+            bannerApi.getActiveBanners(
                     BuildConfig.SUPABASE_ANON_KEY,
                     "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                     "eq.true",
@@ -1259,7 +1259,7 @@ public class MainActivity extends BaseActivity {
         }
 
         try {
-            offerApi.getOffers(
+            offerApi.getActiveOffers(
                     BuildConfig.SUPABASE_ANON_KEY,
                     "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                     "eq.true",

@@ -17,7 +17,7 @@ import retrofit2.http.Query;
 public interface OfferApi {
 
     @GET("rest/v1/offers")
-    Call<List<Offer>> getOffers(
+    Call<List<Offer>> getActiveOffers(
             @Header("apikey") String apiKey,
             @Header("Authorization") String bearer,
             @Query("is_active") String active,
@@ -32,6 +32,9 @@ public interface OfferApi {
             @Query("select") String select,
             @Query("order") String order
     );
+
+    @GET("rest/v1/offers?select=*&order=created_at.desc")
+    Call<List<Offer>> getOffers();
 
     @POST("rest/v1/offers")
     Call<Void> createOffer(
