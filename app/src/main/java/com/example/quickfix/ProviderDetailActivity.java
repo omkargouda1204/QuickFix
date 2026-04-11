@@ -290,7 +290,7 @@ public class ProviderDetailActivity extends BaseActivity {
             return;
         }
 
-        // Always use Firebase UID as plain string for TEXT columns in Supabase.
+        // Use Firebase UID for auth, then resolve DB ids before insert.
         final String firebaseUid = currentUser.getUid();
 
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_book_service, null);
@@ -385,31 +385,42 @@ public class ProviderDetailActivity extends BaseActivity {
             try {
                 UserMeta customerMeta = fetchUserByFirebaseUid(customerId);
 
-                // Canonical provider_id for bookings is provider_profiles.id.
-                String providerProfileId = providerIdForBooking != null ? providerIdForBooking.trim() : "";
-                if (providerProfileId.isEmpty() && providerFirebaseUid != null && !providerFirebaseUid.trim().isEmpty()) {
-                    providerProfileId = fetchProviderProfileIdByFirebaseUid(providerFirebaseUid.trim());
+                // Canonical provider_id for bookings is provider_profiles.id (UUID).
+                // bookings.provider_id is TEXT, so keep non-empty text id.
+                // Keep bookings.provider_id as text, but enforce UUID value for trigger compatibility.
+                String providerIdForInsert = normalizeUuidOrEmpty(providerIdForBooking);
+                if (providerIdForInsert.isEmpty() && providerFirebaseUid != null && !providerFirebaseUid.trim().isEmpty()) {
+                    providerIdForInsert = normalizeUuidOrEmpty(fetchProviderProfileIdByFirebaseUid(providerFirebaseUid.trim()));
                 }
-                if (providerProfileId.isEmpty()) {
+                if (providerIdForInsert.isEmpty()) {
                     mainHandler.post(() -> Toast.makeText(ProviderDetailActivity.this,
-                            "Booking failed: provider profile not found.", Toast.LENGTH_LONG).show());
+                            "Booking failed: provider profile id not found.", Toast.LENGTH_LONG).show());
                     return;
                 }
 
-                String customerIdForInsert = (customerMeta != null && customerMeta.id != null
-                        && !customerMeta.id.trim().isEmpty()) ? customerMeta.id.trim() : customerId;
+                // bookings.customer_id is TEXT, so accept either user row id or firebase uid.
+                String customerIdForInsert = safe(customerMeta != null ? customerMeta.id : "");
+                if (customerIdForInsert.isEmpty()) {
+                    customerIdForInsert = safe(customerId);
+                }
+                if (customerIdForInsert.isEmpty()) {
+                    mainHandler.post(() -> Toast.makeText(ProviderDetailActivity.this,
+                            "Booking failed: customer id missing.", Toast.LENGTH_LONG).show());
+                    return;
+                }
 
                 JSONObject bookingBody = new JSONObject();
                 bookingBody.put("customer_id", customerIdForInsert);
-                bookingBody.put("provider_id", providerProfileId);
+                bookingBody.put("provider_id", providerIdForInsert);
                 bookingBody.put("customer_name", (customerMeta == null || customerMeta.name == null || customerMeta.name.isEmpty())
                         ? "Customer" : customerMeta.name);
                 bookingBody.put("customer_phone", (customerMeta == null || customerMeta.phone == null) ? "" : customerMeta.phone);
                 bookingBody.put("provider_name", providerName != null ? providerName : "");
-                if (serviceIdForBooking == null || serviceIdForBooking.trim().isEmpty()) {
+                String serviceId = normalizeUuidOrEmpty(serviceIdForBooking);
+                if (serviceId.isEmpty()) {
                     bookingBody.put("service_id", JSONObject.NULL);
                 } else {
-                    bookingBody.put("service_id", serviceIdForBooking.trim());
+                    bookingBody.put("service_id", serviceId);
                 }
                 bookingBody.put("service_name", providerCategory != null ? providerCategory : "Service");
                 bookingBody.put("category", providerCategory != null ? providerCategory : "");
@@ -417,7 +428,7 @@ public class ProviderDetailActivity extends BaseActivity {
                 bookingBody.put("booking_time", time);
                 bookingBody.put("address", address);
                 bookingBody.put("city", providerCity != null ? providerCity : "");
-                bookingBody.put("price", 0);
+                bookingBody.put("price", 0.0);
                 bookingBody.put("description", description != null ? description : "");
                 bookingBody.put("status", "pending");
 
@@ -899,6 +910,16 @@ public class ProviderDetailActivity extends BaseActivity {
             Log.e(TAG, "fetchProviderProfileIdByFirebaseUid: " + e.getMessage());
             return "";
         }
+    }
+
+    private boolean isUuid(String value) {
+        if (value == null) return false;
+        return value.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$");
+    }
+
+    private String normalizeUuidOrEmpty(String value) {
+        String safe = value == null ? "" : value.trim();
+        return isUuid(safe) ? safe : "";
     }
 
     private void setText(int viewId, String text) {

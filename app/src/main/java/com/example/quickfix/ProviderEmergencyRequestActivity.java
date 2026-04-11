@@ -326,12 +326,13 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
     private void mirrorEmergencyBooking(JSONObject request) {
         try {
-            String customerId = safe(request.optString("user_id", ""));
-            if (TextUtils.isEmpty(customerId) || TextUtils.isEmpty(providerProfileId)) return;
+             String customerId = safe(request.optString("user_id", ""));
+            String providerId = safe(providerProfileId);
+            if (TextUtils.isEmpty(customerId) || TextUtils.isEmpty(providerId)) return;
 
             JSONObject booking = new JSONObject();
             booking.put("customer_id", customerId);
-            booking.put("provider_id", providerProfileId);
+            booking.put("provider_id", providerId);
             booking.put("customer_name", fallback(request.optString("user_name", ""), "Customer"));
             booking.put("customer_phone", safe(request.optString("phone", "")));
             booking.put("provider_name", fallback(providerName, "Provider"));
@@ -369,8 +370,11 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Prefer", "return=minimal")
                     .build();
-            try (Response ignored = http.newCall(fallbackInsert).execute()) {
+            try (Response fallbackResponse = http.newCall(fallbackInsert).execute()) {
                 // Keep acceptance successful even if booking mirror fails.
+                if (fallbackResponse.code() >= 400) {
+                    Log.w(TAG, "mirrorEmergencyBooking fallback HTTP " + fallbackResponse.code());
+                }
             }
         } catch (Exception e) {
             Log.w(TAG, "mirrorEmergencyBooking failed: " + e.getMessage());
@@ -404,6 +408,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         return value == null ? "" : value.trim();
     }
 
+
     private void showToast(String message) {
         if (TextUtils.isEmpty(message)) return;
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
@@ -417,4 +422,3 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         }
     }
 }
-
