@@ -22,6 +22,9 @@ public class Booking {
     public String city;
     public double price;
     public String status; // pending, accepted, completed, cancelled
+    public String paymentStatus;
+    public String paymentId;
+    public double paymentAmount;
     public String createdAt;
     public String completedAt;
     public String description;
@@ -54,6 +57,9 @@ public class Booking {
         b.city = s(o, "city");
         b.price = o.optDouble("price", 0);
         b.status = s(o, "status");
+        b.paymentStatus = s(o, "payment_status");
+        b.paymentId = s(o, "payment_id");
+        b.paymentAmount = o.optDouble("payment_amount", 0d);
         b.createdAt = s(o, "created_at");
         b.completedAt = s(o, "completed_at");
         b.description = s(o, "description");

@@ -703,8 +703,8 @@ public class MainActivity extends BaseActivity {
                 String normalizedQuery = normalizeSearchInput(query);
                 String enc = java.net.URLEncoder.encode(normalizedQuery, java.nio.charset.StandardCharsets.UTF_8.name());
                 StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
-                        .append("/rest/v1/provider_applications?select=id,firebase_uid,business_name,category,city,status")
-                        .append("&status=eq.approved")
+                        .append("/rest/v1/provider_profiles?select=id,firebase_uid,business_name,category,city")
+                        .append("&is_approved=eq.true")
                         .append("&or=(business_name.ilike.*").append(enc)
                         .append("*,category.ilike.*").append(enc)
                         .append("*,city.ilike.*").append(enc).append("*)")
@@ -1043,11 +1043,12 @@ public class MainActivity extends BaseActivity {
         }
 
         try {
-            bannerApi.getActiveBanners(
+            bannerApi.getBanners(
                     BuildConfig.SUPABASE_ANON_KEY,
                     "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                    "*",
                     "eq.true",
-                    "priority.asc"
+                    "created_at.desc"
             ).enqueue(new Callback<List<Banner>>() {
                 @Override
                 public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
@@ -1259,9 +1260,10 @@ public class MainActivity extends BaseActivity {
         }
 
         try {
-            offerApi.getActiveOffers(
+            offerApi.getOffers(
                     BuildConfig.SUPABASE_ANON_KEY,
                     "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                    "*",
                     "eq.true",
                     "created_at.desc"
             ).enqueue(new Callback<List<Offer>>() {

@@ -35,6 +35,7 @@ android {
         buildConfigField "String", "SUPABASE_BUCKET_BUSINESS_IMG","\"${supabaseProps.getProperty('SUPABASE_BUCKET_BUSINESS_IMG', 'business-images')}\""
         // Edge Function URL for FCM push notifications (stored securely, never hardcoded)
         buildConfigField "String", "SUPABASE_NOTIFY_FN_URL",     "\"${supabaseProps.getProperty('SUPABASE_NOTIFY_FN_URL', '')}\""
+        buildConfigField "String", "RAZORPAY_KEY_ID",            "\"${supabaseProps.getProperty('RAZORPAY_KEY_ID', '')}\""
     }
 
     buildFeatures {
@@ -89,6 +90,9 @@ dependencies {
     // Retrofit (Supabase REST integration)
     implementation 'com.squareup.retrofit2:retrofit:2.9.0'
     implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+
+    // Razorpay Checkout (test mode key configured via BuildConfig.RAZORPAY_KEY_ID)
+    implementation 'com.razorpay:checkout:1.6.33'
 
     // Compact ViewPager2 dots indicator for home banners
     implementation 'com.tbuonomo:dotsindicator:5.1.0'

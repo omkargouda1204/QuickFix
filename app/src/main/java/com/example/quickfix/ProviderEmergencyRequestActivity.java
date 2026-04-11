@@ -359,7 +359,8 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             booking.remove("is_emergency");
             booking.put("booking_date", new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US)
                     .format(new java.util.Date()));
-            booking.put("booking_time", new java.text.SimpleDateFormat("HH:mm", Locale.US)
+
+            booking.put("booking_time", new java.text.SimpleDateFormat("HH:mm:ss", Locale.US)
                     .format(new java.util.Date()));
 
             Request fallbackInsert = new Request.Builder()

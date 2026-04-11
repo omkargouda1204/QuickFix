@@ -151,7 +151,12 @@ public class BannerManagementActivity extends BaseActivity {
 
     private void loadBanners() {
         setLoading(true);
-        bannerApi.getBanners()
+        bannerApi.getAllBanners(
+                        ANON_KEY,
+                        "Bearer " + ANON_KEY,
+                        "*",
+                        "created_at.desc"
+                )
                 .enqueue(new Callback<List<Banner>>() {
                     @Override
                     public void onResponse(Call<List<Banner>> call, Response<List<Banner>> response) {

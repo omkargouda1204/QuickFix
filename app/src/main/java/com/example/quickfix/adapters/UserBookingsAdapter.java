@@ -31,6 +31,7 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
         void onViewDetails(Booking booking);
         void onCancelBooking(Booking booking);
         void onWriteReview(Booking booking);
+        void onPayNow(Booking booking);
     }
 
     public UserBookingsAdapter(Context context, BookingActionListener listener) {
@@ -64,7 +65,7 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
     public class VH extends RecyclerView.ViewHolder {
         MaterialCardView card;
         TextView tvServiceName, tvProviderName, tvDateTime, tvAddress, tvStatus, tvPrice, tvReviewSummary;
-        MaterialButton btnViewDetails, btnCancel, btnReview;
+        MaterialButton btnViewDetails, btnCancel, btnReview, btnPayNow;
 
         public VH(@NonNull View v) {
             super(v);
@@ -79,6 +80,7 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             btnViewDetails = v.findViewById(R.id.btnViewDetails);
             btnCancel = v.findViewById(R.id.btnCancel);
             btnReview = v.findViewById(R.id.btnReview);
+            btnPayNow = v.findViewById(R.id.btnPayNow);
         }
 
         void bind(Booking b) {
@@ -123,6 +125,10 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
 
             boolean isCompleted = "completed".equals(status);
             btnReview.setVisibility(isCompleted ? View.VISIBLE : View.GONE);
+
+            boolean paymentDone = "success".equalsIgnoreCase(b.paymentStatus) || "paid".equalsIgnoreCase(status);
+            boolean canPayNow = "price_set".equals(status) && !paymentDone;
+            btnPayNow.setVisibility(canPayNow ? View.VISIBLE : View.GONE);
             if (isCompleted) {
                 boolean hasReview = b.reviewRating > 0;
                 btnReview.setText(context.getString(
@@ -150,6 +156,9 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             });
             btnReview.setOnClickListener(v -> {
                 if (listener != null) listener.onWriteReview(b);
+            });
+            btnPayNow.setOnClickListener(v -> {
+                if (listener != null) listener.onPayNow(b);
             });
         }
     }

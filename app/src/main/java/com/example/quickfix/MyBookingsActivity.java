@@ -415,6 +415,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
                     } catch (Exception ignored) {
                     }
                     Log.d("BOOKING_UPDATE", "HTTP " + code + " body=" + responseBody);
+                    final String errorBodyForUi = responseBody;
 
                     mainHandler.post(() -> {
                         if (response.isSuccessful()) {
@@ -423,6 +424,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
                                     Toast.LENGTH_SHORT).show();
                             loadBookings();
                         } else {
+                            Log.e("ERROR", errorBodyForUi == null ? "" : errorBodyForUi);
                             Toast.makeText(MyBookingsActivity.this,
                                     "Update failed",
                                     Toast.LENGTH_SHORT).show();

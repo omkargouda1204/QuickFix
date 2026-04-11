@@ -101,7 +101,7 @@ public class ContentManagementActivity extends BaseActivity {
      * Uses Thread (not enqueue) — same pattern as MainActivity which reliably fetches data.
      */
     private void fetchCount(String table, CountCallback callback) {
-        final String url = SUPABASE_URL + "/rest/v1/" + table + "?select=id";
+        final String url = SUPABASE_URL + "/rest/v1/" + table + "?select=id&limit=1";
         Log.d(TAG, "fetchCount(" + table + ") URL=" + url);
 
         new Thread(() -> {
@@ -111,15 +111,24 @@ public class ContentManagementActivity extends BaseActivity {
                         .addHeader("apikey",        ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
                         .addHeader("Accept",        "application/json")
+                        .addHeader("Prefer",        "count=exact")
                         .build();
                 try (Response resp = http.newCall(req).execute()) {
                     int    code = resp.code();
                     String body = resp.body() != null ? resp.body().string() : "[]";
+                    String range = resp.header("Content-Range");
                     Log.d(TAG, "fetchCount(" + table + ") HTTP " + code + " body=" + body);
                     int count = 0;
-                    if (code == 200) {
-                        try { count = new org.json.JSONArray(body).length(); }
-                        catch (Exception ex) { Log.e(TAG, "parse error: " + ex.getMessage()); }
+                    if (code == 200 || code == 206) {
+                        try {
+                            if (range != null && range.contains("/")) {
+                                count = Integer.parseInt(range.substring(range.lastIndexOf('/') + 1).trim());
+                            } else {
+                                count = new org.json.JSONArray(body).length();
+                            }
+                        } catch (Exception ex) {
+                            Log.e(TAG, "parse error: " + ex.getMessage());
+                        }
                     } else {
                         Log.e(TAG, "fetchCount(" + table + ") HTTP " + code + ": " + body);
                     }

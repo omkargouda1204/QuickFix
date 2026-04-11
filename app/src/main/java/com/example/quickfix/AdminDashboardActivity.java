@@ -327,19 +327,8 @@ public class AdminDashboardActivity extends BaseActivity {
 
     private List<Banner> filterAdminBanners(List<Banner> source) {
         List<Banner> out = new ArrayList<>();
-        FirebaseUser user = mAuth != null ? mAuth.getCurrentUser() : null;
-        String uid = user != null ? safe(user.getUid()) : "";
-        String email = user != null ? safe(user.getEmail()) : "";
-
         for (Banner banner : source) {
             if (!isBannerVisible(banner)) continue;
-            if (!isCreatedByCurrentAdmin(
-                    banner != null ? banner.createdBy : "",
-                    banner != null ? banner.createdByUid : "",
-                    banner != null ? banner.createdByEmail : "",
-                    uid,
-                    email
-            )) continue;
             normalizeBannerImage(banner);
             out.add(banner);
         }
@@ -348,46 +337,13 @@ public class AdminDashboardActivity extends BaseActivity {
 
     private List<Offer> filterAdminOffers(List<Offer> source) {
         List<Offer> out = new ArrayList<>();
-        FirebaseUser user = mAuth != null ? mAuth.getCurrentUser() : null;
-        String uid = user != null ? safe(user.getUid()) : "";
-        String email = user != null ? safe(user.getEmail()) : "";
-
         for (Offer offer : source) {
             if (!isOfferVisible(offer)) continue;
-            if (!isCreatedByCurrentAdmin(
-                    offer != null ? offer.createdBy : "",
-                    offer != null ? offer.createdByUid : "",
-                    offer != null ? offer.createdByEmail : "",
-                    uid,
-                    email
-            )) continue;
             out.add(offer);
         }
         return out;
     }
 
-    private boolean isCreatedByCurrentAdmin(String createdBy,
-                                            String createdByUid,
-                                            String createdByEmail,
-                                            String currentUid,
-                                            String currentEmail) {
-        String by = safe(createdBy);
-        String byUid = safe(createdByUid);
-        String byEmail = safe(createdByEmail);
-
-        // Backward compatibility: older rows may not carry creator metadata.
-        if (by.isEmpty() && byUid.isEmpty() && byEmail.isEmpty()) {
-            return true;
-        }
-
-        if (!currentUid.isEmpty() && (currentUid.equalsIgnoreCase(byUid) || currentUid.equalsIgnoreCase(by))) {
-            return true;
-        }
-        if (!currentEmail.isEmpty() && (currentEmail.equalsIgnoreCase(byEmail) || currentEmail.equalsIgnoreCase(by))) {
-            return true;
-        }
-        return false;
-    }
 
     private boolean hasStarted(String date) {
         if (TextUtils.isEmpty(date)) return true;

@@ -18,6 +18,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.quickfix.adapters.UserBookingsAdapter;
+import com.razorpay.Checkout;
+import com.razorpay.PaymentResultListener;
 import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.FirebaseAuth;
@@ -44,7 +46,7 @@ import okhttp3.Response;
  * Filters: All | Upcoming | Completed | Cancelled
  */
 public class UserBookingsActivity extends BaseActivity
-        implements UserBookingsAdapter.BookingActionListener {
+        implements UserBookingsAdapter.BookingActionListener, PaymentResultListener {
 
     private static final String TAG = "UserBookings";
     private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
@@ -72,11 +74,13 @@ public class UserBookingsActivity extends BaseActivity
             .readTimeout(15, TimeUnit.SECONDS)
             .build();
     private final Handler MAIN = new Handler(Looper.getMainLooper());
+    private Booking pendingPaymentBooking;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_user_bookings);
+        Checkout.preload(getApplicationContext());
 
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) {
@@ -287,7 +291,9 @@ public class UserBookingsActivity extends BaseActivity
             filtered = allBookings.stream()
                     .filter(b -> "pending".equalsIgnoreCase(b.status)
                             || "accepted".equalsIgnoreCase(b.status)
-                            || "confirmed".equalsIgnoreCase(b.status))
+                            || "confirmed".equalsIgnoreCase(b.status)
+                            || "price_set".equalsIgnoreCase(b.status)
+                            || "paid".equalsIgnoreCase(b.status))
                     .collect(Collectors.toList());
         } else {
             filtered = allBookings.stream()
@@ -336,6 +342,110 @@ public class UserBookingsActivity extends BaseActivity
             return;
         }
         showReviewDialog(booking);
+    }
+
+    @Override
+    public void onPayNow(Booking booking) {
+        if (booking == null) return;
+        String bookingStatus = clean(booking.status).toLowerCase();
+        if (!"price_set".equals(bookingStatus)) {
+            Toast.makeText(this, "Payment not available for this booking", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String keyId = BuildConfig.RAZORPAY_KEY_ID == null ? "" : BuildConfig.RAZORPAY_KEY_ID.trim();
+        if (keyId.isEmpty()) {
+            Toast.makeText(this, "Payment key missing. Add RAZORPAY_KEY_ID.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        double amountInr = booking.paymentAmount > 0 ? booking.paymentAmount : booking.price;
+        if (amountInr <= 0) {
+            Toast.makeText(this, "Invalid payment amount", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        try {
+            pendingPaymentBooking = booking;
+            Checkout checkout = new Checkout();
+            checkout.setKeyID(keyId);
+
+            JSONObject options = new JSONObject();
+            options.put("name", "Home Service App");
+            options.put("description", "Service Payment");
+            options.put("currency", "INR");
+            options.put("amount", (int) Math.round(amountInr * 100.0));
+
+            FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+            String email = user != null && user.getEmail() != null ? user.getEmail() : "";
+            options.put("prefill.email", email);
+            options.put("prefill.contact", clean(booking.customerPhone));
+
+            checkout.open(this, options);
+        } catch (Exception e) {
+            Log.e(TAG, "Razorpay open error: " + e.getMessage(), e);
+            Toast.makeText(this, "Unable to start payment", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onPaymentSuccess(String razorpayPaymentID) {
+        Booking booking = pendingPaymentBooking;
+        pendingPaymentBooking = null;
+        if (booking == null || clean(booking.id).isEmpty()) {
+            Toast.makeText(this, "Payment received, but booking not found", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        updateBookingPaymentStatus(booking.id, razorpayPaymentID);
+    }
+
+    @Override
+    public void onPaymentError(int code, String response) {
+        pendingPaymentBooking = null;
+        Log.e("RAZORPAY_ERROR", "code=" + code + " response=" + clean(response));
+        Toast.makeText(this, "Payment Failed", Toast.LENGTH_SHORT).show();
+    }
+
+    private void updateBookingPaymentStatus(String bookingId, String razorpayPaymentID) {
+        showLoading(true);
+        new Thread(() -> {
+            try {
+                JSONObject body = new JSONObject();
+                body.put("status", "paid");
+                body.put("payment_status", "success");
+                body.put("payment_id", clean(razorpayPaymentID));
+
+                String url = BASE_URL + "/rest/v1/bookings?id=eq." + android.net.Uri.encode(clean(bookingId));
+                Request req = new Request.Builder().url(url)
+                        .patch(RequestBody.create(body.toString(), JSON))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
+                        .build();
+
+                try (Response r = HTTP.newCall(req).execute()) {
+                    String err = r.body() != null ? r.body().string() : "";
+                    int code = r.code();
+                    MAIN.post(() -> {
+                        showLoading(false);
+                        if (code == 200 || code == 204) {
+                            Toast.makeText(this, "Payment Successful", Toast.LENGTH_SHORT).show();
+                            loadBookings();
+                        } else {
+                            Log.e("ERROR", err);
+                            Toast.makeText(this, "Payment update failed", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "updateBookingPaymentStatus: " + e.getMessage(), e);
+                MAIN.post(() -> {
+                    showLoading(false);
+                    Toast.makeText(this, "Payment update failed", Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
     }
 
     private void showReviewDialog(Booking booking) {

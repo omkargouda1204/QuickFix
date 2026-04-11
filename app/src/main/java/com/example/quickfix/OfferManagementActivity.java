@@ -120,7 +120,12 @@ public class OfferManagementActivity extends BaseActivity {
 
     private void loadOffers() {
         setLoading(true);
-        offerApi.getOffers()
+        offerApi.getAllOffers(
+                        ANON_KEY,
+                        "Bearer " + ANON_KEY,
+                        "*",
+                        "created_at.desc"
+                )
                 .enqueue(new Callback<List<Offer>>() {
                     @Override
                     public void onResponse(Call<List<Offer>> call, Response<List<Offer>> response) {

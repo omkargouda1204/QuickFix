@@ -425,7 +425,7 @@ public class ProviderDetailActivity extends BaseActivity {
                 bookingBody.put("service_name", providerCategory != null ? providerCategory : "Service");
                 bookingBody.put("category", providerCategory != null ? providerCategory : "");
                 bookingBody.put("booking_date", date);
-                bookingBody.put("booking_time", time);
+                bookingBody.put("booking_time", normalizeBookingTime(time));
                 bookingBody.put("address", address);
                 bookingBody.put("city", providerCity != null ? providerCity : "");
                 bookingBody.put("price", 0.0);
@@ -938,6 +938,17 @@ public class ProviderDetailActivity extends BaseActivity {
 
     private String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String normalizeBookingTime(String input) {
+        String raw = safe(input);
+        if (raw.matches("^\\d{2}:\\d{2}:\\d{2}$")) {
+            return raw;
+        }
+        if (raw.matches("^\\d{2}:\\d{2}$")) {
+            return raw + ":00";
+        }
+        return new java.text.SimpleDateFormat("HH:mm:ss", Locale.US).format(new java.util.Date());
     }
 
     private String resolveProviderImageCandidate(JSONObject data) {

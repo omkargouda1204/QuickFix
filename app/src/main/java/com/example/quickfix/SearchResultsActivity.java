@@ -211,10 +211,10 @@ public class SearchResultsActivity extends BaseActivity
         Log.d("SEARCH_QUERY", normalizedQuery);
         Log.d("SEARCH_INPUT", queryText);
         showLoading(true);
-        allResults.clear();
-        filtered.clear();
 
         if (normalizedQuery.isEmpty()) {
+            allResults.clear();
+            filtered.clear();
             showLoading(false);
             applyFilter();
             return;
@@ -318,10 +318,10 @@ public class SearchResultsActivity extends BaseActivity
         List<SearchResult> list = new ArrayList<>();
         try {
             String safeQuery = rawQuery == null ? "" : rawQuery.trim();
-            String query = "(business_name.ilike.%" + safeQuery + "%,description.ilike.%" + safeQuery + "%,category.ilike.%" + safeQuery + "%)";
-            String url = BASE_URL + "/rest/v1/provider_applications"
-                    + "?select=id,firebase_uid,business_name,category,city,status,description,profile_image,phone"
-                    + "&status=eq.approved"
+            String query = "(business_name.ilike.%" + safeQuery + "%,category.ilike.%" + safeQuery + "%,description.ilike.%" + safeQuery + "%)";
+            String url = BASE_URL + "/rest/v1/provider_profiles"
+                    + "?select=id,firebase_uid,business_name,category,city,description,profile_image,phone,rating"
+                    + "&is_approved=eq.true"
                     + "&or=" + Uri.encode(query)
                     + "&limit=60";
 
@@ -344,7 +344,7 @@ public class SearchResultsActivity extends BaseActivity
                 for (int i = 0; i < arr.length(); i++) {
                     JSONObject o = arr.getJSONObject(i);
                     String firebaseUid = o.optString("firebase_uid", "").trim();
-                    String id = firebaseUid.isEmpty() ? o.optString("id", "").trim() : firebaseUid;
+                    String id = o.optString("id", "").trim();
                     if (id.isEmpty() || seenIds.contains(id)) continue;
                     seenIds.add(id);
                     list.add(new SearchResult(
@@ -359,7 +359,7 @@ public class SearchResultsActivity extends BaseActivity
                             o.optString("description", ""),
                             o.optString("phone", ""),
                             o.optString("profile_image", ""),
-                            o.optString("status", "approved")
+                            "approved"
                     ));
                 }
             }
