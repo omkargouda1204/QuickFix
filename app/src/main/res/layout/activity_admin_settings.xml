@@ -34,6 +34,7 @@
             <!-- NOTIFICATIONS -->
             <!-- ══════════════════════════════════════════════════════════ -->
             <TextView
+                android:id="@+id/tvNotificationsSection"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="NOTIFICATIONS"
@@ -46,6 +47,7 @@
                 android:paddingEnd="4dp" />
 
             <androidx.cardview.widget.CardView
+                android:id="@+id/cardNotificationsSection"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 app:cardCornerRadius="12dp"
@@ -616,5 +618,4 @@
     </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>
-
 

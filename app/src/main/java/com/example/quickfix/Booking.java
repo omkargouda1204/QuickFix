@@ -11,6 +11,7 @@ public class Booking {
     public String customerId;
     public String customerName;
     public String customerPhone;
+    public String customerEmail;
     public String providerId;
     public String providerName;
     public String serviceId;
@@ -42,6 +43,7 @@ public class Booking {
         b.customerId = s(o, "customer_id");
         b.customerName = s(o, "customer_name");
         b.customerPhone = s(o, "customer_phone");
+        b.customerEmail = s(o, "customer_email");
         // Current schema: provider_id. Keep firebase_uid as backward-compatible fallback.
         b.providerId = s(o, "provider_id");
         if (b.providerId.isEmpty()) {

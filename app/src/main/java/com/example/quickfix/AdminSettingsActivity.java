@@ -23,6 +23,9 @@ public class AdminSettingsActivity extends BaseActivity {
     private SwitchMaterial switchMaintenance;
     private LinearLayout layoutMaintenanceSettings;
 
+    private View notificationsSectionTitle;
+    private View notificationsSectionCard;
+
     private LinearLayout settingsChangePassword, settingsViewProfile, settingsLogout;
     private TextView tvAdminEmail, tvAdminRole, tvAppVersion;
 
@@ -39,6 +42,7 @@ public class AdminSettingsActivity extends BaseActivity {
         mAuth = FirebaseAuth.getInstance();
         setupToolbar();
         bindViews();
+        applyRequestedVisibilityScope();
         loadSystemInfo();
         setupListeners();
         loadSettingsFromDatabase();
@@ -55,6 +59,9 @@ public class AdminSettingsActivity extends BaseActivity {
     }
 
     private void bindViews() {
+        notificationsSectionTitle = findViewById(R.id.tvNotificationsSection);
+        notificationsSectionCard = findViewById(R.id.cardNotificationsSection);
+
         switchPush = findViewById(R.id.switchAdminPushNotifications);
         switchEmail = findViewById(R.id.switchAdminEmailNotifications);
         switchAdminAlerts = findViewById(R.id.switchAdminAlerts);
@@ -335,6 +342,24 @@ public class AdminSettingsActivity extends BaseActivity {
 
     private void toast(String msg) {
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+    }
+
+    private void applyRequestedVisibilityScope() {
+        if (notificationsSectionTitle != null) notificationsSectionTitle.setVisibility(View.GONE);
+        if (notificationsSectionCard != null) notificationsSectionCard.setVisibility(View.GONE);
+
+        if (switchEmailDigest != null) {
+            View row = (View) switchEmailDigest.getParent();
+            if (row != null) row.setVisibility(View.GONE);
+        }
+        if (switchMaintenance != null) {
+            View row = (View) switchMaintenance.getParent();
+            if (row != null) row.setVisibility(View.GONE);
+        }
+        if (layoutMaintenanceSettings != null) layoutMaintenanceSettings.setVisibility(View.GONE);
+
+        if (settingsChangePassword != null) settingsChangePassword.setVisibility(View.GONE);
+        if (settingsViewProfile != null) settingsViewProfile.setVisibility(View.GONE);
     }
 
     @Override

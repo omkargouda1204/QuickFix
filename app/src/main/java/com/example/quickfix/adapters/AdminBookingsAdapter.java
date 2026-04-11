@@ -59,8 +59,10 @@ public class AdminBookingsAdapter
         Booking b = items.get(pos);
 
         h.tvServiceName.setText(nonEmpty(b.serviceName, "Service"));
-        h.tvCustomerName.setText("👤 " + nonEmpty(b.customerName, "Customer"));
-        h.tvProviderName.setText("🔧 " + nonEmpty(b.providerName, "Provider"));
+        h.tvCustomerName.setText("Customer: " + nonEmpty(b.customerName, "Customer"));
+        h.tvCustomerPhone.setText("Phone: " + nonEmpty(b.customerPhone, "-"));
+        h.tvCustomerEmail.setText("Email: " + nonEmpty(b.customerEmail, "-"));
+        h.tvProviderName.setText("Provider: " + nonEmpty(b.providerName, "Provider"));
 
         // Date + time
         String dateTime = nonEmpty(b.bookingDate, "");
@@ -73,6 +75,10 @@ public class AdminBookingsAdapter
 
         // Address
         h.tvAddress.setText(nonEmpty(b.address, nonEmpty(b.city, "No address")));
+        h.tvCity.setText("City: " + nonEmpty(b.city, "-"));
+        h.tvRating.setText(b.reviewRating > 0
+                ? String.format(Locale.US, "Rating: %.1f / 5", (double) b.reviewRating)
+                : "Rating: -");
 
         // Status badge
         applyStatus(h.tvStatus, b.status);
@@ -122,16 +128,21 @@ public class AdminBookingsAdapter
 
     static class VH extends RecyclerView.ViewHolder {
         TextView tvServiceName, tvCustomerName, tvProviderName,
-                 tvDateTime, tvPrice, tvAddress, tvStatus, tvCategory;
+                 tvDateTime, tvPrice, tvAddress, tvStatus, tvCategory,
+                 tvCustomerPhone, tvCustomerEmail, tvCity, tvRating;
 
         VH(View v) {
             super(v);
             tvServiceName  = v.findViewById(R.id.tvServiceName);
             tvCustomerName = v.findViewById(R.id.tvCustomerName);
             tvProviderName = v.findViewById(R.id.tvProviderName);
+            tvCustomerPhone = v.findViewById(R.id.tvCustomerPhone);
+            tvCustomerEmail = v.findViewById(R.id.tvCustomerEmail);
             tvDateTime     = v.findViewById(R.id.tvDateTime);
             tvPrice        = v.findViewById(R.id.tvPrice);
             tvAddress      = v.findViewById(R.id.tvAddress);
+            tvCity         = v.findViewById(R.id.tvCity);
+            tvRating       = v.findViewById(R.id.tvRating);
             tvStatus       = v.findViewById(R.id.tvStatus);
             tvCategory     = v.findViewById(R.id.tvCategory);
         }

@@ -21,7 +21,7 @@ public class AdminProviderManagementAdapter extends RecyclerView.Adapter<AdminPr
     public interface Listener {
         void onViewDetails(@NonNull ProviderProfile provider);
         void onToggleBlock(@NonNull ProviderProfile provider);
-        void onApprove(@NonNull ProviderProfile provider);
+        void onToggleVerify(@NonNull ProviderProfile provider);
     }
 
     private final Context context;
@@ -53,7 +53,7 @@ public class AdminProviderManagementAdapter extends RecyclerView.Adapter<AdminPr
         h.tvPhone.setText("Phone: " + valueOrDash(p.phone));
         h.tvRating.setText(String.format(Locale.US, "Rating: %.1f", p.rating));
         h.tvAvailable.setText(p.isAvailable ? "Available" : "Blocked");
-        h.tvApproved.setText(p.isApproved ? "Approved" : "Pending");
+        h.tvApproved.setText(p.isVerified ? "Verified" : "Not verified");
 
         h.btnDetails.setOnClickListener(v -> {
             if (listener != null) listener.onViewDetails(p);
@@ -64,10 +64,9 @@ public class AdminProviderManagementAdapter extends RecyclerView.Adapter<AdminPr
             if (listener != null) listener.onToggleBlock(p);
         });
 
-        h.btnApprove.setEnabled(!p.isApproved);
-        h.btnApprove.setAlpha(p.isApproved ? 0.6f : 1f);
-        h.btnApprove.setOnClickListener(v -> {
-            if (listener != null && !p.isApproved) listener.onApprove(p);
+        h.btnVerifyBadge.setText(p.isVerified ? "Remove Badge" : "Verify Badge");
+        h.btnVerifyBadge.setOnClickListener(v -> {
+            if (listener != null) listener.onToggleVerify(p);
         });
     }
 
@@ -92,7 +91,7 @@ public class AdminProviderManagementAdapter extends RecyclerView.Adapter<AdminPr
         TextView tvApproved;
         MaterialButton btnDetails;
         MaterialButton btnBlockUnblock;
-        MaterialButton btnApprove;
+        MaterialButton btnVerifyBadge;
 
         VH(@NonNull View itemView) {
             super(itemView);
@@ -105,8 +104,7 @@ public class AdminProviderManagementAdapter extends RecyclerView.Adapter<AdminPr
             tvApproved = itemView.findViewById(R.id.tvApproved);
             btnDetails = itemView.findViewById(R.id.btnDetails);
             btnBlockUnblock = itemView.findViewById(R.id.btnBlockUnblock);
-            btnApprove = itemView.findViewById(R.id.btnApprove);
+            btnVerifyBadge = itemView.findViewById(R.id.btnVerifyBadge);
         }
     }
 }
-

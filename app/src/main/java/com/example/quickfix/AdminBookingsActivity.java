@@ -27,8 +27,13 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
@@ -197,32 +202,142 @@ public class AdminBookingsActivity extends BaseActivity {
                 String body = response.body() != null ? response.body().string() : "[]";
                 response.close();
                 Log.d(TAG, "loadBookings HTTP " + code);
-                main.post(() -> {
-                    showShimmer(false);
-                    if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
-                    if (code == 200) {
-                        parseBookings(body);
-                    } else {
+                if (code == 200) {
+                    List<Booking> parsed = parseBookings(body);
+                    attachCustomerAndReviewDetails(parsed);
+                    main.post(() -> {
+                        showShimmer(false);
+                        if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+                        allBookings.clear();
+                        allBookings.addAll(parsed);
+                        applyFilters();
+                    });
+                } else {
+                    main.post(() -> {
+                        showShimmer(false);
+                        if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
                         showError("Failed to load bookings (HTTP " + code + ")");
                         Log.e(TAG, "Body: " + body);
-                    }
-                });
+                    });
+                }
             }
         });
     }
 
-    private void parseBookings(String json) {
+    private List<Booking> parseBookings(String json) {
+        List<Booking> parsed = new ArrayList<>();
         try {
             JSONArray arr = new JSONArray(json);
-            allBookings.clear();
             for (int i = 0; i < arr.length(); i++) {
                 Booking b = Booking.fromJson(arr.getJSONObject(i));
-                if (b != null) allBookings.add(b);
+                if (b != null) parsed.add(b);
             }
-            applyFilters();
         } catch (Exception e) {
             Log.e(TAG, "parseBookings: " + e.getMessage());
         }
+        return parsed;
+    }
+
+    private void attachCustomerAndReviewDetails(List<Booking> list) {
+        if (list == null || list.isEmpty()) return;
+        attachCustomerEmails(list);
+        attachReviewRatings(list);
+    }
+
+    private void attachCustomerEmails(List<Booking> list) {
+        try {
+            Set<String> ids = new LinkedHashSet<>();
+            for (Booking b : list) {
+                if (b == null) continue;
+                if (b.customerId != null && !b.customerId.trim().isEmpty()) {
+                    ids.add(android.net.Uri.encode(b.customerId.trim()));
+                }
+            }
+            if (ids.isEmpty()) return;
+
+            String in = String.join(",", ids);
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/users"
+                    + "?select=id,firebase_uid,email,phone,name"
+                    + "&or=(id.in.(" + in + "),firebase_uid.in.(" + in + "))";
+
+            Request req = new Request.Builder().url(url).get()
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response response = http.newCall(req).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return;
+                JSONArray arr = new JSONArray(response.body().string());
+                Map<String, JSONObject> byAnyId = new HashMap<>();
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject u = arr.getJSONObject(i);
+                    String id = u.optString("id", "").trim();
+                    String uid = u.optString("firebase_uid", "").trim();
+                    if (!id.isEmpty()) byAnyId.put(id, u);
+                    if (!uid.isEmpty()) byAnyId.put(uid, u);
+                }
+
+                for (Booking b : list) {
+                    if (b == null) continue;
+                    JSONObject u = byAnyId.get(b.customerId == null ? "" : b.customerId.trim());
+                    if (u == null) continue;
+                    if (isEmpty(b.customerEmail)) b.customerEmail = u.optString("email", "").trim();
+                    if (isEmpty(b.customerPhone)) b.customerPhone = u.optString("phone", "").trim();
+                    if (isEmpty(b.customerName)) b.customerName = u.optString("name", "").trim();
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "attachCustomerEmails failed: " + e.getMessage());
+        }
+    }
+
+    private void attachReviewRatings(List<Booking> list) {
+        try {
+            Set<String> ids = new HashSet<>();
+            for (Booking b : list) {
+                if (b == null || b.id == null || b.id.trim().isEmpty()) continue;
+                ids.add(android.net.Uri.encode(b.id.trim()));
+            }
+            if (ids.isEmpty()) return;
+
+            String in = String.join(",", ids);
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_reviews"
+                    + "?select=booking_id,rating,comment,created_at"
+                    + "&booking_id=in.(" + in + ")"
+                    + "&order=created_at.desc";
+
+            Request req = new Request.Builder().url(url).get()
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response response = http.newCall(req).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return;
+                JSONArray arr = new JSONArray(response.body().string());
+                Map<String, JSONObject> byBooking = new HashMap<>();
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject r = arr.getJSONObject(i);
+                    String bookingId = r.optString("booking_id", "").trim();
+                    if (bookingId.isEmpty() || byBooking.containsKey(bookingId)) continue;
+                    byBooking.put(bookingId, r);
+                }
+                for (Booking b : list) {
+                    if (b == null || b.id == null) continue;
+                    JSONObject r = byBooking.get(b.id.trim());
+                    if (r == null) continue;
+                    b.reviewRating = r.optInt("rating", b.reviewRating);
+                    if (isEmpty(b.reviewComment)) b.reviewComment = r.optString("comment", "").trim();
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "attachReviewRatings failed: " + e.getMessage());
+        }
+    }
+
+    private boolean isEmpty(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     // ── FILTER ────────────────────────────────────────────────────────────

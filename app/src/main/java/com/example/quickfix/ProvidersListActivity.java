@@ -353,6 +353,7 @@ public class ProvidersListActivity extends BaseActivity
             if (Double.isNaN(p.lat)) p.lat = optDoubleFlexible(o, "latitude");
             p.lng = optDoubleFlexible(o, "lng");
             if (Double.isNaN(p.lng)) p.lng = optDoubleFlexible(o, "longitude");
+             p.isVerified       = o.optBoolean("is_verified", o.optBoolean("verified", false));
             return p;
         } catch (Exception e) {
             Log.e(TAG, "parseProvider: " + e.getMessage());

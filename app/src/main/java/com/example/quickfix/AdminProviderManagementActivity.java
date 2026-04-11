@@ -105,7 +105,7 @@ public class AdminProviderManagementActivity extends BaseActivity
     private void loadProviders() {
         showLoading(true);
         String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles"
-                + "?select=id,firebase_uid,business_name,owner_name,category,city,address,phone,email,description,experience,rating,is_available,is_approved,created_at"
+                + "?select=id,firebase_uid,business_name,owner_name,category,city,address,phone,email,description,experience,rating,is_available,is_approved,is_verified,created_at"
                 + "&order=created_at.desc";
 
         Request req = baseGet(url);
@@ -164,6 +164,7 @@ public class AdminProviderManagementActivity extends BaseActivity
                 p.rating = (float) o.optDouble("rating", 0d);
                 p.isAvailable = o.optBoolean("is_available", true);
                 p.isApproved = o.optBoolean("is_approved", false);
+                p.isVerified = o.optBoolean("is_verified", false);
                 p.createdAt = o.optString("created_at", "");
                 list.add(p);
             }
@@ -219,26 +220,28 @@ public class AdminProviderManagementActivity extends BaseActivity
         new AlertDialog.Builder(this)
                 .setTitle(title)
                 .setMessage(msg)
-                .setPositiveButton("Yes", (d, w) -> updateProviderFlags(provider, newValue, null))
+                .setPositiveButton("Yes", (d, w) -> updateProviderFlags(provider, newValue, null, null))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
     @Override
-    public void onApprove(@NonNull ProviderProfile provider) {
-        if (provider.isApproved) {
-            Toast.makeText(this, "Provider already approved", Toast.LENGTH_SHORT).show();
-            return;
-        }
+    public void onToggleVerify(@NonNull ProviderProfile provider) {
+        boolean newValue = !provider.isVerified;
+        String title = newValue ? "Verify Provider" : "Remove Verification";
+        String msg = newValue
+                ? "Show verified badge for this provider?"
+                : "Remove verified badge from this provider?";
+
         new AlertDialog.Builder(this)
-                .setTitle("Approve Provider")
-                .setMessage("Approve this provider profile?")
-                .setPositiveButton("Approve", (d, w) -> updateProviderFlags(provider, null, true))
+                .setTitle(title)
+                .setMessage(msg)
+                .setPositiveButton("Confirm", (d, w) -> updateProviderFlags(provider, null, null, newValue))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
-    private void updateProviderFlags(@NonNull ProviderProfile provider, Boolean isAvailable, Boolean isApproved) {
+    private void updateProviderFlags(@NonNull ProviderProfile provider, Boolean isAvailable, Boolean isApproved, Boolean isVerified) {
         try {
             JSONObject body = new JSONObject();
             if (isAvailable != null) body.put("is_available", isAvailable);
@@ -248,6 +251,7 @@ public class AdminProviderManagementActivity extends BaseActivity
                         .format(new java.util.Date());
                 body.put("approved_at", nowIso);
             }
+            if (isVerified != null) body.put("is_verified", isVerified);
 
             String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles?id=eq."
                     + URLEncoder.encode(provider.id, StandardCharsets.UTF_8.name());
@@ -270,6 +274,7 @@ public class AdminProviderManagementActivity extends BaseActivity
                     runOnUiThread(() -> {
                         if (isAvailable != null) provider.isAvailable = isAvailable;
                         if (isApproved != null && isApproved) provider.isApproved = true;
+                        if (isVerified != null) provider.isVerified = isVerified;
                         adapter.notifyDataSetChanged();
                         updateStats();
                         Toast.makeText(AdminProviderManagementActivity.this, "Provider updated", Toast.LENGTH_SHORT).show();
@@ -356,6 +361,7 @@ public class AdminProviderManagementActivity extends BaseActivity
                 + "\nEmail: " + safe(p.email)
                 + "\nAvailable: " + (p.isAvailable ? "Yes" : "No")
                 + "\nApproved: " + (p.isApproved ? "Yes" : "No")
+                + "\nVerified: " + (p.isVerified ? "Yes" : "No")
                 + "\nRating: " + String.format(Locale.US, "%.1f", p.rating)
                 + "\n\nTotal Bookings: " + totalBookings
                 + "\nTotal Earnings: " + String.format(Locale.US, "Rs %.2f", totalEarnings)

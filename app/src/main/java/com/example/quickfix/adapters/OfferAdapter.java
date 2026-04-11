@@ -83,8 +83,9 @@ public class OfferAdapter extends RecyclerView.Adapter<OfferAdapter.VH> {
     public int getItemCount() { return items != null ? items.size() : 0; }
 
     public void setItems(List<Offer> newItems) {
+        List<Offer> snapshot = newItems == null ? new ArrayList<>() : new ArrayList<>(newItems);
         items.clear();
-        if (newItems != null) items.addAll(newItems);
+        items.addAll(snapshot);
         notifyDataSetChanged();
     }
 
