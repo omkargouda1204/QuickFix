@@ -333,6 +333,10 @@ public final class FcmNotificationHelper {
                         + (trimToEmpty(serviceName).isEmpty() ? "" : " for " + serviceName)
                         + " was cancelled by the provider.";
                 break;
+            case "price_set":
+                title = "Payment Requested";
+                body = "Your provider set the booking amount. Please complete payment.";
+                break;
             default:
                 title = "Booking Updated";
                 body = "Your booking status changed"
@@ -365,6 +369,81 @@ public final class FcmNotificationHelper {
                 );
             } catch (Exception e) {
                 Log.w(TAG, "notifyCustomerBookingStatus failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    public static void notifyCustomerPriceSet(String customerUserId,
+                                              double amount,
+                                              String bookingId) {
+        if (trimToEmpty(customerUserId).isEmpty()) return;
+        String amountLabel = amount > 0 ? "\u20b9" + Math.round(amount) : "the final amount";
+
+        new Thread(() -> {
+            try {
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    return;
+                }
+
+                UserRecipient recipient = fetchUserRecipientById(customerUserId);
+                if (recipient == null || trimToEmpty(recipient.token).isEmpty()) {
+                    Log.d(TAG, "notifyCustomerPriceSet skipped: token not found for " + customerUserId);
+                    return;
+                }
+
+                sendViaEdgeFunction(
+                        listOf(recipient.token),
+                        listOf(recipient.userId),
+                        listOf("user"),
+                        "Payment Requested",
+                        "Provider set " + amountLabel + ". Please pay.",
+                        "booking",
+                        bookingId,
+                        null
+                );
+            } catch (Exception e) {
+                Log.w(TAG, "notifyCustomerPriceSet failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    public static void notifyProviderPaymentCompleted(String providerFirebaseUid,
+                                                      String serviceName,
+                                                      String bookingId) {
+        String providerRef = trimToEmpty(providerFirebaseUid);
+        if (providerRef.isEmpty()) return;
+        String body = "User completed payment"
+                + (trimToEmpty(serviceName).isEmpty() ? "." : " for " + serviceName + ".");
+
+        new Thread(() -> {
+            try {
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    return;
+                }
+
+                UserRecipient recipient = fetchUserRecipient(providerRef);
+                if (recipient == null) {
+                    recipient = fetchUserRecipientById(providerRef);
+                }
+                if (recipient == null || trimToEmpty(recipient.token).isEmpty()) {
+                    Log.d(TAG, "notifyProviderPaymentCompleted skipped: token not found for " + providerRef);
+                    return;
+                }
+
+                sendViaEdgeFunction(
+                        listOf(recipient.token),
+                        listOf(recipient.userId),
+                        listOf("provider"),
+                        "Payment Completed",
+                        body,
+                        "booking",
+                        bookingId,
+                        null
+                );
+            } catch (Exception e) {
+                Log.w(TAG, "notifyProviderPaymentCompleted failed: " + e.getMessage());
             }
         }).start();
     }

@@ -7,6 +7,8 @@ import android.net.Uri;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -20,6 +22,7 @@ import com.google.android.material.button.MaterialButton;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * BookingsAdapter — Shows provider's bookings with action buttons
@@ -34,6 +37,7 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
         void onAccept(Booking booking);
         void onReject(Booking booking);
         void onMarkCompleted(Booking booking);
+        void onSetPrice(Booking booking, double amount);
     }
 
     public BookingsAdapter(Context context, BookingActionListener listener) {
@@ -68,6 +72,10 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
     class BookingViewHolder extends RecyclerView.ViewHolder {
         TextView tvCustomerName, tvServiceName, tvDateTime, tvAddress, tvPrice, tvStatus;
         MaterialButton btnAccept, btnReject, btnMarkCompleted, btnCall;
+        MaterialButton btnSetPrice;
+        EditText etSetAmount;
+        LinearLayout layoutPriceSetter;
+        TextView tvWaitingForPayment;
         CardView cardBooking;
 
         BookingViewHolder(@NonNull View itemView) {
@@ -83,6 +91,10 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
             btnReject = itemView.findViewById(R.id.btnReject);
             btnMarkCompleted = itemView.findViewById(R.id.btnMarkCompleted);
             btnCall = itemView.findViewById(R.id.btnCall);
+            btnSetPrice = itemView.findViewById(R.id.btnSetPrice);
+            etSetAmount = itemView.findViewById(R.id.etSetAmount);
+            layoutPriceSetter = itemView.findViewById(R.id.layoutPriceSetter);
+            tvWaitingForPayment = itemView.findViewById(R.id.tvWaitingForPayment);
         }
 
         void bind(Booking booking) {
@@ -90,11 +102,13 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
             tvServiceName.setText(booking.serviceName.isEmpty() ? "Service" : booking.serviceName);
             tvDateTime.setText(booking.bookingDate + " • " + booking.bookingTime);
             tvAddress.setText(booking.address.isEmpty() ? "No address" : booking.address);
-            tvPrice.setText("₹" + String.format("%.0f", booking.price));
-            tvStatus.setText(booking.status.toUpperCase());
+            double shownAmount = booking.paymentAmount > 0 ? booking.paymentAmount : booking.price;
+            tvPrice.setText("₹" + String.format(Locale.US, "%.0f", shownAmount));
+            String status = booking.status == null ? "" : booking.status.trim().toLowerCase(Locale.US);
+            tvStatus.setText(status.toUpperCase(Locale.US));
 
             // Status badge color
-            switch (booking.status.toLowerCase()) {
+            switch (status) {
                 case "pending":
                     tvStatus.setBackgroundResource(R.drawable.badge_pending);
                     tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_pending_text));
@@ -107,6 +121,11 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
                     tvStatus.setBackgroundResource(R.drawable.badge_completed);
                     tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_approved_text));
                     break;
+                case "price_set":
+                case "paid":
+                    tvStatus.setBackgroundResource(R.drawable.badge_accepted);
+                    tvStatus.setTextColor(ContextCompat.getColor(context, R.color.primary));
+                    break;
                 case "cancelled":
                 case "rejected":
                     tvStatus.setBackgroundResource(R.drawable.badge_cancelled);
@@ -115,18 +134,42 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
             }
 
             // Show/hide action buttons based on status
-            if ("pending".equals(booking.status)) {
+            if ("pending".equals(status)) {
                 btnAccept.setVisibility(View.VISIBLE);
                 btnReject.setVisibility(View.VISIBLE);
                 btnMarkCompleted.setVisibility(View.GONE);
-            } else if ("accepted".equals(booking.status)) {
+                layoutPriceSetter.setVisibility(View.GONE);
+                tvWaitingForPayment.setVisibility(View.GONE);
+            } else if ("accepted".equals(status)) {
+                btnAccept.setVisibility(View.GONE);
+                btnReject.setVisibility(View.GONE);
+                btnMarkCompleted.setVisibility(View.GONE);
+                layoutPriceSetter.setVisibility(View.VISIBLE);
+                tvWaitingForPayment.setVisibility(View.GONE);
+            } else if ("price_set".equals(status)) {
+                btnAccept.setVisibility(View.GONE);
+                btnReject.setVisibility(View.GONE);
+                btnMarkCompleted.setVisibility(View.GONE);
+                layoutPriceSetter.setVisibility(View.GONE);
+                tvWaitingForPayment.setVisibility(View.VISIBLE);
+            } else if ("paid".equals(status)) {
                 btnAccept.setVisibility(View.GONE);
                 btnReject.setVisibility(View.GONE);
                 btnMarkCompleted.setVisibility(View.VISIBLE);
+                layoutPriceSetter.setVisibility(View.GONE);
+                tvWaitingForPayment.setVisibility(View.GONE);
             } else {
                 btnAccept.setVisibility(View.GONE);
                 btnReject.setVisibility(View.GONE);
                 btnMarkCompleted.setVisibility(View.GONE);
+                layoutPriceSetter.setVisibility(View.GONE);
+                tvWaitingForPayment.setVisibility(View.GONE);
+            }
+
+            if (etSetAmount != null) {
+                etSetAmount.setText(booking.paymentAmount > 0
+                        ? String.format(Locale.US, "%.0f", booking.paymentAmount)
+                        : "");
             }
 
             // Click listeners
@@ -140,6 +183,26 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
 
             btnMarkCompleted.setOnClickListener(v -> {
                 if (listener != null) listener.onMarkCompleted(booking);
+            });
+
+            btnSetPrice.setOnClickListener(v -> {
+                if (listener == null || etSetAmount == null) return;
+                String raw = etSetAmount.getText() == null ? "" : etSetAmount.getText().toString().trim();
+                if (raw.isEmpty()) {
+                    etSetAmount.setError("Enter amount");
+                    return;
+                }
+                try {
+                    double amount = Double.parseDouble(raw);
+                    if (amount <= 0) {
+                        etSetAmount.setError("Enter valid amount");
+                        return;
+                    }
+                    etSetAmount.setError(null);
+                    listener.onSetPrice(booking, amount);
+                } catch (Exception ignored) {
+                    etSetAmount.setError("Enter valid amount");
+                }
             });
 
             btnCall.setOnClickListener(v -> {

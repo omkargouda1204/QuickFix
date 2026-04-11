@@ -17,6 +17,7 @@ import com.google.android.material.card.MaterialCardView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * UserBookingsAdapter — Shows customer/user bookings with view details & cancel.
@@ -90,11 +91,15 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
                     + (b.bookingTime.isEmpty() ? "" : " • " + b.bookingTime);
             tvDateTime.setText(dateTime);
             tvAddress.setText(b.address.isEmpty() ? "-" : b.address);
-            tvPrice.setText(b.price > 0 ? "₹" + String.format("%.0f", b.price) : "");
-
             // Status badge
             String status = b.status == null ? "" : b.status.toLowerCase();
             tvStatus.setText(b.status == null ? "" : b.status.toUpperCase());
+            double shownAmount = b.paymentAmount > 0 ? b.paymentAmount : b.price;
+            if ("price_set".equals(status) && shownAmount > 0) {
+                tvPrice.setText("Amount: ₹" + String.format(Locale.US, "%.0f", shownAmount));
+            } else {
+                tvPrice.setText(shownAmount > 0 ? "₹" + String.format(Locale.US, "%.0f", shownAmount) : "");
+            }
             switch (status) {
                 case "pending":
                     tvStatus.setBackgroundResource(R.drawable.badge_pending);
@@ -108,6 +113,11 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
                 case "completed":
                     tvStatus.setBackgroundResource(R.drawable.badge_completed);
                     tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_approved_text));
+                    break;
+                case "price_set":
+                case "paid":
+                    tvStatus.setBackgroundResource(R.drawable.badge_accepted);
+                    tvStatus.setTextColor(ContextCompat.getColor(context, R.color.primary));
                     break;
                 case "cancelled":
                     tvStatus.setBackgroundResource(R.drawable.badge_cancelled);

@@ -75,6 +75,8 @@ public class UserBookingsActivity extends BaseActivity
             .build();
     private final Handler MAIN = new Handler(Looper.getMainLooper());
     private Booking pendingPaymentBooking;
+    private boolean shouldReloadOnResume = false;
+    private boolean skipNextResumeReload = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,12 +96,19 @@ public class UserBookingsActivity extends BaseActivity
         setupFilters();
         setupSwipeRefresh();
         loadBookings();
+        shouldReloadOnResume = true;
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        loadBookings();
+        if (skipNextResumeReload) {
+            skipNextResumeReload = false;
+            return;
+        }
+        if (shouldReloadOnResume) {
+            loadBookings();
+        }
     }
 
     private void bindViews() {
@@ -353,13 +362,13 @@ public class UserBookingsActivity extends BaseActivity
             return;
         }
 
-        String keyId = BuildConfig.RAZORPAY_KEY_ID == null ? "" : BuildConfig.RAZORPAY_KEY_ID.trim();
+        String keyId = BuildConfig.RAZORPAY_KEY_ID.trim();
         if (keyId.isEmpty()) {
             Toast.makeText(this, "Payment key missing. Add RAZORPAY_KEY_ID.", Toast.LENGTH_LONG).show();
             return;
         }
 
-        double amountInr = booking.paymentAmount > 0 ? booking.paymentAmount : booking.price;
+        double amountInr = booking.paymentAmount;
         if (amountInr <= 0) {
             Toast.makeText(this, "Invalid payment amount", Toast.LENGTH_SHORT).show();
             return;
@@ -396,7 +405,7 @@ public class UserBookingsActivity extends BaseActivity
             Toast.makeText(this, "Payment received, but booking not found", Toast.LENGTH_SHORT).show();
             return;
         }
-        updateBookingPaymentStatus(booking.id, razorpayPaymentID);
+        updateBookingPaymentStatus(booking, razorpayPaymentID);
     }
 
     @Override
@@ -406,7 +415,7 @@ public class UserBookingsActivity extends BaseActivity
         Toast.makeText(this, "Payment Failed", Toast.LENGTH_SHORT).show();
     }
 
-    private void updateBookingPaymentStatus(String bookingId, String razorpayPaymentID) {
+    private void updateBookingPaymentStatus(Booking booking, String razorpayPaymentID) {
         showLoading(true);
         new Thread(() -> {
             try {
@@ -415,7 +424,7 @@ public class UserBookingsActivity extends BaseActivity
                 body.put("payment_status", "success");
                 body.put("payment_id", clean(razorpayPaymentID));
 
-                String url = BASE_URL + "/rest/v1/bookings?id=eq." + android.net.Uri.encode(clean(bookingId));
+                String url = BASE_URL + "/rest/v1/bookings?id=eq." + android.net.Uri.encode(clean(booking.id));
                 Request req = new Request.Builder().url(url)
                         .patch(RequestBody.create(body.toString(), JSON))
                         .addHeader("apikey", ANON_KEY)
@@ -431,6 +440,11 @@ public class UserBookingsActivity extends BaseActivity
                         showLoading(false);
                         if (code == 200 || code == 204) {
                             Toast.makeText(this, "Payment Successful", Toast.LENGTH_SHORT).show();
+                            FcmNotificationHelper.notifyProviderPaymentCompleted(
+                                    clean(booking.providerId),
+                                    clean(booking.serviceName),
+                                    clean(booking.id)
+                            );
                             loadBookings();
                         } else {
                             Log.e("ERROR", err);
@@ -582,7 +596,8 @@ public class UserBookingsActivity extends BaseActivity
                 body.put("status", "cancelled");
                 String uid = userId != null ? userId.trim() : "";
                 String dbId = userDbId != null ? userDbId.trim() : "";
-                String url = BASE_URL + "/rest/v1/bookings?id=eq." + booking.id;
+                String bookingId = clean(booking.id);
+                String url = BASE_URL + "/rest/v1/bookings?id=eq." + android.net.Uri.encode(bookingId);
                 if (!uid.isEmpty() || !dbId.isEmpty()) {
                     url += "&or=(";
                     boolean hasPrev = false;

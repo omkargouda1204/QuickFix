@@ -341,7 +341,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         new AlertDialog.Builder(this)
                 .setTitle("Accept Booking")
                 .setMessage("Accept booking from " + booking.customerName + "?")
-                .setPositiveButton("Accept", (d, w) -> updateBookingStatus(booking.id, "accepted"))
+                .setPositiveButton("Accept", (d, w) -> updateBookingStatus(booking, "accepted"))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
@@ -351,7 +351,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         new AlertDialog.Builder(this)
                 .setTitle("Reject Booking")
                 .setMessage("Reject booking from " + booking.customerName + "?")
-                .setPositiveButton("Reject", (d, w) -> updateBookingStatus(booking.id, "cancelled"))
+                .setPositiveButton("Reject", (d, w) -> updateBookingStatus(booking, "cancelled"))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
@@ -361,13 +361,34 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         new AlertDialog.Builder(this)
                 .setTitle("Mark as Completed")
                 .setMessage("Mark this job as completed?")
-                .setPositiveButton("Complete", (d, w) -> updateBookingStatus(booking.id, "completed"))
+                .setPositiveButton("Complete", (d, w) -> updateBookingStatus(booking, "completed"))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
-    private void updateBookingStatus(String bookingId, String newStatus) {
+    @Override
+    public void onSetPrice(Booking booking, double amount) {
+        if (booking == null) return;
+        if (!"accepted".equalsIgnoreCase(booking.status == null ? "" : booking.status.trim())) {
+            Toast.makeText(this, "Price can be set only for accepted bookings", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (amount <= 0) {
+            Toast.makeText(this, "Enter valid amount", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Set Price")
+                .setMessage("Set booking amount to \u20b9" + String.format(Locale.US, "%.0f", amount) + "?")
+                .setPositiveButton("Set", (d, w) -> updateBookingPrice(booking, amount))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void updateBookingStatus(Booking booking, String newStatus) {
         try {
+            String bookingId = booking == null ? "" : (booking.id == null ? "" : booking.id.trim());
             if (bookingId == null || bookingId.trim().isEmpty()) {
                 Toast.makeText(this, "Invalid booking id", Toast.LENGTH_SHORT).show();
                 return;
@@ -422,6 +443,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
                             Toast.makeText(MyBookingsActivity.this,
                                     "Updated",
                                     Toast.LENGTH_SHORT).show();
+                            notifyCustomerForStatus(booking, newStatus, 0d);
                             loadBookings();
                         } else {
                             Log.e("ERROR", errorBodyForUi == null ? "" : errorBodyForUi);
@@ -436,6 +458,72 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
             Log.e(TAG, "Update error: " + e.getMessage());
             Toast.makeText(this, "Error updating status", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void updateBookingPrice(Booking booking, double amount) {
+        String bookingId = booking == null ? "" : (booking.id == null ? "" : booking.id.trim());
+        if (bookingId.isEmpty()) {
+            Toast.makeText(this, "Invalid booking id", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", "price_set");
+        body.put("payment_amount", amount);
+        body.put("price", amount);
+
+        bookingApi.updateBookingStatus(
+                        ANON_KEY,
+                        "Bearer " + ANON_KEY,
+                        "eq." + bookingId,
+                        body
+                )
+                .enqueue(new retrofit2.Callback<>() {
+                    @Override
+                    public void onFailure(retrofit2.Call<Void> call, Throwable t) {
+                        mainHandler.post(() -> Toast.makeText(
+                                MyBookingsActivity.this,
+                                "Failed to set price",
+                                Toast.LENGTH_SHORT
+                        ).show());
+                    }
+
+                    @Override
+                    public void onResponse(retrofit2.Call<Void> call, retrofit2.Response<Void> response) {
+                        mainHandler.post(() -> {
+                            if (response.isSuccessful()) {
+                                Toast.makeText(MyBookingsActivity.this,
+                                        "Price set. Waiting for user payment",
+                                        Toast.LENGTH_SHORT).show();
+                                notifyCustomerForStatus(booking, "price_set", amount);
+                                loadBookings();
+                            } else {
+                                Toast.makeText(MyBookingsActivity.this,
+                                        "Failed to set price",
+                                        Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+                });
+    }
+
+    private void notifyCustomerForStatus(Booking booking, String status, double amount) {
+        if (booking == null) return;
+        if ("price_set".equalsIgnoreCase(status)) {
+            FcmNotificationHelper.notifyCustomerPriceSet(
+                    booking.customerId,
+                    amount,
+                    booking.id
+            );
+            return;
+        }
+        FcmNotificationHelper.notifyCustomerBookingStatus(
+                booking.customerId,
+                booking.providerName,
+                booking.serviceName,
+                status,
+                booking.id
+        );
     }
 
     private String encodeValue(String value) {

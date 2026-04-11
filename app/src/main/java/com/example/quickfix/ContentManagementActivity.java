@@ -85,8 +85,8 @@ public class ContentManagementActivity extends BaseActivity {
 
     // ── Load Counts ───────────────────────────────────────────────────────
     private void loadCounts() {
-        if (tvTotalBanners != null) tvTotalBanners.setText("…");
-        if (tvTotalOffers  != null) tvTotalOffers.setText("…");
+        if (tvTotalBanners != null) tvTotalBanners.setText("...");
+        if (tvTotalOffers  != null) tvTotalOffers.setText("...");
 
         fetchCount("banners", count -> {
             if (tvTotalBanners != null) tvTotalBanners.setText(String.valueOf(count));
@@ -97,39 +97,31 @@ public class ContentManagementActivity extends BaseActivity {
     }
 
     /**
-     * Fetch all rows from `table` and return the row count on the main thread.
-     * Uses Thread (not enqueue) — same pattern as MainActivity which reliably fetches data.
+     * Fetches table row count using `Prefer: count=exact` and `head=true`
+     * to avoid downloading full table payloads.
      */
     private void fetchCount(String table, CountCallback callback) {
-        final String url = SUPABASE_URL + "/rest/v1/" + table + "?select=id&limit=1";
+        final String encodedTable = android.net.Uri.encode(table);
+        final String url = SUPABASE_URL + "/rest/v1/" + encodedTable + "?select=id&head=true";
         Log.d(TAG, "fetchCount(" + table + ") URL=" + url);
 
         new Thread(() -> {
             try {
                 Request req = new Request.Builder()
                         .url(url)
-                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept",        "application/json")
-                        .addHeader("Prefer",        "count=exact")
+                        .addHeader("Accept", "application/json")
+                        .addHeader("Prefer", "count=exact")
                         .build();
                 try (Response resp = http.newCall(req).execute()) {
-                    int    code = resp.code();
-                    String body = resp.body() != null ? resp.body().string() : "[]";
-                    String range = resp.header("Content-Range");
-                    Log.d(TAG, "fetchCount(" + table + ") HTTP " + code + " body=" + body);
+                    int code = resp.code();
                     int count = 0;
+                    String contentRange = resp.header("Content-Range", "");
                     if (code == 200 || code == 206) {
-                        try {
-                            if (range != null && range.contains("/")) {
-                                count = Integer.parseInt(range.substring(range.lastIndexOf('/') + 1).trim());
-                            } else {
-                                count = new org.json.JSONArray(body).length();
-                            }
-                        } catch (Exception ex) {
-                            Log.e(TAG, "parse error: " + ex.getMessage());
-                        }
+                        count = parseCountFromContentRange(contentRange);
                     } else {
+                        String body = resp.body() != null ? resp.body().string() : "";
                         Log.e(TAG, "fetchCount(" + table + ") HTTP " + code + ": " + body);
                     }
                     final int finalCount = count;
@@ -140,6 +132,20 @@ public class ContentManagementActivity extends BaseActivity {
                 main.post(() -> callback.onCount(0));
             }
         }).start();
+    }
+
+    private int parseCountFromContentRange(String contentRange) {
+        // Expected format: "0-0/25" or "*/25"
+        if (contentRange == null || contentRange.trim().isEmpty()) return 0;
+        int slash = contentRange.lastIndexOf('/');
+        if (slash < 0 || slash + 1 >= contentRange.length()) return 0;
+        String total = contentRange.substring(slash + 1).trim();
+        if ("*".equals(total)) return 0;
+        try {
+            return Integer.parseInt(total);
+        } catch (NumberFormatException ignore) {
+            return 0;
+        }
     }
 
     @Override
