@@ -38,6 +38,7 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
         void onReject(Booking booking);
         void onMarkCompleted(Booking booking);
         void onSetPrice(Booking booking, double amount);
+        void onMessageBooking(Booking booking);
     }
 
     public BookingsAdapter(Context context, BookingActionListener listener) {
@@ -71,7 +72,7 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
 
     class BookingViewHolder extends RecyclerView.ViewHolder {
         TextView tvCustomerName, tvServiceName, tvDateTime, tvAddress, tvPrice, tvStatus;
-        MaterialButton btnAccept, btnReject, btnMarkCompleted, btnCall;
+        MaterialButton btnAccept, btnReject, btnMarkCompleted, btnCall, btnMessage;
         MaterialButton btnSetPrice;
         EditText etSetAmount;
         LinearLayout layoutPriceSetter;
@@ -91,6 +92,7 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
             btnReject = itemView.findViewById(R.id.btnReject);
             btnMarkCompleted = itemView.findViewById(R.id.btnMarkCompleted);
             btnCall = itemView.findViewById(R.id.btnCall);
+            btnMessage = itemView.findViewById(R.id.btnMessage);
             btnSetPrice = itemView.findViewById(R.id.btnSetPrice);
             etSetAmount = itemView.findViewById(R.id.etSetAmount);
             layoutPriceSetter = itemView.findViewById(R.id.layoutPriceSetter);
@@ -166,6 +168,10 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
                 tvWaitingForPayment.setVisibility(View.GONE);
             }
 
+            btnMessage.setVisibility(View.VISIBLE);
+            btnMessage.setEnabled(!"completed".equals(status));
+            btnMessage.setAlpha(btnMessage.isEnabled() ? 1f : 0.5f);
+
             if (etSetAmount != null) {
                 etSetAmount.setText(booking.paymentAmount > 0
                         ? String.format(Locale.US, "%.0f", booking.paymentAmount)
@@ -211,6 +217,10 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
                     intent.setData(Uri.parse("tel:" + booking.customerPhone));
                     context.startActivity(intent);
                 }
+            });
+
+            btnMessage.setOnClickListener(v -> {
+                if (listener != null && btnMessage.isEnabled()) listener.onMessageBooking(booking);
             });
         }
     }

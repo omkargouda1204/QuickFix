@@ -4,7 +4,6 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.LinearLayout;
@@ -25,9 +24,9 @@ import com.google.firebase.auth.FirebaseUser;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.MediaType;
@@ -43,7 +42,9 @@ public class MessagesActivity extends BaseActivity {
     public static final String EXTRA_PROVIDER_UID = "provider_uid";
     public static final String EXTRA_USER_UID = "user_uid";
     public static final String EXTRA_PROVIDER_NAME = "provider_name";
-
+    public static final String EXTRA_OTHER_PARTY_ID = "other_party_id";
+    public static final String EXTRA_OTHER_PARTY_ROLE = "other_party_role";
+    public static final String EXTRA_OTHER_PARTY_NAME = "other_party_name";
     public static final String EXTRA_CONTEXT_TITLE = "context_title";
     public static final String EXTRA_CONTEXT_SUBTITLE = "context_subtitle";
     public static final String EXTRA_CONTEXT_BODY = "context_body";
@@ -67,32 +68,30 @@ public class MessagesActivity extends BaseActivity {
     private TextInputEditText etMessage;
     private MaterialButton btnSend;
 
-    private final List<ChatMessage> messageItems = new ArrayList<>();
     private ChatMessageAdapter adapter;
 
     private String bookingId = "";
     private String providerId = "";
     private String providerFirebaseUid = "";
     private String providerName = "";
-
+    private String otherPartyId = "";
+    private String otherPartyRole = "";
+    private String otherPartyName = "";
     private String currentFirebaseUid = "";
+
     private String currentUserId = "";
     private String currentUserRole = "user";
     private String currentUserName = "You";
 
-    private String otherPartyId = "";
-    private String otherPartyRole = "";
-    private String otherPartyName = "";
-
     private Booking activeBooking;
-    private boolean chatReady;
+    private boolean isBookingChat = false;
+    private boolean chatReady = false;
     private final Runnable refreshRunnable = new Runnable() {
         @Override
         public void run() {
-            if (chatReady) {
-                loadMessages(false);
-                main.postDelayed(this, 3000L);
-            }
+            if (!chatReady) return;
+            loadMessages(false);
+            main.postDelayed(this, 2000L);
         }
     };
 
@@ -100,10 +99,8 @@ public class MessagesActivity extends BaseActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_messages);
-
         bindViews();
         setupToolbar();
-        setupRecycler();
         readIntent();
         resolveChatContext();
     }
@@ -114,7 +111,7 @@ public class MessagesActivity extends BaseActivity {
         if (chatReady) {
             loadMessages(false);
             main.removeCallbacks(refreshRunnable);
-            main.postDelayed(refreshRunnable, 3000L);
+            main.postDelayed(refreshRunnable, 2000L);
         }
     }
 
@@ -136,21 +133,17 @@ public class MessagesActivity extends BaseActivity {
         composerBar = findViewById(R.id.composerBar);
         etMessage = findViewById(R.id.etMessage);
         btnSend = findViewById(R.id.btnSend);
-        if (btnSend != null) btnSend.setOnClickListener(v -> sendMessage());
+        rvMessages.setLayoutManager(new LinearLayoutManager(this));
+        btnSend.setOnClickListener(v -> sendMessage());
     }
 
     private void setupToolbar() {
-        if (toolbar == null) return;
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             getSupportActionBar().setTitle("Messages");
         }
         toolbar.setNavigationOnClickListener(v -> finish());
-    }
-
-    private void setupRecycler() {
-        rvMessages.setLayoutManager(new LinearLayoutManager(this));
     }
 
     private void readIntent() {
@@ -161,16 +154,19 @@ public class MessagesActivity extends BaseActivity {
         providerFirebaseUid = safe(i.getStringExtra(EXTRA_PROVIDER_UID));
         providerName = safe(i.getStringExtra(EXTRA_PROVIDER_NAME));
         currentFirebaseUid = safe(i.getStringExtra(EXTRA_USER_UID));
+        otherPartyId = safe(i.getStringExtra(EXTRA_OTHER_PARTY_ID));
+        otherPartyRole = safe(i.getStringExtra(EXTRA_OTHER_PARTY_ROLE));
+        otherPartyName = safe(i.getStringExtra(EXTRA_OTHER_PARTY_NAME));
     }
 
     private void resolveChatContext() {
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null) {
+        FirebaseUser firebaseUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (firebaseUser == null) {
             toast("Please log in to chat");
             finish();
             return;
         }
-        if (currentFirebaseUid.isEmpty()) currentFirebaseUid = user.getUid();
+        if (currentFirebaseUid.isEmpty()) currentFirebaseUid = firebaseUser.getUid();
 
         showLoading(true);
         new Thread(() -> {
@@ -179,76 +175,81 @@ public class MessagesActivity extends BaseActivity {
                 if (current == null) {
                     current = new Participant();
                     current.id = currentFirebaseUid;
-                    current.name = user.getDisplayName();
+                    current.name = safe(firebaseUser.getDisplayName());
                     current.role = "user";
                 }
                 currentUserId = safe(current.id).isEmpty() ? currentFirebaseUid : safe(current.id);
-                currentUserRole = safe(current.role).isEmpty() ? "user" : current.role;
-                currentUserName = safe(current.name).isEmpty() ? "You" : current.name;
+                currentUserRole = safe(current.role).isEmpty() ? "user" : safe(current.role).toLowerCase(Locale.US);
+                currentUserName = safe(current.name).isEmpty() ? "You" : safe(current.name);
 
                 Booking booking = resolveBooking(current);
-                if (booking == null) {
+                if (booking != null) {
+                    activeBooking = booking;
+                    isBookingChat = true;
+                    bookingId = safe(booking.id);
+                    if ("provider".equals(currentUserRole)) {
+                        otherPartyId = safe(booking.customerId);
+                        otherPartyRole = "user";
+                        if (otherPartyName.isEmpty()) otherPartyName = safe(booking.customerName);
+                    } else {
+                        otherPartyId = safe(booking.providerId);
+                        otherPartyRole = "provider";
+                        if (otherPartyName.isEmpty()) {
+                            otherPartyName = safe(booking.providerName).isEmpty() ? providerName : safe(booking.providerName);
+                        }
+                    }
+                } else {
+                    isBookingChat = false;
+                    if (otherPartyId.isEmpty()) {
+                        if ("user".equals(currentUserRole)) {
+                            otherPartyId = !providerId.isEmpty() ? providerId : providerFirebaseUid;
+                            otherPartyRole = "provider";
+                            if (otherPartyName.isEmpty()) otherPartyName = providerName;
+                        }
+                    }
+                }
+
+                if (otherPartyId.isEmpty()) {
                     main.post(() -> {
                         showLoading(false);
                         setComposerEnabled(false);
-                        tvChatStatus.setText("Chat available after booking is accepted");
-                        
                         Intent i = getIntent();
-                        String ctxTitle = i != null ? i.getStringExtra(EXTRA_CONTEXT_TITLE) : "";
-                        String ctxBody = i != null ? i.getStringExtra(EXTRA_CONTEXT_BODY) : "";
-                        
-                        if (!TextUtils.isEmpty(ctxTitle)) {
-                            tvChatTitle.setText(ctxTitle);
-                            String ctxSub = i.getStringExtra(EXTRA_CONTEXT_SUBTITLE);
-                            if (!TextUtils.isEmpty(ctxSub)) tvChatSubtitle.setText(ctxSub);
-                        }
-
-                        if (!TextUtils.isEmpty(ctxBody)) {
-                            tvEmptyState.setText(ctxBody);
-                        } else {
-                            tvEmptyState.setText("No eligible booking found for this conversation.");
-                        }
-                        
+                        String ctxTitle = i != null ? safe(i.getStringExtra(EXTRA_CONTEXT_TITLE)) : "";
+                        String ctxSub = i != null ? safe(i.getStringExtra(EXTRA_CONTEXT_SUBTITLE)) : "";
+                        String ctxBody = i != null ? safe(i.getStringExtra(EXTRA_CONTEXT_BODY)) : "";
+                        if (!ctxTitle.isEmpty()) tvChatTitle.setText(ctxTitle);
+                        if (!ctxSub.isEmpty()) tvChatSubtitle.setText(ctxSub);
+                        tvEmptyState.setText(ctxBody.isEmpty()
+                                ? "Open chat from provider profile or booking list."
+                                : ctxBody);
                         emptyState.setVisibility(View.VISIBLE);
                         rvMessages.setVisibility(View.GONE);
                     });
                     return;
                 }
 
-                activeBooking = booking;
-                bookingId = safe(booking.id);
-
-                if ("provider".equalsIgnoreCase(currentUserRole)) {
-                    otherPartyId = safe(booking.customerId);
-                    otherPartyRole = "user";
-                    otherPartyName = safe(booking.customerName);
-                } else {
-                    otherPartyId = safe(booking.providerId);
-                    otherPartyRole = "provider";
-                    otherPartyName = safe(safe(booking.providerName).isEmpty() ? providerName : booking.providerName);
+                if (otherPartyRole.isEmpty()) {
+                    otherPartyRole = "provider".equals(currentUserRole) ? "user" : "provider";
                 }
-
                 if (otherPartyName.isEmpty()) {
-                    otherPartyName = "Chat";
+                    otherPartyName = "provider".equals(otherPartyRole) ? "Provider" : "User";
                 }
 
                 chatReady = true;
                 main.post(() -> {
                     showLoading(false);
                     bindHeader();
-                    setComposerEnabled(isChatAllowed(booking.status));
-                    if (!isChatAllowed(booking.status)) {
-                        tvChatStatus.setText("Chat is available only for accepted/ongoing bookings");
-                    }
+                    setComposerEnabled(isComposerAllowed());
                     loadMessages(true);
                     main.removeCallbacks(refreshRunnable);
-                    main.postDelayed(refreshRunnable, 3000L);
+                    main.postDelayed(refreshRunnable, 2000L);
                 });
             } catch (Exception e) {
-                Log.e(TAG, "resolveChatContext: " + e.getMessage(), e);
+                Log.e(TAG, "resolveChatContext failed", e);
                 main.post(() -> {
                     showLoading(false);
-                    tvEmptyState.setText("Unable to open chat.");
+                    setComposerEnabled(false);
+                    tvEmptyState.setText("Unable to open chat");
                     emptyState.setVisibility(View.VISIBLE);
                     rvMessages.setVisibility(View.GONE);
                 });
@@ -257,89 +258,112 @@ public class MessagesActivity extends BaseActivity {
     }
 
     private void bindHeader() {
-        if (tvChatTitle != null) tvChatTitle.setText(otherPartyName.isEmpty() ? "Chat" : otherPartyName);
-        if (tvChatSubtitle != null) {
-            String subtitle = "Booking #" + (bookingId.isEmpty() ? "-" : bookingId.substring(0, Math.min(8, bookingId.length())));
+        tvChatTitle.setText(otherPartyName);
+        if (isBookingChat) {
+            String sub = "Booking #" + (bookingId.isEmpty() ? "-" : bookingId.substring(0, Math.min(8, bookingId.length())));
             if (activeBooking != null && !safe(activeBooking.serviceName).isEmpty()) {
-                subtitle = safe(activeBooking.serviceName) + " • " + subtitle;
+                sub = activeBooking.serviceName + " • " + sub;
             }
-            tvChatSubtitle.setText(subtitle);
+            tvChatSubtitle.setText(sub);
+            String status = activeBooking == null ? "" : safe(activeBooking.status).toLowerCase(Locale.US);
+            if ("completed".equals(status)) {
+                tvChatStatus.setText("Chat closed after service completion");
+                btnSend.setVisibility(View.GONE);
+                etMessage.setEnabled(false);
+            } else {
+                tvChatStatus.setText("Booking chat");
+                btnSend.setVisibility(View.VISIBLE);
+                etMessage.setEnabled(true);
+            }
+        } else {
+            tvChatSubtitle.setText("Pre-booking chat");
+            tvChatStatus.setText("Limited to 5 user messages before booking");
+            btnSend.setVisibility(View.VISIBLE);
         }
-        if (tvChatStatus != null) {
-            tvChatStatus.setText("Connected • " + currentUserRole + " → " + otherPartyRole);
+        if (adapter == null) {
+            adapter = new ChatMessageAdapter(this, currentUserId, currentUserRole);
+            rvMessages.setAdapter(adapter);
         }
-        adapter = new ChatMessageAdapter(this, currentUserId, currentUserRole);
-        rvMessages.setAdapter(adapter);
+    }
+
+    private boolean isComposerAllowed() {
+        if (!isBookingChat) return true;
+        return activeBooking != null && isBookingWritable(activeBooking.status);
     }
 
     private void setComposerEnabled(boolean enabled) {
-        if (composerBar != null) composerBar.setEnabled(enabled);
-        if (etMessage != null) etMessage.setEnabled(enabled);
-        if (btnSend != null) btnSend.setEnabled(enabled);
+        composerBar.setEnabled(enabled);
+        etMessage.setEnabled(enabled);
+        btnSend.setEnabled(enabled);
     }
 
     private void loadMessages(boolean scrollToBottom) {
-        if (bookingId.isEmpty()) return;
+        if (!chatReady) return;
         new Thread(() -> {
             try {
-                String url = SUPABASE_URL + "/rest/v1/messages?booking_id=eq." + encode(bookingId)
-                        + "&select=*&order=created_at.asc";
-
-                Request req = new Request.Builder()
-                        .url(url)
+                String url = buildMessageLoadUrl();
+                Request req = new Request.Builder().url(url)
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
                         .addHeader("Accept", "application/json")
                         .build();
-
+                List<ChatMessage> list = new ArrayList<>();
                 try (Response r = http.newCall(req).execute()) {
                     String body = r.body() != null ? r.body().string() : "[]";
                     if (r.code() != 200) {
                         Log.e(TAG, "loadMessages HTTP " + r.code() + " | " + body);
                         return;
                     }
-
                     JSONArray arr = new JSONArray(body);
-                    List<ChatMessage> list = new ArrayList<>();
                     for (int i = 0; i < arr.length(); i++) {
-                        ChatMessage msg = ChatMessage.fromJson(arr.getJSONObject(i));
-                        if (msg != null) list.add(msg);
+                        ChatMessage m = ChatMessage.fromJson(arr.getJSONObject(i));
+                        if (m != null) list.add(m);
                     }
-
-                    main.post(() -> {
-                        if (adapter == null) {
-                            adapter = new ChatMessageAdapter(this, currentUserId, currentUserRole);
-                            rvMessages.setAdapter(adapter);
-                        }
-                        adapter.setItems(list);
-                        boolean empty = list.isEmpty();
-                        emptyState.setVisibility(empty ? View.VISIBLE : View.GONE);
-                        rvMessages.setVisibility(empty ? View.GONE : View.VISIBLE);
-                        if (tvEmptyState != null) {
-                            tvEmptyState.setText(empty ? "No messages yet. Say hello." : "");
-                        }
-                        if (scrollToBottom && !empty) {
-                            rvMessages.scrollToPosition(list.size() - 1);
-                        }
-                    });
                 }
+
+                markIncomingAsSeen();
+
+                main.post(() -> {
+                    adapter.setItems(list);
+                    boolean empty = list.isEmpty();
+                    emptyState.setVisibility(empty ? View.VISIBLE : View.GONE);
+                    rvMessages.setVisibility(empty ? View.GONE : View.VISIBLE);
+                    tvEmptyState.setText(empty ? "No messages yet. Say hello." : "");
+                    if (!empty && scrollToBottom) {
+                        rvMessages.scrollToPosition(list.size() - 1);
+                    }
+                });
             } catch (Exception e) {
-                Log.e(TAG, "loadMessages: " + e.getMessage(), e);
+                Log.e(TAG, "loadMessages failed", e);
             }
         }).start();
     }
 
+    private String buildMessageLoadUrl() {
+        String a = encode(currentUserId);
+        String b = encode(otherPartyId);
+        String pairFilter = "or=(and(sender_id.eq." + a + ",receiver_id.eq." + b + "),and(sender_id.eq." + b + ",receiver_id.eq." + a + "))";
+        if (isBookingChat) {
+            return SUPABASE_URL + "/rest/v1/messages?chat_type=eq.booking&booking_id=eq." + encode(bookingId)
+                    + "&" + pairFilter
+                    + "&select=*&order=created_at.asc";
+        }
+        return SUPABASE_URL + "/rest/v1/messages?chat_type=eq.pre_booking"
+                + "&" + pairFilter
+                + "&select=*&order=created_at.asc";
+    }
+
     private void sendMessage() {
-        if (!chatReady || activeBooking == null || bookingId.isEmpty()) return;
-        if (!isChatAllowed(activeBooking.status)) {
-            toast("Chat is available only after booking is accepted");
+        if (!chatReady) return;
+        String text = etMessage.getText() == null ? "" : etMessage.getText().toString().trim();
+        if (text.isEmpty()) return;
+        if (currentUserId.isEmpty() || otherPartyId.isEmpty()) {
+            toast("Chat not ready");
             return;
         }
 
-        String text = etMessage != null && etMessage.getText() != null ? etMessage.getText().toString().trim() : "";
-        if (text.isEmpty()) return;
-        if (currentUserId.isEmpty() || otherPartyId.isEmpty()) {
-            toast("Chat is not ready yet");
+        if (isBookingChat && (activeBooking == null || !isBookingWritable(activeBooking.status))) {
+            toast("Chat closed after service completion");
             return;
         }
 
@@ -347,8 +371,26 @@ public class MessagesActivity extends BaseActivity {
         showLoading(true);
         new Thread(() -> {
             try {
+                if (!isBookingChat && "user".equals(currentUserRole)) {
+                    int sent = countPreBookingMessagesByUser();
+                    if (sent >= 5) {
+                        main.post(() -> {
+                            setComposerEnabled(true);
+                            showLoading(false);
+                            toast("Message limit reached. Please book service to continue.");
+                        });
+                        return;
+                    }
+                }
+
                 JSONObject body = new JSONObject();
-                body.put("booking_id", bookingId);
+                if (isBookingChat) {
+                    body.put("booking_id", bookingId);
+                    body.put("chat_type", "booking");
+                } else {
+                    body.put("booking_id", JSONObject.NULL);
+                    body.put("chat_type", "pre_booking");
+                }
                 body.put("sender_id", currentUserId);
                 body.put("receiver_id", otherPartyId);
                 body.put("sender_type", currentUserRole);
@@ -365,24 +407,36 @@ public class MessagesActivity extends BaseActivity {
 
                 try (Response r = http.newCall(req).execute()) {
                     String resp = r.body() != null ? r.body().string() : "";
-                    if (r.code() == 200 || r.code() == 201 || r.code() == 204) {
+                    int code = r.code();
+                    if (code == 200 || code == 201 || code == 204) {
+                        FcmNotificationHelper.notifyChatMessage(
+                                otherPartyId,
+                                otherPartyRole,
+                                currentUserName,
+                                text,
+                                isBookingChat ? bookingId : null
+                        );
                         main.post(() -> {
-                            if (etMessage != null) etMessage.setText("");
+                            etMessage.setText("");
                             setComposerEnabled(true);
                             showLoading(false);
                             loadMessages(true);
                         });
                     } else {
-                        Log.e(TAG, "sendMessage HTTP " + r.code() + " | " + resp);
+                        Log.e(TAG, "sendMessage HTTP " + code + " | " + resp);
                         main.post(() -> {
                             setComposerEnabled(true);
                             showLoading(false);
-                            toast("Failed to send message");
+                            if (resp.contains("Please book service to continue") || resp.contains("Message limit reached")) {
+                                toast("Message limit reached. Please book service to continue.");
+                            } else {
+                                toast("Failed to send message");
+                            }
                         });
                     }
                 }
             } catch (Exception e) {
-                Log.e(TAG, "sendMessage: " + e.getMessage(), e);
+                Log.e(TAG, "sendMessage failed", e);
                 main.post(() -> {
                     setComposerEnabled(true);
                     showLoading(false);
@@ -390,6 +444,55 @@ public class MessagesActivity extends BaseActivity {
                 });
             }
         }).start();
+    }
+
+    private int countPreBookingMessagesByUser() {
+        try {
+            String url = SUPABASE_URL + "/rest/v1/messages?chat_type=eq.pre_booking"
+                    + "&sender_type=eq.user&sender_id=eq." + encode(currentUserId)
+                    + "&receiver_id=eq." + encode(otherPartyId)
+                    + "&select=id&limit=6";
+            Request req = new Request.Builder().url(url)
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+            try (Response r = http.newCall(req).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                if (r.code() != 200) return 0;
+                return new JSONArray(body).length();
+            }
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private void markIncomingAsSeen() {
+        try {
+            String filter;
+            if (isBookingChat) {
+                filter = "booking_id=eq." + encode(bookingId)
+                        + "&chat_type=eq.booking"
+                        + "&sender_id=eq." + encode(otherPartyId);
+            } else {
+                filter = "chat_type=eq.pre_booking&sender_id=eq." + encode(otherPartyId);
+            }
+            String url = SUPABASE_URL + "/rest/v1/messages?receiver_id=eq." + encode(currentUserId)
+                    + "&is_seen=eq.false&" + filter;
+            JSONObject body = new JSONObject();
+            body.put("is_seen", true);
+            Request req = new Request.Builder().url(url)
+                    .patch(RequestBody.create(body.toString(), JSON))
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "return=minimal")
+                    .build();
+            try (Response ignored = http.newCall(req).execute()) {
+                // fire-and-forget seen update
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     private Participant resolveCurrentParticipant(String firebaseUid) {
@@ -411,7 +514,7 @@ public class MessagesActivity extends BaseActivity {
             p.name = safe(row.optString("business_name", row.optString("owner_name", "Provider")));
             p.role = "provider";
             return p;
-        } catch (Exception e) {
+        } catch (Exception ignored) {
             return null;
         }
     }
@@ -427,50 +530,38 @@ public class MessagesActivity extends BaseActivity {
             p.name = safe(row.optString("name", "User"));
             p.role = "user";
             return p;
-        } catch (Exception e) {
+        } catch (Exception ignored) {
             return null;
         }
     }
 
     private Booking resolveBooking(Participant current) {
-        String currentUserIdResolved = current == null ? "" : safe(current.id);
+        String currentResolvedId = current == null ? "" : safe(current.id);
         String currentUid = safe(currentFirebaseUid);
         if (!bookingId.isEmpty()) {
             Booking byId = fetchBookingById(bookingId);
             if (byId != null && isBookingAllowed(byId.status)) return byId;
         }
 
-        if (providerId.isEmpty() && providerFirebaseUid.isEmpty()) return null;
-
+        if ("provider".equalsIgnoreCase(currentUserRole)) return null;
         String providerFilter = !providerId.isEmpty() ? providerId : providerFirebaseUid;
-        String customerOr;
-        if (current != null && "provider".equalsIgnoreCase(current.role)) {
-            customerOr = "provider_id=eq." + encode(currentUserIdResolved.isEmpty() ? currentUid : currentUserIdResolved);
-        } else if (!currentUserIdResolved.isEmpty() && !currentUid.equals(currentUserIdResolved)) {
-            customerOr = "or=(customer_id.eq." + encode(currentUid) + ",customer_id.eq." + encode(currentUserIdResolved) + ")";
+        if (providerFilter.isEmpty()) return null;
+
+        String customerFilter;
+        if (!currentResolvedId.isEmpty() && !currentResolvedId.equals(currentUid)) {
+            customerFilter = "or=(customer_id.eq." + encode(currentResolvedId) + ",customer_id.eq." + encode(currentUid) + ")";
         } else {
-            customerOr = "customer_id=eq." + encode(currentUserIdResolved.isEmpty() ? currentUid : currentUserIdResolved);
+            customerFilter = "customer_id=eq." + encode(currentResolvedId.isEmpty() ? currentUid : currentResolvedId);
         }
 
-        try {
-            String url = SUPABASE_URL + "/rest/v1/bookings?select=*&provider_id=eq." + encode(providerFilter)
-                    + "&" + customerOr
-                    + "&status=in.(accepted,price_set,paid,completed)"
-                    + "&order=created_at.desc&limit=1";
-            return fetchBooking(url);
-        } catch (Exception e) {
-            Log.e(TAG, "resolveBooking: " + e.getMessage(), e);
-            return null;
-        }
+        String url = SUPABASE_URL + "/rest/v1/bookings?select=*&provider_id=eq." + encode(providerFilter)
+                + "&" + customerFilter
+                + "&status=in.(accepted,price_set,paid,completed)&order=created_at.desc&limit=1";
+        return fetchBooking(url);
     }
 
     private Booking fetchBookingById(String id) {
-        try {
-            String url = SUPABASE_URL + "/rest/v1/bookings?id=eq." + encode(id) + "&select=*&limit=1";
-            return fetchBooking(url);
-        } catch (Exception e) {
-            return null;
-        }
+        return fetchBooking(SUPABASE_URL + "/rest/v1/bookings?id=eq." + encode(id) + "&select=*&limit=1");
     }
 
     private Booking fetchBooking(String url) {
@@ -487,7 +578,7 @@ public class MessagesActivity extends BaseActivity {
                 if (arr.length() == 0) return null;
                 return Booking.fromJson(arr.getJSONObject(0));
             }
-        } catch (Exception e) {
+        } catch (Exception ignored) {
             return null;
         }
     }
@@ -506,22 +597,23 @@ public class MessagesActivity extends BaseActivity {
                 if (arr.length() == 0) return null;
                 return arr.getJSONObject(0);
             }
-        } catch (Exception e) {
+        } catch (Exception ignored) {
             return null;
         }
     }
 
-    private boolean isChatAllowed(String status) {
-        return isBookingAllowed(status);
-    }
-
     private boolean isBookingAllowed(String status) {
-        String s = safe(status).toLowerCase();
+        String s = safe(status).toLowerCase(Locale.US);
         return "accepted".equals(s) || "price_set".equals(s) || "paid".equals(s) || "completed".equals(s);
     }
 
+    private boolean isBookingWritable(String status) {
+        String s = safe(status).toLowerCase(Locale.US);
+        return "accepted".equals(s) || "price_set".equals(s) || "paid".equals(s);
+    }
+
     private void showLoading(boolean loading) {
-        if (progressBar != null) progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
+        progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
     }
 
     private void toast(String msg) {

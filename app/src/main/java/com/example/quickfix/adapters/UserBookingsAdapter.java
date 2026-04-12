@@ -33,6 +33,7 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
         void onCancelBooking(Booking booking);
         void onWriteReview(Booking booking);
         void onPayNow(Booking booking);
+        void onMessageBooking(Booking booking);
     }
 
     public UserBookingsAdapter(Context context, BookingActionListener listener) {
@@ -66,7 +67,7 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
     public class VH extends RecyclerView.ViewHolder {
         MaterialCardView card;
         TextView tvServiceName, tvProviderName, tvDateTime, tvAddress, tvStatus, tvPrice, tvReviewSummary;
-        MaterialButton btnViewDetails, btnCancel, btnReview, btnPayNow;
+        MaterialButton btnViewDetails, btnCancel, btnReview, btnPayNow, btnMessage;
 
         public VH(@NonNull View v) {
             super(v);
@@ -82,6 +83,7 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             btnCancel = v.findViewById(R.id.btnCancel);
             btnReview = v.findViewById(R.id.btnReview);
             btnPayNow = v.findViewById(R.id.btnPayNow);
+            btnMessage = v.findViewById(R.id.btnMessage);
         }
 
         void bind(Booking b) {
@@ -139,6 +141,9 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             boolean paymentDone = "success".equalsIgnoreCase(b.paymentStatus) || "paid".equalsIgnoreCase(status);
             boolean canPayNow = "price_set".equals(status) && !paymentDone;
             btnPayNow.setVisibility(canPayNow ? View.VISIBLE : View.GONE);
+            btnMessage.setVisibility(View.VISIBLE);
+            btnMessage.setEnabled(!isCompleted);
+            btnMessage.setAlpha(isCompleted ? 0.5f : 1f);
             if (isCompleted) {
                 boolean hasReview = b.reviewRating > 0;
                 btnReview.setText(context.getString(
@@ -169,6 +174,9 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             });
             btnPayNow.setOnClickListener(v -> {
                 if (listener != null) listener.onPayNow(b);
+            });
+            btnMessage.setOnClickListener(v -> {
+                if (listener != null && btnMessage.isEnabled()) listener.onMessageBooking(b);
             });
         }
     }

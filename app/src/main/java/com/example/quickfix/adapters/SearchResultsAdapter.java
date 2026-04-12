@@ -118,7 +118,8 @@ public class SearchResultsAdapter extends RecyclerView.Adapter<SearchResultsAdap
         h.tvType.setBackgroundResource(R.drawable.bg_role_badge_provider);
         h.tvType.setTextColor(0xFF2E7D32);
         String typeLabel = SearchResult.TYPE_SERVICE.equals(r.type) ? "Service" : "Provider";
-        h.tvType.setText(r.isVerified ? "✔ " + typeLabel : typeLabel);
+        h.tvType.setText(typeLabel);
+        h.ivVerified.setVisibility(r.isVerified ? View.VISIBLE : View.GONE);
 
         h.tvAvailability.setVisibility(View.VISIBLE);
 
@@ -143,10 +144,12 @@ public class SearchResultsAdapter extends RecyclerView.Adapter<SearchResultsAdap
 
     public static class VH extends RecyclerView.ViewHolder {
         ImageView ivIcon;
+        ImageView ivVerified;
         TextView tvName, tvSubtitle, tvCity, tvType, tvRating, tvDistance, tvAvailability;
         VH(View v) {
             super(v);
             ivIcon         = v.findViewById(R.id.ivResultIcon);
+            ivVerified     = v.findViewById(R.id.ivResultVerified);
             tvName         = v.findViewById(R.id.tvResultName);
             tvSubtitle     = v.findViewById(R.id.tvResultSubtitle);
             tvCity         = v.findViewById(R.id.tvResultCity);

@@ -51,6 +51,16 @@
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
+            <ImageView
+                android:id="@+id/ivResultVerified"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginTop="2dp"
+                android:src="@drawable/ic_check"
+                app:tint="@color/primary"
+                android:visibility="gone"
+                android:contentDescription="Verified" />
+
             <TextView
                 android:id="@+id/tvResultSubtitle"
                 android:layout_width="wrap_content"

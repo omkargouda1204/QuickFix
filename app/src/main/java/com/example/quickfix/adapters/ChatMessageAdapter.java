@@ -57,11 +57,16 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<ChatMessageAdapter.
         TextView bubble = mine ? h.rightMessage : h.leftMessage;
         TextView sender = mine ? h.rightSender : h.leftSender;
         TextView time = mine ? h.rightTime : h.leftTime;
+        TextView seen = h.rightSeen;
 
         String msgText = safe(m.message);
         bubble.setText(msgText.isEmpty() ? "" : msgText);
-        sender.setText(displaySenderType(m));
+        sender.setText(displaySenderType(m, mine));
         time.setText(formatTime(m.createdAt));
+        if (seen != null) {
+            seen.setVisibility(mine ? View.VISIBLE : View.GONE);
+            seen.setText(m.isSeen ? "\u2713\u2713" : "\u2713");
+        }
     }
 
     @Override
@@ -78,10 +83,12 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<ChatMessageAdapter.
         return safe(m.senderId).equals(currentUserId);
     }
 
-    private String displaySenderType(ChatMessage m) {
+    private String displaySenderType(ChatMessage m, boolean mine) {
+        if (mine) return "You";
         String type = safe(m.senderType).toLowerCase(Locale.US);
-        if (!type.isEmpty()) return type;
-        return isMine(m) ? currentUserRole : ("provider".equalsIgnoreCase(currentUserRole) ? "user" : "provider");
+        if ("provider".equals(type)) return "Provider";
+        if ("user".equals(type)) return "User";
+        return "provider".equalsIgnoreCase(currentUserRole) ? "User" : "Provider";
     }
 
     private String formatTime(String createdAt) {
@@ -102,7 +109,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<ChatMessageAdapter.
     static class VH extends RecyclerView.ViewHolder {
         View leftRoot, rightRoot;
         TextView leftMessage, leftSender, leftTime;
-        TextView rightMessage, rightSender, rightTime;
+        TextView rightMessage, rightSender, rightTime, rightSeen;
 
         VH(@NonNull View itemView) {
             super(itemView);
@@ -114,6 +121,7 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<ChatMessageAdapter.
             rightMessage = itemView.findViewById(R.id.tvRightMessage);
             rightSender = itemView.findViewById(R.id.tvRightSender);
             rightTime = itemView.findViewById(R.id.tvRightTime);
+            rightSeen = itemView.findViewById(R.id.tvRightSeen);
         }
     }
 }

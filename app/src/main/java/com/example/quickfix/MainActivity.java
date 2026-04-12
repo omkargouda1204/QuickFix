@@ -900,7 +900,7 @@ public class MainActivity extends BaseActivity {
         if (navMessages != null) {
             navMessages.setOnClickListener(v -> {
                 setNavSelected(2);
-                startActivity(new Intent(this, MessagesActivity.class));
+                startActivity(new Intent(this, ChatThreadsActivity.class));
                 overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
             });
         }

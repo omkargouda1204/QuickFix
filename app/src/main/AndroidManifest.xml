@@ -327,6 +327,12 @@
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".ChatThreadsActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:screenOrientation="portrait" />
+
         <!-- Search Results Activity -->
         <activity
             android:name=".SearchResultsActivity"

@@ -24,7 +24,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:weightSum="4">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -142,8 +143,9 @@
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCancel"
                 style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="36dp"
+                android:layout_weight="1"
                 android:text="Cancel"
                 android:textSize="12sp"
                 app:strokeColor="#D32F2F"
@@ -154,8 +156,9 @@
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnReview"
                 style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="36dp"
+                android:layout_weight="1"
                 android:layout_marginEnd="8dp"
                 android:text="@string/review_write_button"
                 android:textSize="12sp"
@@ -164,8 +167,9 @@
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnPayNow"
                 style="@style/Widget.Material3.Button.TonalButton"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="36dp"
+                android:layout_weight="1"
                 android:layout_marginEnd="8dp"
                 android:text="Pay Now"
                 android:textSize="12sp"
@@ -174,9 +178,20 @@
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnViewDetails"
                 style="@style/Widget.Material3.Button.TonalButton"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="36dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
                 android:text="Details"
+                android:textSize="12sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnMessage"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="Message"
                 android:textSize="12sp" />
         </LinearLayout>
 

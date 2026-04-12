@@ -219,8 +219,9 @@ public class ProviderDetailActivity extends BaseActivity {
 
         // Experience
         TextView tvExp = findViewById(R.id.tvDetailExperience);
-        if (experience != null && !experience.isEmpty()) {
-            tvExp.setText(experience + " yrs exp");
+        int expYears = parseExperienceYears(experience);
+        if (expYears > 0) {
+            tvExp.setText(expYears + " yrs exp");
             tvExp.setVisibility(View.VISIBLE);
         } else {
             tvExp.setVisibility(View.GONE);
@@ -261,7 +262,7 @@ public class ProviderDetailActivity extends BaseActivity {
         }
 
         // Message button
-        MaterialButton btnMessage = findViewById(R.id.btnDetailCall);
+        MaterialButton btnMessage = findViewById(R.id.btnDetailMessage);
         btnMessage.setOnClickListener(v -> openChat());
 
         // Book button
@@ -373,6 +374,21 @@ public class ProviderDetailActivity extends BaseActivity {
         });
 
         dialog.show();
+    }
+
+    private int parseExperienceYears(String raw) {
+        String s = safe(raw).toLowerCase(Locale.US)
+                .replace("years", "")
+                .replace("year", "")
+                .replace("yrs", "")
+                .replace("yr", "")
+                .trim();
+        if (s.isEmpty()) return 0;
+        try {
+            return Math.max(0, Integer.parseInt(s.replaceAll("[^0-9]", "")));
+        } catch (Exception ignored) {
+            return 0;
+        }
     }
 
     private void submitBooking(String customerId, String date, String time,

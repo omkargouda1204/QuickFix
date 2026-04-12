@@ -1,5 +1,6 @@
 package com.example.quickfix;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -377,6 +378,20 @@ public class UserBookingsActivity extends BaseActivity
         }
 
         createOrderAndLaunchCheckout(booking, amountInr, keyId);
+    }
+
+    @Override
+    public void onMessageBooking(Booking booking) {
+        if (booking == null) return;
+        Intent i = new Intent(this, MessagesActivity.class);
+        i.putExtra(MessagesActivity.EXTRA_BOOKING_ID, clean(booking.id));
+        i.putExtra(MessagesActivity.EXTRA_PROVIDER_ID, clean(booking.providerId));
+        i.putExtra(MessagesActivity.EXTRA_PROVIDER_NAME, clean(booking.providerName));
+        i.putExtra(MessagesActivity.EXTRA_OTHER_PARTY_ID, clean(booking.providerId));
+        i.putExtra(MessagesActivity.EXTRA_OTHER_PARTY_ROLE, "provider");
+        i.putExtra(MessagesActivity.EXTRA_OTHER_PARTY_NAME, clean(booking.providerName));
+        i.putExtra(MessagesActivity.EXTRA_USER_UID, clean(userId));
+        startActivity(i);
     }
 
     private void createOrderAndLaunchCheckout(Booking booking, double amountInr, String keyId) {

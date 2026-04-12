@@ -386,7 +386,7 @@
         android:weightSum="2">
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnDetailCall"
+            android:id="@+id/btnDetailMessage"
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="0dp"
             android:layout_height="52dp"

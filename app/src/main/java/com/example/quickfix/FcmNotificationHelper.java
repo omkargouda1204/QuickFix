@@ -448,6 +448,50 @@ public final class FcmNotificationHelper {
         }).start();
     }
 
+    public static void notifyChatMessage(String receiverId,
+                                         String receiverRole,
+                                         String senderName,
+                                         String messagePreview,
+                                         String bookingId) {
+        String target = trimToEmpty(receiverId);
+        if (target.isEmpty()) return;
+        String role = trimToEmpty(receiverRole).isEmpty() ? "user" : receiverRole.trim().toLowerCase();
+
+        new Thread(() -> {
+            try {
+                Context appCtx = QuickFixApp.getInstance();
+                if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    return;
+                }
+
+                UserRecipient recipient = fetchUserRecipientById(target);
+                if (recipient == null) {
+                    recipient = fetchUserRecipient(target);
+                }
+                if (recipient == null || trimToEmpty(recipient.token).isEmpty()) {
+                    Log.d(TAG, "notifyChatMessage skipped: token not found for " + target);
+                    return;
+                }
+
+                String title = "New message from " + (trimToEmpty(senderName).isEmpty() ? "someone" : trimToEmpty(senderName));
+                String body = trimToEmpty(messagePreview).isEmpty() ? "You received a message" : trimToEmpty(messagePreview);
+
+                sendViaEdgeFunction(
+                        listOf(recipient.token),
+                        listOf(recipient.userId),
+                        listOf(role),
+                        title,
+                        body,
+                        "chat_message",
+                        trimToEmpty(bookingId).isEmpty() ? null : bookingId,
+                        null
+                );
+            } catch (Exception e) {
+                Log.w(TAG, "notifyChatMessage failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
     // ── Private Helpers ───────────────────────────────────────────────────
 
     private static void notifyProviderEvent(String providerFirebaseUid,

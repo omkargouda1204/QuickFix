@@ -20,6 +20,7 @@ import com.google.android.material.button.MaterialButton;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> {
 
@@ -74,8 +75,9 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
         h.tvCategoryBadge.setText(notEmpty(p.category, "Service"));
 
         // Experience
-        if (p.experienceYrs != null && !p.experienceYrs.isEmpty()) {
-            h.tvExperience.setText(p.experienceYrs + " yrs exp");
+        int expYears = parseExperienceYears(p.experienceYrs);
+        if (expYears > 0) {
+            h.tvExperience.setText(expYears + " yrs exp");
             h.tvExperience.setVisibility(View.VISIBLE);
         } else {
             h.tvExperience.setVisibility(View.GONE);
@@ -110,6 +112,23 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
 
     private String notEmpty(String val, String fallback) {
         return (val != null && !val.trim().isEmpty()) ? val.trim() : fallback;
+    }
+
+    private int parseExperienceYears(String raw) {
+        String s = raw == null ? "" : raw.trim().toLowerCase(Locale.US)
+                .replace("years", "")
+                .replace("year", "")
+                .replace("yrs", "")
+                .replace("yr", "")
+                .trim();
+        if (s.isEmpty()) return 0;
+        try {
+            String digits = s.replaceAll("[^0-9]", "");
+            if (digits.isEmpty()) return 0;
+            return Math.max(0, Integer.parseInt(digits));
+        } catch (Exception ignored) {
+            return 0;
+        }
     }
 
     @Override

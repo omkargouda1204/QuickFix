@@ -94,36 +94,45 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:orientation="horizontal"
-            android:gravity="end">
+            android:gravity="center_vertical"
+            android:weightSum="5">
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCall"
                 style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="48dp"
+                android:layout_weight="1"
                 android:text="Call"
                 app:icon="@drawable/ic_phone"
                 app:iconGravity="start" />
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnMessage"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:text="Message" />
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnReject"
                 style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="48dp"
-                android:layout_marginStart="8dp"
+                android:layout_weight="1"
                 android:text="Reject"
                 android:textColor="#D32F2F"
                 app:strokeColor="#D32F2F" />
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnAccept"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="48dp"
-                android:layout_marginStart="8dp"
+                android:layout_weight="1"
                 android:text="Accept"
                 android:backgroundTint="@color/primary" />
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnMarkCompleted"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="48dp"
-                android:layout_marginStart="8dp"
+                android:layout_weight="1"
                 android:text="Complete"
                 android:backgroundTint="#388E3C"
                 android:visibility="gone" />

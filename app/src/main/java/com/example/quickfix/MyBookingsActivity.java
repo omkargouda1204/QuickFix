@@ -1,5 +1,6 @@
 package com.example.quickfix;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -384,6 +385,18 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
                 .setPositiveButton("Set", (d, w) -> updateBookingPrice(booking, amount))
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    @Override
+    public void onMessageBooking(Booking booking) {
+        if (booking == null) return;
+        Intent i = new Intent(this, MessagesActivity.class);
+        i.putExtra(MessagesActivity.EXTRA_BOOKING_ID, booking.id == null ? "" : booking.id.trim());
+        i.putExtra(MessagesActivity.EXTRA_OTHER_PARTY_ID, booking.customerId == null ? "" : booking.customerId.trim());
+        i.putExtra(MessagesActivity.EXTRA_OTHER_PARTY_ROLE, "user");
+        i.putExtra(MessagesActivity.EXTRA_OTHER_PARTY_NAME, booking.customerName == null ? "" : booking.customerName.trim());
+        i.putExtra(MessagesActivity.EXTRA_USER_UID, providerFirebaseUid == null ? "" : providerFirebaseUid.trim());
+        startActivity(i);
     }
 
     private void updateBookingStatus(Booking booking, String newStatus) {
