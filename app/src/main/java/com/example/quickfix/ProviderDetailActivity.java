@@ -260,25 +260,28 @@ public class ProviderDetailActivity extends BaseActivity {
             setText(R.id.tvDetailDescription, description);
         }
 
-        // Call button
-        MaterialButton btnCall = findViewById(R.id.btnDetailCall);
-        if (phone != null && !phone.isEmpty()) {
-            btnCall.setOnClickListener(v -> {
-                try {
-                    Intent dial = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phone));
-                    startActivity(dial);
-                } catch (Exception e) {
-                    Toast.makeText(this, "Cannot open dialer", Toast.LENGTH_SHORT).show();
-                }
-            });
-        } else {
-            btnCall.setEnabled(false);
-            btnCall.setAlpha(0.5f);
-        }
+        // Message button
+        MaterialButton btnMessage = findViewById(R.id.btnDetailCall);
+        btnMessage.setOnClickListener(v -> openChat());
 
         // Book button
         MaterialButton btnBook = findViewById(R.id.btnDetailBook);
         btnBook.setOnClickListener(v -> showBookingDialog());
+    }
+
+    private void openChat() {
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null) {
+            Toast.makeText(this, "Please log in to chat", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Intent chat = new Intent(this, MessagesActivity.class);
+        chat.putExtra(MessagesActivity.EXTRA_PROVIDER_ID, safe(providerIdForBooking));
+        chat.putExtra(MessagesActivity.EXTRA_PROVIDER_UID, safe(providerFirebaseUid));
+        chat.putExtra(MessagesActivity.EXTRA_USER_UID, currentUser.getUid());
+        chat.putExtra(MessagesActivity.EXTRA_PROVIDER_NAME, safe(providerName));
+        startActivity(chat);
     }
 
     // ── Booking Dialog ──────────────────────────────────────────────────────
