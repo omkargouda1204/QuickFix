@@ -71,7 +71,7 @@ public class SearchResultsAdapter extends RecyclerView.Adapter<SearchResultsAdap
 
         h.tvType.setBackgroundResource(R.drawable.bg_role_badge_provider);
         h.tvType.setTextColor(0xFF2E7D32);
-        h.tvType.setText("Approved");
+        h.tvType.setText(r.isVerified ? "Verified" : "Approved");
 
         h.tvAvailability.setVisibility(View.VISIBLE);
         h.tvDistance.setVisibility(View.VISIBLE);

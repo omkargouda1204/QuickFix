@@ -17,6 +17,7 @@ public class SearchResult {
     public String phone;
     public String profileImage;
     public String status;
+    public boolean isVerified;
 
     public SearchResult(String id, String name, String subtitle, String city, String type) {
         this(id, name, subtitle, city, type, 0f, -1f, "");
@@ -45,6 +46,22 @@ public class SearchResult {
                         String phone,
                         String profileImage,
                         String status) {
+        this(id, name, subtitle, city, type, rating, distanceKm, availabilityStatus, description, phone, profileImage, status, false);
+    }
+
+    public SearchResult(String id,
+                        String name,
+                        String subtitle,
+                        String city,
+                        String type,
+                        float rating,
+                        float distanceKm,
+                        String availabilityStatus,
+                        String description,
+                        String phone,
+                        String profileImage,
+                        String status,
+                        boolean isVerified) {
         this.id = id;
         this.name = name;
         this.subtitle = subtitle;
@@ -57,5 +74,6 @@ public class SearchResult {
         this.phone = phone == null ? "" : phone.trim();
         this.profileImage = profileImage == null ? "" : profileImage.trim();
         this.status = status == null ? "" : status.trim();
+        this.isVerified = isVerified;
     }
 }

@@ -352,10 +352,6 @@ public class AdminSettingsActivity extends BaseActivity {
             View row = (View) switchEmailDigest.getParent();
             if (row != null) row.setVisibility(View.GONE);
         }
-        if (switchMaintenance != null) {
-            View row = (View) switchMaintenance.getParent();
-            if (row != null) row.setVisibility(View.GONE);
-        }
         if (layoutMaintenanceSettings != null) layoutMaintenanceSettings.setVisibility(View.GONE);
 
         if (settingsChangePassword != null) settingsChangePassword.setVisibility(View.GONE);
@@ -365,5 +361,11 @@ public class AdminSettingsActivity extends BaseActivity {
     @Override
     protected boolean isAdminThemeScreen() {
         return true;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadSettingsFromDatabase();
     }
 }

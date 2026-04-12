@@ -320,7 +320,7 @@ public class SearchResultsActivity extends BaseActivity
             String safeQuery = rawQuery == null ? "" : rawQuery.trim();
             String query = "(business_name.ilike.%" + safeQuery + "%,category.ilike.%" + safeQuery + "%,description.ilike.%" + safeQuery + "%)";
             String url = BASE_URL + "/rest/v1/provider_profiles"
-                    + "?select=id,firebase_uid,business_name,category,city,description,profile_image,phone,rating"
+                    + "?select=id,firebase_uid,business_name,category,city,description,profile_image,phone,rating,is_verified"
                     + "&is_approved=eq.true"
                     + "&or=" + Uri.encode(query)
                     + "&limit=60";
@@ -355,11 +355,12 @@ public class SearchResultsActivity extends BaseActivity
                             SearchResult.TYPE_PROVIDER,
                             (float) o.optDouble("rating", 0d),
                             -1f,
-                            "Approved",
+                            o.optBoolean("is_verified", false) ? "Verified" : "Approved",
                             o.optString("description", ""),
                             o.optString("phone", ""),
                             o.optString("profile_image", ""),
-                            "approved"
+                            "approved",
+                            o.optBoolean("is_verified", false)
                     ));
                 }
             }

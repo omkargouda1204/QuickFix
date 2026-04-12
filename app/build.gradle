@@ -15,6 +15,19 @@ if (supabasePropsFile.exists()) {
     logger.warn("WARNING: supabase.properties not found — BuildConfig fields will be empty")
 }
 
+// ── Load local machine-only properties (for secret keys like Razorpay key id) ──
+def localPropsFile = rootProject.file("local.properties")
+def localProps = new Properties()
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+
+def razorpayKeyId = localProps.getProperty('RAZORPAY_KEY_ID', supabaseProps.getProperty('RAZORPAY_KEY_ID', ''))
+def createOrderFnUrl = supabaseProps.getProperty(
+        'SUPABASE_CREATE_ORDER_FN_URL',
+        (supabaseProps.getProperty('SUPABASE_URL', '') ?: '') + '/functions/v1/create-order'
+)
+
 android {
     namespace 'com.example.quickfix'
     compileSdk 36
@@ -35,7 +48,8 @@ android {
         buildConfigField "String", "SUPABASE_BUCKET_BUSINESS_IMG","\"${supabaseProps.getProperty('SUPABASE_BUCKET_BUSINESS_IMG', 'business-images')}\""
         // Edge Function URL for FCM push notifications (stored securely, never hardcoded)
         buildConfigField "String", "SUPABASE_NOTIFY_FN_URL",     "\"${supabaseProps.getProperty('SUPABASE_NOTIFY_FN_URL', '')}\""
-        buildConfigField "String", "RAZORPAY_KEY_ID",            "\"${supabaseProps.getProperty('RAZORPAY_KEY_ID', '')}\""
+        buildConfigField "String", "SUPABASE_CREATE_ORDER_FN_URL","\"${createOrderFnUrl}\""
+        buildConfigField "String", "RAZORPAY_KEY_ID",            "\"${razorpayKeyId}\""
     }
 
     buildFeatures {

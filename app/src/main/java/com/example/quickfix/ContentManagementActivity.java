@@ -97,12 +97,12 @@ public class ContentManagementActivity extends BaseActivity {
     }
 
     /**
-     * Fetches table row count using `Prefer: count=exact` and `head=true`
-     * to avoid downloading full table payloads.
+     * Fetches row count by reading a lightweight id list.
+     * This avoids Content-Range/head behavior differences across proxies/devices.
      */
     private void fetchCount(String table, CountCallback callback) {
         final String encodedTable = android.net.Uri.encode(table);
-        final String url = SUPABASE_URL + "/rest/v1/" + encodedTable + "?select=id&head=true";
+        final String url = SUPABASE_URL + "/rest/v1/" + encodedTable + "?select=id";
         Log.d(TAG, "fetchCount(" + table + ") URL=" + url);
 
         new Thread(() -> {
@@ -112,16 +112,14 @@ public class ContentManagementActivity extends BaseActivity {
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
                         .addHeader("Accept", "application/json")
-                        .addHeader("Prefer", "count=exact")
                         .build();
                 try (Response resp = http.newCall(req).execute()) {
                     int code = resp.code();
                     int count = 0;
-                    String contentRange = resp.header("Content-Range", "");
-                    if (code == 200 || code == 206) {
-                        count = parseCountFromContentRange(contentRange);
+                    String body = resp.body() != null ? resp.body().string() : "[]";
+                    if (code == 200) {
+                        count = new org.json.JSONArray(body).length();
                     } else {
-                        String body = resp.body() != null ? resp.body().string() : "";
                         Log.e(TAG, "fetchCount(" + table + ") HTTP " + code + ": " + body);
                     }
                     final int finalCount = count;
@@ -134,19 +132,6 @@ public class ContentManagementActivity extends BaseActivity {
         }).start();
     }
 
-    private int parseCountFromContentRange(String contentRange) {
-        // Expected format: "0-0/25" or "*/25"
-        if (contentRange == null || contentRange.trim().isEmpty()) return 0;
-        int slash = contentRange.lastIndexOf('/');
-        if (slash < 0 || slash + 1 >= contentRange.length()) return 0;
-        String total = contentRange.substring(slash + 1).trim();
-        if ("*".equals(total)) return 0;
-        try {
-            return Integer.parseInt(total);
-        } catch (NumberFormatException ignore) {
-            return 0;
-        }
-    }
 
     @Override
     protected void onResume() {
