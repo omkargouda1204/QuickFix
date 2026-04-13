@@ -29,7 +29,6 @@ import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.android.material.appbar.MaterialToolbar;
-import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import java.util.concurrent.TimeUnit;
 
@@ -51,9 +50,6 @@ public class SettingsActivity extends BaseActivity {
 
     private static final String TAG             = "SettingsActivity";
     private static final String PREFS_NAME      = "quickfix_prefs";
-    private static final String KEY_PUSH_NOTIF  = "notif_push";
-    private static final String KEY_EMAIL_NOTIF = "notif_email";
-    private static final String KEY_BOOKING_REM = "notif_booking_reminders";
 
     private String pendingProfileImagePath = "";
     private String pendingDeleteUid = "";
@@ -61,8 +57,6 @@ public class SettingsActivity extends BaseActivity {
     private boolean supabaseDeleteCompleted = false;
 
     // ── Views ─────────────────────────────────────────────────────────────
-    private SwitchMaterial switchPush, switchEmail, switchBookingRem;
-    private SwitchMaterial switchDarkMode;
     private LinearLayout   settingsChangePassword, settingsDeleteAccount;
     private FrameLayout    loadingOverlay;
     private TextView       tvDeletingMessage;
@@ -107,65 +101,20 @@ public class SettingsActivity extends BaseActivity {
         }
 
         bindViews();
-        loadPrefs();
         setupListeners();
         syncUserSettingsFromServer();
     }
 
     // ── View binding ──────────────────────────────────────────────────────
     private void bindViews() {
-        switchPush             = findViewById(R.id.switchPushNotifications);
-        switchEmail            = findViewById(R.id.switchEmailNotifications);
-        switchBookingRem       = findViewById(R.id.switchBookingReminders);
-        switchDarkMode         = findViewById(R.id.switchDarkMode);
         settingsChangePassword = findViewById(R.id.settingsChangePassword);
         settingsDeleteAccount  = findViewById(R.id.settingsDeleteAccount);
         loadingOverlay         = findViewById(R.id.settingsLoadingOverlay);
         tvDeletingMessage      = findViewById(R.id.tvDeletingMessage);
     }
 
-    // ── Load persisted prefs ──────────────────────────────────────────────
-    private void loadPrefs() {
-        if (switchPush       != null) switchPush.setChecked(prefs.getBoolean(KEY_PUSH_NOTIF,  true));
-        if (switchEmail      != null) switchEmail.setChecked(prefs.getBoolean(KEY_EMAIL_NOTIF, true));
-        if (switchBookingRem != null) switchBookingRem.setChecked(prefs.getBoolean(KEY_BOOKING_REM, true));
-        if (switchDarkMode   != null) switchDarkMode.setChecked(UserPreferenceManager.isDarkMode(this));
-    }
-
     // ── Click / change listeners ──────────────────────────────────────────
     private void setupListeners() {
-        if (switchPush != null)
-            switchPush.setOnCheckedChangeListener((v, c) ->
-                    prefs.edit().putBoolean(KEY_PUSH_NOTIF, c).apply());
-
-        if (switchEmail != null)
-            switchEmail.setOnCheckedChangeListener((v, c) ->
-                    prefs.edit().putBoolean(KEY_EMAIL_NOTIF, c).apply());
-
-        if (switchBookingRem != null)
-            switchBookingRem.setOnCheckedChangeListener((v, c) ->
-                    prefs.edit().putBoolean(KEY_BOOKING_REM, c).apply());
-
-        if (switchDarkMode != null)
-            switchDarkMode.setOnCheckedChangeListener((v, checked) -> {
-                UserPreferenceManager.setDarkMode(this, checked);
-                FirebaseUser current = mAuth != null ? mAuth.getCurrentUser() : null;
-                if (current != null) {
-                    SupabaseClient.updateUserSettings(
-                            current.getUid(),
-                            current.getEmail(),
-                            checked,
-                            UserPreferenceManager.getLanguageCode(this),
-                            new SupabaseClient.Callback2() {
-                                @Override public void onSuccess() { }
-                                @Override public void onError(String message) {
-                                    Log.w(TAG, "Failed to sync dark mode from SettingsActivity: " + message);
-                                }
-                            }
-                    );
-                }
-            });
-
         if (settingsChangePassword != null)
             settingsChangePassword.setOnClickListener(v ->
                     startActivity(new Intent(this, ForgotPasswordActivity.class)));
@@ -563,9 +512,6 @@ public class SettingsActivity extends BaseActivity {
                                 settings.darkMode,
                                 settings.language
                         );
-                        if (switchDarkMode != null) {
-                            switchDarkMode.setChecked(UserPreferenceManager.isDarkMode(SettingsActivity.this));
-                        }
                     }
 
                     @Override
