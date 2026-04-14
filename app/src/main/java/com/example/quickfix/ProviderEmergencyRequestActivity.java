@@ -1,6 +1,8 @@
 package com.example.quickfix;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
@@ -8,6 +10,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.example.quickfix.BuildConfig;
 import com.google.android.material.button.MaterialButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -29,11 +32,13 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
     private static final String TAG = "ProviderEmergency";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    private static final long STATUS_POLL_MS = 4000L;
 
     private final OkHttpClient http = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .build();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private TextView tvEmergencyUser;
     private TextView tvEmergencyPhone;
@@ -49,6 +54,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     private String providerProfileId = "";
     private String providerName = "Provider";
     private String providerPhone = "";
+    private boolean rejectedByCurrentProvider = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -85,10 +91,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
     private void bindButtons() {
         if (btnReject != null) {
-            btnReject.setOnClickListener(v -> {
-                showToast("Request dismissed.");
-                finish();
-            });
+            btnReject.setOnClickListener(v -> rejectRequest());
         }
         if (btnAccept != null) {
             btnAccept.setOnClickListener(v -> acceptRequest());
@@ -117,6 +120,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                     setLoading(false);
                     bindRequest(request);
                     updateAcceptStateFromStatus(request);
+                    startStatusPolling();
                 });
             } catch (Exception e) {
                 Log.e(TAG, "fetchProviderProfileAndRequest failed", e);
@@ -207,8 +211,8 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 && !TextUtils.isEmpty(assignedProviderId)
                 && !assignedProviderId.equals(providerProfileId);
 
-        boolean enableAccept = !alreadyClosed;
-        boolean enableReject = !alreadyClosed;
+        boolean enableAccept = !alreadyClosed && !rejectedByCurrentProvider;
+        boolean enableReject = !alreadyClosed && !rejectedByCurrentProvider;
 
         if (acceptedByOther) {
             showToast("Already assigned to another provider.");
@@ -216,13 +220,54 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
         if (btnAccept != null) {
             btnAccept.setEnabled(enableAccept);
-            btnAccept.setText(alreadyClosed ? "Already Assigned" : "Accept");
+            btnAccept.setText(alreadyClosed ? "Already Assigned" : (rejectedByCurrentProvider ? "Rejected" : "Accept"));
             btnAccept.setAlpha(enableAccept ? 1f : 0.65f);
         }
         if (btnReject != null) {
             btnReject.setEnabled(enableReject);
+            btnReject.setText(rejectedByCurrentProvider ? "Rejected" : "Reject");
             btnReject.setAlpha(enableReject ? 1f : 0.65f);
         }
+    }
+
+    private void rejectRequest() {
+        if (TextUtils.isEmpty(providerProfileId)) {
+            showToast("Provider profile is missing.");
+            return;
+        }
+
+        setLoading(true);
+        new Thread(() -> {
+            try {
+                JSONObject latest = fetchRequestById(requestId);
+                String status = safe(latest.optString("status", "pending")).toLowerCase(Locale.getDefault());
+                if (!"pending".equals(status)) {
+                    runOnUiThread(() -> {
+                        setLoading(false);
+                        bindRequest(latest);
+                        updateAcceptStateFromStatus(latest);
+                        showToast("Request is no longer pending.");
+                    });
+                    return;
+                }
+
+                upsertProviderResponse("rejected");
+                rejectedByCurrentProvider = true;
+
+                runOnUiThread(() -> {
+                    setLoading(false);
+                    setText(tvEmergencyStatus, "Status: Rejected by you (waiting for another provider)");
+                    updateAcceptStateFromStatus(latest);
+                    showToast("Rejected. Another nearby provider can still accept this request.");
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "rejectRequest failed", e);
+                runOnUiThread(() -> {
+                    setLoading(false);
+                    showToast("Could not reject request. Please try again.");
+                });
+            }
+        }).start();
     }
 
     private void acceptRequest() {
@@ -269,6 +314,8 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                     }
 
                     JSONObject updated = updatedRows.getJSONObject(0);
+                    rejectedByCurrentProvider = false;
+                    upsertProviderResponse("accepted");
                     notifyUserAssigned(updated);
                     mirrorEmergencyBooking(updated);
 
@@ -298,6 +345,65 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             });
         } catch (Exception e) {
             Log.w(TAG, "refreshStateAfterConflict failed: " + e.getMessage());
+        }
+    }
+
+    private void startStatusPolling() {
+        mainHandler.removeCallbacks(statusPollingRunnable);
+        mainHandler.postDelayed(statusPollingRunnable, STATUS_POLL_MS);
+    }
+
+    private final Runnable statusPollingRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isFinishing() || isDestroyed()) return;
+            new Thread(() -> {
+                try {
+                    JSONObject latest = fetchRequestById(requestId);
+                    runOnUiThread(() -> {
+                        bindRequest(latest);
+                        updateAcceptStateFromStatus(latest);
+                    });
+                } catch (Exception e) {
+                    Log.w(TAG, "status polling failed: " + e.getMessage());
+                } finally {
+                    mainHandler.postDelayed(this, STATUS_POLL_MS);
+                }
+            }).start();
+        }
+    };
+
+    private void upsertProviderResponse(String responseStatus) {
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("request_id", requestId);
+            payload.put("provider_id", providerProfileId);
+            payload.put("provider_firebase_uid", FirebaseAuth.getInstance().getCurrentUser() != null
+                    ? safe(FirebaseAuth.getInstance().getCurrentUser().getUid()) : "");
+            payload.put("response", safe(responseStatus));
+            payload.put("responded_at", isoNow());
+
+            Request request = new Request.Builder()
+                    .url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_request_responses")
+                    .post(RequestBody.create(payload.toString(), JSON))
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "resolution=merge-duplicates,return=minimal")
+                    .build();
+
+            try (Response response = http.newCall(request).execute()) {
+                if (response.code() == 404) {
+                    Log.w(TAG, "emergency_request_responses table missing; skipping response upsert");
+                    return;
+                }
+                if (response.code() >= 400) {
+                    String body = response.body() != null ? response.body().string() : "";
+                    Log.w(TAG, "upsertProviderResponse HTTP " + response.code() + " " + body);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "upsertProviderResponse failed: " + e.getMessage());
         }
     }
 
@@ -417,9 +523,15 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
     private String urlEncode(String value) {
         try {
-            return java.net.URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8.name());
+            return java.net.URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8.toString());
         } catch (Exception ignored) {
             return value == null ? "" : value;
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null);
+        super.onDestroy();
     }
 }

@@ -869,7 +869,15 @@ public class MainActivity extends BaseActivity {
         }
         if (quickEmergency != null) {
             quickEmergency.setOnClickListener(v -> {
-                startActivity(new Intent(this, EmergencyHelpActivity.class));
+                Intent emergencyIntent = new Intent(this, EmergencyHelpActivity.class);
+                if (locationManager != null) {
+                    emergencyIntent.putExtra(EmergencyHelpActivity.EXTRA_LOCATION_LABEL, locationManager.getSavedLocationLabel());
+                    emergencyIntent.putExtra(EmergencyHelpActivity.EXTRA_LOCATION_CITY, locationManager.getSavedCity());
+                    emergencyIntent.putExtra(EmergencyHelpActivity.EXTRA_LOCATION_AREA, locationManager.getSavedArea());
+                    emergencyIntent.putExtra(EmergencyHelpActivity.EXTRA_LOCATION_LAT, locationManager.getSavedLat());
+                    emergencyIntent.putExtra(EmergencyHelpActivity.EXTRA_LOCATION_LNG, locationManager.getSavedLng());
+                }
+                startActivity(emergencyIntent);
                 overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
             });
         }

@@ -55,7 +55,7 @@
             android:layout_width="match_parent"
             android:layout_height="58dp"
             android:layout_marginTop="18dp"
-            android:text="Emergency Help"
+            android:text="Submit Emergency Request"
             android:textAllCaps="false"
             android:textSize="17sp"
             android:textStyle="bold"
@@ -88,6 +88,17 @@
                     android:textSize="14sp"
                     android:textStyle="bold" />
 
+                <TextView
+                    android:id="@+id/tvEmergencyRequestStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_dashboard_card"
+                    android:padding="10dp"
+                    android:text="Status: Idle"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12sp" />
+
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -106,7 +117,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:hint="Problem Description (optional)">
+                    android:hint="Problem Description">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/etEmergencyDescription"
@@ -156,6 +167,18 @@
             android:text="Location unavailable"
             android:textColor="@color/text_secondary"
             android:textSize="14sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnEmergencySelectLocation"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="10dp"
+            android:text="Select or Enable Location"
+            android:textAllCaps="false"
+            app:cornerRadius="14dp"
+            app:icon="@drawable/ic_my_location"
+            app:iconGravity="textStart"
+            app:iconPadding="8dp" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -227,7 +250,7 @@
                 android:layout_width="72dp"
                 android:layout_height="72dp"
                 android:src="@drawable/ic_emergency"
-                android:tint="@color/primary"
+                app:tint="@color/primary"
                 android:contentDescription="Emergency" />
 
             <TextView
