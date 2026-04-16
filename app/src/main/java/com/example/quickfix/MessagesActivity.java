@@ -50,6 +50,7 @@ public class MessagesActivity extends BaseActivity {
     public static final String EXTRA_CONTEXT_BODY = "context_body";
 
     private static final String TAG = "MessagesActivity";
+    private static final int PREBOOKING_LIMIT = 5;
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
@@ -86,6 +87,7 @@ public class MessagesActivity extends BaseActivity {
     private Booking activeBooking;
     private boolean isBookingChat = false;
     private boolean chatReady = false;
+    private String lastTailMessageId = "";
     private final Runnable refreshRunnable = new Runnable() {
         @Override
         public void run() {
@@ -133,7 +135,9 @@ public class MessagesActivity extends BaseActivity {
         composerBar = findViewById(R.id.composerBar);
         etMessage = findViewById(R.id.etMessage);
         btnSend = findViewById(R.id.btnSend);
-        rvMessages.setLayoutManager(new LinearLayoutManager(this));
+        LinearLayoutManager lm = new LinearLayoutManager(this);
+        lm.setStackFromEnd(true);
+        rvMessages.setLayoutManager(lm);
         btnSend.setOnClickListener(v -> sendMessage());
     }
 
@@ -277,7 +281,7 @@ public class MessagesActivity extends BaseActivity {
             }
         } else {
             tvChatSubtitle.setText("Pre-booking chat");
-            tvChatStatus.setText("Limited to 5 user messages before booking");
+            tvChatStatus.setText("Limited to " + PREBOOKING_LIMIT + " user messages before booking");
             btnSend.setVisibility(View.VISIBLE);
         }
         if (adapter == null) {
@@ -329,7 +333,8 @@ public class MessagesActivity extends BaseActivity {
                     emptyState.setVisibility(empty ? View.VISIBLE : View.GONE);
                     rvMessages.setVisibility(empty ? View.GONE : View.VISIBLE);
                     tvEmptyState.setText(empty ? "No messages yet. Say hello." : "");
-                    if (!empty && scrollToBottom) {
+                    boolean shouldScroll = scrollToBottom || shouldAutoScrollToBottom(list);
+                    if (!empty && shouldScroll) {
                         rvMessages.scrollToPosition(list.size() - 1);
                     }
                 });
@@ -346,11 +351,11 @@ public class MessagesActivity extends BaseActivity {
         if (isBookingChat) {
             return SUPABASE_URL + "/rest/v1/messages?chat_type=eq.booking&booking_id=eq." + encode(bookingId)
                     + "&" + pairFilter
-                    + "&select=*&order=created_at.asc";
+                    + "&select=*&order=created_at.asc,id.asc";
         }
         return SUPABASE_URL + "/rest/v1/messages?chat_type=eq.pre_booking"
                 + "&" + pairFilter
-                + "&select=*&order=created_at.asc";
+                + "&select=*&order=created_at.asc,id.asc";
     }
 
     private void sendMessage() {
@@ -373,7 +378,7 @@ public class MessagesActivity extends BaseActivity {
             try {
                 if (!isBookingChat && "user".equals(currentUserRole)) {
                     int sent = countPreBookingMessagesByUser();
-                    if (sent >= 5) {
+                    if (sent >= PREBOOKING_LIMIT) {
                         main.post(() -> {
                             setComposerEnabled(true);
                             showLoading(false);
@@ -420,6 +425,7 @@ public class MessagesActivity extends BaseActivity {
                             etMessage.setText("");
                             setComposerEnabled(true);
                             showLoading(false);
+                            toast(getString(R.string.toast_message_sent));
                             loadMessages(true);
                         });
                     } else {
@@ -429,8 +435,10 @@ public class MessagesActivity extends BaseActivity {
                             showLoading(false);
                             if (resp.contains("Please book service to continue") || resp.contains("Message limit reached")) {
                                 toast("Message limit reached. Please book service to continue.");
+                            } else if (resp.contains("new row violates row-level security") || resp.contains("42501")) {
+                                toast("Message blocked by server policy. Ask admin to enable message insert policy.");
                             } else {
-                                toast("Failed to send message");
+                                toast(getString(R.string.toast_message_send_failed));
                             }
                         });
                     }
@@ -440,10 +448,47 @@ public class MessagesActivity extends BaseActivity {
                 main.post(() -> {
                     setComposerEnabled(true);
                     showLoading(false);
-                    toast("Failed to send message");
+                    toast(isNetworkIssue(e)
+                            ? getString(R.string.toast_no_internet)
+                            : getString(R.string.toast_message_send_failed));
                 });
             }
         }).start();
+    }
+
+    private boolean shouldAutoScrollToBottom(List<ChatMessage> list) {
+        if (list == null || list.isEmpty()) {
+            lastTailMessageId = "";
+            return false;
+        }
+        ChatMessage tail = list.get(list.size() - 1);
+        String nextTailId = safe(tail == null ? "" : tail.id);
+        if (lastTailMessageId.isEmpty()) {
+            lastTailMessageId = nextTailId;
+            return false;
+        }
+        boolean isNewTail = !nextTailId.isEmpty() && !nextTailId.equals(lastTailMessageId);
+        if (isNewTail) {
+            lastTailMessageId = nextTailId;
+            return isNearBottom();
+        }
+        return false;
+    }
+
+    private boolean isNearBottom() {
+        if (adapter == null) return true;
+        RecyclerView.LayoutManager lm = rvMessages.getLayoutManager();
+        if (!(lm instanceof LinearLayoutManager)) return true;
+        int total = adapter.getItemCount();
+        if (total <= 0) return true;
+        int lastVisible = ((LinearLayoutManager) lm).findLastVisibleItemPosition();
+        return total - 1 - lastVisible <= 2;
+    }
+
+    private boolean isNetworkIssue(Throwable t) {
+        return t instanceof java.net.UnknownHostException
+                || t instanceof java.net.SocketTimeoutException
+                || t instanceof java.net.ConnectException;
     }
 
     private int countPreBookingMessagesByUser() {
@@ -477,10 +522,20 @@ public class MessagesActivity extends BaseActivity {
             } else {
                 filter = "chat_type=eq.pre_booking&sender_id=eq." + encode(otherPartyId);
             }
+            boolean marked = patchSeenFlag(filter, "is_seen");
+            if (!marked) {
+                patchSeenFlag(filter, "is_read");
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private boolean patchSeenFlag(String filter, String seenColumn) {
+        try {
             String url = SUPABASE_URL + "/rest/v1/messages?receiver_id=eq." + encode(currentUserId)
-                    + "&is_seen=eq.false&" + filter;
+                    + "&" + seenColumn + "=eq.false&" + filter;
             JSONObject body = new JSONObject();
-            body.put("is_seen", true);
+            body.put(seenColumn, true);
             Request req = new Request.Builder().url(url)
                     .patch(RequestBody.create(body.toString(), JSON))
                     .addHeader("apikey", ANON_KEY)
@@ -488,10 +543,11 @@ public class MessagesActivity extends BaseActivity {
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Prefer", "return=minimal")
                     .build();
-            try (Response ignored = http.newCall(req).execute()) {
-                // fire-and-forget seen update
+            try (Response resp = http.newCall(req).execute()) {
+                return resp.code() == 200 || resp.code() == 204;
             }
         } catch (Exception ignored) {
+            return false;
         }
     }
 

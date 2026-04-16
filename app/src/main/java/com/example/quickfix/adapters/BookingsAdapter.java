@@ -2,7 +2,6 @@ package com.example.quickfix.adapters;
 
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
 import android.net.Uri;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -105,9 +104,9 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
             tvDateTime.setText(booking.bookingDate + " • " + booking.bookingTime);
             tvAddress.setText(booking.address.isEmpty() ? "No address" : booking.address);
             double shownAmount = booking.paymentAmount > 0 ? booking.paymentAmount : booking.price;
-            tvPrice.setText("₹" + String.format(Locale.US, "%.0f", shownAmount));
+            tvPrice.setText("Amount: ₹" + String.format(Locale.US, "%.0f", shownAmount));
             String status = booking.status == null ? "" : booking.status.trim().toLowerCase(Locale.US);
-            tvStatus.setText(status.toUpperCase(Locale.US));
+            tvStatus.setText(formatStatus(status));
 
             // Status badge color
             switch (status) {
@@ -116,6 +115,7 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
                     tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_pending_text));
                     break;
                 case "accepted":
+                case "confirmed":
                     tvStatus.setBackgroundResource(R.drawable.badge_accepted);
                     tvStatus.setTextColor(ContextCompat.getColor(context, R.color.primary));
                     break;
@@ -132,6 +132,10 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
                 case "rejected":
                     tvStatus.setBackgroundResource(R.drawable.badge_cancelled);
                     tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_rejected_text));
+                    break;
+                default:
+                    tvStatus.setBackgroundResource(R.drawable.badge_pending);
+                    tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_neutral_text));
                     break;
             }
 
@@ -171,6 +175,7 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
             btnMessage.setVisibility(View.VISIBLE);
             btnMessage.setEnabled(!"completed".equals(status));
             btnMessage.setAlpha(btnMessage.isEnabled() ? 1f : 0.5f);
+            btnCall.setVisibility(View.GONE);
 
             if (etSetAmount != null) {
                 etSetAmount.setText(booking.paymentAmount > 0
@@ -222,6 +227,14 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
             btnMessage.setOnClickListener(v -> {
                 if (listener != null && btnMessage.isEnabled()) listener.onMessageBooking(booking);
             });
+        }
+
+        private String formatStatus(String status) {
+            if ("price_set".equals(status) || "paid".equals(status) || "confirmed".equals(status)) {
+                return "ACCEPTED";
+            }
+            if ("rejected".equals(status)) return "CANCELLED";
+            return status.toUpperCase(Locale.US);
         }
     }
 }

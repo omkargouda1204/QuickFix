@@ -48,12 +48,15 @@ public class ChatThreadsAdapter extends RecyclerView.Adapter<ChatThreadsAdapter.
     @Override
     public void onBindViewHolder(@NonNull VH h, int position) {
         ChatThread t = items.get(position);
-        h.tvName.setText(safe(t.otherPartyName).isEmpty() ? "Chat" : t.otherPartyName);
+        String name = safe(t.otherPartyName).isEmpty() ? "Chat" : t.otherPartyName;
+        h.tvName.setText(name);
+        if (h.tvAvatar != null) {
+            h.tvAvatar.setText(name.substring(0, 1).toUpperCase(Locale.getDefault()));
+        }
         h.tvLastMessage.setText(safe(t.lastMessage).isEmpty() ? "No messages yet" : t.lastMessage);
         h.tvTime.setText(formatTime(t.lastMessageAt));
         if (t.unreadCount > 0) {
             h.tvUnread.setVisibility(View.VISIBLE);
-            h.tvUnread.setText(String.valueOf(t.unreadCount));
         } else {
             h.tvUnread.setVisibility(View.GONE);
         }
@@ -83,6 +86,7 @@ public class ChatThreadsAdapter extends RecyclerView.Adapter<ChatThreadsAdapter.
     }
 
     static class VH extends RecyclerView.ViewHolder {
+        TextView tvAvatar;
         TextView tvName;
         TextView tvLastMessage;
         TextView tvTime;
@@ -90,6 +94,7 @@ public class ChatThreadsAdapter extends RecyclerView.Adapter<ChatThreadsAdapter.
 
         VH(@NonNull View itemView) {
             super(itemView);
+            tvAvatar = itemView.findViewById(R.id.tvThreadAvatar);
             tvName = itemView.findViewById(R.id.tvThreadName);
             tvLastMessage = itemView.findViewById(R.id.tvThreadLastMessage);
             tvTime = itemView.findViewById(R.id.tvThreadTime);

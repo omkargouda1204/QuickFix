@@ -95,13 +95,9 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             tvAddress.setText(b.address.isEmpty() ? "-" : b.address);
             // Status badge
             String status = b.status == null ? "" : b.status.toLowerCase();
-            tvStatus.setText(b.status == null ? "" : b.status.toUpperCase());
+            tvStatus.setText(formatStatus(status));
             double shownAmount = b.paymentAmount > 0 ? b.paymentAmount : b.price;
-            if ("price_set".equals(status) && shownAmount > 0) {
-                tvPrice.setText("Amount: ₹" + String.format(Locale.US, "%.0f", shownAmount));
-            } else {
-                tvPrice.setText(shownAmount > 0 ? "₹" + String.format(Locale.US, "%.0f", shownAmount) : "");
-            }
+            tvPrice.setText(shownAmount > 0 ? "Amount: ₹" + String.format(Locale.US, "%.0f", shownAmount) : "Amount: ₹0");
             switch (status) {
                 case "pending":
                     tvStatus.setBackgroundResource(R.drawable.badge_pending);
@@ -122,6 +118,7 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
                     tvStatus.setTextColor(ContextCompat.getColor(context, R.color.primary));
                     break;
                 case "cancelled":
+                case "rejected":
                     tvStatus.setBackgroundResource(R.drawable.badge_cancelled);
                     tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_rejected_text));
                     break;
@@ -178,6 +175,13 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             btnMessage.setOnClickListener(v -> {
                 if (listener != null && btnMessage.isEnabled()) listener.onMessageBooking(b);
             });
+        }
+
+        private String formatStatus(String status) {
+            if ("price_set".equals(status)) return "ACCEPTED";
+            if ("paid".equals(status)) return "ACCEPTED";
+            if ("rejected".equals(status)) return "CANCELLED";
+            return status == null ? "" : status.toUpperCase(Locale.US);
         }
     }
 }

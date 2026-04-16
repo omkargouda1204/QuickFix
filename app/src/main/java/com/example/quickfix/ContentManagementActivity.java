@@ -117,7 +117,7 @@ public class ContentManagementActivity extends BaseActivity {
                     int code = resp.code();
                     int count = 0;
                     String body = resp.body() != null ? resp.body().string() : "[]";
-                    if (code == 200) {
+                    if (code == 200 || code == 206) {
                         count = new org.json.JSONArray(body).length();
                     } else {
                         Log.e(TAG, "fetchCount(" + table + ") HTTP " + code + ": " + body);

@@ -5,13 +5,14 @@
     android:id="@+id/cardBooking"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginStart="16dp"
-    android:layout_marginEnd="16dp"
+    android:layout_marginStart="12dp"
     android:layout_marginTop="8dp"
-    android:layout_marginBottom="4dp"
-    app:cardCornerRadius="16dp"
-    app:cardElevation="3dp"
-    app:strokeWidth="0dp">
+    android:layout_marginEnd="12dp"
+    android:layout_marginBottom="8dp"
+    app:cardCornerRadius="18dp"
+    app:cardElevation="6dp"
+    app:strokeColor="@color/divider"
+    app:strokeWidth="1dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -19,13 +20,11 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- Top row: service name + status -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:weightSum="4">
+            android:orientation="horizontal">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -35,100 +34,104 @@
 
                 <TextView
                     android:id="@+id/tvServiceName"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
                     android:text="Service Name"
                     android:textColor="@color/text_primary"
-                    android:textSize="17sp"
+                    android:textSize="18sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/tvProviderName"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="By: Provider"
-                    android:textColor="@color/primary"
-                    android:textSize="13sp" />
+                    android:layout_marginTop="4dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Provider Name"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <TextView
                 android:id="@+id/tvStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:background="@drawable/badge_pending"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:paddingStart="10dp"
+                android:paddingTop="5dp"
                 android:paddingEnd="10dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp"
+                android:paddingBottom="5dp"
                 android:text="PENDING"
+                android:textColor="@color/status_pending_text"
                 android:textSize="11sp"
-                android:textStyle="bold"
-                android:background="@drawable/badge_pending" />
+                android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Divider -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginTop="12dp"
-            android:layout_marginBottom="10dp"
-            android:background="#F0F0F0" />
-
-        <!-- Date/Time -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
+            android:layout_marginTop="12dp"
             android:gravity="center_vertical"
-            android:layout_marginBottom="6dp">
+            android:orientation="horizontal">
+
             <ImageView
                 android:layout_width="16dp"
                 android:layout_height="16dp"
+                android:contentDescription="Date"
                 android:src="@drawable/ic_calendar"
-                app:tint="#9E9E9E"
-                android:contentDescription="Date" />
+                app:tint="@color/text_secondary" />
+
             <TextView
                 android:id="@+id/tvDateTime"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:text="—"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="-"
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
         </LinearLayout>
 
-        <!-- Address -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
+            android:layout_marginTop="6dp"
             android:gravity="center_vertical"
-            android:layout_marginBottom="12dp">
+            android:orientation="horizontal">
+
             <ImageView
                 android:layout_width="16dp"
                 android:layout_height="16dp"
+                android:contentDescription="Location"
                 android:src="@drawable/ic_location"
-                app:tint="#9E9E9E"
-                android:contentDescription="Address" />
+                app:tint="@color/text_secondary" />
+
             <TextView
                 android:id="@+id/tvAddress"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:layout_marginStart="8dp"
-                android:text="—"
-                android:textColor="@color/text_secondary"
-                android:textSize="13sp"
+                android:layout_weight="1"
+                android:ellipsize="end"
                 android:maxLines="2"
-                android:ellipsize="end" />
+                android:text="-"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp" />
         </LinearLayout>
 
-        <!-- Bottom row: price + buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:layout_marginTop="14dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/tvPrice"
@@ -137,59 +140,69 @@
                 android:layout_weight="1"
                 android:text="₹500"
                 android:textColor="@color/primary"
-                android:textSize="18sp"
+                android:textSize="20sp"
                 android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCancel"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="40dp"
                 android:layout_weight="1"
                 android:text="Cancel"
+                android:textColor="@color/status_rejected_text"
                 android:textSize="12sp"
-                app:strokeColor="#D32F2F"
-                android:textColor="#D32F2F"
-                android:layout_marginEnd="8dp"
-                android:visibility="gone" />
+                android:visibility="gone"
+                app:cornerRadius="20dp"
+                app:strokeColor="@color/status_rejected_text" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnReview"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:layout_marginEnd="8dp"
                 android:text="@string/review_write_button"
                 android:textSize="12sp"
-                android:visibility="gone" />
+                android:visibility="gone"
+                app:cornerRadius="20dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnPayNow"
-                style="@style/Widget.Material3.Button.TonalButton"
+                style="@style/Widget.QuickFix.Button.Rounded"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:layout_marginEnd="8dp"
                 android:text="Pay Now"
                 android:textSize="12sp"
                 android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnViewDetails"
-                style="@style/Widget.Material3.Button.TonalButton"
+                style="@style/Widget.QuickFix.Button.Rounded.Tonal"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:layout_marginEnd="8dp"
                 android:text="Details"
                 android:textSize="12sp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnMessage"
-                style="@style/Widget.Material3.Button.TonalButton"
+                style="@style/Widget.QuickFix.Button.Rounded.Tonal"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:text="Message"
                 android:textSize="12sp" />
@@ -200,12 +213,12 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:text="@string/review_rate_experience"
             android:textColor="@color/text_secondary"
             android:textSize="12sp"
-            android:maxLines="2"
-            android:ellipsize="end"
-            android:visibility="gone"
-            android:text="@string/review_rate_experience" />
+            android:visibility="gone" />
 
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

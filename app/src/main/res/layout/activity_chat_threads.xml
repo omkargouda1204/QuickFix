@@ -4,35 +4,47 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/screen_background">
+    android:background="#F4F6F9">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbarThreads"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/card_bg"
+        android:background="@drawable/bg_admin_header_gradient"
         app:navigationIcon="@drawable/ic_arrow_back_white"
         app:title="Messages"
-        app:titleTextColor="@color/text_primary" />
+        app:titleTextColor="@android:color/white" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rvThreads"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:paddingTop="8dp"
-        android:paddingBottom="16dp" />
+        android:layout_weight="1">
 
-    <TextView
-        android:id="@+id/tvThreadsEmpty"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:padding="24dp"
-        android:text="No chats yet"
-        android:textColor="@color/text_secondary"
-        android:visibility="gone" />
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/swipeThreads"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvThreads"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingTop="12dp"
+                android:paddingBottom="16dp" />
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+        <TextView
+            android:id="@+id/tvThreadsEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:padding="24dp"
+            android:text="No chats yet"
+            android:textColor="@color/text_secondary"
+            android:visibility="gone" />
+    </FrameLayout>
 
     <ProgressBar
         android:id="@+id/progressThreads"

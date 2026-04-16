@@ -11,6 +11,7 @@ import android.widget.TextView;
 
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.quickfix.adapters.ChatThreadsAdapter;
 import com.google.android.material.appbar.MaterialToolbar;
@@ -47,6 +48,7 @@ public class ChatThreadsActivity extends BaseActivity implements ChatThreadsAdap
     private RecyclerView rvThreads;
     private TextView tvEmpty;
     private ProgressBar progress;
+    private SwipeRefreshLayout swipeThreads;
 
     private ChatThreadsAdapter adapter;
 
@@ -85,6 +87,11 @@ public class ChatThreadsActivity extends BaseActivity implements ChatThreadsAdap
         rvThreads = findViewById(R.id.rvThreads);
         tvEmpty = findViewById(R.id.tvThreadsEmpty);
         progress = findViewById(R.id.progressThreads);
+        swipeThreads = findViewById(R.id.swipeThreads);
+        if (swipeThreads != null) {
+            swipeThreads.setColorSchemeResources(R.color.primary);
+            swipeThreads.setOnRefreshListener(this::loadThreads);
+        }
     }
 
     private void setupToolbar() {
@@ -316,6 +323,10 @@ public class ChatThreadsActivity extends BaseActivity implements ChatThreadsAdap
     }
 
     private void showLoading(boolean show) {
+        if (swipeThreads != null && swipeThreads.isRefreshing()) {
+            if (!show) swipeThreads.setRefreshing(false);
+            return;
+        }
         if (progress != null) progress.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 

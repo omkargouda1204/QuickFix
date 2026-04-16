@@ -55,13 +55,11 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<ChatMessageAdapter.
         h.rightRoot.setVisibility(mine ? View.VISIBLE : View.GONE);
 
         TextView bubble = mine ? h.rightMessage : h.leftMessage;
-        TextView sender = mine ? h.rightSender : h.leftSender;
         TextView time = mine ? h.rightTime : h.leftTime;
         TextView seen = h.rightSeen;
 
         String msgText = safe(m.message);
         bubble.setText(msgText.isEmpty() ? "" : msgText);
-        sender.setText(displaySenderType(m, mine));
         time.setText(formatTime(m.createdAt));
         if (seen != null) {
             seen.setVisibility(mine ? View.VISIBLE : View.GONE);
@@ -83,14 +81,6 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<ChatMessageAdapter.
         return safe(m.senderId).equals(currentUserId);
     }
 
-    private String displaySenderType(ChatMessage m, boolean mine) {
-        if (mine) return "You";
-        String type = safe(m.senderType).toLowerCase(Locale.US);
-        if ("provider".equals(type)) return "Provider";
-        if ("user".equals(type)) return "User";
-        return "provider".equalsIgnoreCase(currentUserRole) ? "User" : "Provider";
-    }
-
     private String formatTime(String createdAt) {
         String raw = safe(createdAt);
         if (raw.isEmpty()) return "";
@@ -108,18 +98,16 @@ public class ChatMessageAdapter extends RecyclerView.Adapter<ChatMessageAdapter.
 
     static class VH extends RecyclerView.ViewHolder {
         View leftRoot, rightRoot;
-        TextView leftMessage, leftSender, leftTime;
-        TextView rightMessage, rightSender, rightTime, rightSeen;
+        TextView leftMessage, leftTime;
+        TextView rightMessage, rightTime, rightSeen;
 
         VH(@NonNull View itemView) {
             super(itemView);
             leftRoot = itemView.findViewById(R.id.leftBubbleRoot);
             rightRoot = itemView.findViewById(R.id.rightBubbleRoot);
             leftMessage = itemView.findViewById(R.id.tvLeftMessage);
-            leftSender = itemView.findViewById(R.id.tvLeftSender);
             leftTime = itemView.findViewById(R.id.tvLeftTime);
             rightMessage = itemView.findViewById(R.id.tvRightMessage);
-            rightSender = itemView.findViewById(R.id.tvRightSender);
             rightTime = itemView.findViewById(R.id.tvRightTime);
             rightSeen = itemView.findViewById(R.id.tvRightSeen);
         }
