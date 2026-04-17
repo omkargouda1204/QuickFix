@@ -8,7 +8,6 @@ import android.os.Looper;
 import android.util.Log;
 import android.widget.ImageView;
 
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -18,7 +17,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -104,7 +103,7 @@ public class CategoriesActivity extends BaseActivity {
             try {
                 StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
                         .append("/rest/v1/provider_profiles")
-                        .append("?select=category,city,is_approved,approved,status,is_active");
+                        .append("?select=category,city,is_approved,status");
 
                 Request req = new Request.Builder().url(url.toString())
                         .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
@@ -114,6 +113,8 @@ public class CategoriesActivity extends BaseActivity {
 
                 try (Response r = HTTP.newCall(req).execute()) {
                     if (!r.isSuccessful()) {
+                        String errorBody = r.body() != null ? r.body().string() : "";
+                        Log.w(TAG, "loadProviderCounts HTTP " + r.code() + " body=" + errorBody);
                         MAIN.post(() -> {
                             for (ServiceCategory c : categories) adapter.updateCount(c.name, "No providers");
                         });
@@ -122,7 +123,10 @@ public class CategoriesActivity extends BaseActivity {
 
                     String body = r.body() != null ? r.body().string() : "[]";
                     JSONArray arr = new JSONArray(body);
-                    Map<String, Integer> countByCategory = new HashMap<>();
+                    Map<String, Integer> countByCategory = new LinkedHashMap<>();
+                    for (ServiceCategory cat : categories) {
+                        countByCategory.put(cat.name, 0);
+                    }
 
                     for (int i = 0; i < arr.length(); i++) {
                         JSONObject o = arr.getJSONObject(i);
@@ -134,16 +138,19 @@ public class CategoriesActivity extends BaseActivity {
                             continue;
                         }
 
-                        String category = o.optString("category", "").trim();
-                        if (category.isEmpty()) continue;
+                        String providerCategory = o.optString("category", "").trim();
+                        if (providerCategory.isEmpty()) continue;
 
-                        String key = category.toLowerCase(Locale.getDefault());
-                        countByCategory.put(key, countByCategory.getOrDefault(key, 0) + 1);
+                        for (ServiceCategory cat : categories) {
+                            if (!categoryMatches(cat.name, providerCategory)) continue;
+                            countByCategory.put(cat.name, countByCategory.get(cat.name) + 1);
+                            break;
+                        }
                     }
 
                     MAIN.post(() -> {
                         for (ServiceCategory cat : categories) {
-                            int count = countByCategory.getOrDefault(cat.name.toLowerCase(Locale.getDefault()), 0);
+                            int count = countByCategory.getOrDefault(cat.name, 0);
                             String label = count == 0
                                     ? "No providers"
                                     : count + " provider" + (count != 1 ? "s" : "");
@@ -161,23 +168,12 @@ public class CategoriesActivity extends BaseActivity {
     }
 
     private boolean isProviderApproved(org.json.JSONObject o) {
-        if (o.optBoolean("is_approved", false) || o.optBoolean("approved", false)) return true;
+        if (o.optBoolean("is_approved", false)) return true;
         String status = o.optString("status", "").trim().toLowerCase(Locale.getDefault());
-        if ("approved".equals(status) || "active".equals(status)) return true;
-        return o.optBoolean("is_active", false);
+        return "approved".equals(status) || "active".equals(status);
     }
 
-    private int parseExactCount(Response response) {
-        try {
-            String contentRange = response.header("Content-Range");
-            if (contentRange == null || !contentRange.contains("/")) return -1;
-            String[] parts = contentRange.split("/");
-            if (parts.length != 2) return -1;
-            String countPart = parts[1].trim();
-            if (countPart.equals("*")) return -1;
-            return Integer.parseInt(countPart);
-        } catch (Exception ignore) {
-            return -1;
-        }
+    private boolean categoryMatches(String categoryName, String providerCategory) {
+        return CategoryMatcher.matches(categoryName, providerCategory);
     }
 }

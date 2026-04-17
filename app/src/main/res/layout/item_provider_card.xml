@@ -21,7 +21,7 @@
         <!-- Business image banner -->
         <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="160dp">
+            android:layout_height="120dp">
 
             <ImageView
                 android:id="@+id/ivBusinessImage"
@@ -43,15 +43,15 @@
                 android:id="@+id/tvCategoryBadge"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_margin="10dp"
+                android:layout_margin="8dp"
                 android:background="@drawable/bg_category_badge"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp"
                 android:text="Plumbing"
                 android:textColor="#FFFFFF"
-                android:textSize="11sp"
+                android:textSize="10sp"
                 android:textStyle="bold" />
 
             <!-- Verified badge top-right -->
@@ -60,19 +60,19 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="top|end"
-                android:layout_margin="10dp"
+                android:layout_margin="8dp"
                 android:background="@drawable/bg_verified_badge"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingStart="7dp"
-                android:paddingEnd="7dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp"
                 android:visibility="gone">
 
                 <ImageView
-                    android:layout_width="14dp"
-                    android:layout_height="14dp"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
                     android:src="@drawable/ic_check"
                     app:tint="#FFFFFF"
                     android:contentDescription="Verified" />
@@ -84,18 +84,18 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="bottom|end"
-                android:layout_margin="10dp"
+                android:layout_margin="8dp"
                 android:background="@drawable/bg_rating_chip"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp">
+                android:paddingStart="7dp"
+                android:paddingEnd="7dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp">
 
                 <ImageView
-                    android:layout_width="12dp"
-                    android:layout_height="12dp"
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
                     android:src="@drawable/ic_check"
                     app:tint="#FFD700"
                     android:contentDescription="Rating" />
@@ -107,7 +107,7 @@
                     android:layout_marginStart="3dp"
                     android:text="4.5"
                     android:textColor="#FFFFFF"
-                    android:textSize="11sp"
+                    android:textSize="10sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
@@ -118,7 +118,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="14dp">
+            android:padding="12dp">
 
             <!-- Business name + experience row -->
             <LinearLayout
@@ -134,7 +134,7 @@
                     android:layout_weight="1"
                     android:text="Business Name"
                     android:textColor="@color/text_primary"
-                    android:textSize="16sp"
+                    android:textSize="15sp"
                     android:textStyle="bold"
                     android:maxLines="1"
                     android:ellipsize="end" />
@@ -159,10 +159,10 @@
                 android:id="@+id/tvProviderName"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
+                android:layout_marginTop="2dp"
                 android:text="Provider Name"
                 android:textColor="@color/text_secondary"
-                android:textSize="13sp" />
+                android:textSize="12sp" />
 
             <!-- City row -->
             <LinearLayout
@@ -173,8 +173,8 @@
                 android:orientation="horizontal">
 
                 <ImageView
-                    android:layout_width="13dp"
-                    android:layout_height="13dp"
+                    android:layout_width="11dp"
+                    android:layout_height="11dp"
                     android:src="@drawable/ic_location"
                     app:tint="@color/text_secondary"
                     android:contentDescription="City" />
@@ -186,27 +186,26 @@
                     android:layout_marginStart="4dp"
                     android:text="City"
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
 
-            <!-- Description -->
             <TextView
                 android:id="@+id/tvDescription"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="4dp"
                 android:text="Short description of services offered..."
                 android:textColor="@color/text_secondary"
-                android:textSize="13sp"
-                android:maxLines="2"
-                android:ellipsize="end" />
+                android:textSize="12sp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:visibility="gone" />
 
-            <!-- Divider -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:layout_marginTop="12dp"
-                android:layout_marginBottom="12dp"
+                android:layout_marginTop="10dp"
+                android:layout_marginBottom="10dp"
                 android:background="#F0F0F0" />
 
             <!-- Action buttons -->
@@ -220,12 +219,12 @@
                     android:id="@+id/btnViewProfile"
                     style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="0dp"
-                    android:layout_height="40dp"
+                    android:layout_height="36dp"
                     android:layout_weight="1"
                     android:layout_marginEnd="6dp"
                     android:text="View Profile"
-                    android:textSize="13sp"
-                    app:cornerRadius="20dp"
+                    android:textSize="12sp"
+                    app:cornerRadius="18dp"
                     app:strokeColor="@color/primary"
                     android:textColor="@color/primary" />
 
@@ -233,13 +232,13 @@
                     android:id="@+id/btnBookService"
                     style="@style/Widget.Material3.Button"
                     android:layout_width="0dp"
-                    android:layout_height="40dp"
+                    android:layout_height="36dp"
                     android:layout_weight="1"
                     android:layout_marginStart="6dp"
                     android:text="Book Service"
-                    android:textSize="13sp"
+                    android:textSize="12sp"
                     app:backgroundTint="@color/primary"
-                    app:cornerRadius="20dp"
+                    app:cornerRadius="18dp"
                     android:textColor="#FFFFFF" />
 
             </LinearLayout>
@@ -249,6 +248,5 @@
     </LinearLayout>
 
 </com.google.android.material.card.MaterialCardView>
-
 
 

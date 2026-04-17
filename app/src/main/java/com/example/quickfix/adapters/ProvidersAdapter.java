@@ -1,7 +1,6 @@
 package com.example.quickfix.adapters;
 
 import android.content.Context;
-import android.graphics.Color;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -84,12 +83,8 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
         }
 
         // Description
-        if (p.description != null && !p.description.isEmpty()) {
-            h.tvDescription.setText(p.description);
-            h.tvDescription.setVisibility(View.VISIBLE);
-        } else {
-            h.tvDescription.setVisibility(View.GONE);
-        }
+        // Keep cards compact; full details are shown on ProviderDetailActivity.
+        h.tvDescription.setVisibility(View.GONE);
 
         // Verified badge
         h.layoutVerifiedBadge.setVisibility(p.isVerified ? View.VISIBLE : View.GONE);
@@ -97,7 +92,7 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
         // Rating
         if (p.rating > 0) {
             h.layoutRating.setVisibility(View.VISIBLE);
-            h.tvRating.setText(String.format("%.1f", p.rating));
+            h.tvRating.setText(String.format(Locale.US, "%.1f", p.rating));
         } else {
             h.layoutRating.setVisibility(View.GONE);
         }
@@ -158,4 +153,3 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
         }
     }
 }
-

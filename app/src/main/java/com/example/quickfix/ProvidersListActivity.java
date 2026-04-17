@@ -61,6 +61,7 @@ public class ProvidersListActivity extends BaseActivity
     private static final String TAG = "ProvidersListActivity";
     private static final float NEARBY_RADIUS_PRIMARY_METERS = 20000f;
     private static final float NEARBY_RADIUS_SECONDARY_METERS = 25000f;
+    private static final int PROVIDERS_PAGE_SIZE = 2;
 
     // ── Views ─────────────────────────────────────────────────────────────
     private TextView          tvCategoryTitle, tvResultSubtitle, tvLocationLabel, tvEmptySubtitle;
@@ -72,10 +73,13 @@ public class ProvidersListActivity extends BaseActivity
     private EditText          etSearch;
     private ImageView         btnClearSearch;
     private LinearLayout      searchBar;
+    private com.google.android.material.button.MaterialButton btnLoadMoreProviders;
 
     // ── Data ──────────────────────────────────────────────────────────────
     private ProvidersAdapter      adapter;
     private List<ProviderProfile> allProviders  = new ArrayList<>();
+    private List<ProviderProfile> latestFilteredProviders = new ArrayList<>();
+    private int visibleProvidersCount = PROVIDERS_PAGE_SIZE;
     private String                category      = "";
     private String                cityFilter    = "";
     private String                currentChip   = "All";
@@ -140,6 +144,7 @@ public class ProvidersListActivity extends BaseActivity
         etSearch         = findViewById(R.id.etSearch);
         btnClearSearch   = findViewById(R.id.btnClearSearch);
         searchBar        = findViewById(R.id.searchBar);
+        btnLoadMoreProviders = findViewById(R.id.btnLoadMoreProviders);
 
         btnBack.setOnClickListener(v -> finish());
 
@@ -155,6 +160,13 @@ public class ProvidersListActivity extends BaseActivity
         if (btnRetry != null) btnRetry.setOnClickListener(v -> loadProviders());
         View btnRetryError = findViewById(R.id.btnRetryError);
         if (btnRetryError != null) btnRetryError.setOnClickListener(v -> loadProviders());
+
+        if (btnLoadMoreProviders != null) {
+            btnLoadMoreProviders.setOnClickListener(v -> {
+                visibleProvidersCount += PROVIDERS_PAGE_SIZE;
+                renderProviderList(latestFilteredProviders, false);
+            });
+        }
     }
 
     private void setupRecycler() {
@@ -216,6 +228,8 @@ public class ProvidersListActivity extends BaseActivity
     private void loadProviders() {
         showLoading(true);
         allProviders.clear();
+        latestFilteredProviders.clear();
+        visibleProvidersCount = PROVIDERS_PAGE_SIZE;
 
         new Thread(() -> {
             try {
@@ -262,7 +276,7 @@ public class ProvidersListActivity extends BaseActivity
                     .append("/rest/v1/provider_profiles?select=*");
 
             if (withStatusFilter) {
-                url.append("&or=(is_approved.eq.true,approved.eq.true,status.eq.approved,status.eq.active,is_active.eq.true)");
+                url.append("&or=(is_approved.eq.true,status.eq.approved,status.eq.active)");
             }
 
             url.append("&order=created_at.desc");
@@ -278,7 +292,10 @@ public class ProvidersListActivity extends BaseActivity
 
             try (Response r = HTTP.newCall(req).execute()) {
                 String body = r.body() != null ? r.body().string() : "[]";
-                if (!r.isSuccessful()) return null;
+                if (!r.isSuccessful()) {
+                    Log.w(TAG, "fetchProviders HTTP " + r.code() + " body=" + body);
+                    return null;
+                }
 
                 JSONArray arr = new JSONArray(body);
                 List<ProviderProfile> list = new ArrayList<>();
@@ -304,9 +321,7 @@ public class ProvidersListActivity extends BaseActivity
     }
 
     private boolean matchesCategory(String selectedCategory, String providerCategory) {
-        if (selectedCategory == null || selectedCategory.trim().isEmpty()) return true;
-        if (providerCategory == null || providerCategory.trim().isEmpty()) return false;
-        return providerCategory.trim().equalsIgnoreCase(selectedCategory.trim());
+        return CategoryMatcher.matches(selectedCategory, providerCategory);
     }
 
     private boolean matchesCity(String selectedCity, String providerCity) {
@@ -337,12 +352,10 @@ public class ProvidersListActivity extends BaseActivity
             }
 
             String status      = o.optString("status", "");
-            if (status.isEmpty() && (o.optBoolean("is_approved", false) || o.optBoolean("approved", false))) {
+            if (status.isEmpty() && o.optBoolean("is_approved", false)) {
                 status = "approved";
             }
-            p.status = status.isEmpty()
-                    ? (o.optBoolean("is_active", true) ? "active" : "inactive")
-                    : status;
+            p.status = status;
 
             // rating (optional column)
             p.rating = (float) o.optDouble("rating", 0.0);
@@ -484,7 +497,8 @@ public class ProvidersListActivity extends BaseActivity
             filtered.sort((a, b) -> Float.compare(b.rating, a.rating));
         }
 
-        renderProviderList(filtered);
+        visibleProvidersCount = PROVIDERS_PAGE_SIZE;
+        renderProviderList(filtered, true);
     }
 
     private String normalizeSearchQuery(String input) {
@@ -500,7 +514,7 @@ public class ProvidersListActivity extends BaseActivity
 
     private void applyNearbyFilterFromGps(String cleanedQuery) {
         if (locationManager == null) {
-            renderProviderList(new ArrayList<>());
+            renderProviderList(new ArrayList<>(), true);
             return;
         }
 
@@ -509,13 +523,19 @@ public class ProvidersListActivity extends BaseActivity
             public void onSuccess(String city, String area, double lat, double lng) {
                 List<ProviderProfile> within20Km = filterByDistanceAndQuery(cleanedQuery, lat, lng, NEARBY_RADIUS_PRIMARY_METERS);
                 if (!within20Km.isEmpty()) {
-                    runOnUiThread(() -> renderProviderList(within20Km));
+                    runOnUiThread(() -> {
+                        visibleProvidersCount = PROVIDERS_PAGE_SIZE;
+                        renderProviderList(within20Km, true);
+                    });
                     return;
                 }
 
                 List<ProviderProfile> within25Km = filterByDistanceAndQuery(cleanedQuery, lat, lng, NEARBY_RADIUS_SECONDARY_METERS);
                 if (!within25Km.isEmpty()) {
-                    runOnUiThread(() -> renderProviderList(within25Km));
+                    runOnUiThread(() -> {
+                        visibleProvidersCount = PROVIDERS_PAGE_SIZE;
+                        renderProviderList(within25Km, true);
+                    });
                     return;
                 }
 
@@ -566,25 +586,39 @@ public class ProvidersListActivity extends BaseActivity
         return filtered;
     }
 
-    private void renderProviderList(List<ProviderProfile> filtered) {
-        Log.d("RESULT_SIZE", String.valueOf(filtered == null ? 0 : filtered.size()));
-        adapter.setProviders(filtered);
-        adapter.notifyDataSetChanged();
+    private void renderProviderList(List<ProviderProfile> filtered, boolean resetPagingWindow) {
+        latestFilteredProviders = filtered == null ? new ArrayList<>() : new ArrayList<>(filtered);
 
-        if (filtered.isEmpty()) {
+        if (resetPagingWindow) {
+            visibleProvidersCount = PROVIDERS_PAGE_SIZE;
+        }
+
+        int total = latestFilteredProviders.size();
+        int end = Math.min(total, Math.max(PROVIDERS_PAGE_SIZE, visibleProvidersCount));
+        List<ProviderProfile> visible = latestFilteredProviders.subList(0, end);
+
+        Log.d("RESULT_SIZE", String.valueOf(total));
+        adapter.setProviders(visible);
+
+        if (total == 0) {
             rvProviders.setVisibility(View.GONE);
             errorState.setVisibility(View.GONE);
             emptyState.setVisibility(View.VISIBLE);
             tvEmptySubtitle.setText("No providers found for selected category/city.");
+            if (btnLoadMoreProviders != null) btnLoadMoreProviders.setVisibility(View.GONE);
         } else {
             emptyState.setVisibility(View.GONE);
             errorState.setVisibility(View.GONE);
             rvProviders.setVisibility(View.VISIBLE);
+            if (btnLoadMoreProviders != null) {
+                btnLoadMoreProviders.setVisibility(end < total ? View.VISIBLE : View.GONE);
+                btnLoadMoreProviders.setText("Show more providers");
+            }
         }
 
         String cityLabel = cityFilter == null || cityFilter.trim().isEmpty() ? "All cities" : cityFilter;
-        tvResultSubtitle.setText(filtered.size() + " provider" +
-                (filtered.size() != 1 ? "s" : "") + " in " + cityLabel);
+        tvResultSubtitle.setText("Showing " + end + " of " + total + " provider"
+                + (total != 1 ? "s" : "") + " in " + cityLabel);
     }
 
     // ── State helpers ─────────────────────────────────────────────────────

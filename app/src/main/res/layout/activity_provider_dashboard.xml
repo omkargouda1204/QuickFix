@@ -124,6 +124,7 @@
                         android:gravity="center"
                         android:orientation="vertical">
                         <TextView
+                            android:id="@+id/tvStatsBookings"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="0"
@@ -153,6 +154,7 @@
                         android:gravity="center"
                         android:orientation="vertical">
                         <TextView
+                            android:id="@+id/tvStatsRating"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="⭐ 0.0"
@@ -181,6 +183,7 @@
                         android:gravity="center"
                         android:orientation="vertical">
                         <TextView
+                            android:id="@+id/tvStatsEarnings"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="₹0"
@@ -415,5 +418,4 @@
     </androidx.core.widget.NestedScrollView>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
-
 
