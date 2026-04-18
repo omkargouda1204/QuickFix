@@ -149,6 +149,14 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
                 channelId      = CHANNEL_BOOKINGS;
                 targetActivity = UserBookingsActivity.class;
                 break;
+            case "emergency_request":
+                channelId      = CHANNEL_BOOKINGS;
+                targetActivity = ProviderEmergencyRequestActivity.class;
+                break;
+            case "emergency_assigned":
+                channelId      = CHANNEL_BOOKINGS;
+                targetActivity = EmergencyHelpActivity.class;
+                break;
             default:
                 channelId      = CHANNEL_GENERAL;
                 targetActivity = MainActivity.class;

@@ -3,6 +3,8 @@ package com.example.quickfix;
 import android.content.Context;
 import android.util.Log;
 
+import com.example.quickfix.BuildConfig;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -190,7 +192,7 @@ public final class FcmNotificationHelper {
                         listOf("provider"),
                         title,
                         body,
-                        "emergency",
+                        "emergency_request",
                         requestId,
                         data
                 );
@@ -229,7 +231,7 @@ public final class FcmNotificationHelper {
                         listOf("user"),
                         title,
                         body,
-                        "emergency",
+                        "emergency_assigned",
                         requestId,
                         data
                 );

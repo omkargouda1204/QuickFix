@@ -54,6 +54,9 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     private String providerProfileId = "";
     private String providerName = "Provider";
     private String providerPhone = "";
+    private String providerService = "";
+    private String providerCity = "";
+    private String providerArea = "";
     private boolean rejectedByCurrentProvider = false;
 
     @Override
@@ -113,6 +116,9 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 providerProfileId = safe(provider.optString("id", ""));
                 providerName = safe(provider.optString("business_name", "Provider"));
                 providerPhone = safe(provider.optString("phone", ""));
+                providerService = safe(provider.optString("category", ""));
+                providerCity = safe(provider.optString("city", ""));
+                providerArea = safe(provider.optString("area", ""));
 
                 JSONObject request = fetchRequestById(requestId);
 
@@ -136,7 +142,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     private JSONObject fetchProviderByFirebaseUid(String firebaseUid) throws Exception {
         String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles"
                 + "?firebase_uid=eq." + urlEncode(firebaseUid)
-                + "&select=id,business_name,phone&limit=1";
+                + "&select=id,business_name,phone,category,city,area&limit=1";
 
         Request request = new Request.Builder()
                 .url(url)
@@ -279,53 +285,28 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         setLoading(true);
         new Thread(() -> {
             try {
-                JSONObject body = new JSONObject();
-                body.put("status", "accepted");
-                body.put("assigned_provider_id", providerProfileId);
-                body.put("accepted_at", isoNow());
-
-                String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests"
-                        + "?id=eq." + urlEncode(requestId)
-                        + "&status=eq.pending";
-
-                Request request = new Request.Builder()
-                        .url(url)
-                        .patch(RequestBody.create(body.toString(), JSON))
-                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Content-Type", "application/json")
-                        .addHeader("Prefer", "return=representation")
-                        .build();
-
-                try (Response response = http.newCall(request).execute()) {
-                    String responseBody = response.body() != null ? response.body().string() : "[]";
-                    if (response.code() != 200) {
-                        throw new IllegalStateException("Accept failed HTTP " + response.code() + " " + responseBody);
-                    }
-
-                    JSONArray updatedRows = new JSONArray(responseBody);
-                    if (updatedRows.length() == 0) {
-                        runOnUiThread(() -> {
-                            setLoading(false);
-                            showToast("Already accepted by another provider.");
-                        });
-                        refreshStateAfterConflict();
-                        return;
-                    }
-
-                    JSONObject updated = updatedRows.getJSONObject(0);
-                    rejectedByCurrentProvider = false;
-                    upsertProviderResponse("accepted");
-                    notifyUserAssigned(updated);
-                    mirrorEmergencyBooking(updated);
-
+                JSONArray updatedRows = acceptPendingRequestWithSnapshotFallback();
+                if (updatedRows.length() == 0) {
                     runOnUiThread(() -> {
                         setLoading(false);
-                        bindRequest(updated);
-                        updateAcceptStateFromStatus(updated);
-                        showToast("Emergency request accepted.");
+                        showToast("Already accepted by another provider.");
                     });
+                    refreshStateAfterConflict();
+                    return;
                 }
+
+                JSONObject updated = updatedRows.getJSONObject(0);
+                rejectedByCurrentProvider = false;
+                upsertProviderResponse("accepted");
+                notifyUserAssigned(updated);
+                mirrorEmergencyBooking(updated);
+
+                runOnUiThread(() -> {
+                    setLoading(false);
+                    bindRequest(updated);
+                    updateAcceptStateFromStatus(updated);
+                    showToast("Emergency request accepted.");
+                });
             } catch (Exception e) {
                 Log.e(TAG, "acceptRequest failed", e);
                 runOnUiThread(() -> {
@@ -334,6 +315,59 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 });
             }
         }).start();
+    }
+
+    private JSONArray acceptPendingRequestWithSnapshotFallback() throws Exception {
+        JSONObject withSnapshot = new JSONObject();
+        withSnapshot.put("status", "accepted");
+        withSnapshot.put("assigned_provider_id", providerProfileId);
+        withSnapshot.put("accepted_at", isoNow());
+        withSnapshot.put("assigned_provider_name", fallback(providerName, "Provider"));
+        withSnapshot.put("assigned_provider_phone", fallback(providerPhone, ""));
+        withSnapshot.put("assigned_provider_service", fallback(providerService, ""));
+        withSnapshot.put("assigned_provider_city", fallback(providerCity, ""));
+        withSnapshot.put("assigned_provider_area", fallback(providerArea, ""));
+
+        try {
+            return patchPendingRequest(withSnapshot);
+        } catch (IllegalStateException e) {
+            String message = safe(e.getMessage()).toLowerCase(Locale.US);
+            boolean snapshotColumnMissing = message.contains("assigned_provider_")
+                    || message.contains("column")
+                    || message.contains("schema cache");
+            if (!snapshotColumnMissing) {
+                throw e;
+            }
+
+            JSONObject legacy = new JSONObject();
+            legacy.put("status", "accepted");
+            legacy.put("assigned_provider_id", providerProfileId);
+            legacy.put("accepted_at", isoNow());
+            return patchPendingRequest(legacy);
+        }
+    }
+
+    private JSONArray patchPendingRequest(JSONObject body) throws Exception {
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests"
+                + "?id=eq." + urlEncode(requestId)
+                + "&status=eq.pending";
+
+        Request request = new Request.Builder()
+                .url(url)
+                .patch(RequestBody.create(body.toString(), JSON))
+                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "return=representation")
+                .build();
+
+        try (Response response = http.newCall(request).execute()) {
+            String responseBody = response.body() != null ? response.body().string() : "[]";
+            if (response.code() != 200) {
+                throw new IllegalStateException("Accept failed HTTP " + response.code() + " " + responseBody);
+            }
+            return new JSONArray(responseBody);
+        }
     }
 
     private void refreshStateAfterConflict() {
@@ -415,6 +449,10 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             JSONObject data = new JSONObject();
             data.put("request_id", requestId);
             data.put("provider_name", fallback(providerName, "Provider"));
+            data.put("provider_phone", fallback(providerPhone, ""));
+            data.put("provider_service", fallback(providerService, ""));
+            data.put("provider_city", fallback(providerCity, ""));
+            data.put("provider_area", fallback(providerArea, ""));
             data.put("phone", fallback(providerPhone, ""));
             data.put("eta", "Arriving in 10 mins");
 

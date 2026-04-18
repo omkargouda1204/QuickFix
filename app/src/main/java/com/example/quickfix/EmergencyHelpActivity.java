@@ -1,8 +1,11 @@
 package com.example.quickfix;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
@@ -15,6 +18,7 @@ import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.example.quickfix.BuildConfig;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
@@ -61,16 +65,22 @@ public class EmergencyHelpActivity extends BaseActivity {
             "General Repair"
     );
 
+    private static final long STATUS_POLL_MS = 4000L;
+    private static final double NEARBY_RADIUS_KM = 30d;
+
     public static final String EXTRA_LOCATION_LABEL = "extra_location_label";
     public static final String EXTRA_LOCATION_CITY = "extra_location_city";
     public static final String EXTRA_LOCATION_AREA = "extra_location_area";
     public static final String EXTRA_LOCATION_LAT = "extra_location_lat";
     public static final String EXTRA_LOCATION_LNG = "extra_location_lng";
+    public static final String EXTRA_REQUEST_ID = "request_id";
 
     private final OkHttpClient http = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .build();
+
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private AppLocationManager locationManager;
 
@@ -89,6 +99,12 @@ public class EmergencyHelpActivity extends BaseActivity {
     private TextInputLayout tilDescription;
     private ChipGroup chipGroup;
 
+    private View cardProviderAssigned;
+    private TextView tvProviderName;
+    private TextView tvProviderPhone;
+    private TextView tvProviderService;
+    private TextView tvProviderLocation;
+
     private String currentUserId = "";
     private String currentUserName = "";
     private String currentUserPhone = "";
@@ -97,6 +113,10 @@ public class EmergencyHelpActivity extends BaseActivity {
     private String selectedArea = "";
     private double selectedLat = Double.NaN;
     private double selectedLng = Double.NaN;
+
+    private String activeRequestId = "";
+    private boolean providerAssignedToastShown = false;
+    private JSONObject providerSnapshotFromIntent = new JSONObject();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -110,6 +130,7 @@ public class EmergencyHelpActivity extends BaseActivity {
         setupClicks();
         hydrateLocationFromHomeOrSaved();
         loadProfile();
+        hydrateRequestFromIntent();
     }
 
     private void bindViews() {
@@ -127,6 +148,12 @@ public class EmergencyHelpActivity extends BaseActivity {
         tilCategory = findViewById(R.id.tilEmergencyCategory);
         tilDescription = findViewById(R.id.tilEmergencyDescription);
         chipGroup = findViewById(R.id.chipGroupEmergencyCategories);
+
+        cardProviderAssigned = findViewById(R.id.cardEmergencyAssignedProvider);
+        tvProviderName = findViewById(R.id.tvEmergencyAssignedProviderName);
+        tvProviderPhone = findViewById(R.id.tvEmergencyAssignedProviderPhone);
+        tvProviderService = findViewById(R.id.tvEmergencyAssignedProviderService);
+        tvProviderLocation = findViewById(R.id.tvEmergencyAssignedProviderLocation);
     }
 
     private void setupClicks() {
@@ -384,7 +411,12 @@ public class EmergencyHelpActivity extends BaseActivity {
         new Thread(() -> {
             try {
                 String requestId = createEmergencyRequest(category, description, locationLabel);
-                List<String> providerFirebaseUids = fetchMatchingProviderFirebaseUids(category, selectedCity);
+                List<String> providerFirebaseUids = fetchMatchingProviderFirebaseUids(
+                        category,
+                        selectedCity,
+                        selectedLat,
+                        selectedLng
+                );
 
                 if (!providerFirebaseUids.isEmpty()) {
                     JSONObject data = new JSONObject();
@@ -405,7 +437,11 @@ public class EmergencyHelpActivity extends BaseActivity {
                 final int notifiedProviders = providerFirebaseUids.size();
                 runOnUiThread(() -> {
                     setLoading(false);
+                    activeRequestId = requestId;
+                    providerAssignedToastShown = false;
                     setStatus("Status: Request submitted (ID: " + requestId + ")");
+                    bindAssignedProviderCard(null, category);
+                    startStatusPolling();
                     showToast(notifiedProviders > 0
                             ? "Emergency request submitted. " + notifiedProviders + " provider(s) notified."
                             : "Emergency request submitted. Providers will be matched shortly.");
@@ -467,12 +503,15 @@ public class EmergencyHelpActivity extends BaseActivity {
         }
     }
 
-    private List<String> fetchMatchingProviderFirebaseUids(String category, String city) {
+    private List<String> fetchMatchingProviderFirebaseUids(String category,
+                                                           String city,
+                                                           double requestLat,
+                                                           double requestLng) {
         List<String> providerFirebaseUids = new ArrayList<>();
         try {
             StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
                     .append("/rest/v1/provider_profiles")
-                    .append("?select=firebase_uid,category,city,status,is_approved")
+                    .append("?select=firebase_uid,category,city,status,is_approved,lat,lng,latitude,longitude")
                     .append("&is_approved=eq.true")
                     .append("&limit=200");
 
@@ -503,6 +542,8 @@ public class EmergencyHelpActivity extends BaseActivity {
                     String providerCategory = safe(o.optString("category", ""));
                     String providerStatus = safe(o.optString("status", "approved")).toLowerCase(Locale.US);
                     String providerCity = safe(o.optString("city", ""));
+                    double providerLat = pickDouble(o, "latitude", "lat");
+                    double providerLng = pickDouble(o, "longitude", "lng");
 
                     if (providerFirebaseUid.isEmpty()) continue;
                     if (!providerStatus.isEmpty() && !("approved".equals(providerStatus) || "active".equals(providerStatus))) {
@@ -512,6 +553,14 @@ public class EmergencyHelpActivity extends BaseActivity {
 
                     if (!safe(city).isEmpty() && !providerCity.isEmpty() && !providerCity.equalsIgnoreCase(city)) {
                         continue;
+                    }
+
+                    if (!Double.isNaN(requestLat) && !Double.isNaN(requestLng)
+                            && !Double.isNaN(providerLat) && !Double.isNaN(providerLng)) {
+                        double distanceKm = haversineKm(requestLat, requestLng, providerLat, providerLng);
+                        if (distanceKm > NEARBY_RADIUS_KM) {
+                            continue;
+                        }
                     }
 
                     dedupe.add(providerFirebaseUid);
@@ -524,6 +573,269 @@ public class EmergencyHelpActivity extends BaseActivity {
             Log.w(TAG, "fetchMatchingProviderFirebaseUids failed: " + e.getMessage());
         }
         return providerFirebaseUids;
+    }
+
+    private void hydrateRequestFromIntent() {
+        String requestId = safe(getIntent() != null ? getIntent().getStringExtra(EXTRA_REQUEST_ID) : "");
+        if (requestId.isEmpty()) {
+            requestId = safe(getIntent() != null ? getIntent().getStringExtra("reference_id") : "");
+        }
+        providerSnapshotFromIntent = readProviderSnapshotFromIntent();
+
+        if (providerSnapshotFromIntent.length() > 0) {
+            bindAssignedProviderCard(providerSnapshotFromIntent, "");
+        }
+        if (requestId.isEmpty()) return;
+
+        activeRequestId = requestId;
+        providerAssignedToastShown = false;
+        setStatus("Status: Tracking request " + requestId);
+        startStatusPolling();
+    }
+
+    private void startStatusPolling() {
+        if (activeRequestId.isEmpty()) return;
+        mainHandler.removeCallbacks(statusPollingRunnable);
+        mainHandler.post(statusPollingRunnable);
+    }
+
+    private final Runnable statusPollingRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isFinishing() || isDestroyed() || activeRequestId.isEmpty()) {
+                return;
+            }
+
+            new Thread(() -> {
+                try {
+                    JSONObject request = fetchEmergencyRequestById(activeRequestId);
+                    String status = safe(request.optString("status", "pending")).toLowerCase(Locale.US);
+                    String assignedProviderId = safe(request.optString("assigned_provider_id", ""));
+                    JSONObject provider = extractProviderSnapshotFromRequest(request);
+
+                    if ("accepted".equals(status) && provider.length() == 0 && !assignedProviderId.isEmpty()) {
+                        provider = fetchProviderById(assignedProviderId);
+                    }
+
+                    if (provider.length() == 0 && providerSnapshotFromIntent.length() > 0) {
+                        provider = providerSnapshotFromIntent;
+                    }
+
+                    JSONObject finalProvider = provider;
+                    runOnUiThread(() -> updateRequestStatusUi(request, finalProvider));
+
+                    if ("accepted".equals(status) || "rejected".equals(status)) {
+                        mainHandler.removeCallbacks(statusPollingRunnable);
+                    } else {
+                        mainHandler.postDelayed(statusPollingRunnable, STATUS_POLL_MS);
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "status polling failed: " + e.getMessage());
+                    mainHandler.postDelayed(statusPollingRunnable, STATUS_POLL_MS);
+                }
+            }).start();
+        }
+    };
+
+    private JSONObject fetchEmergencyRequestById(String requestId) throws Exception {
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests"
+                + "?id=eq." + encode(requestId)
+                + "&select=id,status,category,assigned_provider_id,accepted_at,rejected_at,"
+                + "assigned_provider_name,assigned_provider_phone,assigned_provider_service,"
+                + "assigned_provider_city,assigned_provider_area"
+                + "&limit=1";
+
+        JSONObject row = fetchFirstRow(url);
+        if (row == null) {
+            throw new IllegalStateException("Request not found");
+        }
+        return row;
+    }
+
+    private JSONObject fetchProviderById(String providerId) {
+        try {
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles"
+                    + "?id=eq." + encode(providerId)
+                    + "&select=id,business_name,phone,category,city,area"
+                    + "&limit=1";
+            JSONObject row = fetchFirstRow(url);
+            return row == null ? new JSONObject() : row;
+        } catch (Exception e) {
+            Log.w(TAG, "fetchProviderById failed: " + e.getMessage());
+            return new JSONObject();
+        }
+    }
+
+    private void updateRequestStatusUi(JSONObject request, JSONObject provider) {
+        if (request == null) return;
+
+        String status = safe(request.optString("status", "pending")).toLowerCase(Locale.US);
+        String label;
+        switch (status) {
+            case "accepted":
+                label = "Accepted";
+                break;
+            case "rejected":
+                label = "Rejected";
+                break;
+            case "pending":
+            default:
+                label = "Pending";
+                break;
+        }
+
+        setStatus("Status: " + label + " (ID: " + fallback(activeRequestId, "-") + ")");
+
+        String category = safe(request.optString("category", ""));
+        bindAssignedProviderCard("accepted".equals(status) ? provider : null, category);
+
+        if ("accepted".equals(status) && !providerAssignedToastShown) {
+            providerAssignedToastShown = true;
+            showToast("Provider accepted your emergency request.");
+        }
+    }
+
+    private void bindAssignedProviderCard(JSONObject provider, String fallbackService) {
+        if (cardProviderAssigned == null) return;
+
+        if (provider == null || provider.length() == 0) {
+            cardProviderAssigned.setVisibility(View.GONE);
+            return;
+        }
+
+        cardProviderAssigned.setVisibility(View.VISIBLE);
+        setText(tvProviderName, "Name: " + fallback(firstNonBlank(
+                provider.optString("business_name", ""),
+                provider.optString("assigned_provider_name", ""),
+                provider.optString("provider_name", "")
+        ), "Provider"));
+
+        setText(tvProviderPhone, "Contact: " + fallback(firstNonBlank(
+                provider.optString("phone", ""),
+                provider.optString("assigned_provider_phone", ""),
+                provider.optString("provider_phone", "")
+        ), "Not available"));
+
+        String service = firstNonBlank(
+                provider.optString("category", ""),
+                provider.optString("assigned_provider_service", ""),
+                provider.optString("provider_service", ""),
+                fallbackService
+        );
+        setText(tvProviderService, "Service: " + fallback(service, "Emergency Support"));
+
+        String providerCity = firstNonBlank(
+                provider.optString("city", ""),
+                provider.optString("assigned_provider_city", ""),
+                provider.optString("provider_city", "")
+        );
+        String providerArea = firstNonBlank(
+                provider.optString("area", ""),
+                provider.optString("assigned_provider_area", ""),
+                provider.optString("provider_area", "")
+        );
+        String providerLocation = AppLocationManager.composeLocationLabel(providerCity, providerArea);
+        setText(tvProviderLocation, "Location: " + fallback(providerLocation, "Not available"));
+    }
+
+    private JSONObject extractProviderSnapshotFromRequest(JSONObject request) {
+        JSONObject snapshot = new JSONObject();
+        if (request == null) return snapshot;
+
+        try {
+            String name = safe(request.optString("assigned_provider_name", ""));
+            String phone = safe(request.optString("assigned_provider_phone", ""));
+            String service = safe(request.optString("assigned_provider_service", ""));
+            String city = safe(request.optString("assigned_provider_city", ""));
+            String area = safe(request.optString("assigned_provider_area", ""));
+            if (name.isEmpty() && phone.isEmpty() && service.isEmpty() && city.isEmpty() && area.isEmpty()) {
+                return snapshot;
+            }
+
+            snapshot.put("assigned_provider_name", name);
+            snapshot.put("assigned_provider_phone", phone);
+            snapshot.put("assigned_provider_service", service);
+            snapshot.put("assigned_provider_city", city);
+            snapshot.put("assigned_provider_area", area);
+        } catch (Exception ignored) {
+            return new JSONObject();
+        }
+        return snapshot;
+    }
+
+    private JSONObject readProviderSnapshotFromIntent() {
+        JSONObject snapshot = new JSONObject();
+        if (getIntent() == null) return snapshot;
+        try {
+            String name = safe(getIntent().getStringExtra("provider_name"));
+            String phone = firstNonBlank(
+                    safe(getIntent().getStringExtra("provider_phone")),
+                    safe(getIntent().getStringExtra("phone"))
+            );
+            String service = safe(getIntent().getStringExtra("provider_service"));
+            String city = safe(getIntent().getStringExtra("provider_city"));
+            String area = safe(getIntent().getStringExtra("provider_area"));
+            if (name.isEmpty() && phone.isEmpty() && service.isEmpty() && city.isEmpty() && area.isEmpty()) {
+                return snapshot;
+            }
+
+            snapshot.put("provider_name", name);
+            snapshot.put("provider_phone", phone);
+            snapshot.put("provider_service", service);
+            snapshot.put("provider_city", city);
+            snapshot.put("provider_area", area);
+        } catch (Exception ignored) {
+            return new JSONObject();
+        }
+        return snapshot;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) return "";
+        for (String value : values) {
+            String cleaned = safe(value);
+            if (!cleaned.isEmpty()) {
+                return cleaned;
+            }
+        }
+        return "";
+    }
+
+    private double pickDouble(JSONObject obj, String... keys) {
+        if (obj == null || keys == null) return Double.NaN;
+        for (String key : keys) {
+            double value = optDoubleFlexible(obj, key);
+            if (!Double.isNaN(value)) {
+                return value;
+            }
+        }
+        return Double.NaN;
+    }
+
+    private double optDoubleFlexible(JSONObject obj, String key) {
+        try {
+            if (obj == null || key == null || !obj.has(key) || obj.isNull(key)) {
+                return Double.NaN;
+            }
+            Object raw = obj.get(key);
+            if (raw instanceof Number) {
+                return ((Number) raw).doubleValue();
+            }
+            return Double.parseDouble(String.valueOf(raw));
+        } catch (Exception ignored) {
+            return Double.NaN;
+        }
+    }
+
+    private double haversineKm(double lat1, double lon1, double lat2, double lon2) {
+        final double r = 6371d;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2d) * Math.sin(dLat / 2d)
+                + Math.cos(Math.toRadians(lat1))
+                * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2d) * Math.sin(dLon / 2d);
+        return 2d * r * Math.atan2(Math.sqrt(a), Math.sqrt(1d - a));
     }
 
     private void clearValidationErrors() {
@@ -612,5 +924,19 @@ public class EmergencyHelpActivity extends BaseActivity {
         } else {
             showToast("Location permission denied. Please select city manually.");
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null);
+        super.onDestroy();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (intent == null) return;
+        setIntent(intent);
+        hydrateRequestFromIntent();
     }
 }
