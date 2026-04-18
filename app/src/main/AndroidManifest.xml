@@ -264,6 +264,13 @@
             android:parentActivityName=".ProfileActivity"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Help & Support Activity -->
+        <activity
+            android:name=".HelpSupportActivity"
+            android:exported="false"
+            android:parentActivityName=".SettingsActivity"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- FullScreen Image Activity -->
         <activity
             android:name=".FullScreenImageActivity"

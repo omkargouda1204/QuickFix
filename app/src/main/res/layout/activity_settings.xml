@@ -90,6 +90,37 @@
                         android:layout_marginStart="16dp" android:background="@color/divider" />
 
                     <LinearLayout
+                        android:id="@+id/settingsHelpSupport"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/settings_help_support"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp" />
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:src="@drawable/ic_arrow_right"
+                            app:tint="@color/muted_icon"
+                            android:contentDescription="@string/nav_home" />
+                    </LinearLayout>
+
+                    <View android:layout_width="match_parent" android:layout_height="1dp"
+                        android:layout_marginStart="16dp" android:background="@color/divider" />
+
+                    <LinearLayout
                         android:id="@+id/settingsDeleteAccount"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"

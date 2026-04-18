@@ -57,7 +57,7 @@ public class SettingsActivity extends BaseActivity {
     private boolean supabaseDeleteCompleted = false;
 
     // ── Views ─────────────────────────────────────────────────────────────
-    private LinearLayout   settingsChangePassword, settingsDeleteAccount;
+    private LinearLayout   settingsChangePassword, settingsHelpSupport, settingsDeleteAccount;
     private FrameLayout    loadingOverlay;
     private TextView       tvDeletingMessage;
 
@@ -108,6 +108,7 @@ public class SettingsActivity extends BaseActivity {
     // ── View binding ──────────────────────────────────────────────────────
     private void bindViews() {
         settingsChangePassword = findViewById(R.id.settingsChangePassword);
+        settingsHelpSupport    = findViewById(R.id.settingsHelpSupport);
         settingsDeleteAccount  = findViewById(R.id.settingsDeleteAccount);
         loadingOverlay         = findViewById(R.id.settingsLoadingOverlay);
         tvDeletingMessage      = findViewById(R.id.tvDeletingMessage);
@@ -118,6 +119,10 @@ public class SettingsActivity extends BaseActivity {
         if (settingsChangePassword != null)
             settingsChangePassword.setOnClickListener(v ->
                     startActivity(new Intent(this, ForgotPasswordActivity.class)));
+
+        if (settingsHelpSupport != null)
+            settingsHelpSupport.setOnClickListener(v ->
+                    startActivity(new Intent(this, HelpSupportActivity.class)));
 
         if (settingsDeleteAccount != null)
             settingsDeleteAccount.setOnClickListener(v -> showDeleteConfirmDialog());

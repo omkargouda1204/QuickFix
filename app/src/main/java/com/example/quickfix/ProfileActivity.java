@@ -376,8 +376,10 @@ public class ProfileActivity extends BaseActivity {
             });
         }
 
-        menuHelpSupport.setOnClickListener(v ->
-                Toast.makeText(this, "Help & Support — coming soon!", Toast.LENGTH_SHORT).show());
+        menuHelpSupport.setOnClickListener(v -> {
+            startActivity(new Intent(this, HelpSupportActivity.class));
+            overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+        });
 
         menuPrivacyPolicy.setOnClickListener(v -> showInfoDialog(
                 getString(R.string.profile_privacy_policy),

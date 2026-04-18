@@ -146,6 +146,7 @@
     <string name="settings_booking_reminders">Booking Reminders</string>
     <string name="settings_dark_mode">Dark Mode</string>
     <string name="settings_change_password">Change Password</string>
+    <string name="settings_help_support">Help &amp; Support</string>
     <string name="settings_delete_account">Delete Account</string>
     <string name="settings_delete_account_data_scope">Deletes Firebase and Supabase data</string>
     <string name="settings_delete_dialog_warning">This action permanently deletes your account.</string>
@@ -175,6 +176,42 @@
     <string name="settings_delete_reauth_failed" translatable="false">Re-authentication failed. Please sign in again and retry.</string>
     <string name="settings_delete_google_reauth_failed" translatable="false">Could not re-authenticate with Google. Please sign in again and retry.</string>
     <string name="settings_delete_success" translatable="false">Your account and related data were permanently deleted.</string>
+
+    <!-- Help & Support screen -->
+    <string name="help_support_title">Help &amp; Support</string>
+    <string name="help_support_subtitle">Find quick answers, contact support, or report a problem.</string>
+    <string name="help_support_faq_title">FAQs</string>
+    <string name="help_support_contact_title">Contact Support</string>
+    <string name="help_support_report_title">Report an Issue</string>
+    <string name="help_support_contact_hint">Need direct help? Reach us by call or email.</string>
+    <string name="help_support_call">Call</string>
+    <string name="help_support_email">Email</string>
+    <string name="help_support_submit_issue">Submit Issue</string>
+    <string name="help_support_subject_hint">Issue Subject</string>
+    <string name="help_support_description_hint">Describe your issue</string>
+    <string name="help_support_error_subject_required">Please enter an issue subject.</string>
+    <string name="help_support_error_description_required">Please describe the issue.</string>
+    <string name="help_support_error_description_short">Description should be at least 10 characters.</string>
+    <string name="help_support_issue_success">Support request prepared. Please send the email.</string>
+    <string name="help_support_no_email_app">No email app found on this device.</string>
+    <string name="help_support_no_phone_app">No dialer app found on this device.</string>
+    <string name="help_support_email_chooser">Send support email</string>
+    <string name="help_support_email_value">support@quickfix.app</string>
+    <string name="help_support_phone_value">+919999999999</string>
+    <string name="help_support_contact_email_subject">QuickFix Support</string>
+    <string name="help_support_contact_email_body">Hi Support Team,
+
+I need help with QuickFix.
+
+Thanks.</string>
+    <string name="help_support_issue_email_subject_prefix">QuickFix Issue</string>
+
+    <string name="help_support_faq_q1">How do I book a service?</string>
+    <string name="help_support_faq_a1">Open Home, choose a category, select a provider, and tap Book Now to confirm your request.</string>
+    <string name="help_support_faq_q2">How can I cancel a booking?</string>
+    <string name="help_support_faq_a2">Go to My Bookings, open the active booking, and choose Cancel if cancellation is available.</string>
+    <string name="help_support_faq_q3">When will my provider arrive?</string>
+    <string name="help_support_faq_a3">After acceptance, you can track status in My Bookings. Arrival depends on provider distance and traffic.</string>
 
     <!-- Profile placeholders -->
     <string name="profile_avatar_initial">U</string>
