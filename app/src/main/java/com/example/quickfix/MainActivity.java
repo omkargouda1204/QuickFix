@@ -105,6 +105,7 @@ public class MainActivity extends BaseActivity {
 
     // ── Quick Actions ─────────────────────────────────────────────────────
     private LinearLayout quickBookService, quickEmergency, quickTrackBooking;
+    private LinearLayout aiAssistantCard;
 
     // ── Featured ──────────────────────────────────────────────────────────
     private CardView featuredCard1, featuredCard2, featuredCard3;
@@ -351,6 +352,7 @@ public class MainActivity extends BaseActivity {
             quickBookService = findViewSafe(R.id.quickBookService);
             quickEmergency = findViewSafe(R.id.quickEmergency);
             quickTrackBooking = findViewSafe(R.id.quickTrackBooking);
+            aiAssistantCard = findViewSafe(R.id.aiAssistantCard);
 
             featuredCard1 = findViewSafe(R.id.featuredCard1);
             featuredCard2 = findViewSafe(R.id.featuredCard2);
@@ -884,6 +886,12 @@ public class MainActivity extends BaseActivity {
         if (quickTrackBooking != null) {
             quickTrackBooking.setOnClickListener(v -> {
                 startActivity(new Intent(this, UserBookingsActivity.class));
+                overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+            });
+        }
+        if (aiAssistantCard != null) {
+            aiAssistantCard.setOnClickListener(v -> {
+                startActivity(new Intent(this, AiChatActivity.class));
                 overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
             });
         }
