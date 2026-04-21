@@ -6,7 +6,9 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -117,6 +119,7 @@ public class EmergencyHelpActivity extends BaseActivity {
     private String activeRequestId = "";
     private boolean providerAssignedToastShown = false;
     private JSONObject providerSnapshotFromIntent = new JSONObject();
+    private boolean isSubmitting = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -131,6 +134,8 @@ public class EmergencyHelpActivity extends BaseActivity {
         hydrateLocationFromHomeOrSaved();
         loadProfile();
         hydrateRequestFromIntent();
+        setupFormValidation();
+        updateSubmitButtonState();
     }
 
     private void bindViews() {
@@ -185,6 +190,7 @@ public class EmergencyHelpActivity extends BaseActivity {
                         selectedChip.setChecked(true);
                     }
                 }
+                updateSubmitButtonState();
             });
         }
 
@@ -199,9 +205,34 @@ public class EmergencyHelpActivity extends BaseActivity {
                 if (isChecked && actCategory != null) {
                     actCategory.setText(category, false);
                     clearCategoryError();
+                    updateSubmitButtonState();
                 }
             });
             chipGroup.addView(chip);
+        }
+    }
+
+    private void setupFormValidation() {
+        TextWatcher watcher = new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                updateSubmitButtonState();
+            }
+        };
+
+        if (actCategory != null) {
+            actCategory.addTextChangedListener(watcher);
+        }
+        if (etDescription != null) {
+            etDescription.addTextChangedListener(watcher);
         }
     }
 
@@ -302,12 +333,14 @@ public class EmergencyHelpActivity extends BaseActivity {
                 runOnUiThread(() -> {
                     setText(tvName, "Name: " + fallback(currentUserName, "-"));
                     setText(tvPhone, "Phone: " + fallback(currentUserPhone, "-"));
+                    updateSubmitButtonState();
                 });
             } catch (Exception e) {
                 Log.w(TAG, "loadProfile failed: " + e.getMessage());
                 runOnUiThread(() -> {
                     setText(tvName, "Name: " + fallback(currentUserName, "-"));
                     setText(tvPhone, "Phone: " + fallback(currentUserPhone, "-"));
+                    updateSubmitButtonState();
                 });
             }
         }).start();
@@ -359,58 +392,31 @@ public class EmergencyHelpActivity extends BaseActivity {
     private void updateLocationUi() {
         String label = AppLocationManager.composeLocationLabel(selectedCity, selectedArea);
         if (label.isEmpty()) {
-            label = "Location unavailable";
+            label = hasCoordinates() ? "Pinned location selected" : "Location unavailable";
         }
 
         setText(tvLocationSummary, label);
         setText(tvAddress, "Location: " + label);
+        updateSubmitButtonState();
     }
 
     private void submitEmergencyRequest() {
-        clearValidationErrors();
+        if (!validateForm(true)) return;
 
         String category = safe(actCategory != null ? String.valueOf(actCategory.getText()) : "");
         String description = safe(etDescription != null ? String.valueOf(etDescription.getText()) : "");
         String locationLabel = AppLocationManager.composeLocationLabel(selectedCity, selectedArea);
-
-        boolean hasError = false;
-        if (category.isEmpty()) {
-            hasError = true;
-            if (tilCategory != null) {
-                tilCategory.setError("Please choose a service category");
-            }
+        if (locationLabel.isEmpty() && hasCoordinates()) {
+            locationLabel = "Pinned location";
         }
-
-        if (description.isEmpty()) {
-            hasError = true;
-            if (tilDescription != null) {
-                tilDescription.setError("Please describe the problem");
-            }
-        }
-
-        if (currentUserName.isEmpty()) {
-            hasError = true;
-            showToast("Profile name is missing. Please update your profile.");
-        }
-
-        if (currentUserPhone.isEmpty()) {
-            hasError = true;
-            showToast("Phone number is missing. Please update your profile.");
-        }
-
-        if (locationLabel.isEmpty()) {
-            hasError = true;
-            showToast("Please select a location first.");
-        }
-
-        if (hasError) return;
+        final String finalLocationLabel = locationLabel;
 
         setLoading(true);
         setStatus("Status: Submitting request...");
 
         new Thread(() -> {
             try {
-                String requestId = createEmergencyRequest(category, description, locationLabel);
+                String requestId = createEmergencyRequest(category, description, finalLocationLabel);
                 List<String> providerFirebaseUids = fetchMatchingProviderFirebaseUids(
                         category,
                         selectedCity,
@@ -423,7 +429,7 @@ public class EmergencyHelpActivity extends BaseActivity {
                     data.put("request_id", requestId);
                     data.put("category", category);
                     data.put("city", safe(selectedCity));
-                    data.put("address", locationLabel);
+                    data.put("address", finalLocationLabel);
 
                     FcmNotificationHelper.notifyEmergencyProviders(
                             providerFirebaseUids,
@@ -856,14 +862,94 @@ public class EmergencyHelpActivity extends BaseActivity {
         }
     }
 
+    private boolean validateForm(boolean showErrors) {
+        if (showErrors) {
+            clearValidationErrors();
+        }
+
+        String category = safe(actCategory != null ? String.valueOf(actCategory.getText()) : "");
+        String description = safe(etDescription != null ? String.valueOf(etDescription.getText()) : "");
+
+        boolean valid = true;
+
+        if (category.isEmpty()) {
+            valid = false;
+            if (showErrors && tilCategory != null) {
+                tilCategory.setError("Please choose a service category");
+            }
+        } else {
+            clearCategoryError();
+        }
+
+        if (description.isEmpty()) {
+            valid = false;
+            if (showErrors && tilDescription != null) {
+                tilDescription.setError("Please describe the problem");
+            }
+        } else if (description.length() < 10) {
+            valid = false;
+            if (showErrors && tilDescription != null) {
+                tilDescription.setError("Description should be at least 10 characters");
+            }
+        } else if (tilDescription != null) {
+            tilDescription.setError(null);
+            tilDescription.setErrorEnabled(false);
+        }
+
+        if (currentUserName.isEmpty()) {
+            valid = false;
+            if (showErrors) {
+                showToast("Profile name is missing. Please update your profile.");
+            }
+        }
+
+        if (!isValidPhone(currentUserPhone)) {
+            valid = false;
+            if (showErrors) {
+                showToast(currentUserPhone.isEmpty()
+                        ? "Phone number is missing. Please update your profile."
+                        : "Phone number looks invalid. Please update your profile.");
+            }
+        }
+
+        if (!hasValidLocation()) {
+            valid = false;
+            if (showErrors) {
+                showToast("Please select a location first.");
+            }
+        }
+
+        return valid;
+    }
+
+    private void updateSubmitButtonState() {
+        boolean canSubmit = !isSubmitting && validateForm(false);
+        if (btnSubmit != null) {
+            btnSubmit.setEnabled(canSubmit);
+            btnSubmit.setAlpha(canSubmit ? 1f : 0.6f);
+        }
+    }
+
+    private boolean hasValidLocation() {
+        String locationLabel = AppLocationManager.composeLocationLabel(selectedCity, selectedArea);
+        return !locationLabel.isEmpty() || hasCoordinates();
+    }
+
+    private boolean hasCoordinates() {
+        return !Double.isNaN(selectedLat) && !Double.isNaN(selectedLng);
+    }
+
+    private boolean isValidPhone(String rawPhone) {
+        String phone = safe(rawPhone).replaceAll("[^0-9]", "");
+        return phone.length() >= 10;
+    }
+
     private void setLoading(boolean loading) {
+        isSubmitting = loading;
         if (progress != null) {
             progress.setVisibility(loading ? View.VISIBLE : View.GONE);
         }
-        if (btnSubmit != null) {
-            btnSubmit.setEnabled(!loading);
-            btnSubmit.setAlpha(loading ? 0.7f : 1f);
-        }
+        updateSubmitButtonState();
     }
 
     private void setStatus(String text) {
