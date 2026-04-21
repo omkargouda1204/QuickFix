@@ -3,6 +3,7 @@ package com.example.quickfix;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -56,6 +57,10 @@ import okhttp3.Response;
 public class ProviderDetailActivity extends BaseActivity {
 
     private static final String TAG = "ProviderDetail";
+    private static final int SECTION_CONTACT = 0;
+    private static final int SECTION_ABOUT = 1;
+    private static final int SECTION_REVIEWS = 2;
+    private static final int SECTION_SHOWCASE = 3;
 
     public static final String EXTRA_PROVIDER_ID  = "provider_id";
     public static final String EXTRA_CUSTOMER_ID  = "customer_id";
@@ -89,6 +94,7 @@ public class ProviderDetailActivity extends BaseActivity {
     private String providerName;
     private String providerCategory;
     private String providerCity;
+    private int selectedSection = SECTION_CONTACT;
 
     private static class UserMeta {
         String id;
@@ -171,6 +177,7 @@ public class ProviderDetailActivity extends BaseActivity {
 
         providerName = businessName != null ? businessName : "";
 
+        initSectionTabs();
         bindViews(businessName, ownerName, providerCategory, providerCity, phone,
                   email, description, experience, imageUrl, isVerified, rating);
         loadRecentReviews();
@@ -213,15 +220,16 @@ public class ProviderDetailActivity extends BaseActivity {
 
         // Text fields
         setText(R.id.tvDetailBusinessName, businessName);
-        setText(R.id.tvDetailOwnerName,    "by " + notEmpty(ownerName, "—"));
-        setText(R.id.tvDetailCategory,     notEmpty(category, "Service"));
-        setText(R.id.tvDetailCity,         notEmpty(city, "—"));
+        setText(R.id.tvDetailOwnerName, getString(R.string.provider_detail_owner_by,
+                notEmpty(ownerName, getString(R.string.pd_dash))));
+        setText(R.id.tvDetailCategory, notEmpty(category, getString(R.string.provider_detail_category_service)));
+        setText(R.id.tvDetailCity, notEmpty(city, getString(R.string.pd_dash)));
 
         // Experience
         TextView tvExp = findViewById(R.id.tvDetailExperience);
         int expYears = parseExperienceYears(experience);
         if (expYears > 0) {
-            tvExp.setText(expYears + " yrs exp");
+            tvExp.setText(getString(R.string.provider_detail_experience_format, expYears));
             tvExp.setVisibility(View.VISIBLE);
         } else {
             tvExp.setVisibility(View.GONE);
@@ -235,7 +243,7 @@ public class ProviderDetailActivity extends BaseActivity {
         View ratingRow = findViewById(R.id.ratingRow);
         if (rating > 0) {
             ratingRow.setVisibility(View.VISIBLE);
-            setText(R.id.tvDetailRating, String.format("%.1f", rating));
+            setText(R.id.tvDetailRating, String.format(Locale.getDefault(), "%.1f", rating));
         } else {
             ratingRow.setVisibility(View.GONE);
         }
@@ -245,6 +253,8 @@ public class ProviderDetailActivity extends BaseActivity {
         if (phone != null && !phone.isEmpty()) {
             rowPhone.setVisibility(View.VISIBLE);
             setText(R.id.tvDetailPhone, phone);
+        } else {
+            rowPhone.setVisibility(View.GONE);
         }
 
         // Email
@@ -252,14 +262,15 @@ public class ProviderDetailActivity extends BaseActivity {
         if (email != null && !email.isEmpty()) {
             rowEmail.setVisibility(View.VISIBLE);
             setText(R.id.tvDetailEmail, email);
+        } else {
+            rowEmail.setVisibility(View.GONE);
         }
 
         // Description
         View cardDesc = findViewById(R.id.cardDescription);
-        if (description != null && !description.isEmpty()) {
-            cardDesc.setVisibility(View.VISIBLE);
-            setText(R.id.tvDetailDescription, description);
-        }
+        cardDesc.setVisibility(View.VISIBLE);
+        setText(R.id.tvDetailDescription,
+                notEmpty(description, getString(R.string.provider_detail_description_fallback)));
 
         // Message button
         MaterialButton btnMessage = findViewById(R.id.btnDetailMessage);
@@ -273,7 +284,7 @@ public class ProviderDetailActivity extends BaseActivity {
     private void openChat() {
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
         if (currentUser == null) {
-            Toast.makeText(this, "Please log in to chat", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.provider_detail_login_to_chat), Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -290,7 +301,7 @@ public class ProviderDetailActivity extends BaseActivity {
     private void showBookingDialog() {
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
         if (currentUser == null) {
-            Toast.makeText(this, "Please log in to book a service", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.provider_detail_login_to_book), Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -338,10 +349,10 @@ public class ProviderDetailActivity extends BaseActivity {
         }
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Book Service")
+                .setTitle(getString(R.string.provider_detail_dialog_title))
                 .setView(dialogView)
-                .setPositiveButton("Confirm Booking", null)
-                .setNegativeButton("Cancel", null)
+                .setPositiveButton(getString(R.string.provider_detail_dialog_confirm), null)
+                .setNegativeButton(getString(R.string.provider_detail_dialog_cancel), null)
                 .create();
 
         dialog.setOnShowListener(d -> {
@@ -352,19 +363,19 @@ public class ProviderDetailActivity extends BaseActivity {
                 String description = etBookDescription.getText() != null ? etBookDescription.getText().toString().trim() : "";
 
                 if (date.isEmpty()) {
-                    etBookDate.setError("Select a date");
+                    etBookDate.setError(getString(R.string.provider_detail_error_select_date));
                     return;
                 }
                 if (!isBookingDateAllowed(date, minBookingDateMs, maxBookingDateMs)) {
-                    etBookDate.setError("Choose date from today to next 7 days");
+                    etBookDate.setError(getString(R.string.provider_detail_error_date_range));
                     return;
                 }
                 if (time.isEmpty()) {
-                    etBookTime.setError("Select a time");
+                    etBookTime.setError(getString(R.string.provider_detail_error_select_time));
                     return;
                 }
                 if (address.isEmpty()) {
-                    etBookAddress.setError("Address is required");
+                    etBookAddress.setError(getString(R.string.provider_detail_error_address_required));
                     return;
                 }
 
@@ -393,10 +404,10 @@ public class ProviderDetailActivity extends BaseActivity {
 
     private void submitBooking(String customerId, String date, String time,
                                String address, String description) {
-        Toast.makeText(this, "Submitting booking...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, getString(R.string.provider_detail_booking_submitting), Toast.LENGTH_SHORT).show();
 
         if (providerIdForBooking == null || providerIdForBooking.trim().isEmpty()) {
-            Toast.makeText(this, "Provider not available. Please try again.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.provider_detail_booking_failed_provider_missing), Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -413,7 +424,7 @@ public class ProviderDetailActivity extends BaseActivity {
                 }
                 if (providerIdForInsert.isEmpty()) {
                     mainHandler.post(() -> Toast.makeText(ProviderDetailActivity.this,
-                            "Booking failed: provider profile id not found.", Toast.LENGTH_LONG).show());
+                            getString(R.string.provider_detail_booking_failed_provider_missing), Toast.LENGTH_LONG).show());
                     return;
                 }
 
@@ -424,7 +435,7 @@ public class ProviderDetailActivity extends BaseActivity {
                 }
                 if (customerIdForInsert.isEmpty()) {
                     mainHandler.post(() -> Toast.makeText(ProviderDetailActivity.this,
-                            "Booking failed: customer id missing.", Toast.LENGTH_LONG).show());
+                            getString(R.string.provider_detail_booking_failed_customer_missing), Toast.LENGTH_LONG).show());
                     return;
                 }
 
@@ -432,7 +443,7 @@ public class ProviderDetailActivity extends BaseActivity {
                 bookingBody.put("customer_id", customerIdForInsert);
                 bookingBody.put("provider_id", providerIdForInsert);
                 bookingBody.put("customer_name", (customerMeta == null || customerMeta.name == null || customerMeta.name.isEmpty())
-                        ? "Customer" : customerMeta.name);
+                        ? getString(R.string.provider_detail_booking_customer_fallback) : customerMeta.name);
                 bookingBody.put("customer_phone", (customerMeta == null || customerMeta.phone == null) ? "" : customerMeta.phone);
                 bookingBody.put("provider_name", providerName != null ? providerName : "");
                 String serviceId = normalizeUuidOrEmpty(serviceIdForBooking);
@@ -441,7 +452,7 @@ public class ProviderDetailActivity extends BaseActivity {
                 } else {
                     bookingBody.put("service_id", serviceId);
                 }
-                bookingBody.put("service_name", providerCategory != null ? providerCategory : "Service");
+                bookingBody.put("service_name", providerCategory != null ? providerCategory : getString(R.string.provider_detail_category_service));
                 bookingBody.put("category", providerCategory != null ? providerCategory : "");
                 bookingBody.put("booking_date", date);
                 bookingBody.put("booking_time", normalizeBookingTime(time));
@@ -469,7 +480,7 @@ public class ProviderDetailActivity extends BaseActivity {
                     public void onFailure(Call call, IOException e) {
                         mainHandler.post(() ->
                                 Toast.makeText(ProviderDetailActivity.this,
-                                        "Booking failed: " + e.getMessage(),
+                                        getString(R.string.provider_detail_booking_failed_prefix, e.getMessage()),
                                         Toast.LENGTH_SHORT).show());
                     }
 
@@ -483,17 +494,17 @@ public class ProviderDetailActivity extends BaseActivity {
                             if (code == 200 || code == 201 || code == 204) {
                                 FcmNotificationHelper.notifyProviderNewBooking(
                                         providerFirebaseUid,
-                                        bookingBody.optString("customer_name", "Customer"),
-                                        bookingBody.optString("service_name", "Service")
+                                        bookingBody.optString("customer_name", getString(R.string.provider_detail_booking_customer_fallback)),
+                                        bookingBody.optString("service_name", getString(R.string.provider_detail_category_service))
                                 );
                                 Toast.makeText(ProviderDetailActivity.this,
-                                        "Booking submitted successfully!",
+                                        getString(R.string.provider_detail_booking_success),
                                         Toast.LENGTH_LONG).show();
                             } else {
                                 Log.e(TAG, "BOOKING_ERROR HTTP " + code + " | " + resp);
                                 String msg = resp.trim().isEmpty() ? ("HTTP " + code) : resp;
                                 Toast.makeText(ProviderDetailActivity.this,
-                                        "Booking failed: " + msg,
+                                        getString(R.string.provider_detail_booking_failed_prefix, msg),
                                         Toast.LENGTH_LONG).show();
                             }
                         });
@@ -504,7 +515,7 @@ public class ProviderDetailActivity extends BaseActivity {
                 Log.e(TAG, "submitBooking error: " + e.getMessage());
                 mainHandler.post(() ->
                         Toast.makeText(ProviderDetailActivity.this,
-                                "Error creating booking",
+                                getString(R.string.provider_detail_error_creating_booking),
                                 Toast.LENGTH_SHORT).show());
             }
         }).start();
@@ -550,8 +561,8 @@ public class ProviderDetailActivity extends BaseActivity {
                             if (comment.isEmpty()) continue;
 
                             ReviewItem item = new ReviewItem();
-                            item.customerName = safe(o.optString("customer_name", "Customer"));
-                            if (item.customerName.isEmpty()) item.customerName = "Customer";
+                            item.customerName = safe(o.optString("customer_name", getString(R.string.provider_detail_booking_customer_fallback)));
+                            if (item.customerName.isEmpty()) item.customerName = getString(R.string.provider_detail_booking_customer_fallback);
                             item.rating = o.optInt("rating", 0);
                             item.comment = comment;
                             item.createdAt = safe(o.optString("created_at", ""));
@@ -589,7 +600,10 @@ public class ProviderDetailActivity extends BaseActivity {
 
         card.setVisibility(View.VISIBLE);
         tvEmpty.setVisibility(View.GONE);
-        tvCount.setText(reviews.size() + " review" + (reviews.size() == 1 ? "" : "s"));
+        tvCount.setText(getResources().getQuantityString(
+                R.plurals.provider_detail_reviews_count,
+                reviews.size(),
+                reviews.size()));
 
         for (int i = 0; i < reviews.size(); i++) {
             ReviewItem item = reviews.get(i);
@@ -599,7 +613,7 @@ public class ProviderDetailActivity extends BaseActivity {
             row.setPadding(0, i == 0 ? 0 : dp(10), 0, 0);
 
             TextView header = new TextView(this);
-            header.setText(item.customerName + " • " + item.rating + "/5");
+            header.setText(getString(R.string.provider_detail_review_header, item.customerName, item.rating));
             header.setTextColor(getResources().getColor(R.color.text_primary));
             header.setTextSize(13f);
             header.setTypeface(header.getTypeface(), android.graphics.Typeface.BOLD);
@@ -736,7 +750,7 @@ public class ProviderDetailActivity extends BaseActivity {
                 badgeLp.leftMargin = dp(8);
                 badgeLp.topMargin = dp(8);
                 badge.setLayoutParams(badgeLp);
-                badge.setText("VIDEO");
+                badge.setText(getString(R.string.provider_detail_media_video_badge));
                 badge.setTextSize(10f);
                 badge.setTextColor(0xFFFFFFFF);
                 badge.setBackgroundColor(0xAA000000);
@@ -761,11 +775,11 @@ public class ProviderDetailActivity extends BaseActivity {
             } else {
                 Intent intent = new Intent(this, FullScreenImageActivity.class);
                 intent.putExtra(FullScreenImageActivity.EXTRA_IMAGE_URL, item.mediaUrl);
-                intent.putExtra(FullScreenImageActivity.EXTRA_TITLE, "Business Showcase");
+                intent.putExtra(FullScreenImageActivity.EXTRA_TITLE, getString(R.string.provider_detail_media_title));
                 startActivity(intent);
             }
         } catch (Exception e) {
-            Toast.makeText(this, "Unable to open media", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.provider_detail_media_open_failed), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -984,6 +998,53 @@ public class ProviderDetailActivity extends BaseActivity {
         if (raw.isEmpty()) return "";
         if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
         return SupabaseStorageHelper.getPublicObjectUrl(SupabaseStorageHelper.BUCKET_PROFILE_IMAGES, raw);
+    }
+
+    private void initSectionTabs() {
+        MaterialButton btnContact = findViewById(R.id.btnSectionContact);
+        MaterialButton btnAbout = findViewById(R.id.btnSectionAbout);
+        MaterialButton btnReviews = findViewById(R.id.btnSectionReviews);
+        MaterialButton btnShowcase = findViewById(R.id.btnSectionShowcase);
+
+        if (btnContact != null) btnContact.setOnClickListener(v -> selectSection(SECTION_CONTACT));
+        if (btnAbout != null) btnAbout.setOnClickListener(v -> selectSection(SECTION_ABOUT));
+        if (btnReviews != null) btnReviews.setOnClickListener(v -> selectSection(SECTION_REVIEWS));
+        if (btnShowcase != null) btnShowcase.setOnClickListener(v -> selectSection(SECTION_SHOWCASE));
+
+        selectSection(selectedSection);
+    }
+
+    private void selectSection(int section) {
+        selectedSection = section;
+
+        View contactCard = findViewById(R.id.cardContactLocation);
+        View aboutCard = findViewById(R.id.cardDescription);
+        View reviewsCard = findViewById(R.id.cardRecentReviews);
+        View showcaseCard = findViewById(R.id.cardShowcaseMedia);
+
+        if (contactCard != null) contactCard.setVisibility(section == SECTION_CONTACT ? View.VISIBLE : View.GONE);
+        if (aboutCard != null) aboutCard.setVisibility(section == SECTION_ABOUT ? View.VISIBLE : View.GONE);
+        if (reviewsCard != null) reviewsCard.setVisibility(section == SECTION_REVIEWS ? View.VISIBLE : View.GONE);
+        if (showcaseCard != null) showcaseCard.setVisibility(section == SECTION_SHOWCASE ? View.VISIBLE : View.GONE);
+
+        styleSectionButton((MaterialButton) findViewById(R.id.btnSectionContact), section == SECTION_CONTACT);
+        styleSectionButton((MaterialButton) findViewById(R.id.btnSectionAbout), section == SECTION_ABOUT);
+        styleSectionButton((MaterialButton) findViewById(R.id.btnSectionReviews), section == SECTION_REVIEWS);
+        styleSectionButton((MaterialButton) findViewById(R.id.btnSectionShowcase), section == SECTION_SHOWCASE);
+    }
+
+    private void styleSectionButton(MaterialButton button, boolean selected) {
+        if (button == null) return;
+
+        int background = ContextCompat.getColor(this, selected ? R.color.primary_light : R.color.white);
+        int text = ContextCompat.getColor(this, selected ? R.color.primary_dark : R.color.text_primary);
+        int stroke = ContextCompat.getColor(this, selected ? R.color.primary : R.color.divider);
+
+        button.setBackgroundTintList(ColorStateList.valueOf(background));
+        button.setTextColor(text);
+        button.setStrokeColor(ColorStateList.valueOf(stroke));
+        button.setStrokeWidth(dp(1));
+        button.setElevation(selected ? dp(1) : 0f);
     }
 
     @Override

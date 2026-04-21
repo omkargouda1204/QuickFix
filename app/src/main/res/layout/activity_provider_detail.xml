@@ -26,7 +26,7 @@
                 android:scaleType="centerCrop"
                 android:src="@drawable/bg_profile_header_gradient"
                 app:layout_collapseMode="parallax"
-                android:contentDescription="Business" />
+                android:contentDescription="@string/provider_detail_cd_business_image" />
 
             <!-- Dark overlay -->
             <View
@@ -86,7 +86,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="Business Name"
+                            android:text="@string/provider_detail_business_name_placeholder"
                             android:textColor="@color/text_primary"
                             android:textSize="20sp"
                             android:textStyle="bold" />
@@ -108,7 +108,7 @@
                                 android:layout_height="14dp"
                                 android:src="@drawable/ic_check"
                                 app:tint="#FFFFFF"
-                                android:contentDescription="Verified" />
+                                android:contentDescription="@string/provider_detail_cd_verified" />
                         </LinearLayout>
                     </LinearLayout>
 
@@ -117,7 +117,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="by Owner Name"
+                        android:text="@string/provider_detail_owner_name_placeholder"
                         android:textColor="@color/text_secondary"
                         android:textSize="14sp" />
 
@@ -137,7 +137,7 @@
                             android:paddingEnd="10dp"
                             android:paddingTop="4dp"
                             android:paddingBottom="4dp"
-                            android:text="Category"
+                            android:text="@string/provider_detail_category_placeholder"
                             android:textColor="#FFFFFF"
                             android:textSize="12sp"
                             android:textStyle="bold" />
@@ -152,7 +152,7 @@
                             android:paddingEnd="10dp"
                             android:paddingTop="4dp"
                             android:paddingBottom="4dp"
-                            android:text="5 yrs exp"
+                            android:text="@string/provider_detail_experience_placeholder"
                             android:textColor="@color/primary"
                             android:textSize="12sp"
                             android:textStyle="bold" />
@@ -168,16 +168,70 @@
                         android:orientation="horizontal"
                         android:visibility="gone">
 
-                        <ImageView android:layout_width="16dp" android:layout_height="16dp" android:src="@drawable/ic_check" app:tint="#FFD700" android:contentDescription="Star" />
-                        <TextView android:id="@+id/tvDetailRating" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:text="4.5" android:textColor="@color/text_primary" android:textSize="14sp" android:textStyle="bold" />
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:text="rating" android:textColor="@color/text_secondary" android:textSize="13sp" />
+                        <ImageView android:layout_width="16dp" android:layout_height="16dp" android:src="@drawable/ic_check" app:tint="#FFD700" android:contentDescription="@string/provider_detail_cd_star" />
+                        <TextView android:id="@+id/tvDetailRating" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:text="" android:textColor="@color/text_primary" android:textSize="14sp" android:textStyle="bold" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:text="@string/provider_detail_rating_word" android:textColor="@color/text_secondary" android:textSize="13sp" />
                     </LinearLayout>
 
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- Section tab row -->
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingTop="2dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="2dp">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSectionContact"
+                        style="@style/Widget.QuickFix.Button.SectionChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:minWidth="0dp"
+                        android:text="@string/provider_detail_tab_contact" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSectionAbout"
+                        style="@style/Widget.QuickFix.Button.SectionChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="8dp"
+                        android:minWidth="0dp"
+                        android:text="@string/provider_detail_tab_about" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSectionReviews"
+                        style="@style/Widget.QuickFix.Button.SectionChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="8dp"
+                        android:minWidth="0dp"
+                        android:text="@string/provider_detail_tab_reviews" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSectionShowcase"
+                        style="@style/Widget.QuickFix.Button.SectionChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="8dp"
+                        android:minWidth="0dp"
+                        android:text="@string/provider_detail_tab_showcase" />
+                </LinearLayout>
+            </HorizontalScrollView>
+
             <!-- Contact + location card -->
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardContactLocation"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
@@ -195,7 +249,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Contact &amp; Location"
+                        android:text="@string/provider_detail_tab_contact"
                         android:textColor="@color/text_primary"
                         android:textSize="15sp"
                         android:textStyle="bold"
@@ -203,20 +257,20 @@
 
                     <!-- City -->
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:layout_marginBottom="8dp">
-                        <ImageView android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/ic_location" app:tint="@color/primary" android:contentDescription="City" />
-                        <TextView android:id="@+id/tvDetailCity" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="10dp" android:text="City" android:textColor="@color/text_primary" android:textSize="14sp" />
+                        <ImageView android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/ic_location" app:tint="@color/primary" android:contentDescription="@string/provider_detail_city_placeholder" />
+                        <TextView android:id="@+id/tvDetailCity" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="10dp" android:text="@string/provider_detail_city_placeholder" android:textColor="@color/text_primary" android:textSize="14sp" />
                     </LinearLayout>
 
                     <!-- Phone -->
                     <LinearLayout android:id="@+id/rowPhone" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:layout_marginBottom="8dp" android:visibility="gone">
-                        <ImageView android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/ic_phone" app:tint="@color/primary" android:contentDescription="Phone" />
-                        <TextView android:id="@+id/tvDetailPhone" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="10dp" android:text="Phone" android:textColor="@color/text_primary" android:textSize="14sp" />
+                        <ImageView android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/ic_phone" app:tint="@color/primary" android:contentDescription="@string/provider_detail_phone_placeholder" />
+                        <TextView android:id="@+id/tvDetailPhone" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="10dp" android:text="@string/provider_detail_phone_placeholder" android:textColor="@color/text_primary" android:textSize="14sp" />
                     </LinearLayout>
 
                     <!-- Email -->
                     <LinearLayout android:id="@+id/rowEmail" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:visibility="gone">
-                        <ImageView android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/ic_email" app:tint="@color/primary" android:contentDescription="Email" />
-                        <TextView android:id="@+id/tvDetailEmail" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="10dp" android:text="Email" android:textColor="@color/text_primary" android:textSize="14sp" />
+                        <ImageView android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/ic_email" app:tint="@color/primary" android:contentDescription="@string/provider_detail_email_placeholder" />
+                        <TextView android:id="@+id/tvDetailEmail" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="10dp" android:text="@string/provider_detail_email_placeholder" android:textColor="@color/text_primary" android:textSize="14sp" />
                     </LinearLayout>
 
                 </LinearLayout>
@@ -243,7 +297,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="About"
+                        android:text="@string/provider_detail_tab_about"
                         android:textColor="@color/text_primary"
                         android:textSize="15sp"
                         android:textStyle="bold"
@@ -253,7 +307,7 @@
                         android:id="@+id/tvDetailDescription"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Description..."
+                        android:text="@string/provider_detail_description_placeholder"
                         android:textColor="@color/text_secondary"
                         android:textSize="14sp"
                         android:lineSpacingExtra="4dp" />
@@ -283,7 +337,7 @@
                         android:id="@+id/tvRecentReviewsTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Recent Reviews"
+                        android:text="@string/provider_detail_recent_reviews"
                         android:textColor="@color/text_primary"
                         android:textSize="15sp"
                         android:textStyle="bold" />
@@ -302,7 +356,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
-                        android:text="No written reviews yet"
+                        android:text="@string/provider_detail_recent_reviews_empty"
                         android:textColor="@color/text_secondary"
                         android:textSize="13sp"
                         android:visibility="gone" />
@@ -338,7 +392,7 @@
                         android:id="@+id/tvShowcaseTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Business Showcase"
+                        android:text="@string/provider_detail_tab_showcase"
                         android:textColor="@color/text_primary"
                         android:textSize="15sp"
                         android:textStyle="bold" />
@@ -348,7 +402,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="No showcase media available"
+                        android:text="@string/provider_detail_showcase_empty"
                         android:textColor="@color/text_secondary"
                         android:textSize="13sp"
                         android:visibility="gone" />
@@ -392,7 +446,7 @@
             android:layout_height="52dp"
             android:layout_weight="1"
             android:layout_marginEnd="8dp"
-            android:text="Message"
+            android:text="@string/provider_detail_button_message"
             android:textSize="15sp"
             app:icon="@drawable/ic_messages"
             app:iconGravity="textStart"
@@ -408,7 +462,7 @@
             android:layout_height="52dp"
             android:layout_weight="1"
             android:layout_marginStart="8dp"
-            android:text="Book Service"
+            android:text="@string/provider_detail_button_book"
             android:textSize="15sp"
             app:backgroundTint="@color/primary"
             app:cornerRadius="26dp"

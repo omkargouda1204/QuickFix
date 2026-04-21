@@ -61,7 +61,7 @@ public class ProvidersListActivity extends BaseActivity
     private static final String TAG = "ProvidersListActivity";
     private static final float NEARBY_RADIUS_PRIMARY_METERS = 20000f;
     private static final float NEARBY_RADIUS_SECONDARY_METERS = 25000f;
-    private static final int PROVIDERS_PAGE_SIZE = 2;
+    private static final int PROVIDERS_PAGE_SIZE = 10;
 
     // ── Views ─────────────────────────────────────────────────────────────
     private TextView          tvCategoryTitle, tvResultSubtitle, tvLocationLabel, tvEmptySubtitle;
@@ -661,33 +661,5 @@ public class ProvidersListActivity extends BaseActivity
         intent.putExtra(ProviderDetailActivity.EXTRA_RATING,             provider.rating);
         startActivity(intent);
         overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
-    }
-
-    @Override
-    public void onBookService(ProviderProfile provider) {
-        // For now launch detail screen with booking flag
-        Intent intent = new Intent(this, ProviderDetailActivity.class);
-        intent.putExtra(ProviderDetailActivity.EXTRA_PROVIDER_ID,   provider.id);
-        intent.putExtra(ProviderDetailActivity.EXTRA_FIREBASE_UID,  provider.firebaseUid);
-        intent.putExtra(ProviderDetailActivity.EXTRA_BUSINESS_NAME, provider.businessName);
-        intent.putExtra(ProviderDetailActivity.EXTRA_OWNER_NAME,    provider.ownerName);
-        intent.putExtra(ProviderDetailActivity.EXTRA_CATEGORY,      provider.category);
-        intent.putExtra(ProviderDetailActivity.EXTRA_CITY,          provider.city);
-        intent.putExtra(ProviderDetailActivity.EXTRA_PHONE,         provider.phone);
-        intent.putExtra(ProviderDetailActivity.EXTRA_EMAIL,         provider.email);
-        intent.putExtra(ProviderDetailActivity.EXTRA_DESCRIPTION,   provider.description);
-        intent.putExtra(ProviderDetailActivity.EXTRA_EXPERIENCE,    provider.experienceYrs);
-        intent.putExtra(ProviderDetailActivity.EXTRA_IMAGE_URL,     provider.businessImageUrl);
-        intent.putExtra(ProviderDetailActivity.EXTRA_IS_VERIFIED,   provider.isVerified);
-        intent.putExtra(ProviderDetailActivity.EXTRA_RATING,        provider.rating);
-        intent.putExtra(ProviderDetailActivity.EXTRA_OPEN_BOOKING,  true);
-        intent.putExtra(ProviderDetailActivity.EXTRA_CUSTOMER_ID,   getCurrentUserId());
-        startActivity(intent);
-        overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
-    }
-
-    private String getCurrentUserId() {
-        SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
-        return prefs.getString("firebase_uid", "");
     }
 }

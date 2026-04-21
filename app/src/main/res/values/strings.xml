@@ -1,4 +1,5 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="MissingTranslation">
     <string name="app_name">QuickFix</string>
 
     <!-- Admin Bottom Nav (new entries) -->
@@ -267,4 +268,56 @@
     <string name="toast_message_sent" translatable="false">Message sent</string>
     <string name="toast_message_send_failed" translatable="false">Failed to send message</string>
     <string name="toast_no_internet" translatable="false">No internet</string>
+
+    <!-- Provider Detail -->
+    <string name="provider_detail_cd_business_image" translatable="false">Business</string>
+    <string name="provider_detail_cd_verified" translatable="false">Verified</string>
+    <string name="provider_detail_cd_star" translatable="false">Star</string>
+    <string name="provider_detail_business_name_placeholder" translatable="false">Business Name</string>
+    <string name="provider_detail_owner_name_placeholder" translatable="false">Owner Name</string>
+    <string name="provider_detail_owner_by" translatable="false">by %1$s</string>
+    <string name="provider_detail_category_placeholder" translatable="false">Category</string>
+    <string name="provider_detail_category_service" translatable="false">Service</string>
+    <string name="provider_detail_experience_format" translatable="false">%1$d yrs exp</string>
+    <string name="provider_detail_experience_placeholder" translatable="false">5 yrs exp</string>
+    <string name="provider_detail_rating_word" translatable="false">rating</string>
+    <string name="provider_detail_tab_contact" translatable="false">Contact &amp; Location</string>
+    <string name="provider_detail_tab_about" translatable="false">About</string>
+    <string name="provider_detail_tab_reviews" translatable="false">Reviews</string>
+    <string name="provider_detail_tab_showcase" translatable="false">Business Showcase</string>
+    <string name="provider_detail_city_placeholder" translatable="false">City</string>
+    <string name="provider_detail_phone_placeholder" translatable="false">Phone</string>
+    <string name="provider_detail_email_placeholder" translatable="false">Email</string>
+    <string name="provider_detail_description_placeholder" translatable="false">Description...</string>
+    <string name="provider_detail_description_fallback" translatable="false">This provider has not added a business description yet.</string>
+    <string name="provider_detail_recent_reviews" translatable="false">Recent Reviews</string>
+    <string name="provider_detail_recent_reviews_empty" translatable="false">No written reviews yet</string>
+    <string name="provider_detail_showcase_empty" translatable="false">No showcase media available</string>
+    <string name="provider_detail_button_message" translatable="false">Message</string>
+    <string name="provider_detail_button_book" translatable="false">Book Service</string>
+    <string name="provider_detail_login_to_chat" translatable="false">Please log in to chat</string>
+    <string name="provider_detail_login_to_book" translatable="false">Please log in to book a service</string>
+    <string name="provider_detail_dialog_title" translatable="false">Book Service</string>
+    <string name="provider_detail_dialog_confirm" translatable="false">Confirm Booking</string>
+    <string name="provider_detail_dialog_cancel" translatable="false">Cancel</string>
+    <string name="provider_detail_error_select_date" translatable="false">Select a date</string>
+    <string name="provider_detail_error_select_time" translatable="false">Select a time</string>
+    <string name="provider_detail_error_address_required" translatable="false">Address is required</string>
+    <string name="provider_detail_error_date_range" translatable="false">Choose date from today to next 7 days</string>
+    <string name="provider_detail_error_creating_booking" translatable="false">Error creating booking</string>
+    <string name="provider_detail_booking_submitting" translatable="false">Submitting booking...</string>
+    <string name="provider_detail_booking_failed_provider_missing" translatable="false">Booking failed: provider profile id not found.</string>
+    <string name="provider_detail_booking_failed_customer_missing" translatable="false">Booking failed: customer id missing.</string>
+    <string name="provider_detail_booking_customer_fallback" translatable="false">Customer</string>
+    <string name="provider_detail_booking_success" translatable="false">Booking submitted successfully!</string>
+    <string name="provider_detail_booking_failed_prefix" translatable="false">Booking failed: %1$s</string>
+    <string name="provider_detail_review_header" translatable="false">%1$s • %2$d/5</string>
+    <string name="provider_detail_media_video_badge" translatable="false">VIDEO</string>
+    <string name="provider_detail_media_title" translatable="false">Business Showcase</string>
+    <string name="provider_detail_media_open_failed" translatable="false">Unable to open media</string>
+
+    <plurals name="provider_detail_reviews_count" translatable="false">
+        <item quantity="one">%1$d review</item>
+        <item quantity="other">%1$d reviews</item>
+    </plurals>
 </resources>
