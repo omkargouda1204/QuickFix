@@ -44,7 +44,6 @@ public class ProfileActivity extends BaseActivity {
 
     private static final String TAG           = "ProfileActivity";
     private static final String PREFS_NAME    = "quickfix_prefs";
-    private static final String KEY_LANGUAGE  = "selected_language";
     private static final String KEY_NOTIF     = "notifications_enabled";
 
     // ── Header ────────────────────────────────────────────────────────────
@@ -57,6 +56,7 @@ public class ProfileActivity extends BaseActivity {
             menuMyBookings, menuNotifications, menuLanguage,
             menuDarkMode, menuHelpSupport, menuPrivacyPolicy,
             menuTerms, menuAboutApp, menuLogout,
+            menuTransactionHistory,
             menuAdminDashboard, menuProviderDashboard;
     private androidx.cardview.widget.CardView cardRoleDashboard;
 
@@ -125,6 +125,7 @@ public class ProfileActivity extends BaseActivity {
         menuSettings          = findViewById(R.id.menuSettings);
         menuListBusiness      = findViewById(R.id.menuListBusiness);
         menuMyBookings        = findViewById(R.id.menuMyBookings);
+        menuTransactionHistory = findViewById(R.id.menuTransactionHistory);
         menuNotifications     = findViewById(R.id.menuNotifications);
         menuLanguage          = findViewById(R.id.menuLanguage);
         menuDarkMode          = findViewById(R.id.menuDarkMode);
@@ -176,7 +177,7 @@ public class ProfileActivity extends BaseActivity {
 
     private UserModel fetchUserRow(String uid, String email) {
         try {
-            String encodedUid = java.net.URLEncoder.encode(uid, java.nio.charset.StandardCharsets.UTF_8.name());
+            String encodedUid = android.net.Uri.encode(uid);
             String url = BuildConfig.SUPABASE_URL
                     + "/rest/v1/users?firebase_uid=eq." + encodedUid
                     + "&select=id,firebase_uid,name,email,phone,profile_image,is_user,is_service_provider,is_admin,dark_mode,language&limit=1";
@@ -206,7 +207,7 @@ public class ProfileActivity extends BaseActivity {
                 }
             }
             if (!email.isEmpty()) {
-                String enc = java.net.URLEncoder.encode(email, java.nio.charset.StandardCharsets.UTF_8.name());
+                String enc = android.net.Uri.encode(email);
                 String urlE = BuildConfig.SUPABASE_URL
                         + "/rest/v1/users?email=eq." + enc
                         + "&select=id,firebase_uid,name,email,phone,profile_image,is_user,is_service_provider,is_admin,dark_mode,language&limit=1";
@@ -336,6 +337,18 @@ public class ProfileActivity extends BaseActivity {
         });
 
         menuListBusiness.setOnClickListener(v -> handleListBusinessClick());
+
+        menuMyBookings.setOnClickListener(v -> {
+            startActivity(new Intent(this, UserBookingsActivity.class));
+            overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+        });
+
+        if (menuTransactionHistory != null) {
+            menuTransactionHistory.setOnClickListener(v -> {
+                startActivity(new Intent(this, TransactionActivity.class));
+                overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+            });
+        }
 
 
         menuNotifications.setOnClickListener(v -> {
@@ -492,9 +505,6 @@ public class ProfileActivity extends BaseActivity {
     }
 
     // ── Dark Mode ─────────────────────────────────────────────────────────
-    private void applyDarkModeFromPrefs() {
-        ThemeManager.applyFromPrefs(this, false);
-    }
 
     private void setupTogglesFromPrefs() {
         switchNotifications.setChecked(prefs.getBoolean(KEY_NOTIF, true));

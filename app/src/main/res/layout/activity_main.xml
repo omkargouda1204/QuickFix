@@ -235,7 +235,6 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-
             <!-- ── ACTIVE BANNERS CAROUSEL ────────────────────────────── -->
             <LinearLayout
                 android:id="@+id/bannersSection"
@@ -520,137 +519,6 @@
 
             </LinearLayout>
 
-            <!-- Continue where you left -->
-            <LinearLayout
-                android:id="@+id/continueSection"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:animateLayoutChanges="true"
-                android:orientation="vertical"
-                android:paddingStart="20dp"
-                android:paddingEnd="20dp"
-                android:paddingTop="14dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
-                    android:text="@string/home_continue_title"
-                    android:textColor="@color/text_primary"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-
-                <LinearLayout
-                    android:id="@+id/continueLoadingState"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="14dp"
-                    android:background="@drawable/bg_card">
-
-                    <View
-                        android:layout_width="180dp"
-                        android:layout_height="14dp"
-                        android:background="@drawable/bg_shimmer_block" />
-
-                    <View
-                        android:layout_width="240dp"
-                        android:layout_height="12dp"
-                        android:layout_marginTop="8dp"
-                        android:background="@drawable/bg_shimmer_block" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/continueEmptyState"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_card"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:padding="16dp"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/home_continue_empty_title"
-                        android:textColor="@color/text_primary"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="@string/home_continue_empty_subtitle"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/continueErrorState"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_card"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:padding="16dp"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:id="@+id/tvContinueErrorMessage"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/home_continue_error_message"
-                        android:textColor="@color/error_red"
-                        android:textSize="13sp"
-                        android:textStyle="bold" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnRetryContinueLoad"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="@string/retry" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/continueContentContainer"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_card"
-                    android:orientation="vertical"
-                    android:padding="16dp"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:id="@+id/tvContinueHeading"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textColor="@color/text_primary"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/tvContinueSubtitle"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnContinueAction"
-                        style="@style/Widget.Material3.Button"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:layout_marginTop="10dp"
-                        android:text="@string/home_continue_action"
-                        app:cornerRadius="18dp" />
-                </LinearLayout>
-            </LinearLayout>
-
             <!-- ── LIST YOUR BUSINESS CARD ───────────────────────────── -->
             <LinearLayout
                 android:id="@+id/listBusinessSection"
@@ -768,16 +636,6 @@
 
                 </LinearLayout>
 
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/rvServiceChips"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="14dp"
-                    android:clipToPadding="false"
-                    android:nestedScrollingEnabled="false"
-                    android:paddingEnd="4dp"
-                    android:scrollbars="none" />
-
                 <!-- Row 1 -->
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -813,11 +671,13 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:gravity="center"
+                            android:layout_marginTop="6dp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
                             android:text="@string/cat_plumbing"
                             android:textColor="@color/text_primary"
-                            android:textSize="12sp" />
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
 
                     </LinearLayout>
 
@@ -847,11 +707,13 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:gravity="center"
+                            android:layout_marginTop="6dp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
                             android:text="@string/cat_electrical"
                             android:textColor="@color/text_primary"
-                            android:textSize="12sp" />
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
 
                     </LinearLayout>
 
@@ -881,11 +743,13 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:gravity="center"
+                            android:layout_marginTop="6dp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
                             android:text="@string/cat_cleaning"
                             android:textColor="@color/text_primary"
-                            android:textSize="12sp" />
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
 
                     </LinearLayout>
 
@@ -915,11 +779,13 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:gravity="center"
+                            android:layout_marginTop="6dp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
                             android:text="@string/cat_repair"
                             android:textColor="@color/text_primary"
-                            android:textSize="12sp" />
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
 
                     </LinearLayout>
 
@@ -959,11 +825,13 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:gravity="center"
+                            android:layout_marginTop="6dp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
                             android:text="@string/cat_ac"
                             android:textColor="@color/text_primary"
-                            android:textSize="12sp" />
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
 
                     </LinearLayout>
 
@@ -993,11 +861,13 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:gravity="center"
+                            android:layout_marginTop="6dp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
                             android:text="@string/cat_painting"
                             android:textColor="@color/text_primary"
-                            android:textSize="12sp" />
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
 
                     </LinearLayout>
 
@@ -1027,11 +897,13 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:gravity="center"
+                            android:layout_marginTop="6dp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
                             android:text="@string/cat_carpentry"
                             android:textColor="@color/text_primary"
-                            android:textSize="12sp" />
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
 
                     </LinearLayout>
 
@@ -1061,11 +933,13 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:gravity="center"
+                            android:layout_marginTop="6dp"
+                            android:maxLines="1"
+                            android:ellipsize="end"
                             android:text="@string/cat_more"
                             android:textColor="@color/text_primary"
-                            android:textSize="12sp" />
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
 
                     </LinearLayout>
 
@@ -1198,62 +1072,6 @@
 
             </LinearLayout>
 
-            <!-- ── AI ASSISTANT ENTRY ─────────────────────────────────── -->
-            <LinearLayout
-                android:id="@+id/aiAssistantCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="20dp"
-                android:layout_marginTop="16dp"
-                android:layout_marginEnd="20dp"
-                android:background="@drawable/bg_quick_action_purple"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:layout_marginEnd="12dp"
-                    android:background="@drawable/bg_admin_badge"
-                    android:gravity="center"
-                    android:text="AI"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/ai_assistant_title"
-                        android:textColor="@color/text_primary"
-                        android:textSize="16sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="Smart help for service problems and pricing"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@drawable/ic_arrow_right"
-                    app:tint="@color/primary"
-                    android:contentDescription="Open AI Assistant" />
-            </LinearLayout>
-
             <!-- ── FEATURED SERVICES ──────────────────────────────────── -->
             <LinearLayout
                 android:layout_width="match_parent"
@@ -1316,7 +1134,7 @@
                             android:clickable="true"
                             android:focusable="true"
                             app:cardCornerRadius="16dp"
-                            app:cardElevation="4dp">
+                            app:cardElevation="6dp">
 
                             <LinearLayout
                                 android:layout_width="match_parent"
@@ -1377,7 +1195,7 @@
                             android:clickable="true"
                             android:focusable="true"
                             app:cardCornerRadius="16dp"
-                            app:cardElevation="4dp">
+                            app:cardElevation="6dp">
 
                             <LinearLayout
                                 android:layout_width="match_parent"
@@ -1439,7 +1257,7 @@
                             android:clickable="true"
                             android:focusable="true"
                             app:cardCornerRadius="16dp"
-                            app:cardElevation="4dp">
+                            app:cardElevation="6dp">
 
                             <LinearLayout
                                 android:layout_width="match_parent"
@@ -1594,6 +1412,32 @@
 
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/fabAiChat"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="84dp"
+        android:contentDescription="Open AI Assistant"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackgroundBorderless"
+        android:background="@drawable/bg_ai_fab_gradient"
+        app:cardCornerRadius="32dp"
+        app:cardElevation="10dp"
+        app:cardUseCompatPadding="true"
+        app:strokeWidth="0dp">
+
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="14dp"
+            android:src="@drawable/ic_messages"
+            app:tint="@android:color/white"
+            android:contentDescription="Open AI Assistant" />
+    </com.google.android.material.card.MaterialCardView>
+
     <!-- ── BOTTOM NAVIGATION BAR ─────────────────────────────────────── -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -1724,4 +1568,3 @@
     </LinearLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
-

@@ -69,6 +69,7 @@ public class SearchResultsAdapter extends RecyclerView.Adapter<SearchResultsAdap
                         && oldItem.distanceKm == newItem.distanceKm
                         && eq(oldItem.availabilityStatus, newItem.availabilityStatus)
                         && eq(oldItem.profileImage, newItem.profileImage)
+                        && eq(oldItem.priceText, newItem.priceText)
                         && oldItem.isVerified == newItem.isVerified;
             }
         });
@@ -137,6 +138,10 @@ public class SearchResultsAdapter extends RecyclerView.Adapter<SearchResultsAdap
                 ? "Available"
                 : r.availabilityStatus);
 
+        boolean hasPrice = r.priceText != null && !r.priceText.trim().isEmpty();
+        h.tvPrice.setVisibility(hasPrice ? View.VISIBLE : View.GONE);
+        h.tvPrice.setText(hasPrice ? r.priceText.trim() : "");
+
         h.itemView.setOnClickListener(v -> { if (listener != null) listener.onResultClick(r); });
     }
 
@@ -145,7 +150,7 @@ public class SearchResultsAdapter extends RecyclerView.Adapter<SearchResultsAdap
     public static class VH extends RecyclerView.ViewHolder {
         ImageView ivIcon;
         ImageView ivVerified;
-        TextView tvName, tvSubtitle, tvCity, tvType, tvRating, tvDistance, tvAvailability;
+        TextView tvName, tvSubtitle, tvCity, tvType, tvRating, tvDistance, tvAvailability, tvPrice;
         VH(View v) {
             super(v);
             ivIcon         = v.findViewById(R.id.ivResultIcon);
@@ -157,6 +162,7 @@ public class SearchResultsAdapter extends RecyclerView.Adapter<SearchResultsAdap
             tvRating       = v.findViewById(R.id.tvResultRating);
             tvDistance     = v.findViewById(R.id.tvResultDistance);
             tvAvailability = v.findViewById(R.id.tvResultAvailability);
+            tvPrice        = v.findViewById(R.id.tvResultPrice);
         }
     }
 

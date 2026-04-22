@@ -14,7 +14,6 @@ import android.text.TextWatcher;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.animation.AnimationUtils;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -103,12 +102,10 @@ public class MainActivity extends BaseActivity {
     // ── Categories ────────────────────────────────────────────────────────
     private LinearLayout catPlumbing, catElectrical, catCleaning, catRepair;
     private LinearLayout catAC, catPainting, catCarpentry, catMore;
-    private RecyclerView rvServiceChips;
-    private HomeServiceChipsAdapter serviceChipsAdapter;
 
     // ── Quick Actions ─────────────────────────────────────────────────────
     private LinearLayout quickBookService, quickEmergency, quickTrackBooking;
-    private LinearLayout aiAssistantCard;
+    private View fabAiChat;
 
     // ── Featured ──────────────────────────────────────────────────────────
     private CardView featuredCard1, featuredCard2, featuredCard3;
@@ -358,12 +355,11 @@ public class MainActivity extends BaseActivity {
             catPainting = findViewSafe(R.id.catPainting);
             catCarpentry = findViewSafe(R.id.catCarpentry);
             catMore = findViewSafe(R.id.catMore);
-            rvServiceChips = findViewSafe(R.id.rvServiceChips);
 
             quickBookService = findViewSafe(R.id.quickBookService);
             quickEmergency = findViewSafe(R.id.quickEmergency);
             quickTrackBooking = findViewSafe(R.id.quickTrackBooking);
-            aiAssistantCard = findViewSafe(R.id.aiAssistantCard);
+            fabAiChat = findViewSafe(R.id.fabAiChat);
 
             featuredCard1 = findViewSafe(R.id.featuredCard1);
             featuredCard2 = findViewSafe(R.id.featuredCard2);
@@ -392,16 +388,16 @@ public class MainActivity extends BaseActivity {
             tvOffersErrorMessage = findViewSafe(R.id.tvOffersErrorMessage);
             btnRetryOffersLoad = findViewSafe(R.id.btnRetryOffersLoad);
 
-            continueSection = findViewSafe(R.id.continueSection);
-            continueContentContainer = findViewSafe(R.id.continueContentContainer);
-            continueLoadingState = findViewSafe(R.id.continueLoadingState);
-            continueEmptyState = findViewSafe(R.id.continueEmptyState);
-            continueErrorState = findViewSafe(R.id.continueErrorState);
-            tvContinueHeading = findViewSafe(R.id.tvContinueHeading);
-            tvContinueSubtitle = findViewSafe(R.id.tvContinueSubtitle);
-            tvContinueErrorMessage = findViewSafe(R.id.tvContinueErrorMessage);
-            btnContinueAction = findViewSafe(R.id.btnContinueAction);
-            btnRetryContinueLoad = findViewSafe(R.id.btnRetryContinueLoad);
+            continueSection = null;
+            continueContentContainer = null;
+            continueLoadingState = null;
+            continueEmptyState = null;
+            continueErrorState = null;
+            tvContinueHeading = null;
+            tvContinueSubtitle = null;
+            tvContinueErrorMessage = null;
+            btnContinueAction = null;
+            btnRetryContinueLoad = null;
 
             navHome = findViewSafe(R.id.navHome);
             navBookings = findViewSafe(R.id.navBookings);
@@ -461,15 +457,6 @@ public class MainActivity extends BaseActivity {
                 rvOffersStrip.setAdapter(homeOfferAdapter);
             }
 
-            if (rvServiceChips != null) {
-                rvServiceChips.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
-                if (serviceChipsAdapter == null) {
-                    serviceChipsAdapter = new HomeServiceChipsAdapter();
-                }
-                rvServiceChips.setAdapter(serviceChipsAdapter);
-                serviceChipsAdapter.setItems(buildServiceChipItems());
-            }
-
             // Setup retry listeners safely
             if (btnRetryBannerLoad != null) {
                 btnRetryBannerLoad.setOnClickListener(v -> {
@@ -491,19 +478,7 @@ public class MainActivity extends BaseActivity {
                 });
             }
 
-            if (btnRetryContinueLoad != null) {
-                btnRetryContinueLoad.setOnClickListener(v -> {
-                    try {
-                        fetchContinueWhereYouLeft();
-                    } catch (Exception e) {
-                        Log.e(TAG, "Retry continue click failed: " + e.getMessage());
-                    }
-                });
-            }
-
-            if (btnContinueAction != null) {
-                btnContinueAction.setOnClickListener(v -> openContinueBooking());
-            }
+            // Continue section removed from Home UI.
 
             // Setup swipe refresh safely
             if (homeSwipeRefresh != null) {
@@ -568,6 +543,12 @@ public class MainActivity extends BaseActivity {
     protected void onResume() {
         super.onResume();
         try {
+            restoreLastSearchQuery();
+            if (etSearch != null && lastSearchQuery != null && !lastSearchQuery.isEmpty()) {
+                etSearch.setText(lastSearchQuery);
+                etSearch.setSelection(lastSearchQuery.length());
+                if (btnClearSearch != null) btnClearSearch.setVisibility(View.VISIBLE);
+            }
             hideSuggestions();
             refreshHomeContent(false);
             startBannerAutoSlide();
@@ -749,13 +730,13 @@ public class MainActivity extends BaseActivity {
             try {
                 List<SearchResult> list = new ArrayList<>();
                 String normalizedQuery = normalizeSearchInput(query);
-                String enc = java.net.URLEncoder.encode(normalizedQuery, java.nio.charset.StandardCharsets.UTF_8.name());
+                String enc = Uri.encode("%" + normalizedQuery + "%");
                 StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
                         .append("/rest/v1/provider_profiles?select=id,firebase_uid,business_name,category,city")
                         .append("&is_approved=eq.true")
-                        .append("&or=(business_name.ilike.*").append(enc)
-                        .append("*,category.ilike.*").append(enc)
-                        .append("*,city.ilike.*").append(enc).append("*)")
+                        .append("&or=(business_name.ilike.").append(enc)
+                        .append(",category.ilike.").append(enc)
+                        .append(",city.ilike.").append(enc).append(")")
                         .append("&limit=8");
 
                 Request req = new Request.Builder()
@@ -935,8 +916,8 @@ public class MainActivity extends BaseActivity {
                 overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
             });
         }
-        if (aiAssistantCard != null) {
-            aiAssistantCard.setOnClickListener(v -> {
+        if (fabAiChat != null) {
+            fabAiChat.setOnClickListener(v -> {
                 startActivity(new Intent(this, AiChatActivity.class));
                 overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
             });
@@ -1077,14 +1058,12 @@ public class MainActivity extends BaseActivity {
 
     private void refreshHomeContent(boolean fromSwipe) {
         try {
-            pendingHomeLoads = 3;
+            pendingHomeLoads = 2;
             setBannerLoadingState();
             setOffersLoadingState();
-            setContinueLoadingState();
             if (fromSwipe && homeSwipeRefresh != null) homeSwipeRefresh.setRefreshing(true);
             fetchBanners();
             fetchOffers();
-            fetchContinueWhereYouLeft();
         } catch (Exception e) {
             Log.e(MAIN_CRASH, "refreshHomeContent: " + e.toString());
         }
@@ -1193,73 +1172,6 @@ public class MainActivity extends BaseActivity {
         }
     }
 
-    private List<ServiceChipItem> buildServiceChipItems() {
-        List<ServiceChipItem> items = new ArrayList<>();
-        items.add(new ServiceChipItem(getString(R.string.cat_plumbing), "Plumbing"));
-        items.add(new ServiceChipItem(getString(R.string.cat_electrical), "Electrical"));
-        items.add(new ServiceChipItem(getString(R.string.cat_cleaning), "Cleaning"));
-        items.add(new ServiceChipItem(getString(R.string.cat_repair), "Repair"));
-        items.add(new ServiceChipItem(getString(R.string.cat_ac), "AC Service"));
-        items.add(new ServiceChipItem(getString(R.string.cat_painting), "Painting"));
-        items.add(new ServiceChipItem(getString(R.string.cat_carpentry), "Carpentry"));
-        items.add(new ServiceChipItem(getString(R.string.cat_more), "more"));
-        return items;
-    }
-
-    private static class ServiceChipItem {
-        final String title;
-        final String category;
-
-        ServiceChipItem(String title, String category) {
-            this.title = title == null ? "" : title;
-            this.category = category == null ? "" : category;
-        }
-    }
-
-    private class HomeServiceChipsAdapter extends RecyclerView.Adapter<HomeServiceChipsAdapter.ChipViewHolder> {
-        private final List<ServiceChipItem> items = new ArrayList<>();
-
-        void setItems(List<ServiceChipItem> data) {
-            items.clear();
-            if (data != null) items.addAll(data);
-            notifyDataSetChanged();
-        }
-
-        @NonNull
-        @Override
-        public ChipViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View view = getLayoutInflater().inflate(R.layout.item_service_chip, parent, false);
-            return new ChipViewHolder(view);
-        }
-
-        @Override
-        public void onBindViewHolder(@NonNull ChipViewHolder holder, int position) {
-            ServiceChipItem item = items.get(position);
-            holder.button.setText(item.title);
-            holder.button.setOnClickListener(v -> {
-                if ("more".equalsIgnoreCase(item.category)) {
-                    startActivity(new Intent(MainActivity.this, CategoriesActivity.class));
-                } else {
-                    openProvidersList(item.category);
-                }
-                overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
-            });
-        }
-
-        @Override
-        public int getItemCount() {
-            return items.size();
-        }
-
-        class ChipViewHolder extends RecyclerView.ViewHolder {
-            final com.google.android.material.button.MaterialButton button;
-
-            ChipViewHolder(@NonNull View itemView) {
-                super(itemView);
-                button = itemView.findViewById(R.id.btnServiceChip);
-            }
-        }
-    }
 
     private void openContinueBooking() {
         Intent intent = new Intent(this, UserBookingsActivity.class);

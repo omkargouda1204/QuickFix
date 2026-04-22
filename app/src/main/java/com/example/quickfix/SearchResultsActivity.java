@@ -36,6 +36,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -220,7 +221,7 @@ public class SearchResultsActivity extends BaseActivity
             return;
         }
 
-        executeSearch(normalizedQuery, false);
+        ensureLocationThenSearch(normalizedQuery);
     }
 
     private void ensureLocationThenSearch(String query) {
@@ -306,66 +307,17 @@ public class SearchResultsActivity extends BaseActivity
         try {
             String cleanedQuery = sanitizeProviderQuery(query);
             Set<String> seenIds = new HashSet<>();
+            String encQuery = Uri.encode("%" + cleanedQuery + "%");
 
-            list.addAll(fetchProvidersTable(cleanedQuery, seenIds));
-        } catch (Exception e) {
-            Log.e(TAG, "searchProviders: " + e.getMessage());
-        }
-        return list;
-    }
-
-    private List<SearchResult> fetchProvidersTable(String rawQuery, Set<String> seenIds) {
-        List<SearchResult> list = new ArrayList<>();
-        try {
-            String safeQuery = rawQuery == null ? "" : rawQuery.trim();
-            String query = "(business_name.ilike.%" + safeQuery + "%,category.ilike.%" + safeQuery + "%,description.ilike.%" + safeQuery + "%)";
-            String url = BASE_URL + "/rest/v1/provider_profiles"
-                    + "?select=id,firebase_uid,business_name,category,city,description,profile_image,phone,rating,is_verified"
-                    + "&is_approved=eq.true"
-                    + "&or=" + Uri.encode(query)
-                    + "&limit=60";
-
-            Request req = new Request.Builder().url(url)
-                    .addHeader("apikey", ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Accept", "application/json")
-                    .build();
-
-            try (Response r = HTTP.newCall(req).execute()) {
-                String body = r.body() != null ? r.body().string() : "[]";
-                if (r.code() != 200) {
-                    Log.e("API_ERROR", body);
-                    return list;
-                }
-
-                Log.d("API_SUCCESS", body);
-
-                JSONArray arr = new JSONArray(body);
-                for (int i = 0; i < arr.length(); i++) {
-                    JSONObject o = arr.getJSONObject(i);
-                    String firebaseUid = o.optString("firebase_uid", "").trim();
-                    String id = o.optString("id", "").trim();
-                    if (id.isEmpty() || seenIds.contains(id)) continue;
-                    seenIds.add(id);
-                    list.add(new SearchResult(
-                            id,
-                            o.optString("business_name", "-"),
-                            o.optString("category", ""),
-                            o.optString("city", ""),
-                            SearchResult.TYPE_PROVIDER,
-                            (float) o.optDouble("rating", 0d),
-                            -1f,
-                            o.optBoolean("is_verified", false) ? "Verified" : "Approved",
-                            o.optString("description", ""),
-                            o.optString("phone", ""),
-                            o.optString("profile_image", ""),
-                            "approved",
-                            o.optBoolean("is_verified", false)
-                    ));
-                }
+            if (useNearby && !Double.isNaN(originLat) && !Double.isNaN(originLng)) {
+                list.addAll(fetchNearbyFromProfiles(encQuery, "lat", "lng", originLat, originLng, NEARBY_RADIUS_PRIMARY_KM, seenIds));
+                list.addAll(fetchNearbyFromProfiles(encQuery, "latitude", "longitude", originLat, originLng, NEARBY_RADIUS_PRIMARY_KM, seenIds));
+                sortByDistance(list);
+            } else {
+                list.addAll(fetchTextProviders(encQuery, seenIds));
             }
         } catch (Exception e) {
-            Log.d(TAG, "fetchProvidersTable: " + e.getMessage());
+            Log.e(TAG, "searchProviders: " + e.getMessage());
         }
         return list;
     }
@@ -381,13 +333,12 @@ public class SearchResultsActivity extends BaseActivity
         try {
             StringBuilder url = new StringBuilder(BASE_URL)
                     .append("/rest/v1/provider_profiles")
-                    .append("?select=id,business_name,category,description,profile_image,business_image_url,city,area,owner_name,rating,status,availability_status,is_available,")
-                    .append(latKey).append(",").append(lngKey)
+                    .append("?select=*")
                     .append("&is_approved=eq.true")
-                    .append("&or=(business_name.ilike.*").append(encQuery)
-                    .append("*,category.ilike.*").append(encQuery)
-                    .append("*,description.ilike.*").append(encQuery)
-                    .append("*,city.ilike.*").append(encQuery).append("*)")
+                    .append("&or=(business_name.ilike.").append(encQuery)
+                    .append(",category.ilike.").append(encQuery)
+                    .append(",description.ilike.").append(encQuery)
+                    .append(",city.ilike.").append(encQuery).append(")")
                     .append("&limit=220");
 
             Request req = new Request.Builder().url(url.toString())
@@ -424,6 +375,7 @@ public class SearchResultsActivity extends BaseActivity
                             distanceKm,
                             resolveAvailability(o)
                     ));
+                    nearby.get(nearby.size() - 1).priceText = resolvePriceText(o);
                 }
             }
         } catch (Exception e) {
@@ -436,12 +388,12 @@ public class SearchResultsActivity extends BaseActivity
         List<SearchResult> list = new ArrayList<>();
         try {
             String url = BASE_URL + "/rest/v1/provider_profiles"
-                    + "?select=id,business_name,category,description,profile_image,business_image_url,city,area,owner_name,rating,status"
+                    + "?select=*"
                     + "&is_approved=eq.true"
-                    + "&or=(business_name.ilike.*" + encQuery
-                    + "*,category.ilike.*" + encQuery
-                    + "*,description.ilike.*" + encQuery
-                    + "*,city.ilike.*" + encQuery + "*)"
+                    + "&or=(business_name.ilike." + encQuery
+                    + ",category.ilike." + encQuery
+                    + ",description.ilike." + encQuery
+                    + ",city.ilike." + encQuery + ")"
                     + "&limit=60";
 
             Request req = new Request.Builder().url(url)
@@ -470,6 +422,7 @@ public class SearchResultsActivity extends BaseActivity
                                 -1f,
                                 resolveAvailability(o)
                         ));
+                        list.get(list.size() - 1).priceText = resolvePriceText(o);
                     }
                     Log.d(TAG, "Results: " + list.size());
                 }
@@ -478,6 +431,28 @@ public class SearchResultsActivity extends BaseActivity
             Log.d(TAG, "fetchTextProviders: " + e.getMessage());
         }
         return list;
+    }
+
+    private void sortByDistance(List<SearchResult> results) {
+        if (results == null || results.size() < 2) return;
+        Collections.sort(results, new Comparator<SearchResult>() {
+            @Override
+            public int compare(SearchResult a, SearchResult b) {
+                float da = a == null ? Float.MAX_VALUE : a.distanceKm;
+                float db = b == null ? Float.MAX_VALUE : b.distanceKm;
+                boolean aHas = da >= 0f;
+                boolean bHas = db >= 0f;
+                if (aHas && bHas) {
+                    int byDistance = Float.compare(da, db);
+                    if (byDistance != 0) return byDistance;
+                } else if (aHas != bHas) {
+                    return aHas ? -1 : 1;
+                }
+                float ra = a == null ? 0f : a.rating;
+                float rb = b == null ? 0f : b.rating;
+                return Float.compare(rb, ra);
+            }
+        });
     }
 
     // Provider-only results: services lookup intentionally disabled.
@@ -643,6 +618,25 @@ public class SearchResultsActivity extends BaseActivity
             return "Busy";
         }
         return "Available";
+    }
+
+    private static String resolvePriceText(JSONObject o) {
+        if (o == null) return "";
+        String[] keys = {"price", "service_price", "starting_price", "min_price", "base_price"};
+        for (String key : keys) {
+            if (!o.has(key) || o.isNull(key)) continue;
+            Object raw = o.opt(key);
+            if (raw == null) continue;
+            String value = String.valueOf(raw).trim();
+            if (value.isEmpty() || "null".equalsIgnoreCase(value)) continue;
+            try {
+                double numeric = Double.parseDouble(value);
+                return "₹" + (numeric == Math.rint(numeric) ? String.format(Locale.US, "%.0f", numeric) : String.format(Locale.US, "%.2f", numeric));
+            } catch (Exception ignored) {
+                return value.startsWith("₹") ? value : "₹" + value;
+            }
+        }
+        return "";
     }
 
     private static double optDoubleFlexible(JSONObject obj, String key) {

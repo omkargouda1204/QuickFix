@@ -3,6 +3,7 @@
 .idea/
 *.iml
 
+
 # Local secret files
 *.env
 *service-account*.json

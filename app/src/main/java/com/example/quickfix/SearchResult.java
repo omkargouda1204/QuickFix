@@ -18,6 +18,7 @@ public class SearchResult {
     public String profileImage;
     public String status;
     public boolean isVerified;
+    public String priceText;
 
     public SearchResult(String id, String name, String subtitle, String city, String type) {
         this(id, name, subtitle, city, type, 0f, -1f, "");
@@ -75,5 +76,6 @@ public class SearchResult {
         this.profileImage = profileImage == null ? "" : profileImage.trim();
         this.status = status == null ? "" : status.trim();
         this.isVerified = isVerified;
+        this.priceText = "";
     }
 }

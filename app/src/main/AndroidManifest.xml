@@ -250,6 +250,13 @@
             android:parentActivityName=".ProfileActivity"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Transaction History Activity -->
+        <activity
+            android:name=".TransactionActivity"
+            android:exported="false"
+            android:parentActivityName=".ProfileActivity"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- Notifications Activity -->
         <activity
             android:name=".NotificationsActivity"

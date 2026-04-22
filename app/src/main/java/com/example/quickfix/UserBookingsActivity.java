@@ -22,6 +22,7 @@ import com.example.quickfix.adapters.UserBookingsAdapter;
 import com.razorpay.Checkout;
 import com.razorpay.PaymentResultListener;
 import com.google.android.material.chip.ChipGroup;
+import com.google.android.material.textfield.TextInputLayout;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -78,6 +79,9 @@ public class UserBookingsActivity extends BaseActivity
     private final Handler MAIN = new Handler(Looper.getMainLooper());
     private Booking pendingPaymentBooking;
     private String pendingOrderId;
+    private String pendingCouponCode = "";
+    private double pendingCouponDiscount = 0d;
+    private double pendingFinalAmountInr = 0d;
     private boolean shouldReloadOnResume = false;
     private boolean skipNextResumeReload = true;
 
@@ -366,7 +370,7 @@ public class UserBookingsActivity extends BaseActivity
         }
 
         String keyId = BuildConfig.RAZORPAY_KEY_ID.trim();
-        if (keyId.isEmpty()) {
+        if (keyId.trim().isEmpty()) {
             Toast.makeText(this, "Payment key missing. Add RAZORPAY_KEY_ID.", Toast.LENGTH_LONG).show();
             return;
         }
@@ -377,7 +381,130 @@ public class UserBookingsActivity extends BaseActivity
             return;
         }
 
-        createOrderAndLaunchCheckout(booking, amountInr, keyId);
+        showCouponDialog(booking, amountInr, keyId);
+    }
+
+    private void showCouponDialog(Booking booking, double amountInr, String keyId) {
+        TextInputLayout couponInputLayout = new TextInputLayout(this);
+        couponInputLayout.setHint("Enter coupon code");
+        TextInputEditText couponInput = new TextInputEditText(this);
+        couponInput.setSingleLine(true);
+        couponInputLayout.addView(couponInput);
+
+        TextView tvSummary = new TextView(this);
+        tvSummary.setText("Original amount: ₹" + String.format(java.util.Locale.US, "%.2f", amountInr));
+        tvSummary.setPadding(8, 16, 8, 0);
+
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        content.setPadding(pad, pad, pad, 0);
+        content.addView(couponInputLayout);
+        content.addView(tvSummary);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Apply Coupon")
+                .setView(content)
+                .setNegativeButton("Skip", null)
+                .setPositiveButton("Apply & Pay", null)
+                .create();
+
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                String code = clean(couponInput.getText() == null ? "" : couponInput.getText().toString());
+                if (code.isEmpty()) {
+                    pendingCouponCode = "";
+                    pendingCouponDiscount = 0d;
+                    pendingFinalAmountInr = amountInr;
+                    dialog.dismiss();
+                    createOrderAndLaunchCheckout(booking, amountInr, keyId);
+                    return;
+                }
+
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+                validateCouponAndProceed(booking, amountInr, keyId, code, dialog, tvSummary);
+            });
+
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
+                pendingCouponCode = "";
+                pendingCouponDiscount = 0d;
+                pendingFinalAmountInr = amountInr;
+                dialog.dismiss();
+                createOrderAndLaunchCheckout(booking, amountInr, keyId);
+            });
+        });
+
+        dialog.show();
+    }
+
+    private void validateCouponAndProceed(Booking booking,
+                                          double amountInr,
+                                          String keyId,
+                                          String code,
+                                          AlertDialog dialog,
+                                          TextView tvSummary) {
+        new Thread(() -> {
+            try {
+                String url = BASE_URL + "/rest/v1/coupons?select=*&code=eq." + android.net.Uri.encode(code);
+                Request req = new Request.Builder().url(url)
+                        .get()
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
+                try (Response r = HTTP.newCall(req).execute()) {
+                    if (!r.isSuccessful()) {
+                        throw new IllegalStateException("Coupon lookup failed");
+                    }
+
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    JSONArray arr = new JSONArray(body);
+                    if (arr.length() == 0) {
+                        throw new IllegalStateException("Invalid coupon code");
+                    }
+
+                    JSONObject coupon = arr.getJSONObject(0);
+                    if (!coupon.optBoolean("is_active", true)) {
+                        throw new IllegalStateException("Coupon is inactive");
+                    }
+
+                    String expiry = clean(coupon.optString("expiry_date", ""));
+                    if (!expiry.isEmpty() && expiry.length() >= 10) {
+                        String today = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date());
+                        if (expiry.substring(0, 10).compareTo(today) < 0) {
+                            throw new IllegalStateException("Coupon expired");
+                        }
+                    }
+
+                    double percent = coupon.optDouble("discount_percent", 0d);
+                    double maxDiscount = coupon.optDouble("max_discount", 0d);
+                    double discount = amountInr * (percent / 100d);
+                    if (maxDiscount > 0d) discount = Math.min(discount, maxDiscount);
+                    if (discount < 0d) discount = 0d;
+
+                    final double appliedDiscount = discount;
+                    final double finalAmount = Math.max(0.01d, amountInr - appliedDiscount);
+                    pendingCouponCode = code;
+                    pendingCouponDiscount = appliedDiscount;
+                    pendingFinalAmountInr = finalAmount;
+
+                    MAIN.post(() -> {
+                        tvSummary.setText("Discount: ₹" + String.format(java.util.Locale.US, "%.2f", appliedDiscount)
+                                + "\nFinal amount: ₹" + String.format(java.util.Locale.US, "%.2f", finalAmount));
+                        dialog.dismiss();
+                        Toast.makeText(this, "Coupon applied", Toast.LENGTH_SHORT).show();
+                        createOrderAndLaunchCheckout(booking, finalAmount, keyId);
+                    });
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "validateCouponAndProceed: " + e.getMessage(), e);
+                MAIN.post(() -> {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                    Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
     }
 
     @Override
@@ -505,6 +632,12 @@ public class UserBookingsActivity extends BaseActivity
                 body.put("status", "paid");
                 body.put("payment_status", "success");
                 body.put("payment_id", clean(razorpayPaymentID));
+                body.put("payment_amount", pendingFinalAmountInr > 0 ? pendingFinalAmountInr : booking.paymentAmount);
+                if (!clean(pendingCouponCode).isEmpty()) {
+                    body.put("coupon_code", clean(pendingCouponCode));
+                    body.put("coupon_discount", pendingCouponDiscount);
+                    body.put("final_amount", pendingFinalAmountInr > 0 ? pendingFinalAmountInr : booking.paymentAmount);
+                }
                 if (!clean(orderId).isEmpty()) {
                     body.put("payment_order_id", clean(orderId));
                 }

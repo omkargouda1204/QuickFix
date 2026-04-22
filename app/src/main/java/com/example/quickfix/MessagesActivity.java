@@ -13,6 +13,7 @@ import android.widget.Toast;
 
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.quickfix.adapters.ChatMessageAdapter;
 import com.google.android.material.appbar.MaterialToolbar;
@@ -64,6 +65,7 @@ public class MessagesActivity extends BaseActivity {
     private MaterialToolbar toolbar;
     private TextView tvChatTitle, tvChatSubtitle, tvChatStatus, tvEmptyState;
     private RecyclerView rvMessages;
+    private SwipeRefreshLayout swipeMessages;
     private ProgressBar progressBar;
     private LinearLayout emptyState, composerBar;
     private TextInputEditText etMessage;
@@ -130,6 +132,7 @@ public class MessagesActivity extends BaseActivity {
         tvChatStatus = findViewById(R.id.tvChatStatus);
         tvEmptyState = findViewById(R.id.tvEmptyState);
         rvMessages = findViewById(R.id.rvMessages);
+        swipeMessages = findViewById(R.id.swipeMessages);
         progressBar = findViewById(R.id.progressBar);
         emptyState = findViewById(R.id.emptyState);
         composerBar = findViewById(R.id.composerBar);
@@ -139,6 +142,10 @@ public class MessagesActivity extends BaseActivity {
         lm.setStackFromEnd(true);
         rvMessages.setLayoutManager(lm);
         btnSend.setOnClickListener(v -> sendMessage());
+        if (swipeMessages != null) {
+            swipeMessages.setColorSchemeResources(R.color.primary);
+            swipeMessages.setOnRefreshListener(() -> loadMessages(false));
+        }
     }
 
     private void setupToolbar() {
@@ -371,6 +378,10 @@ public class MessagesActivity extends BaseActivity {
             toast("Chat closed after service completion");
             return;
         }
+        if (isBookingChat && bookingId.isEmpty()) {
+            toast("Booking chat unavailable");
+            return;
+        }
 
         setComposerEnabled(false);
         showLoading(true);
@@ -392,9 +403,11 @@ public class MessagesActivity extends BaseActivity {
                 if (isBookingChat) {
                     body.put("booking_id", bookingId);
                     body.put("chat_type", "booking");
+                    body.put("is_prebooking", false);
                 } else {
                     body.put("booking_id", JSONObject.NULL);
                     body.put("chat_type", "pre_booking");
+                    body.put("is_prebooking", true);
                 }
                 body.put("sender_id", currentUserId);
                 body.put("receiver_id", otherPartyId);
@@ -413,6 +426,22 @@ public class MessagesActivity extends BaseActivity {
                 try (Response r = http.newCall(req).execute()) {
                     String resp = r.body() != null ? r.body().string() : "";
                     int code = r.code();
+                    if (!(code == 200 || code == 201 || code == 204)
+                            && resp.toLowerCase(Locale.US).contains("is_prebooking")) {
+                        body.remove("is_prebooking");
+                        Request fallbackReq = new Request.Builder()
+                                .url(SUPABASE_URL + "/rest/v1/messages")
+                                .post(RequestBody.create(body.toString(), JSON))
+                                .addHeader("apikey", ANON_KEY)
+                                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                                .addHeader("Content-Type", "application/json")
+                                .addHeader("Prefer", "return=minimal")
+                                .build();
+                        try (Response fallbackResp = http.newCall(fallbackReq).execute()) {
+                            resp = fallbackResp.body() != null ? fallbackResp.body().string() : "";
+                            code = fallbackResp.code();
+                        }
+                    }
                     if (code == 200 || code == 201 || code == 204) {
                         FcmNotificationHelper.notifyChatMessage(
                                 otherPartyId,
@@ -430,12 +459,13 @@ public class MessagesActivity extends BaseActivity {
                         });
                     } else {
                         Log.e(TAG, "sendMessage HTTP " + code + " | " + resp);
+                        final String errorResp = resp;
                         main.post(() -> {
                             setComposerEnabled(true);
                             showLoading(false);
-                            if (resp.contains("Please book service to continue") || resp.contains("Message limit reached")) {
+                            if (errorResp.contains("Please book service to continue") || errorResp.contains("Message limit reached")) {
                                 toast("Message limit reached. Please book service to continue.");
-                            } else if (resp.contains("new row violates row-level security") || resp.contains("42501")) {
+                            } else if (errorResp.contains("new row violates row-level security") || errorResp.contains("42501")) {
                                 toast("Message blocked by server policy. Ask admin to enable message insert policy.");
                             } else {
                                 toast(getString(R.string.toast_message_send_failed));
@@ -669,6 +699,10 @@ public class MessagesActivity extends BaseActivity {
     }
 
     private void showLoading(boolean loading) {
+        if (swipeMessages != null && swipeMessages.isRefreshing()) {
+            if (!loading) swipeMessages.setRefreshing(false);
+            return;
+        }
         progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
     }
 

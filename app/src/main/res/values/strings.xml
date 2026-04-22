@@ -144,6 +144,7 @@
     <string name="profile_list_business">List Your Business</string>
     <string name="profile_list_business_sub">Start earning for FREE</string>
     <string name="profile_my_bookings">My Bookings</string>
+    <string name="profile_transaction_history">Transaction History</string>
     <string name="profile_notifications">Notifications</string>
     <string name="profile_language">Language</string>
     <string name="profile_dark_mode">Dark Mode</string>
@@ -156,6 +157,7 @@
     <string name="profile_provider_dashboard">Provider Dashboard</string>
     <string name="profile_logout_confirm_title">Logout</string>
     <string name="profile_logout_confirm_msg">Are you sure you want to logout?</string>
+    <string name="no_transactions_yet">No transactions yet</string>
     <string name="profile_version">QuickFix v1.0 · Made with ❤️</string>
 
     <!-- Bookings Screen -->
