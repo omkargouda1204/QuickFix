@@ -54,7 +54,8 @@ public class EarningsActivity extends BaseActivity {
     private LinearLayout emptyState;
 
     private FirebaseAuth mAuth;
-    private String providerId;
+    private String providerFirebaseUid;
+    private String providerProfileId;
     private List<Booking> completedBookings = new ArrayList<>();
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
@@ -75,7 +76,7 @@ public class EarningsActivity extends BaseActivity {
             finish();
             return;
         }
-        providerId = user.getUid();
+        providerFirebaseUid = user.getUid();
 
         setupToolbar();
         initViews();
@@ -114,35 +115,35 @@ public class EarningsActivity extends BaseActivity {
     private void loadEarnings() {
         showLoading(true);
 
-        if (providerId == null || providerId.isEmpty()) {
+        if (providerFirebaseUid == null || providerFirebaseUid.isEmpty()) {
             showLoading(false);
             Toast.makeText(this, "Provider ID not available", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // First, get provider name from users table to match bookings
-        getProviderNameAndLoadEarnings();
+        resolveProviderIdAndLoadEarnings();
     }
 
-    private void getProviderNameAndLoadEarnings() {
-        // Get provider's name from users table
-        String userUrl = SUPABASE_URL + "/rest/v1/users" +
-                "?firebase_uid=eq." + providerId +
-                "&select=name";
+    private void resolveProviderIdAndLoadEarnings() {
+        String url = SUPABASE_URL + "/rest/v1/provider_profiles"
+                + "?firebase_uid=eq." + encodeValue(providerFirebaseUid)
+                + "&select=id"
+                + "&limit=1";
 
-        Request userRequest = new Request.Builder()
-                .url(userUrl)
+        Request request = new Request.Builder()
+                .url(url)
                 .get()
                 .addHeader("apikey", ANON_KEY)
                 .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Accept", "application/json")
                 .build();
 
-        httpClient.newCall(userRequest).enqueue(new Callback() {
+        httpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                Log.e(TAG, "Failed to get provider name: " + e.getMessage());
-                // Fallback: try to load earnings with firebase_uid (enhanced schema)
-                loadEarningsWithFirebaseUid();
+                Log.w(TAG, "resolveProviderId failed, falling back to firebase uid: " + e.getMessage());
+                providerProfileId = "";
+                loadEarningsByProviderId();
             }
 
             @Override
@@ -151,42 +152,46 @@ public class EarningsActivity extends BaseActivity {
                 int code = response.code();
                 response.close();
 
+                providerProfileId = "";
                 if (code == 200) {
                     try {
-                        JSONArray users = new JSONArray(body);
-                        if (users.length() > 0) {
-                            String providerName = users.getJSONObject(0).optString("name", "");
-                            if (!providerName.isEmpty()) {
-                                mainHandler.post(() -> loadEarningsWithProviderName(providerName));
-                                return;
-                            }
+                        JSONArray arr = new JSONArray(body);
+                        if (arr.length() > 0) {
+                            providerProfileId = arr.getJSONObject(0).optString("id", "").trim();
                         }
                     } catch (Exception e) {
-                        Log.e(TAG, "Error parsing provider name: " + e.getMessage());
+                        Log.w(TAG, "Failed to parse provider profile id: " + e.getMessage());
                     }
                 }
-                // Fallback: try with firebase_uid
-                mainHandler.post(() -> loadEarningsWithFirebaseUid());
+
+                loadEarningsByProviderId();
             }
         });
     }
 
-    private void loadEarningsWithProviderName(String providerName) {
-        // Query completed bookings using provider_name (works with current schema)
-        String url = SUPABASE_URL + "/rest/v1/bookings" +
-                "?provider_name=eq." + providerName +
-                "&status=eq.completed" +
-                "&order=created_at.desc" +
-                "&select=id,customer_name,customer_phone,provider_name,service_name,category," +
-                "booking_date,booking_time,address,city,price,status,created_at,description";
+    private void loadEarningsByProviderId() {
+        String encodedUid = encodeValue(providerFirebaseUid);
+        String url = SUPABASE_URL + "/rest/v1/bookings"
+                + "?select=id,customer_name,customer_phone,provider_name,service_name,category,"
+                + "booking_date,booking_time,address,city,price,payment_amount,status,created_at,completed_at,description"
+                + "&status=in.(paid,completed)"
+                + "&order=created_at.desc";
 
-        Log.d(TAG, "loadEarningsWithProviderName URL: " + url);
+        if (providerProfileId != null && !providerProfileId.isEmpty()) {
+            String encodedProfileId = encodeValue(providerProfileId);
+            url += "&or=(provider_id.eq." + encodedProfileId + ",provider_id.eq." + encodedUid + ")";
+        } else {
+            url += "&provider_id=eq." + encodedUid;
+        }
+
+        Log.d(TAG, "loadEarningsByProviderId URL: " + url);
 
         Request request = new Request.Builder()
                 .url(url)
                 .get()
                 .addHeader("apikey", ANON_KEY)
                 .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Accept", "application/json")
                 .build();
 
         httpClient.newCall(request).enqueue(new Callback() {
@@ -206,62 +211,7 @@ public class EarningsActivity extends BaseActivity {
                 int code = response.code();
                 response.close();
 
-                Log.d(TAG, "loadEarnings response: HTTP " + code + " | Body: " + body);
-
-                mainHandler.post(() -> {
-                    showLoading(false);
-                    if (code == 200) {
-                        parseEarnings(body);
-                    } else {
-                        // If provider_name query fails, try with firebase_uid
-                        if (code == 404) {
-                            loadEarningsWithFirebaseUid();
-                        } else {
-                            Toast.makeText(EarningsActivity.this,
-                                    "Error: HTTP " + code + " | " + body,
-                                    Toast.LENGTH_SHORT).show();
-                        }
-                    }
-                });
-            }
-        });
-    }
-
-    private void loadEarningsWithFirebaseUid() {
-        // Query completed bookings using firebase_uid (enhanced schema with all columns)
-        String url = SUPABASE_URL + "/rest/v1/bookings" +
-                "?firebase_uid=eq." + providerId +
-                "&status=eq.completed" +
-                "&order=created_at.desc" +
-                "&select=*";
-
-        Log.d(TAG, "loadEarningsWithFirebaseUid URL: " + url);
-
-        Request request = new Request.Builder()
-                .url(url)
-                .get()
-                .addHeader("apikey", ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .build();
-
-        httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                mainHandler.post(() -> {
-                    showLoading(false);
-                    Toast.makeText(EarningsActivity.this,
-                            "Failed to load earnings: " + e.getMessage(),
-                            Toast.LENGTH_SHORT).show();
-                });
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                String body = response.body() != null ? response.body().string() : "[]";
-                int code = response.code();
-                response.close();
-
-                Log.d(TAG, "loadEarnings response: HTTP " + code + " | Body: " + body);
+                Log.d(TAG, "loadEarningsByProviderId response: HTTP " + code + " | Body: " + body);
 
                 mainHandler.post(() -> {
                     showLoading(false);
@@ -292,41 +242,45 @@ public class EarningsActivity extends BaseActivity {
 
             for (int i = 0; i < arr.length(); i++) {
                 Booking booking = Booking.fromJson(arr.getJSONObject(i));
-                if (booking != null) {
-                    completedBookings.add(booking);
-                    totalEarnings += booking.price;
-                    completedCount++;
+                if (booking == null) continue;
 
-                    // Check if booking is from current month
-                    // Use completedAt if available, otherwise use createdAt
-                    String dateToCheck = booking.completedAt;
-                    if (dateToCheck == null || dateToCheck.isEmpty()) {
-                        dateToCheck = booking.createdAt;
-                    }
+                String status = booking.status == null ? "" : booking.status.trim().toLowerCase(Locale.US);
+                if (!("paid".equals(status) || "completed".equals(status))) {
+                    continue;
+                }
 
-                    if (!dateToCheck.isEmpty()) {
-                        try {
-                            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-                            Calendar bookingCal = Calendar.getInstance();
-                            bookingCal.setTime(sdf.parse(dateToCheck.substring(0, 10)));
+                double amount = booking.price > 0 ? booking.price : booking.paymentAmount;
+                booking.price = amount;
 
-                            if (bookingCal.get(Calendar.MONTH) == currentMonth &&
-                                bookingCal.get(Calendar.YEAR) == currentYear) {
-                                monthEarnings += booking.price;
-                            }
-                        } catch (Exception e) {
-                            Log.e(TAG, "Date parse error: " + e.getMessage());
+                completedBookings.add(booking);
+                totalEarnings += amount;
+                completedCount++;
+
+                String dateToCheck = booking.completedAt;
+                if (dateToCheck == null || dateToCheck.isEmpty()) {
+                    dateToCheck = booking.createdAt;
+                }
+
+                if (dateToCheck != null && !dateToCheck.isEmpty() && dateToCheck.length() >= 10) {
+                    try {
+                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+                        Calendar bookingCal = Calendar.getInstance();
+                        bookingCal.setTime(sdf.parse(dateToCheck.substring(0, 10)));
+
+                        if (bookingCal.get(Calendar.MONTH) == currentMonth
+                                && bookingCal.get(Calendar.YEAR) == currentYear) {
+                            monthEarnings += amount;
                         }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Date parse error: " + e.getMessage());
                     }
                 }
             }
 
-            // Update summary cards
             tvTotalEarnings.setText("₹" + String.format(Locale.getDefault(), "%.0f", totalEarnings));
             tvMonthEarnings.setText("₹" + String.format(Locale.getDefault(), "%.0f", monthEarnings));
             tvCompletedJobs.setText(String.valueOf(completedCount));
 
-            // Update RecyclerView
             adapter.setTransactions(completedBookings);
 
             if (completedBookings.isEmpty()) {
@@ -340,6 +294,11 @@ public class EarningsActivity extends BaseActivity {
             Log.e(TAG, "Parse error: " + e.getMessage());
             Toast.makeText(this, "Error parsing earnings data", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private String encodeValue(String raw) {
+        if (raw == null) return "";
+        return android.net.Uri.encode(raw.trim());
     }
 
     private void showLoading(boolean show) {

@@ -111,53 +111,76 @@
 
         </LinearLayout>
 
-        <!-- Search bar -->
+        <!-- Search row + location filter -->
         <LinearLayout
-            android:id="@+id/searchBar"
             android:layout_width="match_parent"
-            android:layout_height="42dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:background="@color/card_bg"
             android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="12dp"
-            android:paddingEnd="4dp">
+            android:orientation="horizontal">
 
-            <ImageView
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:src="@drawable/ic_search"
-                app:tint="@color/text_secondary"
-                android:contentDescription="Search" />
-
-            <EditText
-                android:id="@+id/etSearch"
+            <!-- Search bar -->
+            <LinearLayout
+                android:id="@+id/searchBar"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
+                android:layout_height="42dp"
                 android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:background="@android:color/transparent"
-                android:hint="Search by name, category, city..."
-                android:textColor="@color/text_primary"
-                android:textColorHint="@color/text_secondary"
-                android:textSize="13sp"
-                android:imeOptions="actionSearch"
-                android:inputType="text"
-                android:singleLine="true"
-                android:maxLines="1" />
+                android:background="@color/card_bg"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="12dp"
+                android:paddingEnd="4dp">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_search"
+                    app:tint="@color/text_secondary"
+                    android:contentDescription="Search" />
+
+                <EditText
+                    android:id="@+id/etSearch"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:background="@android:color/transparent"
+                    android:hint="Search by name, category, city..."
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_secondary"
+                    android:textSize="13sp"
+                    android:imeOptions="actionSearch"
+                    android:inputType="text"
+                    android:singleLine="true"
+                    android:maxLines="1" />
+
+                <ImageView
+                    android:id="@+id/btnClearSearch"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:src="@drawable/ic_close"
+                    app:tint="@color/text_secondary"
+                    android:padding="8dp"
+                    android:visibility="gone"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:contentDescription="Clear" />
+
+            </LinearLayout>
 
             <ImageView
-                android:id="@+id/btnClearSearch"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:src="@drawable/ic_close"
-                app:tint="@color/text_secondary"
-                android:padding="8dp"
-                android:visibility="gone"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:id="@+id/btnSearchFilter"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_search_filter_button"
+                android:contentDescription="Filter location"
+                android:padding="10dp"
+                android:src="@drawable/ic_location"
+                app:tint="@color/primary"
                 android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="Clear" />
+                android:focusable="true" />
 
         </LinearLayout>
 

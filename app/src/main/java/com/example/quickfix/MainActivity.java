@@ -14,6 +14,7 @@ import android.text.TextWatcher;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.animation.AnimationUtils;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -102,6 +103,8 @@ public class MainActivity extends BaseActivity {
     // ── Categories ────────────────────────────────────────────────────────
     private LinearLayout catPlumbing, catElectrical, catCleaning, catRepair;
     private LinearLayout catAC, catPainting, catCarpentry, catMore;
+    private RecyclerView rvServiceChips;
+    private HomeServiceChipsAdapter serviceChipsAdapter;
 
     // ── Quick Actions ─────────────────────────────────────────────────────
     private LinearLayout quickBookService, quickEmergency, quickTrackBooking;
@@ -112,6 +115,13 @@ public class MainActivity extends BaseActivity {
 
     // ── Provider Dashboard ────────────────────────────────────────────────
     private View           providerDashboardSection;
+
+    // ── Continue Where You Left ───────────────────────────────────────────
+    private View continueSection;
+    private View continueContentContainer, continueLoadingState, continueEmptyState, continueErrorState;
+    private TextView tvContinueHeading, tvContinueSubtitle, tvContinueErrorMessage;
+    private MaterialButton btnContinueAction, btnRetryContinueLoad;
+    private Booking continueBooking;
 
     // ── List Your Business ────────────────────────────────────────────────
     private LinearLayout   listBusinessSection;
@@ -348,6 +358,7 @@ public class MainActivity extends BaseActivity {
             catPainting = findViewSafe(R.id.catPainting);
             catCarpentry = findViewSafe(R.id.catCarpentry);
             catMore = findViewSafe(R.id.catMore);
+            rvServiceChips = findViewSafe(R.id.rvServiceChips);
 
             quickBookService = findViewSafe(R.id.quickBookService);
             quickEmergency = findViewSafe(R.id.quickEmergency);
@@ -380,6 +391,17 @@ public class MainActivity extends BaseActivity {
             offersErrorState = findViewSafe(R.id.offersErrorState);
             tvOffersErrorMessage = findViewSafe(R.id.tvOffersErrorMessage);
             btnRetryOffersLoad = findViewSafe(R.id.btnRetryOffersLoad);
+
+            continueSection = findViewSafe(R.id.continueSection);
+            continueContentContainer = findViewSafe(R.id.continueContentContainer);
+            continueLoadingState = findViewSafe(R.id.continueLoadingState);
+            continueEmptyState = findViewSafe(R.id.continueEmptyState);
+            continueErrorState = findViewSafe(R.id.continueErrorState);
+            tvContinueHeading = findViewSafe(R.id.tvContinueHeading);
+            tvContinueSubtitle = findViewSafe(R.id.tvContinueSubtitle);
+            tvContinueErrorMessage = findViewSafe(R.id.tvContinueErrorMessage);
+            btnContinueAction = findViewSafe(R.id.btnContinueAction);
+            btnRetryContinueLoad = findViewSafe(R.id.btnRetryContinueLoad);
 
             navHome = findViewSafe(R.id.navHome);
             navBookings = findViewSafe(R.id.navBookings);
@@ -439,6 +461,15 @@ public class MainActivity extends BaseActivity {
                 rvOffersStrip.setAdapter(homeOfferAdapter);
             }
 
+            if (rvServiceChips != null) {
+                rvServiceChips.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+                if (serviceChipsAdapter == null) {
+                    serviceChipsAdapter = new HomeServiceChipsAdapter();
+                }
+                rvServiceChips.setAdapter(serviceChipsAdapter);
+                serviceChipsAdapter.setItems(buildServiceChipItems());
+            }
+
             // Setup retry listeners safely
             if (btnRetryBannerLoad != null) {
                 btnRetryBannerLoad.setOnClickListener(v -> {
@@ -458,6 +489,20 @@ public class MainActivity extends BaseActivity {
                         Log.e(TAG, "Retry offers click failed: " + e.getMessage());
                     }
                 });
+            }
+
+            if (btnRetryContinueLoad != null) {
+                btnRetryContinueLoad.setOnClickListener(v -> {
+                    try {
+                        fetchContinueWhereYouLeft();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Retry continue click failed: " + e.getMessage());
+                    }
+                });
+            }
+
+            if (btnContinueAction != null) {
+                btnContinueAction.setOnClickListener(v -> openContinueBooking());
             }
 
             // Setup swipe refresh safely
@@ -480,6 +525,7 @@ public class MainActivity extends BaseActivity {
             try {
                 startSkeletonPulse(bannerLoadingState);
                 startSkeletonPulse(offersLoadingState);
+                startSkeletonPulse(continueLoadingState);
             } catch (Exception e) {
                 Log.e(TAG, "Skeleton animation failed: " + e.getMessage());
             }
@@ -1031,12 +1077,14 @@ public class MainActivity extends BaseActivity {
 
     private void refreshHomeContent(boolean fromSwipe) {
         try {
-            pendingHomeLoads = 2;
+            pendingHomeLoads = 3;
             setBannerLoadingState();
             setOffersLoadingState();
+            setContinueLoadingState();
             if (fromSwipe && homeSwipeRefresh != null) homeSwipeRefresh.setRefreshing(true);
             fetchBanners();
             fetchOffers();
+            fetchContinueWhereYouLeft();
         } catch (Exception e) {
             Log.e(MAIN_CRASH, "refreshHomeContent: " + e.toString());
         }
@@ -1048,6 +1096,236 @@ public class MainActivity extends BaseActivity {
 
     private void fetchOffers() {
         loadHomeOffers();
+    }
+
+    private void fetchContinueWhereYouLeft() {
+        FirebaseUser user = mAuth != null ? mAuth.getCurrentUser() : null;
+        if (user == null) {
+            showContinueEmptyState();
+            markHomeSectionLoaded();
+            return;
+        }
+
+        String uid = user.getUid();
+        new Thread(() -> {
+            try {
+                String userId = resolveUserIdByFirebaseUid(uid);
+                String encodedUid = Uri.encode(uid);
+                String encodedUserId = userId == null ? "" : Uri.encode(userId);
+
+                String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
+                        + "?select=*"
+                        + "&status=in.(pending,accepted,price_set,paid,completed)"
+                        + "&order=updated_at.desc"
+                        + "&limit=1";
+
+                if (encodedUserId != null && !encodedUserId.isEmpty()) {
+                    url += "&or=(customer_id.eq." + encodedUid + ",customer_id.eq." + encodedUserId + ")";
+                } else {
+                    url += "&customer_id=eq." + encodedUid;
+                }
+
+                Request req = new Request.Builder()
+                        .url(url)
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
+                try (Response r = HTTP.newCall(req).execute()) {
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    if (!r.isSuccessful()) {
+                        MAIN.post(() -> {
+                            showContinueErrorState(getString(R.string.home_continue_error_message));
+                            markHomeSectionLoaded();
+                        });
+                        return;
+                    }
+
+                    JSONArray arr = new JSONArray(body);
+                    if (arr.length() == 0) {
+                        MAIN.post(() -> {
+                            continueBooking = null;
+                            showContinueEmptyState();
+                            markHomeSectionLoaded();
+                        });
+                        return;
+                    }
+
+                    Booking latest = Booking.fromJson(arr.getJSONObject(0));
+                    MAIN.post(() -> {
+                        continueBooking = latest;
+                        showContinueContent(latest);
+                        markHomeSectionLoaded();
+                    });
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "fetchContinueWhereYouLeft error: " + e.getMessage(), e);
+                MAIN.post(() -> {
+                    showContinueErrorState(getString(R.string.home_continue_error_message));
+                    markHomeSectionLoaded();
+                });
+            }
+        }).start();
+    }
+
+    private String resolveUserIdByFirebaseUid(String firebaseUid) {
+        try {
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/users"
+                    + "?firebase_uid=eq." + Uri.encode(firebaseUid)
+                    + "&select=id"
+                    + "&limit=1";
+            Request req = new Request.Builder()
+                    .url(url)
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response r = HTTP.newCall(req).execute()) {
+                if (!r.isSuccessful() || r.body() == null) return "";
+                JSONArray arr = new JSONArray(r.body().string());
+                if (arr.length() == 0) return "";
+                return arr.getJSONObject(0).optString("id", "").trim();
+            }
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private List<ServiceChipItem> buildServiceChipItems() {
+        List<ServiceChipItem> items = new ArrayList<>();
+        items.add(new ServiceChipItem(getString(R.string.cat_plumbing), "Plumbing"));
+        items.add(new ServiceChipItem(getString(R.string.cat_electrical), "Electrical"));
+        items.add(new ServiceChipItem(getString(R.string.cat_cleaning), "Cleaning"));
+        items.add(new ServiceChipItem(getString(R.string.cat_repair), "Repair"));
+        items.add(new ServiceChipItem(getString(R.string.cat_ac), "AC Service"));
+        items.add(new ServiceChipItem(getString(R.string.cat_painting), "Painting"));
+        items.add(new ServiceChipItem(getString(R.string.cat_carpentry), "Carpentry"));
+        items.add(new ServiceChipItem(getString(R.string.cat_more), "more"));
+        return items;
+    }
+
+    private static class ServiceChipItem {
+        final String title;
+        final String category;
+
+        ServiceChipItem(String title, String category) {
+            this.title = title == null ? "" : title;
+            this.category = category == null ? "" : category;
+        }
+    }
+
+    private class HomeServiceChipsAdapter extends RecyclerView.Adapter<HomeServiceChipsAdapter.ChipViewHolder> {
+        private final List<ServiceChipItem> items = new ArrayList<>();
+
+        void setItems(List<ServiceChipItem> data) {
+            items.clear();
+            if (data != null) items.addAll(data);
+            notifyDataSetChanged();
+        }
+
+        @NonNull
+        @Override
+        public ChipViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            View view = getLayoutInflater().inflate(R.layout.item_service_chip, parent, false);
+            return new ChipViewHolder(view);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull ChipViewHolder holder, int position) {
+            ServiceChipItem item = items.get(position);
+            holder.button.setText(item.title);
+            holder.button.setOnClickListener(v -> {
+                if ("more".equalsIgnoreCase(item.category)) {
+                    startActivity(new Intent(MainActivity.this, CategoriesActivity.class));
+                } else {
+                    openProvidersList(item.category);
+                }
+                overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+            });
+        }
+
+        @Override
+        public int getItemCount() {
+            return items.size();
+        }
+
+        class ChipViewHolder extends RecyclerView.ViewHolder {
+            final com.google.android.material.button.MaterialButton button;
+
+            ChipViewHolder(@NonNull View itemView) {
+                super(itemView);
+                button = itemView.findViewById(R.id.btnServiceChip);
+            }
+        }
+    }
+
+    private void openContinueBooking() {
+        Intent intent = new Intent(this, UserBookingsActivity.class);
+        if (continueBooking != null && continueBooking.id != null && !continueBooking.id.trim().isEmpty()) {
+            intent.putExtra("booking_id", continueBooking.id.trim());
+        }
+        startActivity(intent);
+        overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+    }
+
+    private void setContinueLoadingState() {
+        if (continueSection != null) continueSection.setVisibility(View.VISIBLE);
+        if (continueContentContainer != null) continueContentContainer.setVisibility(View.GONE);
+        if (continueEmptyState != null) continueEmptyState.setVisibility(View.GONE);
+        if (continueErrorState != null) continueErrorState.setVisibility(View.GONE);
+        if (continueLoadingState != null) continueLoadingState.setVisibility(View.VISIBLE);
+    }
+
+    private void showContinueEmptyState() {
+        if (continueSection != null) continueSection.setVisibility(View.VISIBLE);
+        if (continueContentContainer != null) continueContentContainer.setVisibility(View.GONE);
+        if (continueLoadingState != null) continueLoadingState.setVisibility(View.GONE);
+        if (continueErrorState != null) continueErrorState.setVisibility(View.GONE);
+        if (continueEmptyState != null) continueEmptyState.setVisibility(View.VISIBLE);
+    }
+
+    private void showContinueErrorState(String message) {
+        if (continueSection != null) continueSection.setVisibility(View.VISIBLE);
+        if (tvContinueErrorMessage != null) {
+            tvContinueErrorMessage.setText(message == null || message.trim().isEmpty()
+                    ? getString(R.string.home_continue_error_message)
+                    : message);
+        }
+        if (continueContentContainer != null) continueContentContainer.setVisibility(View.GONE);
+        if (continueLoadingState != null) continueLoadingState.setVisibility(View.GONE);
+        if (continueEmptyState != null) continueEmptyState.setVisibility(View.GONE);
+        if (continueErrorState != null) continueErrorState.setVisibility(View.VISIBLE);
+    }
+
+    private void showContinueContent(Booking booking) {
+        if (booking == null) {
+            showContinueEmptyState();
+            return;
+        }
+
+        if (continueSection != null) continueSection.setVisibility(View.VISIBLE);
+        if (continueLoadingState != null) continueLoadingState.setVisibility(View.GONE);
+        if (continueEmptyState != null) continueEmptyState.setVisibility(View.GONE);
+        if (continueErrorState != null) continueErrorState.setVisibility(View.GONE);
+        if (continueContentContainer != null) continueContentContainer.setVisibility(View.VISIBLE);
+
+        String service = booking.serviceName == null || booking.serviceName.trim().isEmpty()
+                ? getString(R.string.book_service)
+                : booking.serviceName.trim();
+        String status = booking.status == null ? "" : booking.status.trim();
+        String statusText = status.isEmpty() ? getString(R.string.home_continue_status_unknown) : status;
+
+        if (tvContinueHeading != null) {
+            tvContinueHeading.setText(getString(R.string.home_continue_heading_format, service));
+        }
+        if (tvContinueSubtitle != null) {
+            tvContinueSubtitle.setText(getString(R.string.home_continue_subtitle_format, statusText));
+        }
+        if (btnContinueAction != null) {
+            btnContinueAction.setText(getString(R.string.home_continue_action));
+        }
     }
 
     private void loadHomeBanners() {

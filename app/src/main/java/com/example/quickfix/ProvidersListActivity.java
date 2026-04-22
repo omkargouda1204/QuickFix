@@ -1,7 +1,9 @@
 package com.example.quickfix;
 
+import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
@@ -16,6 +18,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -59,6 +63,7 @@ public class ProvidersListActivity extends BaseActivity
     public static final String EXTRA_QUERY = "query";
 
     private static final String TAG = "ProvidersListActivity";
+    private static final int LOCATION_PERMISSION_REQ = 4301;
     private static final float NEARBY_RADIUS_PRIMARY_METERS = 20000f;
     private static final float NEARBY_RADIUS_SECONDARY_METERS = 25000f;
     private static final int PROVIDERS_PAGE_SIZE = 10;
@@ -72,6 +77,7 @@ public class ProvidersListActivity extends BaseActivity
     private ChipGroup         chipGroupSort;
     private EditText          etSearch;
     private ImageView         btnClearSearch;
+    private ImageView         btnSearchFilter;
     private LinearLayout      searchBar;
     private com.google.android.material.button.MaterialButton btnLoadMoreProviders;
 
@@ -143,6 +149,7 @@ public class ProvidersListActivity extends BaseActivity
         chipGroupSort    = findViewById(R.id.chipGroupSort);
         etSearch         = findViewById(R.id.etSearch);
         btnClearSearch   = findViewById(R.id.btnClearSearch);
+        btnSearchFilter  = findViewById(R.id.btnSearchFilter);
         searchBar        = findViewById(R.id.searchBar);
         btnLoadMoreProviders = findViewById(R.id.btnLoadMoreProviders);
 
@@ -154,6 +161,10 @@ public class ProvidersListActivity extends BaseActivity
         View btnChangeLocation = findViewById(R.id.btnChangeLocation);
         if (btnChangeLocation != null) {
             btnChangeLocation.setVisibility(View.GONE);
+        }
+
+        if (btnSearchFilter != null) {
+            btnSearchFilter.setOnClickListener(v -> openLocationFilterSheet());
         }
 
         View btnRetry = findViewById(R.id.btnRetry);
@@ -213,6 +224,38 @@ public class ProvidersListActivity extends BaseActivity
                 applyFilterAndSearch();
             });
         }
+    }
+
+    private void openLocationFilterSheet() {
+        if (locationManager == null) return;
+
+        LocationSearchBottomSheet.show(this, locationManager,
+                new LocationSearchBottomSheet.PermissionDelegate() {
+                    @Override
+                    public boolean hasLocationPermission() {
+                        return ContextCompat.checkSelfPermission(ProvidersListActivity.this,
+                                Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                                || ContextCompat.checkSelfPermission(ProvidersListActivity.this,
+                                Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                    }
+
+                    @Override
+                    public void requestLocationPermission() {
+                        ActivityCompat.requestPermissions(
+                                ProvidersListActivity.this,
+                                new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
+                                LOCATION_PERMISSION_REQ
+                        );
+                    }
+                }, suggestion -> {
+                    cityFilter = suggestion == null ? "" : safeText(suggestion.city);
+                    updateHeader();
+                    applyFilterAndSearch();
+                });
+    }
+
+    private String safeText(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private void updateHeader() {
@@ -325,9 +368,14 @@ public class ProvidersListActivity extends BaseActivity
     }
 
     private boolean matchesCity(String selectedCity, String providerCity) {
-        if (selectedCity == null || selectedCity.trim().isEmpty()) return true;
-        if (providerCity == null || providerCity.trim().isEmpty()) return false;
-        return providerCity.trim().equalsIgnoreCase(selectedCity.trim());
+        String selected = safeText(selectedCity).toLowerCase(Locale.getDefault());
+        if (selected.isEmpty()) return true;
+
+        String provider = safeText(providerCity).toLowerCase(Locale.getDefault());
+        if (provider.isEmpty()) return false;
+
+        // Keep location filtering tolerant for values like "Bangalore Urban" vs "Bangalore".
+        return provider.equals(selected) || provider.contains(selected) || selected.contains(provider);
     }
 
     private ProviderProfile parseProvider(JSONObject o) {
@@ -468,6 +516,8 @@ public class ProvidersListActivity extends BaseActivity
 
         List<ProviderProfile> filtered = new ArrayList<>();
         for (ProviderProfile p : allProviders) {
+            if (!matchesCity(cityFilter, p.city)) continue;
+
             boolean passChip = true;
             switch (currentChip) {
                 case "Verified":
@@ -488,7 +538,9 @@ public class ProvidersListActivity extends BaseActivity
                         && p.category.toLowerCase(Locale.getDefault()).contains(q);
                 boolean matchOwner = p.ownerName != null
                         && p.ownerName.toLowerCase(Locale.getDefault()).contains(q);
-                if (!(matchBusiness || matchCategory || matchOwner)) continue;
+                boolean matchCity = p.city != null
+                        && p.city.toLowerCase(Locale.getDefault()).contains(q);
+                if (!(matchBusiness || matchCategory || matchOwner || matchCity)) continue;
             }
             filtered.add(p);
         }
@@ -579,7 +631,9 @@ public class ProvidersListActivity extends BaseActivity
                         && p.category.toLowerCase(Locale.getDefault()).contains(q);
                 boolean matchOwner = p.ownerName != null
                         && p.ownerName.toLowerCase(Locale.getDefault()).contains(q);
-                if (!(matchBusiness || matchCategory || matchOwner)) continue;
+                boolean matchCity = p.city != null
+                        && p.city.toLowerCase(Locale.getDefault()).contains(q);
+                if (!(matchBusiness || matchCategory || matchOwner || matchCity)) continue;
             }
             filtered.add(p);
         }

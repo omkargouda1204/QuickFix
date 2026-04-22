@@ -127,7 +127,7 @@ public class ProviderDashboardActivity extends BaseActivity {
 
         final String uid = user.getUid();
         new Thread(() -> {
-            int completedBookings = 0;
+            int totalBookings = 0;
             double totalEarnings = 0d;
             float rating = 0f;
 
@@ -145,12 +145,18 @@ public class ProviderDashboardActivity extends BaseActivity {
                     rating = (float) p.optDouble("rating", 0d);
                 }
 
-                JSONArray bookingArr = getCompletedBookings(providerProfileId, uid);
+                JSONArray bookingArr = getProviderBookings(providerProfileId, uid);
                 for (int i = 0; i < bookingArr.length(); i++) {
                     JSONObject b = bookingArr.getJSONObject(i);
-                    if (!"completed".equalsIgnoreCase(b.optString("status", ""))) continue;
-                    completedBookings++;
-                    totalEarnings += parseDoubleSafe(b.opt("price"));
+                    String status = b.optString("status", "").trim().toLowerCase(Locale.US);
+                    totalBookings++;
+                    if ("paid".equals(status) || "completed".equals(status)) {
+                        double amount = parseDoubleSafe(b.opt("price"));
+                        if (amount <= 0d) {
+                            amount = parseDoubleSafe(b.opt("payment_amount"));
+                        }
+                        totalEarnings += amount;
+                    }
                 }
 
                 if (rating <= 0f) {
@@ -161,7 +167,7 @@ public class ProviderDashboardActivity extends BaseActivity {
             } catch (Exception ignored) {
             }
 
-            final int finalBookings = completedBookings;
+            final int finalBookings = totalBookings;
             final double finalEarnings = totalEarnings;
             final float finalRating = rating;
             runOnUiThread(() -> {
@@ -176,8 +182,8 @@ public class ProviderDashboardActivity extends BaseActivity {
         }).start();
     }
 
-    private JSONArray getCompletedBookings(String providerProfileId, String uid) {
-        String base = BuildConfig.SUPABASE_URL + "/rest/v1/bookings?select=status,price&status=eq.completed";
+    private JSONArray getProviderBookings(String providerProfileId, String uid) {
+        String base = BuildConfig.SUPABASE_URL + "/rest/v1/bookings?select=status,price,payment_amount";
 
         String url;
         if (providerProfileId != null && !providerProfileId.trim().isEmpty()) {

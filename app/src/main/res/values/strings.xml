@@ -106,6 +106,14 @@
     <string name="home_offer_title_placeholder">Offer title</string>
     <string name="home_offer_description_placeholder">Offer description</string>
     <string name="home_offer_code_placeholder">Code: QUICKFIX20</string>
+    <string name="home_continue_title">Continue where you left</string>
+    <string name="home_continue_empty_title">No recent activity</string>
+    <string name="home_continue_empty_subtitle">Book a service and continue it from here.</string>
+    <string name="home_continue_error_message">Could not load your recent booking. Please retry.</string>
+    <string name="home_continue_heading_format">%1$s</string>
+    <string name="home_continue_subtitle_format">Status: %1$s</string>
+    <string name="home_continue_action">Continue</string>
+    <string name="home_continue_status_unknown">Unknown</string>
     <string name="offer_copy_code">Copy Code</string>
     <string name="offer_code_copied">Code Copied!</string>
 

@@ -64,12 +64,28 @@ public class EarningsAdapter extends RecyclerView.Adapter<EarningsAdapter.Earnin
         }
 
         void bind(Booking booking) {
-            tvBookingId.setText("#" + booking.id.substring(0, Math.min(8, booking.id.length())));
-            tvServiceName.setText(booking.serviceName.isEmpty() ? "Service" : booking.serviceName);
-            tvCustomerName.setText(booking.customerName.isEmpty() ? "Customer" : booking.customerName);
-            tvAmount.setText("₹" + String.format("%.0f", booking.price));
-            tvDate.setText(booking.completedAt.isEmpty() ? booking.bookingDate : booking.completedAt.substring(0, 10));
+            String bookingId = booking != null && booking.id != null ? booking.id.trim() : "";
+            if (bookingId.isEmpty()) {
+                tvBookingId.setText("#--------");
+            } else {
+                tvBookingId.setText("#" + bookingId.substring(0, Math.min(8, bookingId.length())));
+            }
+
+            String serviceName = booking != null && booking.serviceName != null ? booking.serviceName.trim() : "";
+            String customerName = booking != null && booking.customerName != null ? booking.customerName.trim() : "";
+            double amount = booking != null ? Math.max(0d, booking.price) : 0d;
+            String completedAt = booking != null && booking.completedAt != null ? booking.completedAt.trim() : "";
+            String bookingDate = booking != null && booking.bookingDate != null ? booking.bookingDate.trim() : "";
+
+            tvServiceName.setText(serviceName.isEmpty() ? "Service" : serviceName);
+            tvCustomerName.setText(customerName.isEmpty() ? "Customer" : customerName);
+            tvAmount.setText("₹" + String.format(java.util.Locale.getDefault(), "%.0f", amount));
+
+            String displayDate = !completedAt.isEmpty() ? completedAt : bookingDate;
+            if (displayDate.length() >= 10) {
+                displayDate = displayDate.substring(0, 10);
+            }
+            tvDate.setText(displayDate.isEmpty() ? "-" : displayDate);
         }
     }
 }
-
