@@ -33,6 +33,7 @@ import com.google.firebase.auth.FirebaseUser;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -401,6 +402,12 @@ public class EmergencyHelpActivity extends BaseActivity {
     }
 
     private void submitEmergencyRequest() {
+        if (!NetworkHelper.isOnline(this)) {
+            setStatus("Status: No internet connection");
+            showToast("No internet connection. Please try again.");
+            return;
+        }
+
         if (!validateForm(true)) return;
 
         String category = safe(actCategory != null ? String.valueOf(actCategory.getText()) : "");
@@ -412,7 +419,7 @@ public class EmergencyHelpActivity extends BaseActivity {
         final String finalLocationLabel = locationLabel;
 
         setLoading(true);
-        setStatus("Status: Submitting request...");
+        setStatus("Status: Searching nearby providers...");
 
         new Thread(() -> {
             try {
@@ -467,9 +474,9 @@ public class EmergencyHelpActivity extends BaseActivity {
                     activeRequestId = requestId;
                     providerAssignedToastShown = false;
                     if (finalProviderLookupFailed) {
-                        setStatus("Status: Request submitted. Matching providers...");
+                        setStatus("Status: Request submitted. Searching nearby providers...");
                     } else if (notifiedProviders == 0) {
-                        setStatus("Status: Request submitted. No active providers within 20 km yet.");
+                        setStatus("Status: No providers available within 20 km.");
                     } else {
                         setStatus("Status: Emergency request sent to nearby providers");
                     }
@@ -480,7 +487,7 @@ public class EmergencyHelpActivity extends BaseActivity {
                     } else if (notifiedProviders > 0) {
                         showToast("Emergency request sent to nearby providers");
                     } else {
-                        showToast("Emergency request submitted, but no active providers found within 20 km.");
+                        showToast("No providers available within 20 km right now.");
                     }
                 });
             } catch (Exception e) {
@@ -488,7 +495,11 @@ public class EmergencyHelpActivity extends BaseActivity {
                 runOnUiThread(() -> {
                     setLoading(false);
                     setStatus("Status: Submission failed");
-                    showToast("Could not submit emergency request. Please try again.");
+                    if (e instanceof IOException) {
+                        showToast(NetworkHelper.buildMessage((IOException) e, EmergencyHelpActivity.this));
+                    } else {
+                        showToast("Could not submit emergency request due to API failure. Please try again.");
+                    }
                 });
             }
         }).start();
@@ -544,6 +555,10 @@ public class EmergencyHelpActivity extends BaseActivity {
                                                            String city,
                                                            double requestLat,
                                                            double requestLng) throws Exception {
+        if (Double.isNaN(requestLat) || Double.isNaN(requestLng)) {
+            throw new IllegalStateException("Location coordinates missing for provider matching");
+        }
+
         List<String> providerFirebaseUids = new ArrayList<>();
         StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
                 .append("/rest/v1/provider_profiles")
