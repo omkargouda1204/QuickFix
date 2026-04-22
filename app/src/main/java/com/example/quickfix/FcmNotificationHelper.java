@@ -248,6 +248,9 @@ public final class FcmNotificationHelper {
                 }
 
                 UserRecipient recipient = fetchUserRecipient(userFirebaseUid);
+                if (recipient == null) {
+                    recipient = fetchUserRecipientById(userFirebaseUid);
+                }
                 if (recipient == null || trimToEmpty(recipient.token).isEmpty()) {
                     Log.d(TAG, "notifyEmergencyUserAssigned skipped: token not found for " + userFirebaseUid);
                     return;

@@ -33,6 +33,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -71,7 +72,7 @@ public class EmergencyHelpActivity extends BaseActivity {
     );
 
     private static final long STATUS_POLL_MS = 4000L;
-    private static final double NEARBY_RADIUS_KM = 20d;
+    private static final double NEARBY_RADIUS_KM = 30d;
     private static final int PROVIDER_PAGE_SIZE = 500;
     private static final int PROVIDER_MAX_PAGES = 20;
 
@@ -100,6 +101,7 @@ public class EmergencyHelpActivity extends BaseActivity {
     private TextView tvPhone;
     private TextView tvAddress;
     private TextView tvLocationSummary;
+    private TextView tvLocationHint;
     private MaterialAutoCompleteTextView actCategory;
     private TextInputEditText etDescription;
     private TextInputLayout tilCategory;
@@ -153,6 +155,7 @@ public class EmergencyHelpActivity extends BaseActivity {
         tvPhone = findViewById(R.id.tvEmergencyPhone);
         tvAddress = findViewById(R.id.tvEmergencyAddress);
         tvLocationSummary = findViewById(R.id.tvEmergencyLocation);
+        tvLocationHint = findViewById(R.id.tvEmergencyLocationHint);
         actCategory = findViewById(R.id.actEmergencyCategory);
         etDescription = findViewById(R.id.etEmergencyDescription);
         tilCategory = findViewById(R.id.tilEmergencyCategory);
@@ -395,7 +398,7 @@ public class EmergencyHelpActivity extends BaseActivity {
     }
 
     private boolean hasValidSupabaseConfig() {
-        return !safe(BuildConfig.SUPABASE_URL).isEmpty()
+        return safe(BuildConfig.SUPABASE_URL).startsWith("http")
                 && !safe(BuildConfig.SUPABASE_ANON_KEY).isEmpty();
     }
 
@@ -407,6 +410,16 @@ public class EmergencyHelpActivity extends BaseActivity {
 
         setText(tvLocationSummary, label);
         setText(tvAddress, "Location: " + label);
+
+        boolean locationReady = hasCoordinates();
+        if (btnSelectLocation != null) {
+            btnSelectLocation.setVisibility(locationReady ? View.GONE : View.VISIBLE);
+        }
+        if (tvLocationHint != null) {
+            tvLocationHint.setText(locationReady
+                    ? "Using selected location to find active providers within 30 km."
+                    : "Accurate location is required to find active providers within 30 km.");
+        }
         updateSubmitButtonState();
     }
 
@@ -506,7 +519,7 @@ public class EmergencyHelpActivity extends BaseActivity {
                     if (finalProviderLookupFailed) {
                         setStatus("Status: Request submitted. Searching nearby providers...");
                     } else if (notifiedProviders == 0) {
-                        setStatus("Status: No providers available within 20 km.");
+                        setStatus("Status: No providers available within 30 km.");
                     } else {
                         setStatus("Status: Emergency request sent to nearby providers");
                     }
@@ -517,7 +530,7 @@ public class EmergencyHelpActivity extends BaseActivity {
                     } else if (notifiedProviders > 0) {
                         showToast("Emergency request sent to nearby providers");
                     } else {
-                        showToast("No providers available within 20 km right now.");
+                        showToast("No providers available within 30 km right now.");
                     }
                 });
             } catch (Exception e) {
@@ -528,7 +541,8 @@ public class EmergencyHelpActivity extends BaseActivity {
                     if (e instanceof IOException) {
                         showToast(NetworkHelper.buildMessage((IOException) e, EmergencyHelpActivity.this));
                     } else {
-                        showToast("Could not submit emergency request due to API failure. Please try again.");
+                        String detailedError = fallback(safe(e.getMessage()), "Request failed, try again");
+                        showToast(detailedError);
                     }
                 });
             }
@@ -536,11 +550,40 @@ public class EmergencyHelpActivity extends BaseActivity {
     }
 
     private String createEmergencyRequest(String category, String description, String locationLabel) throws Exception {
+        JSONObject payload = buildEmergencyPayload(category, description, locationLabel, true);
+
+        try {
+            return postEmergencyRequest(payload);
+        } catch (IllegalStateException firstError) {
+            String message = safe(firstError.getMessage()).toLowerCase(Locale.US);
+            boolean schemaMismatch = message.contains("column")
+                    || message.contains("schema cache")
+                    || message.contains("type")
+                    || message.contains("service");
+            if (!schemaMismatch) {
+                throw firstError;
+            }
+
+            // Retry with legacy payload for older emergency_requests schema.
+            JSONObject legacyPayload = buildEmergencyPayload(category, description, locationLabel, false);
+            return postEmergencyRequest(legacyPayload);
+        }
+    }
+
+    private JSONObject buildEmergencyPayload(String category,
+                                            String description,
+                                            String locationLabel,
+                                            boolean includeExtendedFields) throws Exception {
         JSONObject payload = new JSONObject();
         payload.put("user_id", safe(currentUserId));
+        payload.put("user_firebase_uid", safe(currentUserId));
+        payload.put("name", safe(currentUserName));
         payload.put("user_name", safe(currentUserName));
         payload.put("phone", safe(currentUserPhone));
+        payload.put("service", safe(category));
+        payload.put("service_type", safe(category));
         payload.put("category", safe(category));
+        payload.put("issue", safe(description));
         payload.put("description", safe(description));
         payload.put("address", safe(locationLabel));
         payload.put("status", "pending");
@@ -552,8 +595,14 @@ public class EmergencyHelpActivity extends BaseActivity {
         if (!Double.isNaN(selectedLng)) {
             payload.put("lng", selectedLng);
         }
+        if (includeExtendedFields) {
+            payload.put("type", "Emergency");
+        }
         payload.put("created_at", isoNow());
+        return payload;
+    }
 
+    private String postEmergencyRequest(JSONObject payload) throws Exception {
         Request request = new Request.Builder()
                 .url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?select=id")
                 .post(RequestBody.create(payload.toString(), JSON))
@@ -566,7 +615,8 @@ public class EmergencyHelpActivity extends BaseActivity {
         try (Response response = http.newCall(request).execute()) {
             String body = response.body() != null ? response.body().string() : "[]";
             if (response.code() != 201 && response.code() != 200) {
-                throw new IllegalStateException("Submit failed HTTP " + response.code() + " " + body);
+                String apiError = extractApiErrorMessage(body, "Submit failed HTTP " + response.code());
+                throw new IllegalStateException(apiError);
             }
 
             JsonArray arr = JsonParser.parseString(body).getAsJsonArray();
@@ -599,14 +649,8 @@ public class EmergencyHelpActivity extends BaseActivity {
             StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
                     .append("/rest/v1/provider_profiles")
                     .append("?select=firebase_uid,category,city,status,is_approved,lat,lng,latitude,longitude")
-                    .append("&is_approved=eq.true")
-                    .append("&status=eq.active")
                     .append("&limit=").append(PROVIDER_PAGE_SIZE)
                     .append("&offset=").append(offset);
-
-            if (!safe(city).isEmpty()) {
-                url.append("&city=ilike.*").append(encode(city)).append("*");
-            }
 
             Request request = new Request.Builder()
                     .url(url.toString())
@@ -641,12 +685,8 @@ public class EmergencyHelpActivity extends BaseActivity {
                 double providerLng = pickDouble(o, "longitude", "lng");
 
                 if (providerFirebaseUid.isEmpty()) continue;
-                if (!"active".equals(providerStatus)) continue;
+                if (!("active".equals(providerStatus) || "approved".equals(providerStatus))) continue;
                 if (!CategoryMatcher.matches(category, providerCategory)) continue;
-
-                if (!safe(city).isEmpty() && !providerCity.isEmpty() && !providerCity.equalsIgnoreCase(city)) {
-                    continue;
-                }
 
                 if (Double.isNaN(providerLat) || Double.isNaN(providerLng)) {
                     continue;
@@ -1009,7 +1049,7 @@ public class EmergencyHelpActivity extends BaseActivity {
         if (!hasCoordinates()) {
             valid = false;
             if (showErrors) {
-                showToast("Please select a precise location to find providers within 20 km.");
+                showToast("Please select a precise location to find providers within 30 km.");
             }
         }
 
@@ -1074,6 +1114,30 @@ public class EmergencyHelpActivity extends BaseActivity {
     private String fallback(String value, String fallback) {
         String clean = safe(value);
         return clean.isEmpty() ? fallback : clean;
+    }
+
+    private String extractApiErrorMessage(String body, String fallbackMessage) {
+        String fallback = safe(fallbackMessage);
+        if (fallback.isEmpty()) {
+            fallback = "Request failed";
+        }
+        try {
+            JSONObject json = new JSONObject(body == null ? "{}" : body);
+            String message = firstNonBlank(
+                    safe(json.optString("message", "")),
+                    safe(json.optString("error_description", "")),
+                    safe(json.optString("hint", "")),
+                    safe(json.optString("details", "")),
+                    safe(json.optString("error", ""))
+            );
+            return message.isEmpty() ? fallback : message;
+        } catch (JSONException ignored) {
+            String compact = safe(body);
+            if (compact.length() > 180) {
+                compact = compact.substring(0, 180) + "...";
+            }
+            return compact.isEmpty() ? fallback : compact;
+        }
     }
 
     private String safe(String value) {
