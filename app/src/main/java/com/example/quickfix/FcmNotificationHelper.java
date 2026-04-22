@@ -1,9 +1,13 @@
 package com.example.quickfix;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import com.example.quickfix.BuildConfig;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -62,7 +66,15 @@ public final class FcmNotificationHelper {
             .writeTimeout(15, TimeUnit.SECONDS)
             .build();
 
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+
     private FcmNotificationHelper() {
+    }
+
+    public interface NotificationDispatchCallback {
+        void onSuccess(int sent, int totalTokens);
+
+        void onFailure(String message);
     }
 
     // ── Public API ────────────────────────────────────────────────────────
@@ -161,13 +173,26 @@ public final class FcmNotificationHelper {
                                                 String body,
                                                 String requestId,
                                                 JSONObject data) {
+        notifyEmergencyProviders(providerFirebaseUids, title, body, requestId, data, null);
+    }
+
+    public static void notifyEmergencyProviders(List<String> providerFirebaseUids,
+                                                String title,
+                                                String body,
+                                                String requestId,
+                                                JSONObject data,
+                                                NotificationDispatchCallback callback) {
         List<String> targets = sanitize(providerFirebaseUids);
-        if (targets.isEmpty()) return;
+        if (targets.isEmpty()) {
+            postFailure(callback, "No providers available for notification.");
+            return;
+        }
 
         new Thread(() -> {
             try {
                 Context appCtx = QuickFixApp.getInstance();
                 if (appCtx != null && !AppSettings.isPushEnabled(appCtx)) {
+                    postFailure(callback, "Push notifications are disabled.");
                     return;
                 }
 
@@ -183,6 +208,7 @@ public final class FcmNotificationHelper {
 
                 if (tokens.isEmpty()) {
                     Log.d(TAG, "notifyEmergencyProviders skipped: no provider tokens found");
+                    postFailure(callback, "No valid provider device tokens found.");
                     return;
                 }
 
@@ -194,10 +220,12 @@ public final class FcmNotificationHelper {
                         body,
                         "emergency_request",
                         requestId,
-                        data
+                        data,
+                        callback
                 );
             } catch (Exception e) {
                 Log.w(TAG, "notifyEmergencyProviders failed: " + e.getMessage());
+                postFailure(callback, "Notification failed: " + trimToEmpty(e.getMessage()));
             }
         }).start();
     }
@@ -666,14 +694,28 @@ public final class FcmNotificationHelper {
                                             String type,
                                             String referenceId,
                                             JSONObject data) {
+        sendViaEdgeFunction(tokens, receiverIds, receiverRoles, title, body, type, referenceId, data, null);
+    }
+
+    private static void sendViaEdgeFunction(List<String> tokens,
+                                            List<String> receiverIds,
+                                            List<String> receiverRoles,
+                                            String title,
+                                            String body,
+                                            String type,
+                                            String referenceId,
+                                            JSONObject data,
+                                            NotificationDispatchCallback callback) {
         if (trimToEmpty(NOTIFY_FN_URL).isEmpty()) {
             Log.w(TAG, "SUPABASE_NOTIFY_FN_URL is not configured");
+            postFailure(callback, "Notification service is not configured.");
             return;
         }
 
         List<String> cleanTokens = sanitize(tokens);
         if (cleanTokens.isEmpty()) {
             Log.d(TAG, "sendViaEdgeFunction skipped: no valid tokens");
+            postFailure(callback, "No valid notification tokens available.");
             return;
         }
 
@@ -703,6 +745,7 @@ public final class FcmNotificationHelper {
                 @Override
                 public void onFailure(Call call, IOException e) {
                     Log.w(TAG, "sendViaEdgeFunction failed: " + e.getMessage());
+                    postFailure(callback, "Notification request failed: " + trimToEmpty(e.getMessage()));
                 }
 
                 @Override
@@ -712,14 +755,44 @@ public final class FcmNotificationHelper {
                     response.close();
                     if (code >= 200 && code < 300) {
                         Log.d(TAG, "sendViaEdgeFunction success HTTP " + code + " type=" + type);
+                        int sent = 0;
+                        int totalTokens = cleanTokens.size();
+                        try {
+                            if (!trimToEmpty(rb).isEmpty()) {
+                                JsonObject root = JsonParser.parseString(rb).getAsJsonObject();
+                                if (root.has("sent")) {
+                                    sent = root.get("sent").getAsInt();
+                                }
+                                if (root.has("totalTokens")) {
+                                    totalTokens = root.get("totalTokens").getAsInt();
+                                }
+                            }
+                        } catch (Exception parseError) {
+                            Log.w(TAG, "sendViaEdgeFunction response parse failed: " + parseError.getMessage());
+                            sent = cleanTokens.size();
+                        }
+                        postSuccess(callback, sent, totalTokens);
                     } else {
                         Log.w(TAG, "sendViaEdgeFunction HTTP " + code + " body=" + rb);
+                        postFailure(callback, "Notification API failed (" + code + ").");
                     }
                 }
             });
         } catch (Exception e) {
             Log.w(TAG, "sendViaEdgeFunction exception: " + e.getMessage());
+            postFailure(callback, "Notification exception: " + trimToEmpty(e.getMessage()));
         }
+    }
+
+    private static void postSuccess(NotificationDispatchCallback callback, int sent, int totalTokens) {
+        if (callback == null) return;
+        MAIN.post(() -> callback.onSuccess(Math.max(0, sent), Math.max(0, totalTokens)));
+    }
+
+    private static void postFailure(NotificationDispatchCallback callback, String message) {
+        if (callback == null) return;
+        String safeMessage = trimToEmpty(message).isEmpty() ? "Notification failed." : message.trim();
+        MAIN.post(() -> callback.onFailure(safeMessage));
     }
 
     private static List<String> sanitize(List<String> values) {

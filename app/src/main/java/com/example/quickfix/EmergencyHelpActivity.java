@@ -21,6 +21,8 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.example.quickfix.BuildConfig;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
@@ -70,6 +72,8 @@ public class EmergencyHelpActivity extends BaseActivity {
 
     private static final long STATUS_POLL_MS = 4000L;
     private static final double NEARBY_RADIUS_KM = 20d;
+    private static final int PROVIDER_PAGE_SIZE = 500;
+    private static final int PROVIDER_MAX_PAGES = 20;
 
     public static final String EXTRA_LOCATION_LABEL = "extra_location_label";
     public static final String EXTRA_LOCATION_CITY = "extra_location_city";
@@ -384,10 +388,15 @@ public class EmergencyHelpActivity extends BaseActivity {
                 return null;
             }
             String body = response.body() != null ? response.body().string() : "[]";
-            JSONArray arr = new JSONArray(body);
-            if (arr.length() == 0) return null;
-            return arr.getJSONObject(0);
+            JsonArray arr = JsonParser.parseString(body).getAsJsonArray();
+            if (arr.size() == 0) return null;
+            return new JSONObject(arr.get(0).toString());
         }
+    }
+
+    private boolean hasValidSupabaseConfig() {
+        return !safe(BuildConfig.SUPABASE_URL).isEmpty()
+                && !safe(BuildConfig.SUPABASE_ANON_KEY).isEmpty();
     }
 
     private void updateLocationUi() {
@@ -402,6 +411,12 @@ public class EmergencyHelpActivity extends BaseActivity {
     }
 
     private void submitEmergencyRequest() {
+        if (!hasValidSupabaseConfig()) {
+            setStatus("Status: Request failed");
+            showToast("Supabase configuration is missing. Please contact support.");
+            return;
+        }
+
         if (!NetworkHelper.isOnline(this)) {
             setStatus("Status: No internet connection");
             showToast("No internet connection. Please try again.");
@@ -463,7 +478,22 @@ public class EmergencyHelpActivity extends BaseActivity {
                                     + " help at " + fallback(finalLocationLabel, "shared location")
                                     + ". Contact: " + fallback(currentUserPhone, "N/A"),
                             requestId,
-                            data
+                            data,
+                            new FcmNotificationHelper.NotificationDispatchCallback() {
+                                @Override
+                                public void onSuccess(int sent, int totalTokens) {
+                                    if (sent <= 0) {
+                                        setStatus("Status: Request submitted. Notification delivery pending.");
+                                        showToast("Request saved, but notification delivery is pending.");
+                                    }
+                                }
+
+                                @Override
+                                public void onFailure(String message) {
+                                    setStatus("Status: Request submitted. Notification retry needed.");
+                                    showToast(fallback(message, "Notification failed. Please try again."));
+                                }
+                            }
                     );
                 }
 
@@ -539,11 +569,13 @@ public class EmergencyHelpActivity extends BaseActivity {
                 throw new IllegalStateException("Submit failed HTTP " + response.code() + " " + body);
             }
 
-            JSONArray arr = new JSONArray(body);
-            if (arr.length() == 0) {
+            JsonArray arr = JsonParser.parseString(body).getAsJsonArray();
+            if (arr.size() == 0) {
                 throw new IllegalStateException("Emergency request created but id missing");
             }
-            String requestId = safe(arr.getJSONObject(0).optString("id", ""));
+            String requestId = safe(arr.get(0).getAsJsonObject().has("id")
+                    ? arr.get(0).getAsJsonObject().get("id").getAsString()
+                    : "");
             if (requestId.isEmpty()) {
                 throw new IllegalStateException("Emergency request id missing");
             }
@@ -560,37 +592,47 @@ public class EmergencyHelpActivity extends BaseActivity {
         }
 
         List<String> providerFirebaseUids = new ArrayList<>();
-        StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
-                .append("/rest/v1/provider_profiles")
-                .append("?select=firebase_uid,category,city,status,is_approved,lat,lng,latitude,longitude")
-                .append("&is_approved=eq.true")
-                .append("&status=eq.active")
-                .append("&limit=250");
+        Set<String> dedupe = new LinkedHashSet<>();
 
-        if (!safe(city).isEmpty()) {
-            url.append("&city=ilike.*").append(encode(city)).append("*");
-        }
+        for (int page = 0; page < PROVIDER_MAX_PAGES; page++) {
+            int offset = page * PROVIDER_PAGE_SIZE;
+            StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
+                    .append("/rest/v1/provider_profiles")
+                    .append("?select=firebase_uid,category,city,status,is_approved,lat,lng,latitude,longitude")
+                    .append("&is_approved=eq.true")
+                    .append("&status=eq.active")
+                    .append("&limit=").append(PROVIDER_PAGE_SIZE)
+                    .append("&offset=").append(offset);
 
-        Request request = new Request.Builder()
-                .url(url.toString())
-                .get()
-                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Accept", "application/json")
-                .build();
-
-        try (Response response = http.newCall(request).execute()) {
-            if (response.code() != 200) {
-                String body = response.body() != null ? response.body().string() : "";
-                throw new IllegalStateException("Provider lookup HTTP " + response.code() + " " + body);
+            if (!safe(city).isEmpty()) {
+                url.append("&city=ilike.*").append(encode(city)).append("*");
             }
 
-            String body = response.body() != null ? response.body().string() : "[]";
-            JSONArray arr = new JSONArray(body);
-            Set<String> dedupe = new LinkedHashSet<>();
+            Request request = new Request.Builder()
+                    .url(url.toString())
+                    .get()
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
 
-            for (int i = 0; i < arr.length(); i++) {
-                JSONObject o = arr.getJSONObject(i);
+            JsonArray arr;
+            try (Response response = http.newCall(request).execute()) {
+                if (response.code() != 200) {
+                    String body = response.body() != null ? response.body().string() : "";
+                    throw new IllegalStateException("Provider lookup HTTP " + response.code() + " " + body);
+                }
+
+                String body = response.body() != null ? response.body().string() : "[]";
+                arr = JsonParser.parseString(body).getAsJsonArray();
+            }
+
+            if (arr.size() == 0) {
+                break;
+            }
+
+            for (int i = 0; i < arr.size(); i++) {
+                JSONObject o = new JSONObject(arr.get(i).toString());
                 String providerFirebaseUid = safe(o.optString("firebase_uid", ""));
                 String providerCategory = safe(o.optString("category", ""));
                 String providerStatus = safe(o.optString("status", "")).toLowerCase(Locale.US);
@@ -616,11 +658,13 @@ public class EmergencyHelpActivity extends BaseActivity {
                 }
 
                 dedupe.add(providerFirebaseUid);
-                if (dedupe.size() >= 30) break;
             }
 
-            providerFirebaseUids.addAll(dedupe);
+            if (arr.size() < PROVIDER_PAGE_SIZE) {
+                break;
+            }
         }
+        providerFirebaseUids.addAll(dedupe);
         return providerFirebaseUids;
     }
 
