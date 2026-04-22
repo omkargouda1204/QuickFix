@@ -68,7 +68,7 @@ public class EmergencyHelpActivity extends BaseActivity {
     );
 
     private static final long STATUS_POLL_MS = 4000L;
-    private static final double NEARBY_RADIUS_KM = 30d;
+    private static final double NEARBY_RADIUS_KM = 20d;
 
     public static final String EXTRA_LOCATION_LABEL = "extra_location_label";
     public static final String EXTRA_LOCATION_CITY = "extra_location_city";
@@ -417,40 +417,71 @@ public class EmergencyHelpActivity extends BaseActivity {
         new Thread(() -> {
             try {
                 String requestId = createEmergencyRequest(category, description, finalLocationLabel);
-                List<String> providerFirebaseUids = fetchMatchingProviderFirebaseUids(
-                        category,
-                        selectedCity,
-                        selectedLat,
-                        selectedLng
-                );
+                boolean providerLookupFailed = false;
+                List<String> providerFirebaseUids = new ArrayList<>();
+                try {
+                    providerFirebaseUids = fetchMatchingProviderFirebaseUids(
+                            category,
+                            selectedCity,
+                            selectedLat,
+                            selectedLng
+                    );
+                } catch (Exception providerLookupError) {
+                    providerLookupFailed = true;
+                    Log.w(TAG, "Provider lookup failed after request create: " + providerLookupError.getMessage());
+                }
 
                 if (!providerFirebaseUids.isEmpty()) {
                     JSONObject data = new JSONObject();
                     data.put("request_id", requestId);
-                    data.put("category", category);
+                    data.put("user_name", safe(currentUserName));
+                    data.put("phone", safe(currentUserPhone));
+                    data.put("service_type", safe(category));
+                    data.put("category", safe(category));
                     data.put("city", safe(selectedCity));
                     data.put("address", finalLocationLabel);
+                    data.put("location", finalLocationLabel);
+                    data.put("description", safe(description));
+                    if (!Double.isNaN(selectedLat)) {
+                        data.put("lat", String.valueOf(selectedLat));
+                    }
+                    if (!Double.isNaN(selectedLng)) {
+                        data.put("lng", String.valueOf(selectedLng));
+                    }
 
                     FcmNotificationHelper.notifyEmergencyProviders(
                             providerFirebaseUids,
                             "Emergency Request",
-                            currentUserName + " needs urgent " + category + " support.",
+                            safe(currentUserName) + " needs " + safe(category)
+                                    + " help at " + fallback(finalLocationLabel, "shared location")
+                                    + ". Contact: " + fallback(currentUserPhone, "N/A"),
                             requestId,
                             data
                     );
                 }
 
                 final int notifiedProviders = providerFirebaseUids.size();
+                final boolean finalProviderLookupFailed = providerLookupFailed;
                 runOnUiThread(() -> {
                     setLoading(false);
                     activeRequestId = requestId;
                     providerAssignedToastShown = false;
-                    setStatus("Status: Request submitted (ID: " + requestId + ")");
+                    if (finalProviderLookupFailed) {
+                        setStatus("Status: Request submitted. Matching providers...");
+                    } else if (notifiedProviders == 0) {
+                        setStatus("Status: Request submitted. No active providers within 20 km yet.");
+                    } else {
+                        setStatus("Status: Emergency request sent to nearby providers");
+                    }
                     bindAssignedProviderCard(null, category);
                     startStatusPolling();
-                    showToast(notifiedProviders > 0
-                            ? "Emergency request submitted. " + notifiedProviders + " provider(s) notified."
-                            : "Emergency request submitted. Providers will be matched shortly.");
+                    if (finalProviderLookupFailed) {
+                        showToast("Emergency request submitted, but provider matching is delayed due to network.");
+                    } else if (notifiedProviders > 0) {
+                        showToast("Emergency request sent to nearby providers");
+                    } else {
+                        showToast("Emergency request submitted, but no active providers found within 20 km.");
+                    }
                 });
             } catch (Exception e) {
                 Log.e(TAG, "submitEmergencyRequest failed", e);
@@ -512,71 +543,68 @@ public class EmergencyHelpActivity extends BaseActivity {
     private List<String> fetchMatchingProviderFirebaseUids(String category,
                                                            String city,
                                                            double requestLat,
-                                                           double requestLng) {
+                                                           double requestLng) throws Exception {
         List<String> providerFirebaseUids = new ArrayList<>();
-        try {
-            StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
-                    .append("/rest/v1/provider_profiles")
-                    .append("?select=firebase_uid,category,city,status,is_approved,lat,lng,latitude,longitude")
-                    .append("&is_approved=eq.true")
-                    .append("&limit=200");
+        StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
+                .append("/rest/v1/provider_profiles")
+                .append("?select=firebase_uid,category,city,status,is_approved,lat,lng,latitude,longitude")
+                .append("&is_approved=eq.true")
+                .append("&status=eq.active")
+                .append("&limit=250");
 
-            if (!safe(city).isEmpty()) {
-                url.append("&city=ilike.*").append(encode(city)).append("*");
+        if (!safe(city).isEmpty()) {
+            url.append("&city=ilike.*").append(encode(city)).append("*");
+        }
+
+        Request request = new Request.Builder()
+                .url(url.toString())
+                .get()
+                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .build();
+
+        try (Response response = http.newCall(request).execute()) {
+            if (response.code() != 200) {
+                String body = response.body() != null ? response.body().string() : "";
+                throw new IllegalStateException("Provider lookup HTTP " + response.code() + " " + body);
             }
 
-            Request request = new Request.Builder()
-                    .url(url.toString())
-                    .get()
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Accept", "application/json")
-                    .build();
+            String body = response.body() != null ? response.body().string() : "[]";
+            JSONArray arr = new JSONArray(body);
+            Set<String> dedupe = new LinkedHashSet<>();
 
-            try (Response response = http.newCall(request).execute()) {
-                if (response.code() != 200) {
-                    return providerFirebaseUids;
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                String providerFirebaseUid = safe(o.optString("firebase_uid", ""));
+                String providerCategory = safe(o.optString("category", ""));
+                String providerStatus = safe(o.optString("status", "")).toLowerCase(Locale.US);
+                String providerCity = safe(o.optString("city", ""));
+                double providerLat = pickDouble(o, "latitude", "lat");
+                double providerLng = pickDouble(o, "longitude", "lng");
+
+                if (providerFirebaseUid.isEmpty()) continue;
+                if (!"active".equals(providerStatus)) continue;
+                if (!CategoryMatcher.matches(category, providerCategory)) continue;
+
+                if (!safe(city).isEmpty() && !providerCity.isEmpty() && !providerCity.equalsIgnoreCase(city)) {
+                    continue;
                 }
 
-                String body = response.body() != null ? response.body().string() : "[]";
-                JSONArray arr = new JSONArray(body);
-                Set<String> dedupe = new LinkedHashSet<>();
-
-                for (int i = 0; i < arr.length(); i++) {
-                    JSONObject o = arr.getJSONObject(i);
-                    String providerFirebaseUid = safe(o.optString("firebase_uid", ""));
-                    String providerCategory = safe(o.optString("category", ""));
-                    String providerStatus = safe(o.optString("status", "approved")).toLowerCase(Locale.US);
-                    String providerCity = safe(o.optString("city", ""));
-                    double providerLat = pickDouble(o, "latitude", "lat");
-                    double providerLng = pickDouble(o, "longitude", "lng");
-
-                    if (providerFirebaseUid.isEmpty()) continue;
-                    if (!providerStatus.isEmpty() && !("approved".equals(providerStatus) || "active".equals(providerStatus))) {
-                        continue;
-                    }
-                    if (!CategoryMatcher.matches(category, providerCategory)) continue;
-
-                    if (!safe(city).isEmpty() && !providerCity.isEmpty() && !providerCity.equalsIgnoreCase(city)) {
-                        continue;
-                    }
-
-                    if (!Double.isNaN(requestLat) && !Double.isNaN(requestLng)
-                            && !Double.isNaN(providerLat) && !Double.isNaN(providerLng)) {
-                        double distanceKm = haversineKm(requestLat, requestLng, providerLat, providerLng);
-                        if (distanceKm > NEARBY_RADIUS_KM) {
-                            continue;
-                        }
-                    }
-
-                    dedupe.add(providerFirebaseUid);
-                    if (dedupe.size() >= 30) break;
+                if (Double.isNaN(providerLat) || Double.isNaN(providerLng)) {
+                    continue;
                 }
 
-                providerFirebaseUids.addAll(dedupe);
+                double distanceKm = haversineKm(requestLat, requestLng, providerLat, providerLng);
+                if (distanceKm > NEARBY_RADIUS_KM) {
+                    continue;
+                }
+
+                dedupe.add(providerFirebaseUid);
+                if (dedupe.size() >= 30) break;
             }
-        } catch (Exception e) {
-            Log.w(TAG, "fetchMatchingProviderFirebaseUids failed: " + e.getMessage());
+
+            providerFirebaseUids.addAll(dedupe);
         }
         return providerFirebaseUids;
     }
@@ -916,6 +944,13 @@ public class EmergencyHelpActivity extends BaseActivity {
             valid = false;
             if (showErrors) {
                 showToast("Please select a location first.");
+            }
+        }
+
+        if (!hasCoordinates()) {
+            valid = false;
+            if (showErrors) {
+                showToast("Please select a precise location to find providers within 20 km.");
             }
         }
 

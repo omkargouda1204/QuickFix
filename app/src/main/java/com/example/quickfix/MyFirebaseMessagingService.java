@@ -195,6 +195,28 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
                         .setColor(getResources().getColor(R.color.primary, getTheme()))
                         .setContentIntent(pendingIntent);
 
+        if ("emergency_request".equals(type)) {
+            String emergencyRequestId = "";
+            if (data != null) {
+                emergencyRequestId = data.containsKey("request_id")
+                        ? data.get("request_id")
+                        : data.get("reference_id");
+            }
+
+            if (emergencyRequestId != null && !emergencyRequestId.trim().isEmpty()) {
+                builder.addAction(
+                        0,
+                        "Decline",
+                        createEmergencyActionPendingIntent(emergencyRequestId.trim(), "decline")
+                );
+                builder.addAction(
+                        0,
+                        "Accept",
+                        createEmergencyActionPendingIntent(emergencyRequestId.trim(), "accept")
+                );
+            }
+        }
+
         NotificationManager manager =
                 (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager != null) {
@@ -255,5 +277,22 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
     /** Instance helper — calls static version */
     private void ensureNotificationChannels() {
         ensureNotificationChannels(this);
+    }
+
+    private PendingIntent createEmergencyActionPendingIntent(String requestId, String quickAction) {
+        Intent actionIntent = new Intent(this, ProviderEmergencyRequestActivity.class);
+        actionIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        actionIntent.putExtra("request_id", requestId);
+        actionIntent.putExtra("quick_action", quickAction);
+
+        int requestCode = NOTIF_ID.incrementAndGet();
+        return PendingIntent.getActivity(
+                this,
+                requestCode,
+                actionIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT
+                        | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                        ? PendingIntent.FLAG_IMMUTABLE : 0)
+        );
     }
 }

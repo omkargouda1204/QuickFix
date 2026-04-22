@@ -260,6 +260,14 @@
             android:textColor="@color/text_secondary"
             android:textSize="14sp" />
 
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Accurate location is required to find active providers within 20 km."
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnEmergencySelectLocation"
             android:layout_width="match_parent"

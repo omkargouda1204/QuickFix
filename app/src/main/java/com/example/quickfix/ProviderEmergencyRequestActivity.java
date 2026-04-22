@@ -57,6 +57,8 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     private String providerService = "";
     private String providerCity = "";
     private String providerArea = "";
+    private String quickAction = "";
+    private boolean quickActionConsumed = false;
     private boolean rejectedByCurrentProvider = false;
 
     @Override
@@ -71,6 +73,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         if (TextUtils.isEmpty(requestId)) {
             requestId = safe(getIntent() != null ? getIntent().getStringExtra("reference_id") : "");
         }
+        quickAction = safe(getIntent() != null ? getIntent().getStringExtra("quick_action") : "").toLowerCase(Locale.US);
         if (TextUtils.isEmpty(requestId)) {
             showToast("Emergency request id is missing.");
             finish();
@@ -127,6 +130,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                     bindRequest(request);
                     updateAcceptStateFromStatus(request);
                     startStatusPolling();
+                    triggerQuickActionIfNeeded();
                 });
             } catch (Exception e) {
                 Log.e(TAG, "fetchProviderProfileAndRequest failed", e);
@@ -315,6 +319,20 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 });
             }
         }).start();
+    }
+
+    private void triggerQuickActionIfNeeded() {
+        if (quickActionConsumed || TextUtils.isEmpty(quickAction)) return;
+        quickActionConsumed = true;
+
+        if ("accept".equals(quickAction)) {
+            acceptRequest();
+            return;
+        }
+
+        if ("decline".equals(quickAction) || "reject".equals(quickAction)) {
+            rejectRequest();
+        }
     }
 
     private JSONArray acceptPendingRequestWithSnapshotFallback() throws Exception {
@@ -571,5 +589,33 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     protected void onDestroy() {
         mainHandler.removeCallbacksAndMessages(null);
         super.onDestroy();
+    }
+
+    @Override
+    protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        if (intent == null) return;
+        setIntent(intent);
+
+        String nextRequestId = safe(intent.getStringExtra("request_id"));
+        if (TextUtils.isEmpty(nextRequestId)) {
+            nextRequestId = safe(intent.getStringExtra("reference_id"));
+        }
+        String nextQuickAction = safe(intent.getStringExtra("quick_action")).toLowerCase(Locale.US);
+
+        if (!TextUtils.isEmpty(nextRequestId) && !nextRequestId.equals(requestId)) {
+            requestId = nextRequestId;
+            quickAction = nextQuickAction;
+            quickActionConsumed = false;
+            rejectedByCurrentProvider = false;
+            fetchProviderProfileAndRequest();
+            return;
+        }
+
+        if (!TextUtils.isEmpty(nextQuickAction)) {
+            quickAction = nextQuickAction;
+            quickActionConsumed = false;
+            triggerQuickActionIfNeeded();
+        }
     }
 }

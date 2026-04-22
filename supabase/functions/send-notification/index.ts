@@ -330,6 +330,8 @@ function bookingLikeType(type: string): boolean {
     "booking_completed",
     "booking_update",
     "booking",
+    "emergency_request",
+    "emergency_assigned",
   ].includes((type ?? "").trim());
 }
 
