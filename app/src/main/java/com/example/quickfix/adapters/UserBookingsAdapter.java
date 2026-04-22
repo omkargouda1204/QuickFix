@@ -87,7 +87,11 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
         }
 
         void bind(Booking b) {
-            tvServiceName.setText(b.serviceName.isEmpty() ? "Service" : b.serviceName);
+            String serviceTitle = b.serviceName.isEmpty() ? "Service" : b.serviceName;
+            if (b.isEmergency) {
+                serviceTitle = "EMERGENCY - " + serviceTitle;
+            }
+            tvServiceName.setText(serviceTitle);
             tvProviderName.setText(b.providerName.isEmpty() ? "Provider" : "By: " + b.providerName);
             String dateTime = (b.bookingDate.isEmpty() ? "-" : b.bookingDate)
                     + (b.bookingTime.isEmpty() ? "" : " • " + b.bookingTime);

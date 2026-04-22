@@ -57,7 +57,7 @@ public class SettingsActivity extends BaseActivity {
     private boolean supabaseDeleteCompleted = false;
 
     // ── Views ─────────────────────────────────────────────────────────────
-    private LinearLayout   settingsChangePassword, settingsHelpSupport, settingsDeleteAccount;
+    private LinearLayout   settingsChangePassword, settingsDeleteAccount;
     private FrameLayout    loadingOverlay;
     private TextView       tvDeletingMessage;
 
@@ -97,7 +97,7 @@ public class SettingsActivity extends BaseActivity {
             setSupportActionBar(toolbar);
             if (getSupportActionBar() != null)
                 getSupportActionBar().setDisplayHomeAsUpEnabled(false);
-            toolbar.setNavigationOnClickListener(v -> finish());
+            toolbar.setNavigationOnClickListener(v -> goHome());
         }
 
         bindViews();
@@ -108,7 +108,6 @@ public class SettingsActivity extends BaseActivity {
     // ── View binding ──────────────────────────────────────────────────────
     private void bindViews() {
         settingsChangePassword = findViewById(R.id.settingsChangePassword);
-        settingsHelpSupport    = findViewById(R.id.settingsHelpSupport);
         settingsDeleteAccount  = findViewById(R.id.settingsDeleteAccount);
         loadingOverlay         = findViewById(R.id.settingsLoadingOverlay);
         tvDeletingMessage      = findViewById(R.id.tvDeletingMessage);
@@ -120,12 +119,20 @@ public class SettingsActivity extends BaseActivity {
             settingsChangePassword.setOnClickListener(v ->
                     startActivity(new Intent(this, ForgotPasswordActivity.class)));
 
-        if (settingsHelpSupport != null)
-            settingsHelpSupport.setOnClickListener(v ->
-                    startActivity(new Intent(this, HelpSupportActivity.class)));
-
         if (settingsDeleteAccount != null)
             settingsDeleteAccount.setOnClickListener(v -> showDeleteConfirmDialog());
+    }
+
+    private void goHome() {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+        finish();
+    }
+
+    @Override
+    public void onBackPressed() {
+        goHome();
     }
 
     @Override

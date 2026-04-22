@@ -170,7 +170,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     private JSONObject fetchRequestById(String id) throws Exception {
         String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests"
                 + "?id=eq." + urlEncode(id)
-                + "&select=id,status,user_id,user_name,phone,category,description,address,assigned_provider_id,accepted_at"
+                + "&select=id,status,user_id,user_firebase_uid,user_name,phone,category,description,address,type,assigned_provider_id,accepted_at"
                 + "&limit=1";
 
         Request request = new Request.Builder()
@@ -460,8 +460,11 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     }
 
     private void notifyUserAssigned(JSONObject request) {
-        String userFirebaseUid = safe(request.optString("user_id", ""));
-        if (TextUtils.isEmpty(userFirebaseUid)) return;
+        String userRef = safe(request.optString("user_firebase_uid", ""));
+        if (TextUtils.isEmpty(userRef)) {
+            userRef = safe(request.optString("user_id", ""));
+        }
+        if (TextUtils.isEmpty(userRef)) return;
 
         try {
             JSONObject data = new JSONObject();
@@ -475,7 +478,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             data.put("eta", "Arriving in 10 mins");
 
             FcmNotificationHelper.notifyEmergencyUserAssigned(
-                    userFirebaseUid,
+                    userRef,
                     "Provider Assigned",
                     fallback(providerName, "Provider") + " is on the way.",
                     requestId,
@@ -488,9 +491,18 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
     private void mirrorEmergencyBooking(JSONObject request) {
         try {
-             String customerId = safe(request.optString("user_id", ""));
+            String customerId = safe(request.optString("user_id", ""));
             String providerId = safe(providerProfileId);
             if (TextUtils.isEmpty(customerId) || TextUtils.isEmpty(providerId)) return;
+            String emergencyRequestId = safe(request.optString("id", ""));
+            if (TextUtils.isEmpty(emergencyRequestId)) {
+                emergencyRequestId = requestId;
+            }
+
+            if (!TextUtils.isEmpty(emergencyRequestId)
+                    && bookingExistsForEmergency(providerId, emergencyRequestId)) {
+                return;
+            }
 
             JSONObject booking = new JSONObject();
             booking.put("customer_id", customerId);
@@ -504,36 +516,25 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             booking.put("description", safe(request.optString("description", "")));
             booking.put("status", "accepted");
             booking.put("is_emergency", true);
-
-            Request insert = new Request.Builder()
-                    .url(BuildConfig.SUPABASE_URL + "/rest/v1/bookings")
-                    .post(RequestBody.create(booking.toString(), JSON))
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Prefer", "return=minimal")
-                    .build();
-
-            try (Response response = http.newCall(insert).execute()) {
-                if (response.code() == 200 || response.code() == 201 || response.code() == 204) return;
+            booking.put("type", "Emergency");
+            if (!TextUtils.isEmpty(emergencyRequestId)) {
+                booking.put("emergency_request_id", emergencyRequestId);
             }
 
+            if (tryInsertBooking(booking)) return;
+
             booking.remove("is_emergency");
+            if (tryInsertBooking(booking)) return;
+
+            booking.remove("type");
+            booking.remove("emergency_request_id");
             booking.put("booking_date", new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US)
                     .format(new java.util.Date()));
 
             booking.put("booking_time", new java.text.SimpleDateFormat("HH:mm:ss", Locale.US)
                     .format(new java.util.Date()));
 
-            Request fallbackInsert = new Request.Builder()
-                    .url(BuildConfig.SUPABASE_URL + "/rest/v1/bookings")
-                    .post(RequestBody.create(booking.toString(), JSON))
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Prefer", "return=minimal")
-                    .build();
-            try (Response fallbackResponse = http.newCall(fallbackInsert).execute()) {
+            try (Response fallbackResponse = postBookingInsert(booking)) {
                 // Keep acceptance successful even if booking mirror fails.
                 if (fallbackResponse.code() >= 400) {
                     Log.w(TAG, "mirrorEmergencyBooking fallback HTTP " + fallbackResponse.code());
@@ -542,6 +543,56 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         } catch (Exception e) {
             Log.w(TAG, "mirrorEmergencyBooking failed: " + e.getMessage());
         }
+    }
+
+    private boolean bookingExistsForEmergency(String providerId, String emergencyRequestId) {
+        try {
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
+                    + "?provider_id=eq." + urlEncode(providerId)
+                    + "&emergency_request_id=eq." + urlEncode(emergencyRequestId)
+                    + "&select=id&limit=1";
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .get()
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response response = http.newCall(request).execute()) {
+                if (response.code() != 200) {
+                    return false;
+                }
+                String body = response.body() != null ? response.body().string() : "[]";
+                JSONArray arr = new JSONArray(body);
+                return arr.length() > 0;
+            }
+        } catch (Exception ignored) {
+            // emergency_request_id column may not exist on all schema variants.
+            return false;
+        }
+    }
+
+    private boolean tryInsertBooking(JSONObject payload) {
+        try (Response response = postBookingInsert(payload)) {
+            return response.code() == 200 || response.code() == 201 || response.code() == 204;
+        } catch (Exception e) {
+            Log.w(TAG, "tryInsertBooking failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private Response postBookingInsert(JSONObject payload) throws Exception {
+        Request insert = new Request.Builder()
+                .url(BuildConfig.SUPABASE_URL + "/rest/v1/bookings")
+                .post(RequestBody.create(payload.toString(), JSON))
+                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "return=minimal")
+                .build();
+        return http.newCall(insert).execute();
     }
 
     private void setLoading(boolean loading) {

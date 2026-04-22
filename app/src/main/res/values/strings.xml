@@ -167,7 +167,6 @@
     <string name="settings_booking_reminders">Booking Reminders</string>
     <string name="settings_dark_mode">Dark Mode</string>
     <string name="settings_change_password">Change Password</string>
-    <string name="settings_help_support">Help &amp; Support</string>
     <string name="settings_delete_account">Delete Account</string>
     <string name="settings_delete_account_data_scope">Deletes Firebase and Supabase data</string>
     <string name="settings_delete_dialog_warning">This action permanently deletes your account.</string>

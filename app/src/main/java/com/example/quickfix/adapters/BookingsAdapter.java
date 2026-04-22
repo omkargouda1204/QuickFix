@@ -100,7 +100,11 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
 
         void bind(Booking booking) {
             tvCustomerName.setText(booking.customerName.isEmpty() ? "Customer" : booking.customerName);
-            tvServiceName.setText(booking.serviceName.isEmpty() ? "Service" : booking.serviceName);
+            String serviceTitle = booking.serviceName.isEmpty() ? "Service" : booking.serviceName;
+            if (booking.isEmergency) {
+                serviceTitle = "EMERGENCY - " + serviceTitle;
+            }
+            tvServiceName.setText(serviceTitle);
             tvDateTime.setText(booking.bookingDate + " • " + booking.bookingTime);
             tvAddress.setText(booking.address.isEmpty() ? "No address" : booking.address);
             double shownAmount = booking.paymentAmount > 0 ? booking.paymentAmount : booking.price;

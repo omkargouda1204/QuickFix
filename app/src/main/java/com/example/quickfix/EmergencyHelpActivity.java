@@ -21,6 +21,8 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.example.quickfix.BuildConfig;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
@@ -31,8 +33,10 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -68,7 +72,9 @@ public class EmergencyHelpActivity extends BaseActivity {
     );
 
     private static final long STATUS_POLL_MS = 4000L;
-    private static final double NEARBY_RADIUS_KM = 20d;
+    private static final double NEARBY_RADIUS_KM = 30d;
+    private static final int PROVIDER_PAGE_SIZE = 500;
+    private static final int PROVIDER_MAX_PAGES = 20;
 
     public static final String EXTRA_LOCATION_LABEL = "extra_location_label";
     public static final String EXTRA_LOCATION_CITY = "extra_location_city";
@@ -95,6 +101,7 @@ public class EmergencyHelpActivity extends BaseActivity {
     private TextView tvPhone;
     private TextView tvAddress;
     private TextView tvLocationSummary;
+    private TextView tvLocationHint;
     private MaterialAutoCompleteTextView actCategory;
     private TextInputEditText etDescription;
     private TextInputLayout tilCategory;
@@ -148,6 +155,7 @@ public class EmergencyHelpActivity extends BaseActivity {
         tvPhone = findViewById(R.id.tvEmergencyPhone);
         tvAddress = findViewById(R.id.tvEmergencyAddress);
         tvLocationSummary = findViewById(R.id.tvEmergencyLocation);
+        tvLocationHint = findViewById(R.id.tvEmergencyLocationHint);
         actCategory = findViewById(R.id.actEmergencyCategory);
         etDescription = findViewById(R.id.etEmergencyDescription);
         tilCategory = findViewById(R.id.tilEmergencyCategory);
@@ -383,10 +391,15 @@ public class EmergencyHelpActivity extends BaseActivity {
                 return null;
             }
             String body = response.body() != null ? response.body().string() : "[]";
-            JSONArray arr = new JSONArray(body);
-            if (arr.length() == 0) return null;
-            return arr.getJSONObject(0);
+            JsonArray arr = JsonParser.parseString(body).getAsJsonArray();
+            if (arr.size() == 0) return null;
+            return new JSONObject(arr.get(0).toString());
         }
+    }
+
+    private boolean hasValidSupabaseConfig() {
+        return safe(BuildConfig.SUPABASE_URL).startsWith("http")
+                && !safe(BuildConfig.SUPABASE_ANON_KEY).isEmpty();
     }
 
     private void updateLocationUi() {
@@ -397,10 +410,32 @@ public class EmergencyHelpActivity extends BaseActivity {
 
         setText(tvLocationSummary, label);
         setText(tvAddress, "Location: " + label);
+
+        boolean locationReady = hasCoordinates();
+        if (btnSelectLocation != null) {
+            btnSelectLocation.setVisibility(locationReady ? View.GONE : View.VISIBLE);
+        }
+        if (tvLocationHint != null) {
+            tvLocationHint.setText(locationReady
+                    ? "Using selected location to find active providers within 30 km."
+                    : "Accurate location is required to find active providers within 30 km.");
+        }
         updateSubmitButtonState();
     }
 
     private void submitEmergencyRequest() {
+        if (!hasValidSupabaseConfig()) {
+            setStatus("Status: Request failed");
+            showToast("Supabase configuration is missing. Please contact support.");
+            return;
+        }
+
+        if (!NetworkHelper.isOnline(this)) {
+            setStatus("Status: No internet connection");
+            showToast("No internet connection. Please try again.");
+            return;
+        }
+
         if (!validateForm(true)) return;
 
         String category = safe(actCategory != null ? String.valueOf(actCategory.getText()) : "");
@@ -412,7 +447,7 @@ public class EmergencyHelpActivity extends BaseActivity {
         final String finalLocationLabel = locationLabel;
 
         setLoading(true);
-        setStatus("Status: Submitting request...");
+        setStatus("Status: Searching nearby providers...");
 
         new Thread(() -> {
             try {
@@ -456,7 +491,22 @@ public class EmergencyHelpActivity extends BaseActivity {
                                     + " help at " + fallback(finalLocationLabel, "shared location")
                                     + ". Contact: " + fallback(currentUserPhone, "N/A"),
                             requestId,
-                            data
+                            data,
+                            new FcmNotificationHelper.NotificationDispatchCallback() {
+                                @Override
+                                public void onSuccess(int sent, int totalTokens) {
+                                    if (sent <= 0) {
+                                        setStatus("Status: Request submitted. Notification delivery pending.");
+                                        showToast("Request saved, but notification delivery is pending.");
+                                    }
+                                }
+
+                                @Override
+                                public void onFailure(String message) {
+                                    setStatus("Status: Request submitted. Notification retry needed.");
+                                    showToast(fallback(message, "Notification failed. Please try again."));
+                                }
+                            }
                     );
                 }
 
@@ -467,9 +517,9 @@ public class EmergencyHelpActivity extends BaseActivity {
                     activeRequestId = requestId;
                     providerAssignedToastShown = false;
                     if (finalProviderLookupFailed) {
-                        setStatus("Status: Request submitted. Matching providers...");
+                        setStatus("Status: Request submitted. Searching nearby providers...");
                     } else if (notifiedProviders == 0) {
-                        setStatus("Status: Request submitted. No active providers within 20 km yet.");
+                        setStatus("Status: No providers available within 30 km.");
                     } else {
                         setStatus("Status: Emergency request sent to nearby providers");
                     }
@@ -480,7 +530,7 @@ public class EmergencyHelpActivity extends BaseActivity {
                     } else if (notifiedProviders > 0) {
                         showToast("Emergency request sent to nearby providers");
                     } else {
-                        showToast("Emergency request submitted, but no active providers found within 20 km.");
+                        showToast("No providers available within 30 km right now.");
                     }
                 });
             } catch (Exception e) {
@@ -488,18 +538,52 @@ public class EmergencyHelpActivity extends BaseActivity {
                 runOnUiThread(() -> {
                     setLoading(false);
                     setStatus("Status: Submission failed");
-                    showToast("Could not submit emergency request. Please try again.");
+                    if (e instanceof IOException) {
+                        showToast(NetworkHelper.buildMessage((IOException) e, EmergencyHelpActivity.this));
+                    } else {
+                        String detailedError = fallback(safe(e.getMessage()), "Request failed, try again");
+                        showToast(detailedError);
+                    }
                 });
             }
         }).start();
     }
 
     private String createEmergencyRequest(String category, String description, String locationLabel) throws Exception {
+        JSONObject payload = buildEmergencyPayload(category, description, locationLabel, true);
+
+        try {
+            return postEmergencyRequest(payload);
+        } catch (IllegalStateException firstError) {
+            String message = safe(firstError.getMessage()).toLowerCase(Locale.US);
+            boolean schemaMismatch = message.contains("column")
+                    || message.contains("schema cache")
+                    || message.contains("type")
+                    || message.contains("service");
+            if (!schemaMismatch) {
+                throw firstError;
+            }
+
+            // Retry with legacy payload for older emergency_requests schema.
+            JSONObject legacyPayload = buildEmergencyPayload(category, description, locationLabel, false);
+            return postEmergencyRequest(legacyPayload);
+        }
+    }
+
+    private JSONObject buildEmergencyPayload(String category,
+                                            String description,
+                                            String locationLabel,
+                                            boolean includeExtendedFields) throws Exception {
         JSONObject payload = new JSONObject();
         payload.put("user_id", safe(currentUserId));
+        payload.put("user_firebase_uid", safe(currentUserId));
+        payload.put("name", safe(currentUserName));
         payload.put("user_name", safe(currentUserName));
         payload.put("phone", safe(currentUserPhone));
+        payload.put("service", safe(category));
+        payload.put("service_type", safe(category));
         payload.put("category", safe(category));
+        payload.put("issue", safe(description));
         payload.put("description", safe(description));
         payload.put("address", safe(locationLabel));
         payload.put("status", "pending");
@@ -511,8 +595,14 @@ public class EmergencyHelpActivity extends BaseActivity {
         if (!Double.isNaN(selectedLng)) {
             payload.put("lng", selectedLng);
         }
+        if (includeExtendedFields) {
+            payload.put("type", "Emergency");
+        }
         payload.put("created_at", isoNow());
+        return payload;
+    }
 
+    private String postEmergencyRequest(JSONObject payload) throws Exception {
         Request request = new Request.Builder()
                 .url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?select=id")
                 .post(RequestBody.create(payload.toString(), JSON))
@@ -525,14 +615,17 @@ public class EmergencyHelpActivity extends BaseActivity {
         try (Response response = http.newCall(request).execute()) {
             String body = response.body() != null ? response.body().string() : "[]";
             if (response.code() != 201 && response.code() != 200) {
-                throw new IllegalStateException("Submit failed HTTP " + response.code() + " " + body);
+                String apiError = extractApiErrorMessage(body, "Submit failed HTTP " + response.code());
+                throw new IllegalStateException(apiError);
             }
 
-            JSONArray arr = new JSONArray(body);
-            if (arr.length() == 0) {
+            JsonArray arr = JsonParser.parseString(body).getAsJsonArray();
+            if (arr.size() == 0) {
                 throw new IllegalStateException("Emergency request created but id missing");
             }
-            String requestId = safe(arr.getJSONObject(0).optString("id", ""));
+            String requestId = safe(arr.get(0).getAsJsonObject().has("id")
+                    ? arr.get(0).getAsJsonObject().get("id").getAsString()
+                    : "");
             if (requestId.isEmpty()) {
                 throw new IllegalStateException("Emergency request id missing");
             }
@@ -544,38 +637,46 @@ public class EmergencyHelpActivity extends BaseActivity {
                                                            String city,
                                                            double requestLat,
                                                            double requestLng) throws Exception {
-        List<String> providerFirebaseUids = new ArrayList<>();
-        StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
-                .append("/rest/v1/provider_profiles")
-                .append("?select=firebase_uid,category,city,status,is_approved,lat,lng,latitude,longitude")
-                .append("&is_approved=eq.true")
-                .append("&status=eq.active")
-                .append("&limit=250");
-
-        if (!safe(city).isEmpty()) {
-            url.append("&city=ilike.*").append(encode(city)).append("*");
+        if (Double.isNaN(requestLat) || Double.isNaN(requestLng)) {
+            throw new IllegalStateException("Location coordinates missing for provider matching");
         }
 
-        Request request = new Request.Builder()
-                .url(url.toString())
-                .get()
-                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Accept", "application/json")
-                .build();
+        List<String> providerFirebaseUids = new ArrayList<>();
+        Set<String> dedupe = new LinkedHashSet<>();
 
-        try (Response response = http.newCall(request).execute()) {
-            if (response.code() != 200) {
-                String body = response.body() != null ? response.body().string() : "";
-                throw new IllegalStateException("Provider lookup HTTP " + response.code() + " " + body);
+        for (int page = 0; page < PROVIDER_MAX_PAGES; page++) {
+            int offset = page * PROVIDER_PAGE_SIZE;
+            StringBuilder url = new StringBuilder(BuildConfig.SUPABASE_URL)
+                    .append("/rest/v1/provider_profiles")
+                    .append("?select=firebase_uid,category,city,status,is_approved,lat,lng,latitude,longitude")
+                    .append("&limit=").append(PROVIDER_PAGE_SIZE)
+                    .append("&offset=").append(offset);
+
+            Request request = new Request.Builder()
+                    .url(url.toString())
+                    .get()
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            JsonArray arr;
+            try (Response response = http.newCall(request).execute()) {
+                if (response.code() != 200) {
+                    String body = response.body() != null ? response.body().string() : "";
+                    throw new IllegalStateException("Provider lookup HTTP " + response.code() + " " + body);
+                }
+
+                String body = response.body() != null ? response.body().string() : "[]";
+                arr = JsonParser.parseString(body).getAsJsonArray();
             }
 
-            String body = response.body() != null ? response.body().string() : "[]";
-            JSONArray arr = new JSONArray(body);
-            Set<String> dedupe = new LinkedHashSet<>();
+            if (arr.size() == 0) {
+                break;
+            }
 
-            for (int i = 0; i < arr.length(); i++) {
-                JSONObject o = arr.getJSONObject(i);
+            for (int i = 0; i < arr.size(); i++) {
+                JSONObject o = new JSONObject(arr.get(i).toString());
                 String providerFirebaseUid = safe(o.optString("firebase_uid", ""));
                 String providerCategory = safe(o.optString("category", ""));
                 String providerStatus = safe(o.optString("status", "")).toLowerCase(Locale.US);
@@ -584,12 +685,8 @@ public class EmergencyHelpActivity extends BaseActivity {
                 double providerLng = pickDouble(o, "longitude", "lng");
 
                 if (providerFirebaseUid.isEmpty()) continue;
-                if (!"active".equals(providerStatus)) continue;
+                if (!("active".equals(providerStatus) || "approved".equals(providerStatus))) continue;
                 if (!CategoryMatcher.matches(category, providerCategory)) continue;
-
-                if (!safe(city).isEmpty() && !providerCity.isEmpty() && !providerCity.equalsIgnoreCase(city)) {
-                    continue;
-                }
 
                 if (Double.isNaN(providerLat) || Double.isNaN(providerLng)) {
                     continue;
@@ -601,11 +698,13 @@ public class EmergencyHelpActivity extends BaseActivity {
                 }
 
                 dedupe.add(providerFirebaseUid);
-                if (dedupe.size() >= 30) break;
             }
 
-            providerFirebaseUids.addAll(dedupe);
+            if (arr.size() < PROVIDER_PAGE_SIZE) {
+                break;
+            }
         }
+        providerFirebaseUids.addAll(dedupe);
         return providerFirebaseUids;
     }
 
@@ -950,7 +1049,7 @@ public class EmergencyHelpActivity extends BaseActivity {
         if (!hasCoordinates()) {
             valid = false;
             if (showErrors) {
-                showToast("Please select a precise location to find providers within 20 km.");
+                showToast("Please select a precise location to find providers within 30 km.");
             }
         }
 
@@ -1015,6 +1114,30 @@ public class EmergencyHelpActivity extends BaseActivity {
     private String fallback(String value, String fallback) {
         String clean = safe(value);
         return clean.isEmpty() ? fallback : clean;
+    }
+
+    private String extractApiErrorMessage(String body, String fallbackMessage) {
+        String fallback = safe(fallbackMessage);
+        if (fallback.isEmpty()) {
+            fallback = "Request failed";
+        }
+        try {
+            JSONObject json = new JSONObject(body == null ? "{}" : body);
+            String message = firstNonBlank(
+                    safe(json.optString("message", "")),
+                    safe(json.optString("error_description", "")),
+                    safe(json.optString("hint", "")),
+                    safe(json.optString("details", "")),
+                    safe(json.optString("error", ""))
+            );
+            return message.isEmpty() ? fallback : message;
+        } catch (JSONException ignored) {
+            String compact = safe(body);
+            if (compact.length() > 180) {
+                compact = compact.substring(0, 180) + "...";
+            }
+            return compact.isEmpty() ? fallback : compact;
+        }
     }
 
     private String safe(String value) {

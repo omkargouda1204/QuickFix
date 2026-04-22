@@ -29,6 +29,9 @@ public class Booking {
     public String createdAt;
     public String completedAt;
     public String description;
+    public String type;
+    public boolean isEmergency;
+    public String emergencyRequestId;
 
     // Optional provider review payload (joined or mapped after fetch)
     public String reviewId;
@@ -65,6 +68,12 @@ public class Booking {
         b.createdAt = s(o, "created_at");
         b.completedAt = s(o, "completed_at");
         b.description = s(o, "description");
+        b.type = s(o, "type");
+        b.isEmergency = o.optBoolean("is_emergency", false)
+                || "emergency".equalsIgnoreCase(b.type)
+                || "emergency".equalsIgnoreCase(b.category)
+                || "emergency".equalsIgnoreCase(b.serviceName);
+        b.emergencyRequestId = s(o, "emergency_request_id");
 
         // Read review if API includes an embedded relation or flat columns.
         JSONObject reviewObj = null;
