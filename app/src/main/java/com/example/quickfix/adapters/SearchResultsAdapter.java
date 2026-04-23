@@ -125,13 +125,13 @@ public class SearchResultsAdapter extends RecyclerView.Adapter<SearchResultsAdap
         h.tvAvailability.setVisibility(View.VISIBLE);
 
         boolean hasRating = r.rating > 0f;
-        h.tvRating.setVisibility(r.rating > 0f ? View.VISIBLE : View.GONE);
-        h.tvRating.setText(hasRating ? String.format(Locale.getDefault(), "%.1f", r.rating) : "");
+        h.tvRating.setVisibility(hasRating ? View.VISIBLE : View.GONE);
+        h.tvRating.setText(hasRating ? "★ " + String.format(Locale.getDefault(), "%.1f", r.rating) : "");
 
         boolean hasDistance = r.distanceKm >= 0f;
         h.tvDistance.setVisibility(hasDistance ? View.VISIBLE : View.GONE);
         h.tvDistance.setText(hasDistance
-                ? String.format(Locale.getDefault(), "%.1f km", r.distanceKm)
+                ? String.format(Locale.getDefault(), "• %.1f km", r.distanceKm)
                 : "");
 
         h.tvAvailability.setText((r.availabilityStatus == null || r.availabilityStatus.isEmpty())

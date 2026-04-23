@@ -521,6 +521,73 @@ public class UserBookingsActivity extends BaseActivity
         startActivity(i);
     }
 
+    @Override
+    public void onProviderClick(Booking booking) {
+        if (booking == null || clean(booking.providerId).isEmpty()) return;
+        showLoading(true);
+        new Thread(() -> {
+            try {
+                String pid = clean(booking.providerId);
+                String url = BASE_URL + "/rest/v1/provider_profiles"
+                        + "?or=(id.eq." + android.net.Uri.encode(pid) 
+                        + ",firebase_uid.eq." + android.net.Uri.encode(pid) + ")"
+                        + "&select=*&limit=1";
+                Request req = new Request.Builder().url(url)
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+                try (Response r = HTTP.newCall(req).execute()) {
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    if (r.code() == 200) {
+                        JSONArray arr = new JSONArray(body);
+                        if (arr.length() > 0) {
+                            JSONObject o = arr.getJSONObject(0);
+                            MAIN.post(() -> {
+                                showLoading(false);
+                                openProviderDetail(o);
+                            });
+                            return;
+                        }
+                    }
+                }
+                MAIN.post(() -> {
+                    showLoading(false);
+                    Toast.makeText(this, "Provider profile not found", Toast.LENGTH_SHORT).show();
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "onProviderClick: " + e.getMessage());
+                MAIN.post(() -> {
+                    showLoading(false);
+                    Toast.makeText(this, "Error opening profile", Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
+    }
+
+    private void openProviderDetail(JSONObject o) {
+        Intent intent = new Intent(this, ProviderDetailActivity.class);
+        intent.putExtra(ProviderDetailActivity.EXTRA_PROVIDER_ID, o.optString("id"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_FIREBASE_UID, o.optString("firebase_uid"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_BUSINESS_NAME, o.optString("business_name"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_OWNER_NAME, o.optString("owner_name", o.optString("user_name", "")));
+        intent.putExtra(ProviderDetailActivity.EXTRA_CATEGORY, o.optString("category"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_CITY, o.optString("city"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_PHONE, o.optString("phone"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_EMAIL, o.optString("email"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_DESCRIPTION, o.optString("description"));
+        intent.putExtra(ProviderDetailActivity.EXTRA_EXPERIENCE, o.optString("experience_yrs", o.optString("experience", "")));
+        String profileImage = o.optString("profile_image", "");
+        if (profileImage == null || profileImage.trim().isEmpty()) {
+            profileImage = o.optString("business_image_url", "");
+        }
+        intent.putExtra(ProviderDetailActivity.EXTRA_IMAGE_URL, profileImage);
+        intent.putExtra(ProviderDetailActivity.EXTRA_IS_VERIFIED, o.optBoolean("is_verified", false));
+        intent.putExtra(ProviderDetailActivity.EXTRA_RATING, (float) o.optDouble("rating", 0));
+        startActivity(intent);
+        overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
+    }
+
     private void createOrderAndLaunchCheckout(Booking booking, double amountInr, String keyId) {
         if (clean(CREATE_ORDER_FN_URL).isEmpty()) {
             Toast.makeText(this, "Payment backend URL missing", Toast.LENGTH_LONG).show();
@@ -864,10 +931,10 @@ public class UserBookingsActivity extends BaseActivity
         String msg = "Service: " + (b.serviceName.isEmpty() ? "-" : b.serviceName) + "\n"
                 + "Provider: " + (b.providerName.isEmpty() ? "-" : b.providerName) + "\n"
                 + "Date: " + (b.bookingDate.isEmpty() ? "-" : b.bookingDate) + "\n"
-                + "Time: " + (b.bookingTime.isEmpty() ? "-" : b.bookingTime) + "\n"
+                + "Time: " + (b.bookingTime.isEmpty() ? "" : " " + b.bookingTime) + "\n"
                 + "Address: " + (b.address.isEmpty() ? "-" : b.address) + "\n"
-                + "Status: " + b.status.toUpperCase() + "\n"
-                + "Price: ₹" + String.format("%.0f", b.price)
+                + "Status: " + (b.status == null ? "" : b.status.toUpperCase(Locale.US)) + "\n"
+                + "Price: ₹" + String.format(Locale.US, "%.0f", b.price)
                 + reviewLine;
         new AlertDialog.Builder(this)
                 .setTitle("Booking Details")

@@ -7,16 +7,17 @@
     android:orientation="vertical"
     android:background="@color/screen_background">
 
-    <!-- ═══════════ GRADIENT HEADER ═══════════ -->
+    <!-- ═══════════ MODERN GRADIENT HEADER ═══════════ -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_profile_header_gradient"
         android:orientation="vertical"
-        android:paddingTop="44dp"
-        android:paddingBottom="16dp"
+        android:paddingTop="48dp"
+        android:paddingBottom="20dp"
         android:paddingStart="20dp"
-        android:paddingEnd="20dp">
+        android:paddingEnd="20dp"
+        android:elevation="8dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -26,72 +27,70 @@
 
             <ImageView
                 android:id="@+id/btnBack"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
                 android:src="@drawable/ic_back"
                 app:tint="@color/white"
-                android:padding="8dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:focusable="true"
                 android:contentDescription="Back" />
 
-            <LinearLayout
+            <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical"
-                android:layout_marginStart="12dp">
+                android:layout_marginStart="16dp"
+                android:text="Notifications"
+                android:textColor="@color/white"
+                android:textSize="22sp"
+                android:textStyle="bold" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Notifications"
-                    android:textColor="@color/white"
-                    android:textSize="22sp"
-                    android:textStyle="bold" />
+            <ImageView
+                android:id="@+id/btnClearAllNotifications"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_delete"
+                app:tint="@color/white"
+                android:padding="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Clear all" />
+        </LinearLayout>
 
-                <TextView
-                    android:id="@+id/tvUnreadCount"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Loading…"
-                    android:textColor="#CCE3F2FD"
-                    android:textSize="13sp" />
-            </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-            <LinearLayout
+            <TextView
+                android:id="@+id/tvUnreadCount"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Loading…"
+                android:textColor="#E3F2FD"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/btnMarkAllRead"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnMarkAllRead"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:text="Mark all read"
-                    android:textColor="@color/white"
-                    android:textSize="12sp"
-                    app:strokeColor="@color/white" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnClearAllNotifications"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginStart="8dp"
-                    android:text="Clear all"
-                    android:textColor="@color/white"
-                    android:textSize="12sp"
-                    app:strokeColor="@color/white" />
-            </LinearLayout>
-
+                android:text="Mark all as read"
+                android:textColor="@color/white"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground"
+                android:padding="4dp" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- ═══════════ LIST AREA ═══════════ -->
+    <!-- ═══════════ NOTIFICATION LIST ═══════════ -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -101,12 +100,13 @@
             android:id="@+id/swipeRefresh"
             android:layout_width="match_parent"
             android:layout_height="match_parent">
+
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recyclerView"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
-                android:paddingTop="8dp"
+                android:paddingTop="12dp"
                 android:paddingBottom="24dp" />
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
@@ -120,37 +120,36 @@
 
         <LinearLayout
             android:id="@+id/emptyState"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:gravity="center"
+            android:orientation="vertical"
+            android:padding="32dp"
             android:visibility="gone">
             <ImageView
-                android:layout_width="80dp"
-                android:layout_height="80dp"
+                android:layout_width="100dp"
+                android:layout_height="100dp"
                 android:src="@drawable/ic_notification"
-                app:tint="#BDBDBD"
+                app:tint="#D1D1D1"
                 android:contentDescription="No notifications" />
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="20dp"
                 android:text="No notifications yet"
-                android:textColor="#9E9E9E"
-                android:textSize="16sp"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
                 android:textStyle="bold" />
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="We'll notify you about bookings and updates"
-                android:textColor="#BDBDBD"
-                android:textSize="13sp"
+                android:layout_marginTop="8dp"
+                android:text="You will see updates about your bookings and messages here."
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
                 android:gravity="center" />
         </LinearLayout>
 
     </FrameLayout>
 
 </LinearLayout>
-

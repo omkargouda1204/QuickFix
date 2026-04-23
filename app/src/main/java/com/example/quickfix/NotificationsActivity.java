@@ -52,8 +52,6 @@ public class NotificationsActivity extends BaseActivity
     private ProgressBar           progressBar;
     private LinearLayout          emptyState;
     private TextView              tvUnreadCount;
-    private MaterialButton        btnMarkAllRead;
-    private MaterialButton        btnClearAllNotifications;
 
     private String firebaseUid;
     private String currentUserId;
@@ -141,15 +139,17 @@ public class NotificationsActivity extends BaseActivity
         progressBar    = findViewById(R.id.progressBar);
         emptyState     = findViewById(R.id.emptyState);
         tvUnreadCount  = findViewById(R.id.tvUnreadCount);
-        btnMarkAllRead = findViewById(R.id.btnMarkAllRead);
-        btnClearAllNotifications = findViewById(R.id.btnClearAllNotifications);
+        
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
-
-        if (btnMarkAllRead != null) {
-            btnMarkAllRead.setOnClickListener(v -> markAllRead());
+        
+        View btnMarkAll = findViewById(R.id.btnMarkAllRead);
+        if (btnMarkAll != null) {
+            btnMarkAll.setOnClickListener(v -> markAllRead());
         }
-        if (btnClearAllNotifications != null) {
-            btnClearAllNotifications.setOnClickListener(v -> confirmClearAllNotifications());
+        
+        View btnClear = findViewById(R.id.btnClearAllNotifications);
+        if (btnClear != null) {
+            btnClear.setOnClickListener(v -> confirmClearAllNotifications());
         }
     }
 
@@ -168,7 +168,6 @@ public class NotificationsActivity extends BaseActivity
 
     private void loadNotifications() {
         showLoading(true);
-        Log.d(TAG, "USER firebaseUid=" + firebaseUid + " userId=" + currentUserId + " role=" + currentUserRole);
         new Thread(() -> {
             try {
                 String roleFilter = (currentUserRole == null || currentUserRole.trim().isEmpty())
@@ -193,15 +192,12 @@ public class NotificationsActivity extends BaseActivity
                 List<Notification> list = new ArrayList<>();
                 try (Response r = HTTP.newCall(req).execute()) {
                     String body = r.body() != null ? r.body().string() : "[]";
-                    Log.d(TAG, "loadNotifications HTTP=" + r.code() + " bodyLen=" + body.length());
                     if (r.code() == 200 && body.startsWith("[")) {
                         JSONArray arr = new JSONArray(body);
                         for (int i = 0; i < arr.length(); i++) {
                             Notification n = Notification.fromJson(arr.getJSONObject(i));
                             if (n != null) list.add(n);
                         }
-                    } else {
-                        Log.e(TAG, "ERROR LOADING NOTIFICATIONS: HTTP " + r.code() + " " + body);
                     }
                 }
 
@@ -213,7 +209,6 @@ public class NotificationsActivity extends BaseActivity
                     updateUnreadCount();
                     emptyState.setVisibility(finalList.isEmpty() ? View.VISIBLE : View.GONE);
                     recyclerView.setVisibility(finalList.isEmpty() ? View.GONE : View.VISIBLE);
-                    Log.d(TAG, "NOTIFICATIONS COUNT: " + finalList.size());
                 });
             } catch (Exception e) {
                 Log.e(TAG, "ERROR LOADING NOTIFICATIONS", e);
@@ -221,18 +216,9 @@ public class NotificationsActivity extends BaseActivity
                     showLoading(false);
                     emptyState.setVisibility(View.VISIBLE);
                     recyclerView.setVisibility(View.GONE);
-                    if (tvUnreadCount != null) tvUnreadCount.setText("No notifications");
                 });
             }
         }).start();
-    }
-
-    /**
-     * @deprecated Legacy fallback fetch is intentionally disabled in the clean system.
-     */
-    @Deprecated
-    private List<Notification> fetchNotifications(String column, String value) {
-        return new ArrayList<>();
     }
 
     @Override
@@ -292,7 +278,6 @@ public class NotificationsActivity extends BaseActivity
                             updateUnreadCount();
                             emptyState.setVisibility(allNotifications.isEmpty() ? View.VISIBLE : View.GONE);
                             recyclerView.setVisibility(allNotifications.isEmpty() ? View.GONE : View.VISIBLE);
-                            Toast.makeText(this, "Deleted", Toast.LENGTH_SHORT).show();
                         }
                     });
                 }
@@ -327,10 +312,7 @@ public class NotificationsActivity extends BaseActivity
                     MAIN.post(() -> {
                         if (r.code() == 200 || r.code() == 204) {
                             for (Notification n : allNotifications) {
-                                if (resolvedUserId.equals(n.receiverId)
-                                        || resolvedUserId.equals(n.userId)) {
-                                    n.isRead = true;
-                                }
+                                n.isRead = true;
                             }
                             adapter.notifyDataSetChanged();
                             updateUnreadCount();
@@ -361,15 +343,10 @@ public class NotificationsActivity extends BaseActivity
     private void clearAllNotifications() {
         final List<String> ids = new ArrayList<>();
         for (Notification n : allNotifications) {
-            if (n == null || n.id == null) continue;
-            String id = n.id.trim();
-            if (!id.isEmpty()) ids.add(id);
+            if (n != null && n.id != null) ids.add(n.id.trim());
         }
 
-        if (ids.isEmpty()) {
-            Toast.makeText(this, "No notifications to clear", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        if (ids.isEmpty()) return;
 
         new Thread(() -> {
             try {
@@ -395,15 +372,12 @@ public class NotificationsActivity extends BaseActivity
                             updateUnreadCount();
                             emptyState.setVisibility(View.VISIBLE);
                             recyclerView.setVisibility(View.GONE);
-                            Toast.makeText(this, "All notifications cleared", Toast.LENGTH_SHORT).show();
-                        } else {
-                            Toast.makeText(this, "Failed to clear notifications (HTTP " + code + ")", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Cleared", Toast.LENGTH_SHORT).show();
                         }
                     });
                 }
             } catch (Exception e) {
                 Log.e(TAG, "clearAllNotifications failed", e);
-                MAIN.post(() -> Toast.makeText(this, "Failed to clear notifications", Toast.LENGTH_SHORT).show());
             }
         }).start();
     }
@@ -411,8 +385,7 @@ public class NotificationsActivity extends BaseActivity
     private void updateUnreadCount() {
         if (tvUnreadCount == null) return;
         long unread = allNotifications.stream().filter(n -> !n.isRead).count();
-        tvUnreadCount.setText(unread > 0 ? unread + " unread" : "All read");
-        tvUnreadCount.setTextColor(getColor(unread > 0 ? R.color.error_red : R.color.success_green));
+        tvUnreadCount.setText(unread > 0 ? unread + " unread" : "No unread messages");
     }
 
     private void showLoading(boolean show) {
@@ -426,11 +399,9 @@ public class NotificationsActivity extends BaseActivity
     private static final class UserIdentity {
         final String userId;
         final String role;
-
         UserIdentity(String userId, String role) {
             this.userId = userId;
             this.role = role;
         }
     }
 }
-

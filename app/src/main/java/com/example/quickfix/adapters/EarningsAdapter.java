@@ -14,9 +14,10 @@ import com.example.quickfix.R;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * EarningsAdapter — Shows completed bookings as transaction history
+ * EarningsAdapter — Shows bookings as transaction history
  */
 public class EarningsAdapter extends RecyclerView.Adapter<EarningsAdapter.EarningViewHolder> {
 
@@ -52,40 +53,43 @@ public class EarningsAdapter extends RecyclerView.Adapter<EarningsAdapter.Earnin
     }
 
     static class EarningViewHolder extends RecyclerView.ViewHolder {
-        TextView tvBookingId, tvServiceName, tvCustomerName, tvAmount, tvDate;
+        TextView tvBookingId, tvServiceName, tvAmount, tvDate, tvTxnId, tvStatus;
 
         EarningViewHolder(@NonNull View itemView) {
             super(itemView);
             tvBookingId = itemView.findViewById(R.id.tvBookingId);
             tvServiceName = itemView.findViewById(R.id.tvServiceName);
-            tvCustomerName = itemView.findViewById(R.id.tvCustomerName);
             tvAmount = itemView.findViewById(R.id.tvAmount);
             tvDate = itemView.findViewById(R.id.tvDate);
+            tvTxnId = itemView.findViewById(R.id.tvTxnId);
+            tvStatus = itemView.findViewById(R.id.tvStatus);
         }
 
         void bind(Booking booking) {
-            String bookingId = booking != null && booking.id != null ? booking.id.trim() : "";
-            if (bookingId.isEmpty()) {
-                tvBookingId.setText("#--------");
+            String bid = booking.id != null ? booking.id.trim() : "";
+            tvBookingId.setText(bid.length() > 8 ? "#" + bid.substring(0, 8) : "#" + bid);
+            
+            tvServiceName.setText(booking.serviceName != null ? booking.serviceName : "Service");
+            
+            double amount = booking.paymentAmount > 0 ? booking.paymentAmount : booking.price;
+            tvAmount.setText("₹" + String.format(Locale.US, "%.0f", amount));
+
+            String displayDate = booking.completedAt != null && !booking.completedAt.isEmpty() 
+                    ? booking.completedAt : (booking.bookingDate != null ? booking.bookingDate : "");
+            if (displayDate.length() >= 10) displayDate = displayDate.substring(0, 10);
+            tvDate.setText(displayDate);
+
+            String txnId = booking.paymentId != null ? booking.paymentId : "";
+            tvTxnId.setText(txnId.isEmpty() ? "N/A" : txnId);
+
+            String status = booking.status != null ? booking.status.toUpperCase(Locale.US) : "COMPLETED";
+            tvStatus.setText(status);
+            
+            if ("COMPLETED".equals(status) || "PAID".equals(status)) {
+                tvStatus.setBackgroundResource(R.drawable.badge_completed);
             } else {
-                tvBookingId.setText("#" + bookingId.substring(0, Math.min(8, bookingId.length())));
+                tvStatus.setBackgroundResource(R.drawable.badge_pending);
             }
-
-            String serviceName = booking != null && booking.serviceName != null ? booking.serviceName.trim() : "";
-            String customerName = booking != null && booking.customerName != null ? booking.customerName.trim() : "";
-            double amount = booking != null ? Math.max(0d, booking.price) : 0d;
-            String completedAt = booking != null && booking.completedAt != null ? booking.completedAt.trim() : "";
-            String bookingDate = booking != null && booking.bookingDate != null ? booking.bookingDate.trim() : "";
-
-            tvServiceName.setText(serviceName.isEmpty() ? "Service" : serviceName);
-            tvCustomerName.setText(customerName.isEmpty() ? "Customer" : customerName);
-            tvAmount.setText("₹" + String.format(java.util.Locale.getDefault(), "%.0f", amount));
-
-            String displayDate = !completedAt.isEmpty() ? completedAt : bookingDate;
-            if (displayDate.length() >= 10) {
-                displayDate = displayDate.substring(0, 10);
-            }
-            tvDate.setText(displayDate.isEmpty() ? "-" : displayDate);
         }
     }
 }

@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * UserBookingsAdapter — Shows customer/user bookings with view details & cancel.
+ * UserBookingsAdapter — Shows customer/user bookings with details, cancel, review & provider profile link.
  */
 public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapter.VH> {
 
@@ -34,6 +34,7 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
         void onWriteReview(Booking booking);
         void onPayNow(Booking booking);
         void onMessageBooking(Booking booking);
+        void onProviderClick(Booking booking);
     }
 
     public UserBookingsAdapter(Context context, BookingActionListener listener) {
@@ -87,21 +88,68 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
         }
 
         void bind(Booking b) {
-            String serviceTitle = b.serviceName.isEmpty() ? "Service" : b.serviceName;
+            String serviceTitle = b.serviceName == null || b.serviceName.isEmpty() ? "Service" : b.serviceName;
             if (b.isEmergency) {
                 serviceTitle = "EMERGENCY - " + serviceTitle;
             }
             tvServiceName.setText(serviceTitle);
-            tvProviderName.setText(b.providerName.isEmpty() ? "Provider" : "By: " + b.providerName);
-            String dateTime = (b.bookingDate.isEmpty() ? "-" : b.bookingDate)
-                    + (b.bookingTime.isEmpty() ? "" : " • " + b.bookingTime);
+            
+            String pName = b.providerName == null || b.providerName.isEmpty() ? "Provider" : b.providerName;
+            tvProviderName.setText("By: " + pName);
+            tvProviderName.setOnClickListener(v -> {
+                if (listener != null) listener.onProviderClick(b);
+            });
+
+            String dateTime = (b.bookingDate == null || b.bookingDate.isEmpty() ? "-" : b.bookingDate)
+                    + (b.bookingTime == null || b.bookingTime.isEmpty() ? "" : " • " + b.bookingTime);
             tvDateTime.setText(dateTime);
-            tvAddress.setText(b.address.isEmpty() ? "-" : b.address);
+            tvAddress.setText(b.address == null || b.address.isEmpty() ? "-" : b.address);
+
             // Status badge
-            String status = b.status == null ? "" : b.status.toLowerCase();
+            String status = b.status == null ? "" : b.status.toLowerCase(Locale.US);
             tvStatus.setText(formatStatus(status));
+            
             double shownAmount = b.paymentAmount > 0 ? b.paymentAmount : b.price;
-            tvPrice.setText(shownAmount > 0 ? "Amount: ₹" + String.format(Locale.US, "%.0f", shownAmount) : "Amount: ₹0");
+            tvPrice.setText("₹" + String.format(Locale.US, "%.0f", shownAmount));
+
+            applyStatusStyle(status);
+
+            // Logic: Cancel only for pending
+            btnCancel.setVisibility("pending".equals(status) ? View.VISIBLE : View.GONE);
+
+            // Logic: Review ONLY if COMPLETED
+            boolean isCompleted = "completed".equals(status);
+            btnReview.setVisibility(isCompleted ? View.VISIBLE : View.GONE);
+
+            // Logic: Pay Now for price_set and not already paid
+            boolean paymentDone = "success".equalsIgnoreCase(b.paymentStatus) || "paid".equalsIgnoreCase(status);
+            boolean canPayNow = "price_set".equals(status) && !paymentDone;
+            btnPayNow.setVisibility(canPayNow ? View.VISIBLE : View.GONE);
+            
+            btnMessage.setVisibility(View.VISIBLE);
+            btnMessage.setEnabled(!isCompleted);
+            btnMessage.setAlpha(isCompleted ? 0.5f : 1f);
+
+            if (isCompleted && b.reviewRating > 0) {
+                String summary = "Your review: " + b.reviewRating + "/5"
+                        + (b.reviewComment == null || b.reviewComment.trim().isEmpty()
+                        ? "" : " - " + b.reviewComment.trim());
+                tvReviewSummary.setText(summary);
+                tvReviewSummary.setVisibility(View.VISIBLE);
+                btnReview.setText("Edit Review");
+            } else {
+                tvReviewSummary.setVisibility(View.GONE);
+                btnReview.setText("Write Review");
+            }
+
+            btnViewDetails.setOnClickListener(v -> { if (listener != null) listener.onViewDetails(b); });
+            btnCancel.setOnClickListener(v -> { if (listener != null) listener.onCancelBooking(b); });
+            btnReview.setOnClickListener(v -> { if (listener != null) listener.onWriteReview(b); });
+            btnPayNow.setOnClickListener(v -> { if (listener != null) listener.onPayNow(b); });
+            btnMessage.setOnClickListener(v -> { if (listener != null && btnMessage.isEnabled()) listener.onMessageBooking(b); });
+        }
+
+        private void applyStatusStyle(String status) {
             switch (status) {
                 case "pending":
                     tvStatus.setBackgroundResource(R.drawable.badge_pending);
@@ -109,17 +157,14 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
                     break;
                 case "accepted":
                 case "confirmed":
+                case "price_set":
+                case "paid":
                     tvStatus.setBackgroundResource(R.drawable.badge_accepted);
                     tvStatus.setTextColor(ContextCompat.getColor(context, R.color.primary));
                     break;
                 case "completed":
                     tvStatus.setBackgroundResource(R.drawable.badge_completed);
                     tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_approved_text));
-                    break;
-                case "price_set":
-                case "paid":
-                    tvStatus.setBackgroundResource(R.drawable.badge_accepted);
-                    tvStatus.setTextColor(ContextCompat.getColor(context, R.color.primary));
                     break;
                 case "cancelled":
                 case "rejected":
@@ -131,54 +176,6 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
                     tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_neutral_text));
                     break;
             }
-
-            // Cancel only for pending
-            boolean canCancel = "pending".equals(status);
-            btnCancel.setVisibility(canCancel ? View.VISIBLE : View.GONE);
-
-            boolean isCompleted = "completed".equals(status);
-            btnReview.setVisibility(isCompleted ? View.VISIBLE : View.GONE);
-
-            boolean paymentDone = "success".equalsIgnoreCase(b.paymentStatus) || "paid".equalsIgnoreCase(status);
-            boolean canPayNow = "price_set".equals(status) && !paymentDone;
-            btnPayNow.setVisibility(canPayNow ? View.VISIBLE : View.GONE);
-            btnMessage.setVisibility(View.VISIBLE);
-            btnMessage.setEnabled(!isCompleted);
-            btnMessage.setAlpha(isCompleted ? 0.5f : 1f);
-            if (isCompleted) {
-                boolean hasReview = b.reviewRating > 0;
-                btnReview.setText(context.getString(
-                        hasReview ? R.string.review_edit_button : R.string.review_write_button
-                ));
-                if (hasReview) {
-                    String summary = "Your review: " + b.reviewRating + "/5"
-                            + (b.reviewComment == null || b.reviewComment.trim().isEmpty()
-                            ? ""
-                            : " - " + b.reviewComment.trim());
-                    tvReviewSummary.setText(summary);
-                    tvReviewSummary.setVisibility(View.VISIBLE);
-                } else {
-                    tvReviewSummary.setVisibility(View.GONE);
-                }
-            } else {
-                tvReviewSummary.setVisibility(View.GONE);
-            }
-
-            btnViewDetails.setOnClickListener(v -> {
-                if (listener != null) listener.onViewDetails(b);
-            });
-            btnCancel.setOnClickListener(v -> {
-                if (listener != null) listener.onCancelBooking(b);
-            });
-            btnReview.setOnClickListener(v -> {
-                if (listener != null) listener.onWriteReview(b);
-            });
-            btnPayNow.setOnClickListener(v -> {
-                if (listener != null) listener.onPayNow(b);
-            });
-            btnMessage.setOnClickListener(v -> {
-                if (listener != null && btnMessage.isEnabled()) listener.onMessageBooking(b);
-            });
         }
 
         private String formatStatus(String status) {
