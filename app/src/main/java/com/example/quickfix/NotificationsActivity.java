@@ -53,6 +53,7 @@ public class NotificationsActivity extends BaseActivity
     private LinearLayout          emptyState;
     private TextView              tvUnreadCount;
     private MaterialButton        btnMarkAllRead;
+    private MaterialButton        btnClearAllNotifications;
 
     private String firebaseUid;
     private String currentUserId;
@@ -141,10 +142,14 @@ public class NotificationsActivity extends BaseActivity
         emptyState     = findViewById(R.id.emptyState);
         tvUnreadCount  = findViewById(R.id.tvUnreadCount);
         btnMarkAllRead = findViewById(R.id.btnMarkAllRead);
+        btnClearAllNotifications = findViewById(R.id.btnClearAllNotifications);
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
 
         if (btnMarkAllRead != null) {
             btnMarkAllRead.setOnClickListener(v -> markAllRead());
+        }
+        if (btnClearAllNotifications != null) {
+            btnClearAllNotifications.setOnClickListener(v -> confirmClearAllNotifications());
         }
     }
 
@@ -335,6 +340,70 @@ public class NotificationsActivity extends BaseActivity
                 }
             } catch (Exception e) {
                 Log.e(TAG, "markAllRead: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    private void confirmClearAllNotifications() {
+        if (allNotifications == null || allNotifications.isEmpty()) {
+            Toast.makeText(this, "No notifications to clear", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Clear all notifications")
+                .setMessage("This will permanently remove all notifications currently shown.")
+                .setPositiveButton("Clear all", (d, w) -> clearAllNotifications())
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void clearAllNotifications() {
+        final List<String> ids = new ArrayList<>();
+        for (Notification n : allNotifications) {
+            if (n == null || n.id == null) continue;
+            String id = n.id.trim();
+            if (!id.isEmpty()) ids.add(id);
+        }
+
+        if (ids.isEmpty()) {
+            Toast.makeText(this, "No notifications to clear", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                StringBuilder in = new StringBuilder();
+                for (int i = 0; i < ids.size(); i++) {
+                    if (i > 0) in.append(",");
+                    in.append(ids.get(i));
+                }
+
+                String url = BASE_URL + "/rest/v1/notifications?id=in.(" + in + ")";
+                Request req = new Request.Builder().url(url)
+                        .delete()
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .build();
+
+                try (Response r = HTTP.newCall(req).execute()) {
+                    final int code = r.code();
+                    MAIN.post(() -> {
+                        if (code == 200 || code == 204) {
+                            allNotifications.clear();
+                            adapter.setNotifications(new ArrayList<>());
+                            updateUnreadCount();
+                            emptyState.setVisibility(View.VISIBLE);
+                            recyclerView.setVisibility(View.GONE);
+                            Toast.makeText(this, "All notifications cleared", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(this, "Failed to clear notifications (HTTP " + code + ")", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "clearAllNotifications failed", e);
+                MAIN.post(() -> Toast.makeText(this, "Failed to clear notifications", Toast.LENGTH_SHORT).show());
             }
         }).start();
     }

@@ -1,29 +1,24 @@
 package com.example.quickfix;
 
-import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import androidx.appcompat.app.AppCompatActivity;
 
 import com.github.mikephil.charting.charts.PieChart;
 import com.github.mikephil.charting.data.PieData;
 import com.github.mikephil.charting.data.PieDataSet;
 import com.github.mikephil.charting.data.PieEntry;
 import com.google.android.material.button.MaterialButtonToggleGroup;
-import com.google.android.material.card.MaterialCardView;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -33,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import okhttp3.Call;
 import okhttp3.Callback;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -85,6 +81,7 @@ public class ReportsAnalyticsActivity extends BaseActivity {
     private String currentTimePeriod = "month";
     // Counter to track parallel loads — scroll shown when all 5 complete
     private final AtomicInteger loadCounter = new AtomicInteger(0);
+    private final AtomicInteger loadGeneration = new AtomicInteger(0);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -173,20 +170,38 @@ public class ReportsAnalyticsActivity extends BaseActivity {
     }
 
     private void loadAnalyticsData() {
+        int generation = loadGeneration.incrementAndGet();
         loadCounter.set(5); // 5 parallel loads
         if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
         if (scrollContent != null) scrollContent.setVisibility(View.GONE);
-        loadUserStatistics();
-        loadBookingStatistics();
-        loadRevenueMetrics();
-        loadServiceMetrics();
-        loadPendingApprovals();
+        if (tvErrorMessage != null) tvErrorMessage.setVisibility(View.GONE);
+
+        loadUserStatistics(generation);
+        loadBookingStatistics(generation);
+        loadRevenueMetrics(generation);
+        loadServiceMetrics(generation);
+        loadPendingApprovals(generation);
     }
 
-    private void loadPendingApprovals() {
-        String url = BuildConfig.SUPABASE_URL
-                + "/rest/v1/provider_applications?select=id&status=eq.pending";
-        Request req = new Request.Builder().url(url)
+    private boolean isStaleLoad(int generation) {
+        return generation != loadGeneration.get();
+    }
+
+    private void onLoadPartFinished(int generation) {
+        if (isStaleLoad(generation)) return;
+        showLoading(false);
+    }
+
+    private void loadPendingApprovals(int generation) {
+        HttpUrl.Builder b = supabaseTableUrl("provider_applications");
+        if (b == null) {
+            onLoadPartFinished(generation);
+            return;
+        }
+        b.addQueryParameter("select", "id");
+        b.addQueryParameter("status", "eq.pending");
+
+        Request req = new Request.Builder().url(b.build())
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Accept", "application/json")
@@ -195,9 +210,9 @@ public class ReportsAnalyticsActivity extends BaseActivity {
         httpClient.newCall(req).enqueue(new Callback() {
             @Override public void onFailure(Call call, IOException e) {
                 Log.w(TAG, "loadPendingApprovals: " + e.getMessage());
-                runOnUiThread(() -> showLoading(false));
+                runOnUiThread(() -> onLoadPartFinished(generation));
             }
-            @Override public void onResponse(Call call, Response response) throws IOException {
+            @Override public void onResponse(Call call, Response response) {
                 try {
                     String range = response.header("Content-Range", "0-0/0");
                     response.close();
@@ -208,24 +223,31 @@ public class ReportsAnalyticsActivity extends BaseActivity {
                     }
                     final int pending = count;
                     runOnUiThread(() -> {
-                        if (tvPendingApprovals != null)
+                        if (!isStaleLoad(generation) && tvPendingApprovals != null) {
                             tvPendingApprovals.setText(formatNumber(pending));
-                        showLoading(false);
+                        }
+                        onLoadPartFinished(generation);
                     });
                 } catch (Exception e) {
                     Log.w(TAG, "loadPendingApprovals parse: " + e.getMessage());
-                    runOnUiThread(() -> showLoading(false));
+                    runOnUiThread(() -> onLoadPartFinished(generation));
                 }
             }
         });
     }
 
-    private void loadUserStatistics() {
-        String path = "/rest/v1/users?select=id,is_service_provider,is_verified,created_at&limit=10000";
-        String url = BuildConfig.SUPABASE_URL + path;
+    private void loadUserStatistics(int generation) {
+        HttpUrl.Builder b = supabaseTableUrl("users");
+        if (b == null) {
+            onLoadPartFinished(generation);
+            return;
+        }
+        b.addQueryParameter("select", "id,is_service_provider,is_verified,created_at");
+        applyCreatedAtFilter(b);
+        b.addQueryParameter("limit", "10000");
 
         Request request = new Request.Builder()
-                .url(url)
+                .url(b.build())
                 .get()
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
@@ -236,21 +258,36 @@ public class ReportsAnalyticsActivity extends BaseActivity {
             @Override
             public void onFailure(Call call, IOException e) {
                 Log.e(TAG, "Failed to load user statistics: " + e.getMessage());
-                showError("Failed to load user data");
+                runOnUiThread(() -> {
+                    if (!isStaleLoad(generation)) {
+                        if (tvErrorMessage != null) {
+                            tvErrorMessage.setVisibility(View.VISIBLE);
+                            tvErrorMessage.setText("Failed to load user data");
+                        }
+                    }
+                    onLoadPartFinished(generation);
+                });
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 try {
                     if (!response.isSuccessful()) {
-                        showError("Server error: " + response.code());
+                        final int code = response.code();
                         response.close();
+                        runOnUiThread(() -> {
+                            if (!isStaleLoad(generation) && tvErrorMessage != null) {
+                                tvErrorMessage.setVisibility(View.VISIBLE);
+                                tvErrorMessage.setText("User report error: HTTP " + code);
+                            }
+                            onLoadPartFinished(generation);
+                        });
                         return;
                     }
 
                     if (response.body() == null) {
-                        showError("Empty response from server");
                         response.close();
+                        runOnUiThread(() -> onLoadPartFinished(generation));
                         return;
                     }
 
@@ -280,23 +317,16 @@ public class ReportsAnalyticsActivity extends BaseActivity {
                             }
                         }
 
-                        // Count new users this month
                         String createdAt = user.optString("created_at", "");
-                        if (!createdAt.isEmpty()) {
-                            try {
-                                long createdTime = parseIsoDate(createdAt);
-                                if (createdTime > monthAgoTime) {
-                                    newUsersThisMonth++;
-                                    if (user.optBoolean("is_service_provider", false)) {
-                                        newProvidersThisMonth++;
-                                    }
-                                }
-                            } catch (Exception e) {
-                                Log.w(TAG, "Failed to parse date: " + createdAt);
+                        long createdTime = parseIsoDate(createdAt);
+                        if (createdTime > 0 && createdTime > monthAgoTime) {
+                            newUsersThisMonth++;
+                            if (user.optBoolean("is_service_provider", false)) {
+                                newProvidersThisMonth++;
                             }
                         }
 
-                        activeUsers = totalUsers; // Simplified
+                        activeUsers = totalUsers;
                     }
 
                     final int fTotalUsers = totalUsers;
@@ -306,22 +336,33 @@ public class ReportsAnalyticsActivity extends BaseActivity {
                     final int fNewUsersMonth = newUsersThisMonth;
                     final int fNewProvidersMonth = newProvidersThisMonth;
 
-                    runOnUiThread(() -> updateUserStatistics(fTotalUsers, fTotalProviders,
-                            fVerifiedProviders, fActiveUsers, fNewUsersMonth, fNewProvidersMonth));
+                    runOnUiThread(() -> {
+                        if (!isStaleLoad(generation)) {
+                            updateUserStatistics(fTotalUsers, fTotalProviders,
+                                    fVerifiedProviders, fActiveUsers, fNewUsersMonth, fNewProvidersMonth);
+                        }
+                        onLoadPartFinished(generation);
+                    });
                 } catch (JSONException e) {
                     Log.e(TAG, "JSON parsing error: " + e.getMessage());
-                    showError("Data parsing error");
+                    runOnUiThread(() -> onLoadPartFinished(generation));
                 }
             }
         });
     }
 
-    private void loadBookingStatistics() {
-        String path = "/rest/v1/bookings?select=id,status,booking_value,created_at&limit=10000";
-        String url = BuildConfig.SUPABASE_URL + path;
+    private void loadBookingStatistics(int generation) {
+        HttpUrl.Builder b = supabaseTableUrl("bookings");
+        if (b == null) {
+            onLoadPartFinished(generation);
+            return;
+        }
+        b.addQueryParameter("select", "id,status,price,created_at");
+        applyCreatedAtFilter(b);
+        b.addQueryParameter("limit", "10000");
 
         Request request = new Request.Builder()
-                .url(url)
+                .url(b.build())
                 .get()
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
@@ -332,20 +373,33 @@ public class ReportsAnalyticsActivity extends BaseActivity {
             @Override
             public void onFailure(Call call, IOException e) {
                 Log.w(TAG, "Failed to load booking statistics: " + e.getMessage());
-                runOnUiThread(() -> showLoading(false));
+                runOnUiThread(() -> {
+                    if (!isStaleLoad(generation) && tvErrorMessage != null) {
+                        tvErrorMessage.setVisibility(View.VISIBLE);
+                        tvErrorMessage.setText("Failed to load booking data");
+                    }
+                    onLoadPartFinished(generation);
+                });
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 try {
                     if (!response.isSuccessful()) {
+                        final int code = response.code();
                         response.close();
-                        runOnUiThread(() -> showLoading(false));
+                        runOnUiThread(() -> {
+                            if (!isStaleLoad(generation) && tvErrorMessage != null) {
+                                tvErrorMessage.setVisibility(View.VISIBLE);
+                                tvErrorMessage.setText("Booking report error: HTTP " + code);
+                            }
+                            onLoadPartFinished(generation);
+                        });
                         return;
                     }
                     if (response.body() == null) {
                         response.close();
-                        runOnUiThread(() -> showLoading(false));
+                        runOnUiThread(() -> onLoadPartFinished(generation));
                         return;
                     }
                     String body = response.body().string();
@@ -354,39 +408,52 @@ public class ReportsAnalyticsActivity extends BaseActivity {
                     int totalBookings = arr.length();
                     int completedBookings = 0;
                     int cancelledBookings = 0;
-                    int pendingBookings   = 0;
-                    double totalRevenue   = 0.0;
+                    int pendingBookings = 0;
+                    double totalRevenue = 0.0;
                     for (int i = 0; i < arr.length(); i++) {
                         JSONObject booking = arr.getJSONObject(i);
                         String status = booking.optString("status", "");
                         if ("completed".equals(status)) {
                             completedBookings++;
-                            totalRevenue += booking.optDouble("booking_value", 0.0);
+                            totalRevenue += booking.optDouble("price", 0.0);
                         } else if ("cancelled".equals(status)) {
                             cancelledBookings++;
-                        } else if ("pending".equals(status)) {
+                        } else if ("pending".equals(status) || "accepted".equals(status)) {
                             pendingBookings++;
                         }
                     }
-                    final int    fTotal     = totalBookings;
-                    final int    fCompleted = completedBookings;
-                    final int    fCancelled = cancelledBookings;
-                    final int    fPending   = pendingBookings;
-                    final double fRevenue   = totalRevenue;
-                    runOnUiThread(() -> updateBookingStatistics(fTotal, fCompleted, fCancelled, fPending, fRevenue));
+                    final int fTotal = totalBookings;
+                    final int fCompleted = completedBookings;
+                    final int fCancelled = cancelledBookings;
+                    final int fPending = pendingBookings;
+                    final double fRevenue = totalRevenue;
+                    runOnUiThread(() -> {
+                        if (!isStaleLoad(generation)) {
+                            updateBookingStatistics(fTotal, fCompleted, fCancelled, fPending, fRevenue);
+                        }
+                        onLoadPartFinished(generation);
+                    });
                 } catch (JSONException e) {
                     Log.w(TAG, "JSON parsing error: " + e.getMessage());
-                    runOnUiThread(() -> showLoading(false));
+                    runOnUiThread(() -> onLoadPartFinished(generation));
                 }
             }
         });
     }
 
-    private void loadRevenueMetrics() {
-        String path = "/rest/v1/bookings?select=booking_value,status&limit=10000";
-        String url = BuildConfig.SUPABASE_URL + path;
+    private void loadRevenueMetrics(int generation) {
+        HttpUrl.Builder b = supabaseTableUrl("bookings");
+        if (b == null) {
+            onLoadPartFinished(generation);
+            return;
+        }
+        b.addQueryParameter("select", "price,status,created_at");
+        applyCreatedAtFilter(b);
+        b.addQueryParameter("limit", "10000");
+
         Request request = new Request.Builder()
-                .url(url).get()
+                .url(b.build())
+                .get()
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Accept", "application/json")
@@ -394,40 +461,65 @@ public class ReportsAnalyticsActivity extends BaseActivity {
         httpClient.newCall(request).enqueue(new Callback() {
             @Override public void onFailure(Call call, IOException e) {
                 Log.w(TAG, "Failed to load revenue metrics: " + e.getMessage());
-                runOnUiThread(() -> showLoading(false));
+                runOnUiThread(() -> onLoadPartFinished(generation));
             }
             @Override public void onResponse(Call call, Response response) throws IOException {
                 try {
-                    if (!response.isSuccessful()) { response.close(); runOnUiThread(() -> showLoading(false)); return; }
-                    if (response.body() == null)  { response.close(); runOnUiThread(() -> showLoading(false)); return; }
+                    if (!response.isSuccessful()) {
+                        response.close();
+                        runOnUiThread(() -> onLoadPartFinished(generation));
+                        return;
+                    }
+                    if (response.body() == null) {
+                        response.close();
+                        runOnUiThread(() -> onLoadPartFinished(generation));
+                        return;
+                    }
                     String body = response.body().string();
                     response.close();
                     JSONArray arr = new JSONArray(body);
-                    double totalRevenue = 0.0;
-                    int completedCount  = 0;
+                    double completedRevenue = 0.0;
+                    double pendingRevenue = 0.0;
+                    int completedCount = 0;
                     for (int i = 0; i < arr.length(); i++) {
                         JSONObject booking = arr.getJSONObject(i);
-                        if ("completed".equals(booking.optString("status", ""))) {
-                            totalRevenue += booking.optDouble("booking_value", 0.0);
+                        String status = booking.optString("status", "");
+                        double price = booking.optDouble("price", 0.0);
+                        if ("completed".equals(status)) {
+                            completedRevenue += price;
                             completedCount++;
+                        } else if ("pending".equals(status) || "accepted".equals(status)) {
+                            pendingRevenue += price;
                         }
                     }
-                    final double fRevenue  = totalRevenue;
-                    final double fAvgValue = completedCount > 0 ? totalRevenue / completedCount : 0.0;
-                    runOnUiThread(() -> updateRevenueMetrics(fRevenue, fAvgValue));
+                    final double fCompletedRevenue = completedRevenue;
+                    final double fPendingRevenue = pendingRevenue;
+                    final double fAvgValue = completedCount > 0 ? completedRevenue / completedCount : 0.0;
+                    runOnUiThread(() -> {
+                        if (!isStaleLoad(generation)) {
+                            updateRevenueMetrics(fCompletedRevenue, fPendingRevenue, fAvgValue);
+                        }
+                        onLoadPartFinished(generation);
+                    });
                 } catch (JSONException e) {
                     Log.w(TAG, "JSON parsing error: " + e.getMessage());
-                    runOnUiThread(() -> showLoading(false));
+                    runOnUiThread(() -> onLoadPartFinished(generation));
                 }
             }
         });
     }
 
-    private void loadServiceMetrics() {
-        String path = "/rest/v1/services?select=id,category,is_active&limit=10000";
-        String url = BuildConfig.SUPABASE_URL + path;
+    private void loadServiceMetrics(int generation) {
+        HttpUrl.Builder b = supabaseTableUrl("services");
+        if (b == null) {
+            onLoadPartFinished(generation);
+            return;
+        }
+        b.addQueryParameter("select", "id,category,is_active");
+        b.addQueryParameter("limit", "10000");
+
         Request request = new Request.Builder()
-                .url(url).get()
+                .url(b.build()).get()
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Accept", "application/json")
@@ -435,20 +527,23 @@ public class ReportsAnalyticsActivity extends BaseActivity {
         httpClient.newCall(request).enqueue(new Callback() {
             @Override public void onFailure(Call call, IOException e) {
                 Log.w(TAG, "Failed to load service metrics: " + e.getMessage());
-                runOnUiThread(() -> showLoading(false));
+                runOnUiThread(() -> onLoadPartFinished(generation));
             }
             @Override public void onResponse(Call call, Response response) throws IOException {
                 try {
-                    if (!response.isSuccessful()) { response.close(); runOnUiThread(() -> showLoading(false)); return; }
-                    if (response.body() == null)  { response.close(); runOnUiThread(() -> showLoading(false)); return; }
+                    if (!response.isSuccessful()) { response.close(); runOnUiThread(() -> onLoadPartFinished(generation)); return; }
+                    if (response.body() == null)  { response.close(); runOnUiThread(() -> onLoadPartFinished(generation)); return; }
                     String body = response.body().string();
                     response.close();
                     JSONArray arr = new JSONArray(body);
                     int totalServices = arr.length();
-                    runOnUiThread(() -> updateServiceMetrics(totalServices, 0.0));
+                    runOnUiThread(() -> {
+                        if (!isStaleLoad(generation)) updateServiceMetrics(totalServices, 0.0);
+                        onLoadPartFinished(generation);
+                    });
                 } catch (JSONException e) {
                     Log.w(TAG, "JSON parsing error: " + e.getMessage());
-                    runOnUiThread(() -> showLoading(false));
+                    runOnUiThread(() -> onLoadPartFinished(generation));
                 }
             }
         });
@@ -475,7 +570,7 @@ public class ReportsAnalyticsActivity extends BaseActivity {
 
         // Store data for pie chart
         this.totalProviders = totalProviders;
-        int customers = totalUsers - totalProviders;
+        int customers = Math.max(0, totalUsers - totalProviders);
         updateUserTypePieChart(totalProviders, customers);
 
         showLoading(false);
@@ -501,19 +596,15 @@ public class ReportsAnalyticsActivity extends BaseActivity {
         showLoading(false);
     }
 
-    private void updateRevenueMetrics(double totalRevenue, double avgValue) {
+    private void updateRevenueMetrics(double completedRevenue, double pendingRevenue, double avgValue) {
         if (tvTotalRevenue != null) {
-            tvTotalRevenue.setText("₹" + formatCurrency(totalRevenue));
+            tvTotalRevenue.setText("₹" + formatCurrency(completedRevenue));
         }
         if (tvAvgBookingValue != null) {
             tvAvgBookingValue.setText("₹" + formatCurrency(avgValue));
         }
 
-        // Update revenue pie chart - split between completed and pending
-        double completedRevenue = totalRevenue; // All revenue shown is from completed
-        updateRevenuePieChart(completedRevenue, totalRevenue + (totalRevenue * 0.2)); // 20% pending
-
-        showLoading(false);
+        updateRevenuePieChart(completedRevenue, pendingRevenue);
     }
 
     private void updateServiceMetrics(int totalServices, double avgRating) {
@@ -538,13 +629,12 @@ public class ReportsAnalyticsActivity extends BaseActivity {
 
     private void showLoading(boolean show) {
         if (show) {
-            if (progressBar  != null) progressBar.setVisibility(View.VISIBLE);
+            if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
             if (scrollContent != null) scrollContent.setVisibility(View.GONE);
         } else {
-            // Decrement counter; only hide spinner when all loads done
             int remaining = loadCounter.decrementAndGet();
             if (remaining <= 0) {
-                if (progressBar  != null) progressBar.setVisibility(View.GONE);
+                if (progressBar != null) progressBar.setVisibility(View.GONE);
                 if (scrollContent != null) scrollContent.setVisibility(View.VISIBLE);
             }
         }
@@ -552,7 +642,6 @@ public class ReportsAnalyticsActivity extends BaseActivity {
 
     private void showError(String message) {
         runOnUiThread(() -> {
-            showLoading(false);
             if (tvErrorMessage != null) {
                 tvErrorMessage.setVisibility(View.VISIBLE);
                 tvErrorMessage.setText(message);
@@ -580,12 +669,89 @@ public class ReportsAnalyticsActivity extends BaseActivity {
     }
 
     private long parseIsoDate(String isoDate) {
-        try {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US);
-            return sdf.parse(isoDate).getTime();
-        } catch (Exception e) {
-            return System.currentTimeMillis();
+        if (isoDate == null || isoDate.trim().isEmpty()) return -1L;
+        String value = isoDate.trim();
+        String[] patterns = new String[] {
+                "yyyy-MM-dd'T'HH:mm:ss.SSSX",
+                "yyyy-MM-dd'T'HH:mm:ssX",
+                "yyyy-MM-dd'T'HH:mm:ss",
+                "yyyy-MM-dd HH:mm:ss"
+        };
+        for (String pattern : patterns) {
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat(pattern, Locale.US);
+                sdf.setLenient(false);
+                if (sdf.parse(value) != null) {
+                    return sdf.parse(value).getTime();
+                }
+            } catch (ParseException ignored) {
+            }
         }
+        return -1L;
+    }
+
+    private HttpUrl.Builder supabaseTableUrl(String table) {
+        HttpUrl base = HttpUrl.parse(BuildConfig.SUPABASE_URL + "/rest/v1/" + table);
+        return base != null ? base.newBuilder() : null;
+    }
+
+    private void applyCreatedAtFilter(HttpUrl.Builder builder) {
+        String[] range = getCurrentPeriodRangeIso();
+        if (range == null || range.length < 2) return;
+        builder.addQueryParameter("created_at", "gte." + range[0]);
+        builder.addQueryParameter("created_at", "lte." + range[1]);
+    }
+
+    private String[] getCurrentPeriodRangeIso() {
+        Calendar start = Calendar.getInstance();
+        Calendar end = Calendar.getInstance();
+
+        switch (currentTimePeriod) {
+            case "today":
+                start.set(Calendar.HOUR_OF_DAY, 0);
+                start.set(Calendar.MINUTE, 0);
+                start.set(Calendar.SECOND, 0);
+                start.set(Calendar.MILLISECOND, 0);
+                end.setTime(start.getTime());
+                end.add(Calendar.DAY_OF_MONTH, 1);
+                end.add(Calendar.MILLISECOND, -1);
+                break;
+            case "week":
+                start.setFirstDayOfWeek(Calendar.MONDAY);
+                start.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY);
+                start.set(Calendar.HOUR_OF_DAY, 0);
+                start.set(Calendar.MINUTE, 0);
+                start.set(Calendar.SECOND, 0);
+                start.set(Calendar.MILLISECOND, 0);
+                end.setTime(start.getTime());
+                end.add(Calendar.DAY_OF_MONTH, 7);
+                end.add(Calendar.MILLISECOND, -1);
+                break;
+            case "year":
+                start.set(Calendar.DAY_OF_YEAR, 1);
+                start.set(Calendar.HOUR_OF_DAY, 0);
+                start.set(Calendar.MINUTE, 0);
+                start.set(Calendar.SECOND, 0);
+                start.set(Calendar.MILLISECOND, 0);
+                end.setTime(start.getTime());
+                end.add(Calendar.YEAR, 1);
+                end.add(Calendar.MILLISECOND, -1);
+                break;
+            case "month":
+            default:
+                start.set(Calendar.DAY_OF_MONTH, 1);
+                start.set(Calendar.HOUR_OF_DAY, 0);
+                start.set(Calendar.MINUTE, 0);
+                start.set(Calendar.SECOND, 0);
+                start.set(Calendar.MILLISECOND, 0);
+                end.setTime(start.getTime());
+                end.add(Calendar.MONTH, 1);
+                end.add(Calendar.MILLISECOND, -1);
+                break;
+        }
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US);
+        return new String[] { sdf.format(start.getTime()), sdf.format(end.getTime()) };
     }
 
     // ── Pie Chart Setup Methods ───────────────────────────────────────
@@ -692,21 +858,19 @@ public class ReportsAnalyticsActivity extends BaseActivity {
         pieChartServiceQuality.invalidate();
     }
 
-    private void updateRevenuePieChart(double completedRevenue, double totalRevenue) {
+    private void updateRevenuePieChart(double completedRevenue, double pendingRevenue) {
         if (pieChartRevenue == null) return;
 
-        double pendingRevenue = totalRevenue - completedRevenue;
-
         List<PieEntry> entries = new ArrayList<>();
-        entries.add(new PieEntry((float)completedRevenue, "Completed"));
-        entries.add(new PieEntry((float)pendingRevenue, "Pending"));
+        entries.add(new PieEntry((float) completedRevenue, "Completed"));
+        entries.add(new PieEntry((float) pendingRevenue, "Pending"));
 
         PieDataSet dataSet = new PieDataSet(entries, "Revenue");
         dataSet.setSliceSpace(3f);
         dataSet.setIconsOffset(new com.github.mikephil.charting.utils.MPPointF(0, 40));
         dataSet.setSelectionShift(5f);
 
-        int[] colors = {0xFF10B981, 0xFFF59E0B}; // Green, Orange
+        int[] colors = {0xFF10B981, 0xFFF59E0B};
         dataSet.setColors(colors);
 
         PieData data = new PieData(dataSet);

@@ -173,8 +173,7 @@ public class EarningsActivity extends BaseActivity {
         String encodedUid = encodeValue(providerFirebaseUid);
         String url = SUPABASE_URL + "/rest/v1/bookings"
                 + "?select=id,customer_name,customer_phone,provider_name,service_name,category,"
-                + "booking_date,booking_time,address,city,price,payment_amount,status,created_at,completed_at,description"
-                + "&status=in.(paid,completed)"
+                + "booking_date,booking_time,address,city,price,status,created_at,completed_at,description"
                 + "&order=created_at.desc";
 
         if (providerProfileId != null && !providerProfileId.isEmpty()) {
@@ -219,7 +218,7 @@ public class EarningsActivity extends BaseActivity {
                         parseEarnings(body);
                     } else {
                         Toast.makeText(EarningsActivity.this,
-                                "Error: HTTP " + code + " | " + body,
+                                "Error loading earnings (HTTP " + code + ")",
                                 Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -309,4 +308,3 @@ public class EarningsActivity extends BaseActivity {
         }
     }
 }
-

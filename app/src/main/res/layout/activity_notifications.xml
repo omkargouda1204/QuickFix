@@ -60,15 +60,33 @@
                     android:textSize="13sp" />
             </LinearLayout>
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnMarkAllRead"
-                style="@style/Widget.Material3.Button.OutlinedButton"
+            <LinearLayout
                 android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:text="Mark all read"
-                android:textColor="@color/white"
-                android:textSize="12sp"
-                app:strokeColor="@color/white" />
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMarkAllRead"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="Mark all read"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    app:strokeColor="@color/white" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnClearAllNotifications"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="8dp"
+                    android:text="Clear all"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    app:strokeColor="@color/white" />
+            </LinearLayout>
 
         </LinearLayout>
     </LinearLayout>

@@ -197,7 +197,8 @@ public class SearchResultsActivity extends BaseActivity
 
     private void updateLocationLabel() {
         String base = cityFilter.isEmpty() ? "All locations" : "📍 " + cityFilter;
-        if (!Double.isNaN(userLat) && !Double.isNaN(userLng)) {
+        // Show radius hint only when no explicit city filter is selected.
+        if (cityFilter.isEmpty() && !Double.isNaN(userLat) && !Double.isNaN(userLng)) {
             tvSearchLocation.setText(base + " • " + (int) NEARBY_RADIUS_PRIMARY_KM + "km radius");
         } else {
             tvSearchLocation.setText(base);
@@ -225,6 +226,15 @@ public class SearchResultsActivity extends BaseActivity
     }
 
     private void ensureLocationThenSearch(String query) {
+        boolean hasExplicitCityFilter = cityFilter != null && !cityFilter.trim().isEmpty();
+        boolean wantsNearby = isNearbyQuery(query);
+
+        // If a city is explicitly selected, keep search city-scoped unless user asks for nearby.
+        if (hasExplicitCityFilter && !wantsNearby) {
+            executeSearch(query, false);
+            return;
+        }
+
         if (!Double.isNaN(userLat) && !Double.isNaN(userLng)) {
             executeSearch(query, true);
             return;
@@ -308,13 +318,23 @@ public class SearchResultsActivity extends BaseActivity
             String cleanedQuery = sanitizeProviderQuery(query);
             Set<String> seenIds = new HashSet<>();
             String encQuery = Uri.encode("%" + cleanedQuery + "%");
+            String encCityFilter = getEncodedCityFilter();
+            boolean enforceCityFilter = !encCityFilter.isEmpty();
 
             if (useNearby && !Double.isNaN(originLat) && !Double.isNaN(originLng)) {
-                list.addAll(fetchNearbyFromProfiles(encQuery, "lat", "lng", originLat, originLng, NEARBY_RADIUS_PRIMARY_KM, seenIds));
-                list.addAll(fetchNearbyFromProfiles(encQuery, "latitude", "longitude", originLat, originLng, NEARBY_RADIUS_PRIMARY_KM, seenIds));
+                list.addAll(fetchNearbyFromProfiles(encQuery, encCityFilter, "lat", "lng", originLat, originLng, NEARBY_RADIUS_PRIMARY_KM, seenIds));
+                list.addAll(fetchNearbyFromProfiles(encQuery, encCityFilter, "latitude", "longitude", originLat, originLng, NEARBY_RADIUS_PRIMARY_KM, seenIds));
                 sortByDistance(list);
             } else {
-                list.addAll(fetchTextProviders(encQuery, seenIds));
+                list.addAll(fetchTextProviders(encQuery, encCityFilter, seenIds));
+            }
+
+            if (enforceCityFilter) {
+                List<SearchResult> cityFiltered = new ArrayList<>();
+                for (SearchResult r : list) {
+                    if (matchesCity(cityFilter, r.city)) cityFiltered.add(r);
+                }
+                list = cityFiltered;
             }
         } catch (Exception e) {
             Log.e(TAG, "searchProviders: " + e.getMessage());
@@ -323,6 +343,7 @@ public class SearchResultsActivity extends BaseActivity
     }
 
     private List<SearchResult> fetchNearbyFromProfiles(String encQuery,
+                                                        String encCityFilter,
                                                         String latKey,
                                                         String lngKey,
                                                         double originLat,
@@ -340,6 +361,10 @@ public class SearchResultsActivity extends BaseActivity
                     .append(",description.ilike.").append(encQuery)
                     .append(",city.ilike.").append(encQuery).append(")")
                     .append("&limit=220");
+
+            if (!encCityFilter.isEmpty()) {
+                url.append("&city=ilike.").append(encCityFilter);
+            }
 
             Request req = new Request.Builder().url(url.toString())
                     .addHeader("apikey", ANON_KEY)
@@ -384,19 +409,24 @@ public class SearchResultsActivity extends BaseActivity
         return nearby;
     }
 
-    private List<SearchResult> fetchTextProviders(String encQuery, Set<String> seenIds) {
+    private List<SearchResult> fetchTextProviders(String encQuery, String encCityFilter, Set<String> seenIds) {
         List<SearchResult> list = new ArrayList<>();
         try {
-            String url = BASE_URL + "/rest/v1/provider_profiles"
-                    + "?select=*"
-                    + "&is_approved=eq.true"
-                    + "&or=(business_name.ilike." + encQuery
-                    + ",category.ilike." + encQuery
-                    + ",description.ilike." + encQuery
-                    + ",city.ilike." + encQuery + ")"
-                    + "&limit=60";
+            StringBuilder url = new StringBuilder(BASE_URL)
+                    .append("/rest/v1/provider_profiles")
+                    .append("?select=*")
+                    .append("&is_approved=eq.true")
+                    .append("&or=(business_name.ilike.").append(encQuery)
+                    .append(",category.ilike.").append(encQuery)
+                    .append(",description.ilike.").append(encQuery)
+                    .append(",city.ilike.").append(encQuery).append(")")
+                    .append("&limit=60");
 
-            Request req = new Request.Builder().url(url)
+            if (!encCityFilter.isEmpty()) {
+                url.append("&city=ilike.").append(encCityFilter);
+            }
+
+            Request req = new Request.Builder().url(url.toString())
                     .addHeader("apikey", ANON_KEY)
                     .addHeader("Authorization", "Bearer " + ANON_KEY)
                     .addHeader("Accept", "application/json")
@@ -470,6 +500,7 @@ public class SearchResultsActivity extends BaseActivity
     private void applyFilter() {
         filtered.clear();
         for (SearchResult r : allResults) {
+            if (!matchesCity(cityFilter, r.city)) continue;
             if ("All".equals(currentFilter) || currentFilter.equals(r.type)) {
                 filtered.add(r);
             }
@@ -659,5 +690,21 @@ public class SearchResultsActivity extends BaseActivity
                 * Math.cos(Math.toRadians(lat2))
                 * Math.sin(dLon / 2) * Math.sin(dLon / 2);
         return r * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    }
+
+    private String getEncodedCityFilter() {
+        String normalized = cityFilter == null ? "" : cityFilter.trim();
+        if (normalized.isEmpty()) return "";
+        return Uri.encode("%" + normalized + "%");
+    }
+
+    private boolean matchesCity(String selectedCity, String resultCity) {
+        String selected = selectedCity == null ? "" : selectedCity.trim().toLowerCase(Locale.getDefault());
+        if (selected.isEmpty()) return true;
+
+        String provider = resultCity == null ? "" : resultCity.trim().toLowerCase(Locale.getDefault());
+        if (provider.isEmpty()) return false;
+
+        return provider.equals(selected) || provider.contains(selected) || selected.contains(provider);
     }
 }
