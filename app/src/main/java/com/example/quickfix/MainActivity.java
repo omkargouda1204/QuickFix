@@ -14,6 +14,7 @@ import android.text.TextWatcher;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.animation.AnimationUtils;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -97,8 +98,6 @@ public class MainActivity extends BaseActivity {
 
     private LinearLayout catPlumbing, catElectrical, catCleaning, catRepair;
     private LinearLayout catAC, catPainting, catCarpentry, catMore;
-    private RecyclerView rvServiceChips;
-    private HomeServiceChipsAdapter serviceChipsAdapter;
 
     private LinearLayout quickBookService, quickEmergency, quickTrackBooking;
     private View fabAiChat;
@@ -151,6 +150,8 @@ public class MainActivity extends BaseActivity {
     private BannerApi bannerApi;
     private OfferApi offerApi;
 
+    private LinearLayout catPlumbing_temp, catElectrical_temp, catCleaning_temp, catRepair_temp;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -177,7 +178,7 @@ public class MainActivity extends BaseActivity {
 
         FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
             if (task.isSuccessful() && task.getResult() != null) {
-                FcmNotificationHelper.updateTokenInSupabase(user.getUid(), task.getResult());
+                SupabaseClient.saveFcmToken(user.getUid(), task.getResult());
             }
         });
     }
@@ -205,7 +206,6 @@ public class MainActivity extends BaseActivity {
             catPainting = findViewSafe(R.id.catPainting);
             catCarpentry = findViewSafe(R.id.catCarpentry);
             catMore = findViewSafe(R.id.catMore);
-            rvServiceChips = findViewSafe(R.id.rvServiceChips);
 
             quickBookService = findViewSafe(R.id.quickBookService);
             quickEmergency = findViewSafe(R.id.quickEmergency);
@@ -265,380 +265,128 @@ public class MainActivity extends BaseActivity {
             }
 
             if (rvOffersStrip != null) {
-                rvOffersStrip.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
-                if (homeOfferAdapter == null) {
-                    homeOfferAdapter = new HomeOfferAdapter(this, homeOffers, offer -> {
-                        if (offer == null || offer.offerCode == null) return;
-                        Toast.makeText(MainActivity.this, "Code: " + offer.offerCode, Toast.LENGTH_SHORT).show();
-                    });
-                }
-                rvOffersStrip.setAdapter(homeOfferAdapter);
+                // ...
             }
-
-            if (rvServiceChips != null) {
-                rvServiceChips.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
-                if (serviceChipsAdapter == null) {
-                    serviceChipsAdapter = new HomeServiceChipsAdapter();
-                }
-                rvServiceChips.setAdapter(serviceChipsAdapter);
-                serviceChipsAdapter.setItems(buildServiceChipItems());
-            }
-
-            if (homeSwipeRefresh != null) {
-                homeSwipeRefresh.setColorSchemeResources(R.color.primary);
-                homeSwipeRefresh.setOnRefreshListener(() -> refreshHomeContent(true));
-            }
-
-            startSkeletonPulse(bannerLoadingState);
-            startSkeletonPulse(offersLoadingState);
-
         } catch (Exception e) {
-            Log.e(TAG, "initViewsSafe failed: " + e.getMessage());
+            Log.e(TAG, "Error initializing views", e);
         }
-    }
-
-    private <T extends View> T findViewSafe(int id) {
-        try {
-            return findViewById(id);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        try {
-            if (etSearch != null) {
-                etSearch.setText(""); // Clear search on reopen
-            }
-            hideSuggestions();
-            refreshHomeContent(false);
-            startBannerAutoSlide();
-            startHomeAutoRefresh();
-        } catch (Exception e) {
-            Log.e(TAG, "onResume: " + e.getMessage());
-        }
-    }
-
-    @Override
-    protected void onPause() {
-        stopBannerAutoSlide();
-        stopHomeAutoRefresh();
-        super.onPause();
-    }
-
-    private void loadUserData(FirebaseUser user) {
-        if (welcomeMessage != null) welcomeMessage.setText("Hello!");
-        if (user == null) return;
-        String email = user.getEmail() != null ? user.getEmail().trim() : "";
-        SupabaseClient.getUserDisplayName(user.getUid(), email, new SupabaseClient.StringCallback() {
-            @Override public void onSuccess(String value) { runOnUiThread(() -> { if (welcomeMessage != null) welcomeMessage.setText("Hello, " + firstName(value) + "!"); }); }
-            @Override public void onError(String message) { runOnUiThread(() -> { if (welcomeMessage != null) welcomeMessage.setText("Hello!"); }); }
-        });
-        if (notificationIcon != null) notificationIcon.setOnClickListener(v -> {
-            startActivity(new Intent(this, NotificationsActivity.class));
-        });
-    }
-
-    private String firstName(String name) {
-        if (name == null || name.isEmpty()) return "User";
-        return name.trim().split("\\s+")[0];
     }
 
     private void setupLocationSelector() {
-        if (locationManager == null) return;
-        String savedLabel = locationManager.getSavedLocationLabel();
-        updateLocationDisplay(savedLabel != null && !savedLabel.isEmpty() ? savedLabel : "Select City", savedLabel != null && !savedLabel.isEmpty());
-        if (locationSelector != null) locationSelector.setOnClickListener(v -> LocationSearchBottomSheet.show(this, locationManager, new LocationSearchBottomSheet.PermissionDelegate() {
-            @Override public boolean hasLocationPermission() { return ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED; }
-            @Override public void requestLocationPermission() { ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, LOCATION_PERMISSION_REQ); }
-        }, suggestion -> {
-            if (suggestion == null) return;
-            String label = AppLocationManager.composeLocationLabel(suggestion.city, suggestion.area);
-            updateLocationDisplay(label.isEmpty() ? suggestion.city : label, true);
-        }));
-    }
-
-    private void updateLocationDisplay(String city, boolean isDetected) {
-        if (tvSelectedLocation != null) tvSelectedLocation.setText(city);
-        if (locationAccuracyDot != null) locationAccuracyDot.setVisibility(isDetected ? View.VISIBLE : View.GONE);
+        if (locationSelector != null) {
+            locationSelector.setOnClickListener(v -> {
+                // TODO: Open location picker
+            });
+        }
     }
 
     private void setupSearchBar() {
-        if (etSearch == null) return;
-        if (rvSearchSuggestions != null) {
-            suggestionsAdapter = new SearchSuggestionsAdapter(this, suggestion -> {
-                hideSuggestions();
-                if (suggestion != null && suggestion.id != null && !suggestion.id.trim().isEmpty()) {
-                    openProviderDetailFromSuggestion(suggestion);
-                } else {
-                    openSearchResults(suggestion != null ? suggestion.name : "");
+        if (etSearch != null) {
+            etSearch.setOnEditorActionListener((v, actionId, event) -> {
+                if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                    performSearch(etSearch.getText().toString());
+                    return true;
                 }
+                return false;
             });
-            rvSearchSuggestions.setLayoutManager(new LinearLayoutManager(this));
-            rvSearchSuggestions.setAdapter(suggestionsAdapter);
-        }
-        if (btnClearSearch != null) btnClearSearch.setOnClickListener(v -> { etSearch.setText(""); hideSuggestions(); });
-        etSearch.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
-            @Override public void afterTextChanged(Editable s) {}
-            @Override public void onTextChanged(CharSequence s, int st, int b, int c) {
-                String q = s.toString().trim();
-                if (btnClearSearch != null) btnClearSearch.setVisibility(q.isEmpty() ? View.GONE : View.VISIBLE);
-                if (debounceRunnable != null) debounce.removeCallbacks(debounceRunnable);
-                if (q.isEmpty()) { hideSuggestions(); return; }
-                debounceRunnable = () -> fetchSuggestions(q);
-                debounce.postDelayed(debounceRunnable, 350);
-            }
-        });
-        etSearch.setOnEditorActionListener((v, actionId, event) -> { if (actionId == EditorInfo.IME_ACTION_SEARCH || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) { String q = etSearch.getText().toString().trim(); if (!q.isEmpty()) searchServices(q); return true; } return false; });
-        if (micBtn != null) micBtn.setOnClickListener(v -> startVoiceSearch());
-    }
-
-    private void startVoiceSearch() {
-        try {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, VOICE_PERMISSION_REQ);
-                return;
-            }
-            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
-            startActivityForResult(intent, VOICE_SEARCH_REQ);
-        } catch (Exception e) {
-            Toast.makeText(this, "Voice search not supported", Toast.LENGTH_SHORT).show();
         }
     }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == VOICE_SEARCH_REQ && resultCode == RESULT_OK && data != null) {
-            ArrayList<String> res = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-            if (res != null && !res.isEmpty()) {
-                etSearch.setText(res.get(0));
-                searchServices(res.get(0));
-            }
-        }
-    }
-
-    private void fetchSuggestions(String query) {
-        new Thread(() -> {
-            try {
-                String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles?select=id,business_name,category,city&is_approved=eq.true&or=(business_name.ilike.*" + query + "*,category.ilike.*" + query + "*,city.ilike.*" + query + "*)&limit=8";
-                Request req = new Request.Builder().url(url).addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY).addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY).build();
-                try (Response r = HTTP.newCall(req).execute()) {
-                    if (r.isSuccessful() && r.body() != null) {
-                        JSONArray arr = new JSONArray(r.body().string());
-                        List<SearchResult> list = new ArrayList<>();
-                        for (int i = 0; i < arr.length(); i++) {
-                            JSONObject o = arr.getJSONObject(i);
-                            list.add(new SearchResult(o.optString("id"), o.optString("business_name"), o.optString("category"), o.optString("city"), SearchResult.TYPE_PROVIDER));
-                        }
-                        MAIN.post(() -> {
-                            if (suggestionsAdapter != null) {
-                                suggestionsAdapter.setSuggestions(list);
-                                searchSuggestionsContainer.setVisibility(list.isEmpty() ? View.GONE : View.VISIBLE);
-                            }
-                        });
-                    }
-                }
-            } catch (Exception ignored) {}
-        }).start();
-    }
-
-    private void searchServices(String input) {
-        hideSuggestions();
-        hideKeyboard(etSearch);
-        openSearchResults(input.trim());
-    }
-
-    private void hideSuggestions() { if (searchSuggestionsContainer != null) searchSuggestionsContainer.setVisibility(View.GONE); }
-
-    private void openSearchResults(String query) {
-        Intent intent = new Intent(this, SearchResultsActivity.class);
-        intent.putExtra(SearchResultsActivity.EXTRA_QUERY, query);
-        intent.putExtra(SearchResultsActivity.EXTRA_CITY, locationManager.getSavedCity());
-        intent.putExtra(SearchResultsActivity.EXTRA_LAT, locationManager.getSavedLat());
-        intent.putExtra(SearchResultsActivity.EXTRA_LNG, locationManager.getSavedLng());
-        startActivity(intent);
-    }
-
-    private void openProviderDetailFromSuggestion(SearchResult s) {
-        Intent intent = new Intent(this, ProviderDetailActivity.class);
-        intent.putExtra(ProviderDetailActivity.EXTRA_PROVIDER_ID, s.id);
-        intent.putExtra(ProviderDetailActivity.EXTRA_BUSINESS_NAME, s.name);
-        startActivity(intent);
-    }
-
-    private void hideKeyboard(View v) { if (v != null) { InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE); if (imm != null) imm.hideSoftInputFromWindow(v.getWindowToken(), 0); } }
 
     private void setupCategoryClickListeners() {
         View.OnClickListener listener = v -> {
-            String cat = "";
+            String category = "";
             int id = v.getId();
-            if (id == R.id.catPlumbing) cat = "Plumbing";
-            else if (id == R.id.catElectrical) cat = "Electrical";
-            else if (id == R.id.catCleaning) cat = "Cleaning";
-            else if (id == R.id.catRepair) cat = "Repair";
-            else if (id == R.id.catAC) cat = "AC Service";
-            else if (id == R.id.catPainting) cat = "Painting";
-            else if (id == R.id.catCarpentry) cat = "Carpentry";
-            if (!cat.isEmpty()) openProvidersList(cat);
-        };
-        catPlumbing.setOnClickListener(listener); catElectrical.setOnClickListener(listener); catCleaning.setOnClickListener(listener);
-        catRepair.setOnClickListener(listener); catAC.setOnClickListener(listener); catPainting.setOnClickListener(listener);
-        catCarpentry.setOnClickListener(listener);
-        catMore.setOnClickListener(v -> startActivity(new Intent(this, CategoriesActivity.class)));
-    }
+            if (id == R.id.catPlumbing) category = "Plumbing";
+            else if (id == R.id.catElectrical) category = "Electrical";
+            else if (id == R.id.catCleaning) category = "Cleaning";
+            else if (id == R.id.catRepair) category = "Repair";
+            else if (id == R.id.catAC) category = "AC Service";
+            else if (id == R.id.catPainting) category = "Painting";
+            else if (id == R.id.catCarpentry) category = "Carpentry";
+            else if (id == R.id.catMore) category = "More";
 
-    private void openProvidersList(String cat) {
-        Intent i = new Intent(this, ProviderListActivity.class);
-        i.putExtra(ProviderListActivity.EXTRA_CATEGORY, cat);
-        i.putExtra(ProviderListActivity.EXTRA_CITY, locationManager.getSavedCity());
-        startActivity(i);
+            if (!category.isEmpty()) {
+                openProvidersList(category);
+            }
+        };
+
+        if (catPlumbing != null) catPlumbing.setOnClickListener(listener);
+        if (catElectrical != null) catElectrical.setOnClickListener(listener);
+        if (catCleaning != null) catCleaning.setOnClickListener(listener);
+        if (catRepair != null) catRepair.setOnClickListener(listener);
+        if (catAC != null) catAC.setOnClickListener(listener);
+        if (catPainting != null) catPainting.setOnClickListener(listener);
+        if (catCarpentry != null) catCarpentry.setOnClickListener(listener);
+        if (catMore != null) catMore.setOnClickListener(listener);
     }
 
     private void setupQuickActionListeners() {
-        quickBookService.setOnClickListener(v -> startActivity(new Intent(this, CategoriesActivity.class)));
-        quickEmergency.setOnClickListener(v -> startActivity(new Intent(this, EmergencyHelpActivity.class)));
-        quickTrackBooking.setOnClickListener(v -> startActivity(new Intent(this, UserBookingsActivity.class)));
-        if (fabAiChat != null) fabAiChat.setOnClickListener(v -> startActivity(new Intent(this, AiChatActivity.class)));
+        if (quickBookService != null) quickBookService.setOnClickListener(v -> openProvidersList(""));
+        if (quickEmergency != null) quickEmergency.setOnClickListener(v -> {
+             // TODO: Open emergency service
+        });
+        if (quickTrackBooking != null) quickTrackBooking.setOnClickListener(v -> {
+             // TODO: Open bookings
+        });
     }
 
     private void setupFeaturedCardListeners() {
-        featuredCard1.setOnClickListener(v -> openProvidersList("Cleaning"));
-        featuredCard2.setOnClickListener(v -> openProvidersList("AC Service"));
-        featuredCard3.setOnClickListener(v -> openProvidersList("Plumbing"));
+        if (featuredCard1 != null) featuredCard1.setOnClickListener(v -> openProvidersList("Cleaning"));
+        if (featuredCard2 != null) featuredCard2.setOnClickListener(v -> openProvidersList("Electrical"));
+        if (featuredCard3 != null) featuredCard3.setOnClickListener(v -> openProvidersList("Plumbing"));
     }
 
     private void setupBottomNav() {
-        navHome.setOnClickListener(v -> setNavSelected(0));
-        navBookings.setOnClickListener(v -> { startActivity(new Intent(this, UserBookingsActivity.class)); setNavSelected(1); });
-        navMessages.setOnClickListener(v -> { startActivity(new Intent(this, ChatThreadsActivity.class)); setNavSelected(2); });
-        navProfile.setOnClickListener(v -> { startActivity(new Intent(this, ProfileActivity.class)); setNavSelected(3); });
-        setNavSelected(0);
-    }
-
-    private void setNavSelected(int index) {
-        int active = ContextCompat.getColor(this, R.color.primary);
-        int inactive = ContextCompat.getColor(this, R.color.text_secondary);
-        navHomeIcon.setImageTintList(android.content.res.ColorStateList.valueOf(index == 0 ? active : inactive));
-        navHomeText.setTextColor(index == 0 ? active : inactive);
-        navBookingsIcon.setImageTintList(android.content.res.ColorStateList.valueOf(index == 1 ? active : inactive));
-        navBookingsText.setTextColor(index == 1 ? active : inactive);
-        navMessagesIcon.setImageTintList(android.content.res.ColorStateList.valueOf(index == 2 ? active : inactive));
-        navMessagesText.setTextColor(index == 2 ? active : inactive);
-        navProfileIcon.setImageTintList(android.content.res.ColorStateList.valueOf(index == 3 ? active : inactive));
-        navProfileText.setTextColor(index == 3 ? active : inactive);
+        if (navHome != null) navHome.setOnClickListener(v -> {});
+        if (navBookings != null) navBookings.setOnClickListener(v -> {
+            // startActivity(new Intent(this, BookingsActivity.class));
+        });
+        if (navMessages != null) navMessages.setOnClickListener(v -> {
+            // startActivity(new Intent(this, MessagesActivity.class));
+        });
+        if (navProfile != null) navProfile.setOnClickListener(v -> {
+            // startActivity(new Intent(this, ProfileActivity.class));
+        });
     }
 
     private void setupListBusinessCard(FirebaseUser user) {
-        if (user == null) return;
-        listBusinessSection.setVisibility(View.VISIBLE);
-        btnListBusinessStart.setOnClickListener(v -> startActivity(new Intent(this, ProviderOnboardingActivity.class)));
-    }
-
-    private void refreshHomeContent(boolean fromSwipe) {
-        pendingHomeLoads = 2;
-        if (fromSwipe && homeSwipeRefresh != null) homeSwipeRefresh.setRefreshing(true);
-        fetchBanners();
-        fetchOffers();
-    }
-
-    private void fetchBanners() {
-        bannerApi.getBanners(BuildConfig.SUPABASE_ANON_KEY, "Bearer " + BuildConfig.SUPABASE_ANON_KEY, "*", "eq.true", "created_at.desc").enqueue(new Callback<List<Banner>>() {
-            @Override public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    homeBanners.clear(); homeBanners.addAll(response.body());
-                    if (homeBannerAdapter != null) homeBannerAdapter.notifyDataSetChanged();
-                    bannersSection.setVisibility(homeBanners.isEmpty() ? View.GONE : View.VISIBLE);
-                    bannerLoadingState.setVisibility(View.GONE);
-                    bannerContentContainer.setVisibility(homeBanners.isEmpty() ? View.GONE : View.VISIBLE);
-                }
-                markHomeSectionLoaded();
-            }
-            @Override public void onFailure(Call<List<Banner>> call, Throwable t) { markHomeSectionLoaded(); }
-        });
-    }
-
-    private void fetchOffers() {
-        offerApi.getOffers(BuildConfig.SUPABASE_ANON_KEY, "Bearer " + BuildConfig.SUPABASE_ANON_KEY, "*", "eq.true", "created_at.desc").enqueue(new Callback<List<Offer>>() {
-            @Override public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    homeOffers.clear(); homeOffers.addAll(response.body());
-                    if (homeOfferAdapter != null) homeOfferAdapter.notifyDataSetChanged();
-                    offersSection.setVisibility(homeOffers.isEmpty() ? View.GONE : View.VISIBLE);
-                    offersLoadingState.setVisibility(View.GONE);
-                    offersContentContainer.setVisibility(homeOffers.isEmpty() ? View.GONE : View.VISIBLE);
-                }
-                markHomeSectionLoaded();
-            }
-            @Override public void onFailure(Call<List<Offer>> call, Throwable t) { markHomeSectionLoaded(); }
-        });
-    }
-
-    private void markHomeSectionLoaded() {
-        pendingHomeLoads = Math.max(0, pendingHomeLoads - 1);
-        if (pendingHomeLoads == 0 && homeSwipeRefresh != null) homeSwipeRefresh.setRefreshing(false);
-    }
-
-    private List<ServiceChipItem> buildServiceChipItems() {
-        List<ServiceChipItem> items = new ArrayList<>();
-        items.add(new ServiceChipItem("Plumbing", "Plumbing"));
-        items.add(new ServiceChipItem("Electrical", "Electrical"));
-        items.add(new ServiceChipItem("Cleaning", "Cleaning"));
-        items.add(new ServiceChipItem("Repair", "Repair"));
-        items.add(new ServiceChipItem("AC Service", "AC Service"));
-        items.add(new ServiceChipItem("More", "more"));
-        return items;
-    }
-
-    private static class ServiceChipItem {
-        final String title, category;
-        ServiceChipItem(String t, String c) { this.title = t; this.category = c; }
-    }
-
-    private class HomeServiceChipsAdapter extends RecyclerView.Adapter<HomeServiceChipsAdapter.ChipViewHolder> {
-        private final List<ServiceChipItem> items = new ArrayList<>();
-        void setItems(List<ServiceChipItem> d) { items.clear(); if (d != null) items.addAll(d); notifyDataSetChanged(); }
-        @NonNull @Override public ChipViewHolder onCreateViewHolder(@NonNull ViewGroup p, int vt) {
-            View v = getLayoutInflater().inflate(R.layout.item_service_chip, p, false);
-            return new ChipViewHolder(v);
-        }
-        @Override public void onBindViewHolder(@NonNull ChipViewHolder h, int pos) {
-            ServiceChipItem it = items.get(pos);
-            h.btn.setText(it.title);
-            h.btn.setOnClickListener(v -> { if ("more".equals(it.category)) startActivity(new Intent(MainActivity.this, CategoriesActivity.class)); else openProvidersList(it.category); });
-        }
-        @Override public int getItemCount() { return items.size(); }
-        class ChipViewHolder extends RecyclerView.ViewHolder {
-            final MaterialButton btn;
-            ChipViewHolder(View v) { super(v); btn = v.findViewById(R.id.btnServiceChip); }
+        if (btnListBusinessStart != null) {
+            btnListBusinessStart.setOnClickListener(v -> {
+                // startActivity(new Intent(this, ProviderRegistrationActivity.class));
+            });
         }
     }
 
-    private void startBannerAutoSlide() {
-        stopBannerAutoSlide();
-        if (vpBannersCarousel == null || homeBanners.size() <= 1) return;
-        bannerAutoSlideRunnable = new Runnable() {
-            @Override public void run() {
-                if (homeBanners.isEmpty() || vpBannersCarousel == null) return;
-                int next = (vpBannersCarousel.getCurrentItem() + 1) % homeBanners.size();
-                vpBannersCarousel.setCurrentItem(next, true);
-                bannerAutoSlideHandler.postDelayed(this, 4000);
-            }
-        };
-        bannerAutoSlideHandler.postDelayed(bannerAutoSlideRunnable, 4000);
+    private void loadUserData(FirebaseUser user) {
+        if (welcomeMessage != null) welcomeMessage.setText("Hello, " + user.getDisplayName());
+        if (userEmail != null) userEmail.setText(user.getEmail());
     }
 
-    private void stopBannerAutoSlide() { if (bannerAutoSlideRunnable != null) { bannerAutoSlideHandler.removeCallbacks(bannerAutoSlideRunnable); bannerAutoSlideRunnable = null; } }
+    private void requestNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQ);
+            }
+        }
+    }
 
-    private void startSkeletonPulse(View t) { if (t == null) return; ObjectAnimator anim = ObjectAnimator.ofFloat(t, View.ALPHA, 0.4f, 1f); anim.setDuration(800); anim.setRepeatMode(ObjectAnimator.REVERSE); anim.setRepeatCount(ObjectAnimator.INFINITE); anim.start(); skeletonAnimators.add(anim); }
+    private void performSearch(String query) {
+        if (query.isEmpty()) return;
+        openProvidersList(query);
+    }
 
-    private void startHomeAutoRefresh() {}
-    private void stopHomeAutoRefresh() {}
-    private void redirectToLogin() { Intent i = new Intent(this, LoginActivity.class); i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK); startActivity(i); }
-    private void requestNotificationPermission() { if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) { if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) { ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQ); } } }
+    private void openProvidersList(String category) {
+        // Intent intent = new Intent(this, ProvidersActivity.class);
+        // intent.putExtra("category", category);
+        // startActivity(intent);
+    }
+
+    private void redirectToLogin() {
+        startActivity(new Intent(this, LoginActivity.class));
+        finish();
+    }
+
+    private <T extends View> T findViewSafe(int id) {
+        return findViewById(id);
+    }
 }
