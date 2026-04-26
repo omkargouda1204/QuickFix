@@ -100,9 +100,9 @@ public class MainActivity extends BaseActivity {
     private LinearLayout catAC, catPainting, catCarpentry, catMore;
 
     private LinearLayout quickBookService, quickEmergency, quickTrackBooking;
-    private View fabAiChat;
 
     private CardView featuredCard1, featuredCard2, featuredCard3;
+    private CardView cardImageDetection;
     private View providerDashboardSection;
 
     private View continueSection;
@@ -217,11 +217,11 @@ public class MainActivity extends BaseActivity {
             quickBookService = findViewSafe(R.id.quickBookService);
             quickEmergency = findViewSafe(R.id.quickEmergency);
             quickTrackBooking = findViewSafe(R.id.quickTrackBooking);
-            fabAiChat = findViewSafe(R.id.fabAiChat);
 
             featuredCard1 = findViewSafe(R.id.featuredCard1);
             featuredCard2 = findViewSafe(R.id.featuredCard2);
             featuredCard3 = findViewSafe(R.id.featuredCard3);
+            cardImageDetection = findViewSafe(R.id.cardImageDetection);
 
             providerDashboardSection = findViewSafe(R.id.providerDashboardSection);
             listBusinessSection = findViewSafe(R.id.listBusinessSection);
@@ -352,6 +352,7 @@ public class MainActivity extends BaseActivity {
         if (featuredCard1 != null) featuredCard1.setOnClickListener(v -> openProvidersList("Cleaning"));
         if (featuredCard2 != null) featuredCard2.setOnClickListener(v -> openProvidersList("Electrical"));
         if (featuredCard3 != null) featuredCard3.setOnClickListener(v -> openProvidersList("Plumbing"));
+        if (cardImageDetection != null) cardImageDetection.setOnClickListener(v -> openImageDetection());
     }
 
     private void setupBottomNav() {
@@ -407,6 +408,10 @@ public class MainActivity extends BaseActivity {
             Log.e(TAG, "Error opening providers list", e);
             Toast.makeText(this, "Unable to open services", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void openImageDetection() {
+        startActivity(new Intent(this, ImageDetectionActivity.class));
     }
 
     private void redirectToLogin() {

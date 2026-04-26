@@ -403,5 +403,13 @@
             android:exported="false"
             android:parentActivityName=".MainActivity" />
 
+    <!-- Image Detection Activity -->
+        <activity
+            android:name=".ImageDetectionActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize" />
+
     </application>
 </manifest>
