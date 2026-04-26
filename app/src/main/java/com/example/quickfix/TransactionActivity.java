@@ -86,6 +86,18 @@ public class TransactionActivity extends BaseActivity {
         progressBar = findViewById(R.id.progressBar);
         emptyState = findViewById(R.id.emptyState);
         tvEmptyMessage = findViewById(R.id.tvEmptyMessage);
+        
+        // Hide provider-specific summary cards from user view
+        hideProviderSpecificCards();
+    }
+    
+    private void hideProviderSpecificCards() {
+        // Hide the summary cards container that contains Total Earnings, This Month, Jobs Done
+        // These are provider-specific and should not be shown to users
+        View summaryCards = findViewById(R.id.summaryCardsContainer);
+        if (summaryCards != null) {
+            summaryCards.setVisibility(View.GONE);
+        }
     }
 
     private void setupRecyclerView() {

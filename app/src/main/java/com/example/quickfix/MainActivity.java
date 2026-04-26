@@ -172,9 +172,14 @@ public class MainActivity extends BaseActivity {
         setupQuickActionListeners();
         setupFeaturedCardListeners();
         setupBottomNav();
+        setupPullToRefresh();
         setupListBusinessCard(user);
         loadUserData(user);
         requestNotificationPermission();
+        
+        // Make banner and offers sections visible during loading
+        if (bannersSection != null) bannersSection.setVisibility(View.VISIBLE);
+        if (offersSection != null) offersSection.setVisibility(View.VISIBLE);
         
         // Load banners and offers
         loadBanners();
@@ -344,7 +349,7 @@ public class MainActivity extends BaseActivity {
             startActivity(new Intent(this, EmergencyHelpActivity.class));
         });
         if (quickTrackBooking != null) quickTrackBooking.setOnClickListener(v -> {
-            startActivity(new Intent(this, MyBookingsActivity.class));
+            startActivity(new Intent(this, UserBookingsActivity.class));
         });
     }
 
@@ -360,27 +365,59 @@ public class MainActivity extends BaseActivity {
             // Already on MainActivity, no action needed
         });
         if (navBookings != null) navBookings.setOnClickListener(v -> {
-            startActivity(new Intent(this, MyBookingsActivity.class));
+            startActivity(new Intent(this, UserBookingsActivity.class));
         });
         if (navMessages != null) navMessages.setOnClickListener(v -> {
-            startActivity(new Intent(this, MessagesActivity.class));
+            startActivity(new Intent(this, ChatThreadsActivity.class));
         });
         if (navProfile != null) navProfile.setOnClickListener(v -> {
             startActivity(new Intent(this, ProfileActivity.class));
         });
     }
+    
+    private void setupPullToRefresh() {
+        if (homeSwipeRefresh != null) {
+            homeSwipeRefresh.setColorSchemeResources(R.color.primary);
+            homeSwipeRefresh.setOnRefreshListener(() -> {
+                // Refresh banners and offers
+                loadBanners();
+                loadOffers();
+                
+                // Stop refreshing after a delay
+                homeSwipeRefresh.postDelayed(() -> {
+                    if (homeSwipeRefresh != null) {
+                        homeSwipeRefresh.setRefreshing(false);
+                    }
+                }, 2000);
+            });
+        }
+    }
 
     private void setupListBusinessCard(FirebaseUser user) {
+        // Make the list business section visible
+        if (listBusinessSection != null) {
+            listBusinessSection.setVisibility(View.VISIBLE);
+        }
+        
         if (btnListBusinessStart != null) {
             btnListBusinessStart.setOnClickListener(v -> {
-                // startActivity(new Intent(this, ProviderRegistrationActivity.class));
+                try {
+                    startActivity(new Intent(this, ProviderApplicationDetailActivity.class));
+                } catch (Exception e) {
+                    Log.e(TAG, "Error opening provider application: " + e.getMessage());
+                    Toast.makeText(this, "Unable to open provider form", Toast.LENGTH_SHORT).show();
+                }
             });
         }
     }
 
     private void loadUserData(FirebaseUser user) {
         if (welcomeMessage != null) welcomeMessage.setText("Hello, " + user.getDisplayName());
-        if (userEmail != null) userEmail.setText(user.getEmail());
+        // Set professional greeting subtitle
+        if (userEmail != null) {
+            userEmail.setText("Find trusted services near you");
+            userEmail.setVisibility(View.VISIBLE);
+        }
     }
 
     private void requestNotificationPermission() {
@@ -559,14 +596,62 @@ public class MainActivity extends BaseActivity {
     }
     
     private void showBannerError(boolean show, String message) {
+        // Only show error if API fails AND list is empty
+        boolean shouldShowError = show && homeBanners.isEmpty();
+        
         if (bannersSection != null) {
-            bannersSection.setVisibility(show ? View.VISIBLE : View.GONE);
+            bannersSection.setVisibility(shouldShowError ? View.VISIBLE : View.GONE);
         }
         if (bannerErrorState != null) {
-            bannerErrorState.setVisibility(show ? View.VISIBLE : View.GONE);
+            bannerErrorState.setVisibility(shouldShowError ? View.VISIBLE : View.GONE);
         }
-        if (tvBannerErrorMessage != null && message != null) {
+        if (tvBannerErrorMessage != null && message != null && shouldShowError) {
             tvBannerErrorMessage.setText(message);
+        }
+        
+        // Add sample data fallback only if error and no data
+        if (shouldShowError) {
+            addSampleBanners();
+        }
+    }
+    
+    private void addSampleBanners() {
+        homeBanners.clear();
+        homeBanners.add(new Banner(
+            "1", 
+            "Special Plumbing Offers", 
+            "https://via.placeholder.com/400x200/4CAF50/FFFFFF?text=Plumbing+Deals",
+            "category",
+            "Plumbing",
+            "2024-01-01",
+            "2024-12-31",
+            true,
+            1,
+            "active",
+            "2024-01-01",
+            "2024-01-01",
+            null
+        ));
+        homeBanners.add(new Banner(
+            "2", 
+            "Expert Electrical Services", 
+            "https://via.placeholder.com/400x200/2196F3/FFFFFF?text=Electrical+Services",
+            "category",
+            "Electrical",
+            "2024-01-01",
+            "2024-12-31",
+            true,
+            2,
+            "active",
+            "2024-01-01",
+            "2024-01-01",
+            null
+        ));
+        
+        showBannerContent(true);
+        if (homeBannerAdapter != null) {
+            homeBannerAdapter.notifyDataSetChanged();
+            startBannerAutoSlide();
         }
     }
     
@@ -598,14 +683,76 @@ public class MainActivity extends BaseActivity {
     }
     
     private void showOffersError(boolean show, String message) {
+        // Only show error if API fails AND list is empty
+        boolean shouldShowError = show && homeOffers.isEmpty();
+        
         if (offersSection != null) {
-            offersSection.setVisibility(show ? View.VISIBLE : View.GONE);
+            offersSection.setVisibility(shouldShowError ? View.VISIBLE : View.GONE);
         }
         if (offersErrorState != null) {
-            offersErrorState.setVisibility(show ? View.VISIBLE : View.GONE);
+            offersErrorState.setVisibility(shouldShowError ? View.VISIBLE : View.GONE);
         }
-        if (tvOffersErrorMessage != null && message != null) {
+        if (tvOffersErrorMessage != null && message != null && shouldShowError) {
             tvOffersErrorMessage.setText(message);
+        }
+        
+        // Add sample data fallback only if error and no data
+        if (shouldShowError) {
+            addSampleOffers();
+        }
+    }
+    
+    private void addSampleOffers() {
+        homeOffers.clear();
+        homeOffers.add(new Offer(
+            "1",
+            "20% Off Plumbing Services",
+            "Get 20% discount on all plumbing services",
+            "PLUMB20",
+            "percentage",
+            20.0,
+            500.0,
+            "2024-12-31",
+            true,
+            "active",
+            "2024-01-01",
+            "2024-01-01",
+            null
+        ));
+        homeOffers.add(new Offer(
+            "2",
+            "₹100 Off Electrical Work",
+            "Save ₹100 on electrical repair services",
+            "ELEC100",
+            "fixed",
+            100.0,
+            200.0,
+            "2024-12-31",
+            true,
+            "active",
+            "2024-01-01",
+            "2024-01-01",
+            null
+        ));
+        homeOffers.add(new Offer(
+            "3",
+            "Free Inspection",
+            "Free home inspection for new customers",
+            "FREE2024",
+            "fixed",
+            0.0,
+            0.0,
+            "2024-12-31",
+            true,
+            "active",
+            "2024-01-01",
+            "2024-01-01",
+            null
+        ));
+        
+        showOffersContent(true);
+        if (homeOfferAdapter != null) {
+            homeOfferAdapter.notifyDataSetChanged();
         }
     }
     
