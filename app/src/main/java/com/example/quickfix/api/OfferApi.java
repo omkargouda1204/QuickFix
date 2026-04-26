@@ -20,6 +20,7 @@ public interface OfferApi {
     Call<List<Offer>> getOffers(
             @Header("apikey") String apiKey,
             @Header("Authorization") String bearer,
+            @Header("Content-Type") String contentType,
             @Query("select") String select,
             @Query("is_active") String active,
             @Query("order") String order

@@ -175,6 +175,10 @@ public class MainActivity extends BaseActivity {
         setupListBusinessCard(user);
         loadUserData(user);
         requestNotificationPermission();
+        
+        // Load banners and offers
+        loadBanners();
+        loadOffers();
 
         FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
             if (task.isSuccessful() && task.getResult() != null) {
@@ -190,6 +194,9 @@ public class MainActivity extends BaseActivity {
             ivLocationPulse = findViewSafe(R.id.ivLocationPulse);
             locationAccuracyDot = findViewSafe(R.id.locationAccuracyDot);
             notificationIcon = findViewSafe(R.id.notificationIcon);
+            notificationIcon.setOnClickListener(v -> {
+                startActivity(new Intent(this, NotificationsActivity.class));
+            });
             etSearch = findViewSafe(R.id.etSearch);
             micBtn = findViewSafe(R.id.micBtn);
             btnClearSearch = findViewSafe(R.id.btnClearSearch);
@@ -228,6 +235,7 @@ public class MainActivity extends BaseActivity {
             bannerErrorState = findViewSafe(R.id.bannerErrorState);
             tvBannerErrorMessage = findViewSafe(R.id.tvBannerErrorMessage);
             btnRetryBannerLoad = findViewSafe(R.id.btnRetryBannerLoad);
+            btnRetryBannerLoad.setOnClickListener(v -> loadBanners());
             vpBannersCarousel = findViewSafe(R.id.vpBannersCarousel);
             rvOffersStrip = findViewSafe(R.id.rvOffersStrip);
             bannerDotsLayout = findViewSafe(R.id.bannerDotsLayout);
@@ -238,6 +246,7 @@ public class MainActivity extends BaseActivity {
             offersErrorState = findViewSafe(R.id.offersErrorState);
             tvOffersErrorMessage = findViewSafe(R.id.tvOffersErrorMessage);
             btnRetryOffersLoad = findViewSafe(R.id.btnRetryOffersLoad);
+            btnRetryOffersLoad.setOnClickListener(v -> loadOffers());
 
             navHome = findViewSafe(R.id.navHome);
             navBookings = findViewSafe(R.id.navBookings);
@@ -265,7 +274,16 @@ public class MainActivity extends BaseActivity {
             }
 
             if (rvOffersStrip != null) {
-                // ...
+                homeOfferAdapter = new HomeOfferAdapter(this, homeOffers, offer -> {
+                    if (offer == null) return;
+                    String code = offer.offerCode == null ? "" : offer.offerCode.trim();
+                    if (!code.isEmpty()) {
+                        copyCouponCode(code);
+                    }
+                });
+                rvOffersStrip.setAdapter(homeOfferAdapter);
+                LinearLayoutManager layoutManager = new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false);
+                rvOffersStrip.setLayoutManager(layoutManager);
             }
         } catch (Exception e) {
             Log.e(TAG, "Error initializing views", e);
@@ -323,10 +341,10 @@ public class MainActivity extends BaseActivity {
     private void setupQuickActionListeners() {
         if (quickBookService != null) quickBookService.setOnClickListener(v -> openProvidersList(""));
         if (quickEmergency != null) quickEmergency.setOnClickListener(v -> {
-             // TODO: Open emergency service
+            startActivity(new Intent(this, EmergencyHelpActivity.class));
         });
         if (quickTrackBooking != null) quickTrackBooking.setOnClickListener(v -> {
-             // TODO: Open bookings
+            startActivity(new Intent(this, MyBookingsActivity.class));
         });
     }
 
@@ -337,15 +355,17 @@ public class MainActivity extends BaseActivity {
     }
 
     private void setupBottomNav() {
-        if (navHome != null) navHome.setOnClickListener(v -> {});
+        if (navHome != null) navHome.setOnClickListener(v -> {
+            // Already on MainActivity, no action needed
+        });
         if (navBookings != null) navBookings.setOnClickListener(v -> {
-            // startActivity(new Intent(this, BookingsActivity.class));
+            startActivity(new Intent(this, MyBookingsActivity.class));
         });
         if (navMessages != null) navMessages.setOnClickListener(v -> {
-            // startActivity(new Intent(this, MessagesActivity.class));
+            startActivity(new Intent(this, MessagesActivity.class));
         });
         if (navProfile != null) navProfile.setOnClickListener(v -> {
-            // startActivity(new Intent(this, ProfileActivity.class));
+            startActivity(new Intent(this, ProfileActivity.class));
         });
     }
 
@@ -376,14 +396,248 @@ public class MainActivity extends BaseActivity {
     }
 
     private void openProvidersList(String category) {
-        // Intent intent = new Intent(this, ProvidersActivity.class);
-        // intent.putExtra("category", category);
-        // startActivity(intent);
+        try {
+            Intent intent = new Intent(this, ProviderListActivity.class);
+            if (category != null && !category.trim().isEmpty()) {
+                intent.putExtra("category", category);
+                intent.putExtra("query", category);
+            }
+            startActivity(intent);
+        } catch (Exception e) {
+            Log.e(TAG, "Error opening providers list", e);
+            Toast.makeText(this, "Unable to open services", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void redirectToLogin() {
         startActivity(new Intent(this, LoginActivity.class));
         finish();
+    }
+
+    private void loadBanners() {
+        if (bannerApi == null) {
+            Log.e(TAG, "Banner API is null");
+            return;
+        }
+        
+        Log.d(TAG, "Loading banners from Supabase...");
+        showBannerLoading(true);
+        
+        bannerApi.getBanners(
+                BuildConfig.SUPABASE_ANON_KEY,
+                "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                "application/json",
+                "*",
+                "eq.true",
+                "sort_order.asc"
+        ).enqueue(new Callback<List<Banner>>() {
+            @Override
+            public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
+                runOnUiThread(() -> {
+                    showBannerLoading(false);
+                    Log.d(TAG, "Banner API response code: " + response.code());
+                    
+                    if (response.isSuccessful() && response.body() != null) {
+                        List<Banner> banners = response.body();
+                        Log.d(TAG, "Banners loaded successfully: " + banners.size() + " items");
+                        
+                        homeBanners.clear();
+                        homeBanners.addAll(banners);
+                        
+                        if (homeBanners.isEmpty()) {
+                            Log.d(TAG, "No active banners found");
+                            showBannerEmpty(true);
+                        } else {
+                            Log.d(TAG, "Displaying " + homeBanners.size() + " banners");
+                            showBannerContent(true);
+                            if (homeBannerAdapter != null) {
+                                homeBannerAdapter.notifyDataSetChanged();
+                                startBannerAutoSlide();
+                            }
+                        }
+                    } else {
+                        String errorMsg = "Failed to load banners (HTTP " + response.code() + ")";
+                        Log.e(TAG, errorMsg);
+                        showBannerError(true, errorMsg);
+                    }
+                });
+            }
+            
+            @Override
+            public void onFailure(Call<List<Banner>> call, Throwable t) {
+                runOnUiThread(() -> {
+                    showBannerLoading(false);
+                    String errorMsg = "Network error: " + t.getMessage();
+                    Log.e(TAG, "Banner API network failure", t);
+                    showBannerError(true, errorMsg);
+                });
+            }
+        });
+    }
+    
+    private void loadOffers() {
+        if (offerApi == null) {
+            Log.e(TAG, "Offer API is null");
+            return;
+        }
+        
+        Log.d(TAG, "Loading offers from Supabase...");
+        showOffersLoading(true);
+        
+        offerApi.getOffers(
+                BuildConfig.SUPABASE_ANON_KEY,
+                "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                "application/json",
+                "*",
+                "eq.true",
+                "sort_order.asc"
+        ).enqueue(new Callback<List<Offer>>() {
+            @Override
+            public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
+                runOnUiThread(() -> {
+                    showOffersLoading(false);
+                    Log.d(TAG, "Offer API response code: " + response.code());
+                    
+                    if (response.isSuccessful() && response.body() != null) {
+                        List<Offer> offers = response.body();
+                        Log.d(TAG, "Offers loaded successfully: " + offers.size() + " items");
+                        
+                        homeOffers.clear();
+                        homeOffers.addAll(offers);
+                        
+                        if (homeOffers.isEmpty()) {
+                            Log.d(TAG, "No active offers found");
+                            showOffersEmpty(true);
+                        } else {
+                            Log.d(TAG, "Displaying " + homeOffers.size() + " offers");
+                            showOffersContent(true);
+                            if (homeOfferAdapter != null) {
+                                homeOfferAdapter.notifyDataSetChanged();
+                            }
+                        }
+                    } else {
+                        String errorMsg = "Failed to load offers (HTTP " + response.code() + ")";
+                        Log.e(TAG, errorMsg);
+                        showOffersError(true, errorMsg);
+                    }
+                });
+            }
+            
+            @Override
+            public void onFailure(Call<List<Offer>> call, Throwable t) {
+                runOnUiThread(() -> {
+                    showOffersLoading(false);
+                    String errorMsg = "Network error: " + t.getMessage();
+                    Log.e(TAG, "Offer API network failure", t);
+                    showOffersError(true, errorMsg);
+                });
+            }
+        });
+    }
+    
+    private void showBannerLoading(boolean show) {
+        if (bannersSection != null) {
+            bannersSection.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (bannerLoadingState != null) {
+            bannerLoadingState.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+    }
+    
+    private void showBannerEmpty(boolean show) {
+        if (bannersSection != null) {
+            bannersSection.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (bannerEmptyState != null) {
+            bannerEmptyState.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+    }
+    
+    private void showBannerError(boolean show, String message) {
+        if (bannersSection != null) {
+            bannersSection.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (bannerErrorState != null) {
+            bannerErrorState.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (tvBannerErrorMessage != null && message != null) {
+            tvBannerErrorMessage.setText(message);
+        }
+    }
+    
+    private void showBannerContent(boolean show) {
+        if (bannersSection != null) {
+            bannersSection.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (bannerContentContainer != null) {
+            bannerContentContainer.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+    }
+    
+    private void showOffersLoading(boolean show) {
+        if (offersSection != null) {
+            offersSection.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (offersLoadingState != null) {
+            offersLoadingState.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+    }
+    
+    private void showOffersEmpty(boolean show) {
+        if (offersSection != null) {
+            offersSection.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (offersEmptyState != null) {
+            offersEmptyState.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+    }
+    
+    private void showOffersError(boolean show, String message) {
+        if (offersSection != null) {
+            offersSection.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (offersErrorState != null) {
+            offersErrorState.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (tvOffersErrorMessage != null && message != null) {
+            tvOffersErrorMessage.setText(message);
+        }
+    }
+    
+    private void showOffersContent(boolean show) {
+        if (offersSection != null) {
+            offersSection.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (offersContentContainer != null) {
+            offersContentContainer.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+    }
+    
+    private void startBannerAutoSlide() {
+        if (bannerAutoSlideRunnable != null) {
+            bannerAutoSlideHandler.removeCallbacks(bannerAutoSlideRunnable);
+        }
+        
+        bannerAutoSlideRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (homeBanners.size() > 1 && vpBannersCarousel != null) {
+                    int currentItem = vpBannersCarousel.getCurrentItem();
+                    int nextItem = (currentItem + 1) % homeBanners.size();
+                    vpBannersCarousel.setCurrentItem(nextItem, true);
+                    bannerAutoSlideHandler.postDelayed(this, 3000);
+                }
+            }
+        };
+        
+        bannerAutoSlideHandler.postDelayed(bannerAutoSlideRunnable, 3000);
+    }
+    
+    private void copyCouponCode(String code) {
+        android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        android.content.ClipData clip = android.content.ClipData.newPlainText("Coupon Code", code);
+        clipboard.setPrimaryClip(clip);
+        Toast.makeText(this, "Coupon code copied: " + code, Toast.LENGTH_SHORT).show();
     }
 
     private <T extends View> T findViewSafe(int id) {
