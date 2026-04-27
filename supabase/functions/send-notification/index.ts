@@ -286,6 +286,8 @@ async function sendFcmV1(
 ): Promise<Response> {
   const messageData: Record<string, string> = {
     type: args.type,
+    title: args.title,
+    body: args.body,
     ...(args.referenceId ? { reference_id: args.referenceId } : {}),
     ...args.data,
   };
@@ -296,6 +298,28 @@ async function sendFcmV1(
       ? "provider_apps"
       : "general";
 
+  const isEmergencyRequest = (args.type ?? "").trim() === "emergency_request";
+
+  const message: Record<string, unknown> = {
+    token: args.token,
+    data: messageData,
+    android: {
+      priority: "high",
+      notification: {
+        sound: "default",
+        channel_id: channelId,
+      },
+    },
+  };
+
+  if (!isEmergencyRequest) {
+    message.notification = {
+      title: args.title,
+      body: args.body,
+    };
+  }
+
+
   return await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
     method: "POST",
     headers: {
@@ -303,21 +327,7 @@ async function sendFcmV1(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      message: {
-        token: args.token,
-        notification: {
-          title: args.title,
-          body: args.body,
-        },
-        data: messageData,
-        android: {
-          priority: "high",
-          notification: {
-            sound: "default",
-            channel_id: channelId,
-          },
-        },
-      },
+      message,
     }),
   });
 }

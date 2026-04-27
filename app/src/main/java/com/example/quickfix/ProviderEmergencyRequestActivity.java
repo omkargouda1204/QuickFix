@@ -274,7 +274,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 Log.e(TAG, "rejectRequest failed", e);
                 runOnUiThread(() -> {
                     setLoading(false);
-                    showToast("Could not reject request. Please try again.");
+                    showToast(extractErrorMessage(e, "Could not reject request. Please try again."));
                 });
             }
         }).start();
@@ -315,7 +315,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 Log.e(TAG, "acceptRequest failed", e);
                 runOnUiThread(() -> {
                     setLoading(false);
-                    showToast("Could not accept request. Please try again.");
+                    showToast(extractErrorMessage(e, "Could not accept request. Please try again."));
                 });
             }
         }).start();
@@ -504,6 +504,11 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 return;
             }
 
+            if (!TextUtils.isEmpty(emergencyRequestId)
+                    && tryUpdateEmergencyBookingOnAccept(customerId, emergencyRequestId)) {
+                return;
+            }
+
             JSONObject booking = new JSONObject();
             booking.put("customer_id", customerId);
             booking.put("provider_id", providerId);
@@ -543,6 +548,48 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         } catch (Exception e) {
             Log.w(TAG, "mirrorEmergencyBooking failed: " + e.getMessage());
         }
+    }
+
+    private boolean tryUpdateEmergencyBookingOnAccept(String customerId, String emergencyRequestId) {
+        try {
+            JSONObject patch = new JSONObject();
+            patch.put("provider_id", safe(providerProfileId));
+            patch.put("provider_name", fallback(providerName, "Provider"));
+            patch.put("status", "accepted");
+            patch.put("type", "Emergency");
+            patch.put("is_emergency", true);
+
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
+                    + "?customer_id=eq." + urlEncode(customerId)
+                    + "&emergency_request_id=eq." + urlEncode(emergencyRequestId)
+                    + "&status=eq.pending";
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .patch(RequestBody.create(patch.toString(), JSON))
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "return=representation")
+                    .build();
+
+            try (Response response = http.newCall(request).execute()) {
+                if (response.code() != 200) {
+                    return false;
+                }
+                String body = response.body() != null ? response.body().string() : "[]";
+                JSONArray rows = new JSONArray(body);
+                return rows.length() > 0;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "tryUpdateEmergencyBookingOnAccept failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private String extractErrorMessage(Throwable throwable, String fallback) {
+        String msg = safe(throwable != null ? throwable.getMessage() : "");
+        return TextUtils.isEmpty(msg) ? fallback : msg;
     }
 
     private boolean bookingExistsForEmergency(String providerId, String emergencyRequestId) {

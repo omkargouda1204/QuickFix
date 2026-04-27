@@ -452,6 +452,7 @@ public class EmergencyHelpActivity extends BaseActivity {
         new Thread(() -> {
             try {
                 String requestId = createEmergencyRequest(category, description, finalLocationLabel);
+                mirrorEmergencyBookingOnSubmit(requestId, category, description, finalLocationLabel);
                 boolean providerLookupFailed = false;
                 List<String> providerFirebaseUids = new ArrayList<>();
                 try {
@@ -477,6 +478,7 @@ public class EmergencyHelpActivity extends BaseActivity {
                     data.put("address", finalLocationLabel);
                     data.put("location", finalLocationLabel);
                     data.put("description", safe(description));
+                    data.put("contact_number", safe(currentUserPhone));
                     if (!Double.isNaN(selectedLat)) {
                         data.put("lat", String.valueOf(selectedLat));
                     }
@@ -521,14 +523,14 @@ public class EmergencyHelpActivity extends BaseActivity {
                     } else if (notifiedProviders == 0) {
                         setStatus("Status: No providers available within 30 km.");
                     } else {
-                        setStatus("Status: Emergency request sent to nearby providers");
+                        setStatus("Status: Request sent to nearby providers");
                     }
                     bindAssignedProviderCard(null, category);
                     startStatusPolling();
                     if (finalProviderLookupFailed) {
                         showToast("Emergency request submitted, but provider matching is delayed due to network.");
                     } else if (notifiedProviders > 0) {
-                        showToast("Emergency request sent to nearby providers");
+                        showToast("Request sent to nearby providers");
                     } else {
                         showToast("No providers available within 30 km right now.");
                     }
@@ -586,6 +588,9 @@ public class EmergencyHelpActivity extends BaseActivity {
         payload.put("issue", safe(description));
         payload.put("description", safe(description));
         payload.put("address", safe(locationLabel));
+        if (!Double.isNaN(selectedLat) && !Double.isNaN(selectedLng)) {
+            payload.put("location", selectedLat + "," + selectedLng);
+        }
         payload.put("status", "pending");
         payload.put("city", safe(selectedCity));
         payload.put("area", safe(selectedArea));
@@ -597,6 +602,7 @@ public class EmergencyHelpActivity extends BaseActivity {
         }
         if (includeExtendedFields) {
             payload.put("type", "Emergency");
+            payload.put("timestamp", isoNow());
         }
         payload.put("created_at", isoNow());
         return payload;
@@ -623,14 +629,82 @@ public class EmergencyHelpActivity extends BaseActivity {
             if (arr.size() == 0) {
                 throw new IllegalStateException("Emergency request created but id missing");
             }
-            String requestId = safe(arr.get(0).getAsJsonObject().has("id")
+            String newRequestId = safe(arr.get(0).getAsJsonObject().has("id")
                     ? arr.get(0).getAsJsonObject().get("id").getAsString()
                     : "");
-            if (requestId.isEmpty()) {
+            if (newRequestId.isEmpty()) {
                 throw new IllegalStateException("Emergency request id missing");
             }
-            return requestId;
+            return newRequestId;
         }
+    }
+
+    private void mirrorEmergencyBookingOnSubmit(String requestId,
+                                                String category,
+                                                String description,
+                                                String locationLabel) {
+        try {
+            JSONObject booking = new JSONObject();
+            booking.put("customer_id", safe(currentUserId));
+            booking.put("customer_name", safe(currentUserName));
+            booking.put("customer_phone", safe(currentUserPhone));
+            booking.put("provider_id", JSONObject.NULL);
+            booking.put("provider_name", "");
+            booking.put("service_name", fallback(category, "Emergency"));
+            booking.put("category", fallback(category, "Emergency"));
+            booking.put("address", safe(locationLabel));
+            booking.put("description", safe(description));
+            booking.put("status", "pending");
+            booking.put("type", "Emergency");
+            booking.put("is_emergency", true);
+            booking.put("emergency_request_id", safe(requestId));
+            booking.put("created_at", isoNow());
+
+            if (tryInsertBooking(booking)) {
+                return;
+            }
+
+            booking.remove("is_emergency");
+            if (tryInsertBooking(booking)) {
+                return;
+            }
+
+            booking.remove("type");
+            booking.remove("emergency_request_id");
+            booking.put("booking_date", new SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                    .format(new java.util.Date()));
+            booking.put("booking_time", new SimpleDateFormat("HH:mm:ss", Locale.US)
+                    .format(new java.util.Date()));
+            try (Response fallbackResponse = postBookingInsert(booking)) {
+                if (fallbackResponse.code() >= 400) {
+                    Log.w(TAG, "mirrorEmergencyBookingOnSubmit fallback HTTP " + fallbackResponse.code());
+                }
+            }
+        } catch (Exception e) {
+            // Keep emergency submission successful even if booking mirror write fails.
+            Log.w(TAG, "mirrorEmergencyBookingOnSubmit failed: " + e.getMessage());
+        }
+    }
+
+    private boolean tryInsertBooking(JSONObject payload) {
+        try (Response response = postBookingInsert(payload)) {
+            return response.code() == 200 || response.code() == 201 || response.code() == 204;
+        } catch (Exception e) {
+            Log.w(TAG, "tryInsertBooking failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private Response postBookingInsert(JSONObject payload) throws Exception {
+        Request request = new Request.Builder()
+                .url(BuildConfig.SUPABASE_URL + "/rest/v1/bookings")
+                .post(RequestBody.create(payload.toString(), JSON))
+                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "return=minimal")
+                .build();
+        return http.newCall(request).execute();
     }
 
     private List<String> fetchMatchingProviderFirebaseUids(String category,
@@ -685,7 +759,7 @@ public class EmergencyHelpActivity extends BaseActivity {
                 double providerLng = pickDouble(o, "longitude", "lng");
 
                 if (providerFirebaseUid.isEmpty()) continue;
-                if (!("active".equals(providerStatus) || "approved".equals(providerStatus))) continue;
+                if (!("active".equals(providerStatus))) continue;
                 if (!CategoryMatcher.matches(category, providerCategory)) continue;
 
                 if (Double.isNaN(providerLat) || Double.isNaN(providerLng)) {

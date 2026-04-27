@@ -206,12 +206,12 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
             if (emergencyRequestId != null && !emergencyRequestId.trim().isEmpty()) {
                 builder.addAction(
                         0,
-                        "Decline",
-                        createEmergencyActionPendingIntent(emergencyRequestId.trim(), "decline")
+                        "\u274c Reject",
+                        createEmergencyActionPendingIntent(emergencyRequestId.trim(), "reject")
                 );
                 builder.addAction(
                         0,
-                        "Accept",
+                        "\u2705 Accept",
                         createEmergencyActionPendingIntent(emergencyRequestId.trim(), "accept")
                 );
             }
