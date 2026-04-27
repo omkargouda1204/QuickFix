@@ -31,10 +31,14 @@ import com.google.mlkit.vision.label.ImageLabeling;
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class ImageDetectionActivity extends AppCompatActivity {
 
@@ -50,11 +54,14 @@ public class ImageDetectionActivity extends AppCompatActivity {
     private MaterialCardView resultCard;
     private ProgressBar progressBar;
     private TextView tvResultTitle, tvResultSubtitle, tvDetectedService, tvConfidence;
-    private Button btnBookService;
+    private Button btnBookService, btnManualPlumbing, btnManualElectrical, btnManualCleaning, btnManualRepair;
+    private View layoutManualSelection;
 
     private ImageLabeler imageLabeler;
     private Uri selectedImageUri;
     private Bitmap selectedBitmap;
+    private static final float HIGH_CONFIDENCE_THRESHOLD = 0.68f;
+    private static final float LOW_CONFIDENCE_THRESHOLD = 0.45f;
 
     // Service mapping for ML Kit labels
     private final Map<String, String> labelToServiceMap = new HashMap<String, String>() {{
@@ -68,6 +75,14 @@ public class ImageDetectionActivity extends AppCompatActivity {
         
         put("wire", "Electrical");
         put("switch", "Electrical");
+        put("switchboard", "Electrical");
+        put("switch board", "Electrical");
+        put("socket", "Electrical");
+        put("plug", "Electrical");
+        put("electrical panel", "Electrical");
+        put("panel", "Electrical");
+        put("wiring", "Electrical");
+        put("distribution board", "Electrical");
         put("outlet", "Electrical");
         put("circuit", "Electrical");
         put("breaker", "Electrical");
@@ -116,7 +131,7 @@ public class ImageDetectionActivity extends AppCompatActivity {
 
         // Initialize ML Kit Image Labeler
         ImageLabelerOptions options = new ImageLabelerOptions.Builder()
-                .setConfidenceThreshold(0.7f)
+                .setConfidenceThreshold(0.35f)
                 .build();
         imageLabeler = ImageLabeling.getClient(options);
 
@@ -137,6 +152,11 @@ public class ImageDetectionActivity extends AppCompatActivity {
         tvDetectedService = findViewById(R.id.tvDetectedService);
         tvConfidence = findViewById(R.id.tvConfidence);
         btnBookService = findViewById(R.id.btnBookService);
+        layoutManualSelection = findViewById(R.id.layoutManualSelection);
+        btnManualPlumbing = findViewById(R.id.btnManualPlumbing);
+        btnManualElectrical = findViewById(R.id.btnManualElectrical);
+        btnManualCleaning = findViewById(R.id.btnManualCleaning);
+        btnManualRepair = findViewById(R.id.btnManualRepair);
     }
 
     private void setupToolbar() {
@@ -152,6 +172,10 @@ public class ImageDetectionActivity extends AppCompatActivity {
         btnTakePhoto.setOnClickListener(v -> checkCameraPermission());
         btnChooseGallery.setOnClickListener(v -> checkStoragePermission());
         btnBookService.setOnClickListener(v -> bookDetectedService());
+        btnManualPlumbing.setOnClickListener(v -> openService("Plumbing"));
+        btnManualElectrical.setOnClickListener(v -> openService("Electrical"));
+        btnManualCleaning.setOnClickListener(v -> openService("Cleaning"));
+        btnManualRepair.setOnClickListener(v -> openService("Repair"));
     }
 
     private void checkCameraPermission() {
@@ -254,51 +278,82 @@ public class ImageDetectionActivity extends AppCompatActivity {
     }
 
     private void processLabels(List<ImageLabel> labels) {
-        String detectedService = null;
-        float maxConfidence = 0f;
-        StringBuilder allLabels = new StringBuilder();
+        StringBuilder detectedLabels = new StringBuilder();
+        Map<String, Float> serviceScores = new HashMap<>();
 
         for (ImageLabel label : labels) {
             String labelText = label.getText().toLowerCase();
             float confidence = label.getConfidence();
-            
-            allLabels.append(label.getText()).append(" (").append(String.format("%.0f%%", confidence * 100)).append("), ");
-            
-            // Map label to service category
+
+            detectedLabels.append(label.getText())
+                    .append(" (")
+                    .append(String.format("%.0f%%", confidence * 100))
+                    .append("), ");
+
             for (Map.Entry<String, String> entry : labelToServiceMap.entrySet()) {
-                if (labelText.contains(entry.getKey()) && confidence > maxConfidence) {
-                    detectedService = entry.getValue();
-                    maxConfidence = confidence;
+                if (labelText.contains(entry.getKey())) {
+                    float weightedScore = confidence * keywordWeight(entry.getKey());
+                    String service = entry.getValue();
+                    Float existing = serviceScores.get(service);
+                    if (existing == null || weightedScore > existing) {
+                        serviceScores.put(service, weightedScore);
+                    }
                 }
             }
         }
 
-        if (detectedService != null) {
-            showResult(detectedService, maxConfidence, allLabels.toString());
+        if (serviceScores.isEmpty()) {
+            showNoServiceDetected(trimLabelOutput(detectedLabels.toString()), topSuggestions(labels));
+            return;
+        }
+
+        List<Map.Entry<String, Float>> ranked = new ArrayList<>(serviceScores.entrySet());
+        ranked.sort((a, b) -> Float.compare(b.getValue(), a.getValue()));
+        String bestService = ranked.get(0).getKey();
+        float bestScore = ranked.get(0).getValue();
+
+        if (bestScore >= HIGH_CONFIDENCE_THRESHOLD) {
+            showResult(bestService, bestScore, topServiceSuggestions(ranked));
+        } else if (bestScore >= LOW_CONFIDENCE_THRESHOLD) {
+            showLowConfidence(bestService, bestScore, topServiceSuggestions(ranked));
         } else {
-            showNoServiceDetected(allLabels.toString());
+            showNoServiceDetected(trimLabelOutput(detectedLabels.toString()), topServiceSuggestions(ranked));
         }
     }
 
-    private void showResult(String service, float confidence, String allLabels) {
+    private void showResult(String service, float confidence, String suggestions) {
         resultCard.setVisibility(View.VISIBLE);
         tvResultTitle.setText("✅ Service Detected!");
         tvResultSubtitle.setText("AI has identified the service you need");
         tvDetectedService.setText(service);
         tvConfidence.setText(String.format("Confidence: %.0f%%", confidence * 100));
         btnBookService.setVisibility(View.VISIBLE);
-        
+        showManualSelection(false);
+
         // Store detected service for booking
         btnBookService.setTag(service);
     }
 
-    private void showNoServiceDetected(String allLabels) {
+    private void showLowConfidence(String service, float confidence, String suggestions) {
         resultCard.setVisibility(View.VISIBLE);
-        tvResultTitle.setText("🤔 Service Not Clear");
-        tvResultSubtitle.setText("AI detected: " + allLabels.substring(0, Math.min(allLabels.length() - 2, 100)));
-        tvDetectedService.setText("Manual selection recommended");
-        tvConfidence.setText("Try a clearer photo");
+        tvResultTitle.setText("🤔 Low confidence detection");
+        tvResultSubtitle.setText("Top match: " + service + " (" + String.format("%.0f%%", confidence * 100) + ")");
+        tvDetectedService.setText("Suggestions: " + suggestions);
+        tvConfidence.setText("You can continue or choose manually below");
+        btnBookService.setTag(service);
+        btnBookService.setVisibility(View.VISIBLE);
+        showManualSelection(true);
+    }
+
+    private void showNoServiceDetected(String labels, String suggestions) {
+        resultCard.setVisibility(View.VISIBLE);
+        tvResultTitle.setText("🤔 Could not map service");
+        tvResultSubtitle.setText(labels.isEmpty() ? "Try a clearer image with the issue in focus"
+                : "Detected labels: " + labels);
+        tvDetectedService.setText("Suggestions: " + suggestions);
+        tvConfidence.setText("Manual selection recommended");
         btnBookService.setVisibility(View.GONE);
+        showManualSelection(true);
     }
 
     private void showNoResults() {
@@ -308,6 +363,7 @@ public class ImageDetectionActivity extends AppCompatActivity {
         tvDetectedService.setText("Try again with a clearer photo");
         tvConfidence.setText("");
         btnBookService.setVisibility(View.GONE);
+        showManualSelection(true);
     }
 
     private void showError(String message) {
@@ -317,6 +373,7 @@ public class ImageDetectionActivity extends AppCompatActivity {
         tvDetectedService.setText("");
         tvConfidence.setText("");
         btnBookService.setVisibility(View.GONE);
+        showManualSelection(true);
     }
 
     private void showLoading(boolean show) {
@@ -332,12 +389,66 @@ public class ImageDetectionActivity extends AppCompatActivity {
     private void bookDetectedService() {
         String service = (String) btnBookService.getTag();
         if (service != null) {
-            Intent intent = new Intent(this, ProviderListActivity.class);
-            intent.putExtra("category", service);
-            intent.putExtra("query", service);
-            startActivity(intent);
-            finish();
+            openService(service);
         }
+    }
+
+    private void openService(String service) {
+        Intent intent = new Intent(this, ProviderListActivity.class);
+        intent.putExtra("category", service);
+        intent.putExtra("query", service);
+        startActivity(intent);
+        finish();
+    }
+
+    private void showManualSelection(boolean show) {
+        if (layoutManualSelection != null) {
+            layoutManualSelection.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    private float keywordWeight(String keyword) {
+        if ("switchboard".equals(keyword)
+                || "electrical panel".equals(keyword)
+                || "distribution board".equals(keyword)
+                || "wiring".equals(keyword)
+                || "socket".equals(keyword)) {
+            return 1.2f;
+        }
+        return 1.0f;
+    }
+
+    private String trimLabelOutput(String raw) {
+        if (raw == null) return "";
+        String cleaned = raw.trim();
+        if (cleaned.endsWith(",")) {
+            cleaned = cleaned.substring(0, cleaned.length() - 1);
+        }
+        if (cleaned.length() > 120) {
+            cleaned = cleaned.substring(0, 120) + "...";
+        }
+        return cleaned;
+    }
+
+    private String topSuggestions(List<ImageLabel> labels) {
+        if (labels == null || labels.isEmpty()) return "Plumbing, Electrical, Cleaning";
+        List<ImageLabel> sorted = new ArrayList<>(labels);
+        sorted.sort((a, b) -> Float.compare(b.getConfidence(), a.getConfidence()));
+        Set<String> picks = new LinkedHashSet<>();
+        for (int i = 0; i < sorted.size() && picks.size() < 3; i++) {
+            picks.add(sorted.get(i).getText());
+        }
+        if (picks.isEmpty()) return "Plumbing, Electrical, Cleaning";
+        return String.join(", ", picks);
+    }
+
+    private String topServiceSuggestions(List<Map.Entry<String, Float>> ranked) {
+        if (ranked == null || ranked.isEmpty()) return "Plumbing, Electrical, Cleaning";
+        List<String> names = new ArrayList<>();
+        for (int i = 0; i < ranked.size() && names.size() < 3; i++) {
+            names.add(ranked.get(i).getKey());
+        }
+        return String.join(", ", names);
     }
 
     private void showPermissionDeniedDialog(String message) {

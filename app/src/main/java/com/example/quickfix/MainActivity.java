@@ -51,8 +51,10 @@ import org.json.JSONObject;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import android.speech.RecognizerIntent;
@@ -103,7 +105,12 @@ public class MainActivity extends BaseActivity {
 
     private CardView featuredCard1, featuredCard2, featuredCard3;
     private CardView cardImageDetection;
+    private View featuredServicesSection;
+    private TextView tvFeaturedTitle1, tvFeaturedDesc1, tvFeaturedTitle2, tvFeaturedDesc2, tvFeaturedTitle3, tvFeaturedDesc3;
     private View providerDashboardSection;
+    private String featuredCategory1 = "Cleaning";
+    private String featuredCategory2 = "Electrical";
+    private String featuredCategory3 = "Plumbing";
 
     private View continueSection;
     private View continueContentContainer, continueLoadingState, continueEmptyState, continueErrorState;
@@ -181,9 +188,8 @@ public class MainActivity extends BaseActivity {
         if (bannersSection != null) bannersSection.setVisibility(View.VISIBLE);
         if (offersSection != null) offersSection.setVisibility(View.VISIBLE);
         
-        // Load banners and offers
-        loadBanners();
-        loadOffers();
+        // Load home content from database-backed APIs.
+        reloadHomeData(false);
 
         FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
             if (task.isSuccessful() && task.getResult() != null) {
@@ -227,6 +233,13 @@ public class MainActivity extends BaseActivity {
             featuredCard2 = findViewSafe(R.id.featuredCard2);
             featuredCard3 = findViewSafe(R.id.featuredCard3);
             cardImageDetection = findViewSafe(R.id.cardImageDetection);
+            featuredServicesSection = findViewSafe(R.id.featuredServicesSection);
+            tvFeaturedTitle1 = findViewSafe(R.id.tvFeaturedTitle1);
+            tvFeaturedDesc1 = findViewSafe(R.id.tvFeaturedDesc1);
+            tvFeaturedTitle2 = findViewSafe(R.id.tvFeaturedTitle2);
+            tvFeaturedDesc2 = findViewSafe(R.id.tvFeaturedDesc2);
+            tvFeaturedTitle3 = findViewSafe(R.id.tvFeaturedTitle3);
+            tvFeaturedDesc3 = findViewSafe(R.id.tvFeaturedDesc3);
 
             providerDashboardSection = findViewSafe(R.id.providerDashboardSection);
             listBusinessSection = findViewSafe(R.id.listBusinessSection);
@@ -354,9 +367,9 @@ public class MainActivity extends BaseActivity {
     }
 
     private void setupFeaturedCardListeners() {
-        if (featuredCard1 != null) featuredCard1.setOnClickListener(v -> openProvidersList("Cleaning"));
-        if (featuredCard2 != null) featuredCard2.setOnClickListener(v -> openProvidersList("Electrical"));
-        if (featuredCard3 != null) featuredCard3.setOnClickListener(v -> openProvidersList("Plumbing"));
+        if (featuredCard1 != null) featuredCard1.setOnClickListener(v -> openProvidersList(featuredCategory1));
+        if (featuredCard2 != null) featuredCard2.setOnClickListener(v -> openProvidersList(featuredCategory2));
+        if (featuredCard3 != null) featuredCard3.setOnClickListener(v -> openProvidersList(featuredCategory3));
         if (cardImageDetection != null) cardImageDetection.setOnClickListener(v -> openImageDetection());
     }
 
@@ -378,18 +391,7 @@ public class MainActivity extends BaseActivity {
     private void setupPullToRefresh() {
         if (homeSwipeRefresh != null) {
             homeSwipeRefresh.setColorSchemeResources(R.color.primary);
-            homeSwipeRefresh.setOnRefreshListener(() -> {
-                // Refresh banners and offers
-                loadBanners();
-                loadOffers();
-                
-                // Stop refreshing after a delay
-                homeSwipeRefresh.postDelayed(() -> {
-                    if (homeSwipeRefresh != null) {
-                        homeSwipeRefresh.setRefreshing(false);
-                    }
-                }, 2000);
-            });
+            homeSwipeRefresh.setOnRefreshListener(() -> reloadHomeData(true));
         }
     }
 
@@ -402,7 +404,7 @@ public class MainActivity extends BaseActivity {
         if (btnListBusinessStart != null) {
             btnListBusinessStart.setOnClickListener(v -> {
                 try {
-                    startActivity(new Intent(this, ProviderApplicationDetailActivity.class));
+                    startActivity(new Intent(this, ProviderApplicationActivity.class));
                 } catch (Exception e) {
                     Log.e(TAG, "Error opening provider application: " + e.getMessage());
                     Toast.makeText(this, "Unable to open provider form", Toast.LENGTH_SHORT).show();
@@ -456,13 +458,39 @@ public class MainActivity extends BaseActivity {
         finish();
     }
 
+    private void reloadHomeData(boolean fromPullToRefresh) {
+        if (fromPullToRefresh) {
+            homeBanners.clear();
+            homeOffers.clear();
+            if (homeBannerAdapter != null) homeBannerAdapter.notifyDataSetChanged();
+            if (homeOfferAdapter != null) homeOfferAdapter.notifyDataSetChanged();
+        }
+        pendingHomeLoads = 0;
+        loadBanners();
+        loadOffers();
+        loadFeaturedServices();
+    }
+
+    private void beginHomeLoad() {
+        pendingHomeLoads++;
+    }
+
+    private void endHomeLoad() {
+        pendingHomeLoads = Math.max(0, pendingHomeLoads - 1);
+        if (pendingHomeLoads == 0 && homeSwipeRefresh != null) {
+            homeSwipeRefresh.setRefreshing(false);
+        }
+    }
+
     private void loadBanners() {
         if (bannerApi == null) {
             Log.e(TAG, "Banner API is null");
+            endHomeLoad();
             return;
         }
         
         Log.d(TAG, "Loading banners from Supabase...");
+        beginHomeLoad();
         showBannerLoading(true);
         
         bannerApi.getBanners(
@@ -502,6 +530,7 @@ public class MainActivity extends BaseActivity {
                         Log.e(TAG, errorMsg);
                         showBannerError(true, errorMsg);
                     }
+                    endHomeLoad();
                 });
             }
             
@@ -512,6 +541,7 @@ public class MainActivity extends BaseActivity {
                     String errorMsg = "Network error: " + t.getMessage();
                     Log.e(TAG, "Banner API network failure", t);
                     showBannerError(true, errorMsg);
+                    endHomeLoad();
                 });
             }
         });
@@ -520,10 +550,12 @@ public class MainActivity extends BaseActivity {
     private void loadOffers() {
         if (offerApi == null) {
             Log.e(TAG, "Offer API is null");
+            endHomeLoad();
             return;
         }
         
         Log.d(TAG, "Loading offers from Supabase...");
+        beginHomeLoad();
         showOffersLoading(true);
         
         offerApi.getOffers(
@@ -562,6 +594,7 @@ public class MainActivity extends BaseActivity {
                         Log.e(TAG, errorMsg);
                         showOffersError(true, errorMsg);
                     }
+                    endHomeLoad();
                 });
             }
             
@@ -572,197 +605,192 @@ public class MainActivity extends BaseActivity {
                     String errorMsg = "Network error: " + t.getMessage();
                     Log.e(TAG, "Offer API network failure", t);
                     showOffersError(true, errorMsg);
+                    endHomeLoad();
                 });
             }
         });
     }
     
     private void showBannerLoading(boolean show) {
-        if (bannersSection != null) {
-            bannersSection.setVisibility(show ? View.VISIBLE : View.GONE);
-        }
+        if (bannersSection != null) bannersSection.setVisibility(show ? View.VISIBLE : View.GONE);
         if (bannerLoadingState != null) {
             bannerLoadingState.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (show) {
+            if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE);
+            if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE);
+            if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE);
         }
     }
     
     private void showBannerEmpty(boolean show) {
-        if (bannersSection != null) {
-            bannersSection.setVisibility(show ? View.VISIBLE : View.GONE);
-        }
+        if (bannersSection != null) bannersSection.setVisibility(show ? View.VISIBLE : View.GONE);
         if (bannerEmptyState != null) {
             bannerEmptyState.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (show) {
+            if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE);
+            if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE);
+            if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE);
         }
     }
     
     private void showBannerError(boolean show, String message) {
-        // Only show error if API fails AND list is empty
         boolean shouldShowError = show && homeBanners.isEmpty();
-        
-        if (bannersSection != null) {
-            bannersSection.setVisibility(shouldShowError ? View.VISIBLE : View.GONE);
-        }
+
+        if (bannersSection != null) bannersSection.setVisibility(shouldShowError ? View.VISIBLE : View.GONE);
         if (bannerErrorState != null) {
             bannerErrorState.setVisibility(shouldShowError ? View.VISIBLE : View.GONE);
         }
         if (tvBannerErrorMessage != null && message != null && shouldShowError) {
             tvBannerErrorMessage.setText(message);
         }
-        
-        // Add sample data fallback only if error and no data
         if (shouldShowError) {
-            addSampleBanners();
-        }
-    }
-    
-    private void addSampleBanners() {
-        homeBanners.clear();
-        homeBanners.add(new Banner(
-            "1", 
-            "Special Plumbing Offers", 
-            "https://via.placeholder.com/400x200/4CAF50/FFFFFF?text=Plumbing+Deals",
-            "category",
-            "Plumbing",
-            "2024-01-01",
-            "2024-12-31",
-            true,
-            1,
-            "active",
-            "2024-01-01",
-            "2024-01-01",
-            null
-        ));
-        homeBanners.add(new Banner(
-            "2", 
-            "Expert Electrical Services", 
-            "https://via.placeholder.com/400x200/2196F3/FFFFFF?text=Electrical+Services",
-            "category",
-            "Electrical",
-            "2024-01-01",
-            "2024-12-31",
-            true,
-            2,
-            "active",
-            "2024-01-01",
-            "2024-01-01",
-            null
-        ));
-        
-        showBannerContent(true);
-        if (homeBannerAdapter != null) {
-            homeBannerAdapter.notifyDataSetChanged();
-            startBannerAutoSlide();
+            if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE);
+            if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE);
+            if (bannerContentContainer != null) bannerContentContainer.setVisibility(View.GONE);
+        } else if (!homeBanners.isEmpty()) {
+            showBannerContent(true);
         }
     }
     
     private void showBannerContent(boolean show) {
-        if (bannersSection != null) {
-            bannersSection.setVisibility(show ? View.VISIBLE : View.GONE);
-        }
+        if (bannersSection != null) bannersSection.setVisibility(show ? View.VISIBLE : View.GONE);
         if (bannerContentContainer != null) {
             bannerContentContainer.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (show) {
+            if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE);
+            if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE);
+            if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE);
         }
     }
     
     private void showOffersLoading(boolean show) {
-        if (offersSection != null) {
-            offersSection.setVisibility(show ? View.VISIBLE : View.GONE);
-        }
+        if (offersSection != null) offersSection.setVisibility(show ? View.VISIBLE : View.GONE);
         if (offersLoadingState != null) {
             offersLoadingState.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (show) {
+            if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE);
+            if (offersErrorState != null) offersErrorState.setVisibility(View.GONE);
+            if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE);
         }
     }
     
     private void showOffersEmpty(boolean show) {
-        if (offersSection != null) {
-            offersSection.setVisibility(show ? View.VISIBLE : View.GONE);
-        }
+        if (offersSection != null) offersSection.setVisibility(show ? View.VISIBLE : View.GONE);
         if (offersEmptyState != null) {
             offersEmptyState.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (show) {
+            if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE);
+            if (offersErrorState != null) offersErrorState.setVisibility(View.GONE);
+            if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE);
         }
     }
     
     private void showOffersError(boolean show, String message) {
-        // Only show error if API fails AND list is empty
         boolean shouldShowError = show && homeOffers.isEmpty();
-        
-        if (offersSection != null) {
-            offersSection.setVisibility(shouldShowError ? View.VISIBLE : View.GONE);
-        }
+
+        if (offersSection != null) offersSection.setVisibility(shouldShowError ? View.VISIBLE : View.GONE);
         if (offersErrorState != null) {
             offersErrorState.setVisibility(shouldShowError ? View.VISIBLE : View.GONE);
         }
         if (tvOffersErrorMessage != null && message != null && shouldShowError) {
             tvOffersErrorMessage.setText(message);
         }
-        
-        // Add sample data fallback only if error and no data
         if (shouldShowError) {
-            addSampleOffers();
-        }
-    }
-    
-    private void addSampleOffers() {
-        homeOffers.clear();
-        homeOffers.add(new Offer(
-            "1",
-            "20% Off Plumbing Services",
-            "Get 20% discount on all plumbing services",
-            "PLUMB20",
-            "percentage",
-            20.0,
-            500.0,
-            "2024-12-31",
-            true,
-            "active",
-            "2024-01-01",
-            "2024-01-01",
-            null
-        ));
-        homeOffers.add(new Offer(
-            "2",
-            "₹100 Off Electrical Work",
-            "Save ₹100 on electrical repair services",
-            "ELEC100",
-            "fixed",
-            100.0,
-            200.0,
-            "2024-12-31",
-            true,
-            "active",
-            "2024-01-01",
-            "2024-01-01",
-            null
-        ));
-        homeOffers.add(new Offer(
-            "3",
-            "Free Inspection",
-            "Free home inspection for new customers",
-            "FREE2024",
-            "fixed",
-            0.0,
-            0.0,
-            "2024-12-31",
-            true,
-            "active",
-            "2024-01-01",
-            "2024-01-01",
-            null
-        ));
-        
-        showOffersContent(true);
-        if (homeOfferAdapter != null) {
-            homeOfferAdapter.notifyDataSetChanged();
+            if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE);
+            if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE);
+            if (offersContentContainer != null) offersContentContainer.setVisibility(View.GONE);
+        } else if (!homeOffers.isEmpty()) {
+            showOffersContent(true);
         }
     }
     
     private void showOffersContent(boolean show) {
-        if (offersSection != null) {
-            offersSection.setVisibility(show ? View.VISIBLE : View.GONE);
-        }
+        if (offersSection != null) offersSection.setVisibility(show ? View.VISIBLE : View.GONE);
         if (offersContentContainer != null) {
             offersContentContainer.setVisibility(show ? View.VISIBLE : View.GONE);
         }
+        if (show) {
+            if (offersLoadingState != null) offersLoadingState.setVisibility(View.GONE);
+            if (offersEmptyState != null) offersEmptyState.setVisibility(View.GONE);
+            if (offersErrorState != null) offersErrorState.setVisibility(View.GONE);
+        }
+    }
+
+    private void loadFeaturedServices() {
+        beginHomeLoad();
+        new Thread(() -> {
+            List<String> categories = new ArrayList<>();
+            try {
+                String url = BuildConfig.SUPABASE_URL
+                        + "/rest/v1/services?select=title,category,is_active&is_active=eq.true&order=created_at.desc&limit=40";
+                Request req = new Request.Builder().url(url)
+                        .get()
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+                try (Response r = HTTP.newCall(req).execute()) {
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    if (r.isSuccessful()) {
+                        JSONArray arr = new JSONArray(body);
+                        Set<String> unique = new LinkedHashSet<>();
+                        for (int i = 0; i < arr.length(); i++) {
+                            JSONObject row = arr.getJSONObject(i);
+                            String category = row.optString("category", "").trim();
+                            if (category.isEmpty()) {
+                                category = row.optString("title", "").trim();
+                            }
+                            if (!category.isEmpty()) {
+                                unique.add(category);
+                            }
+                            if (unique.size() >= 3) {
+                                break;
+                            }
+                        }
+                        categories.addAll(unique);
+                    } else {
+                        Log.w(TAG, "Failed loading services for featured cards: HTTP " + r.code());
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "loadFeaturedServices", e);
+            }
+
+            List<String> finalCategories = categories;
+            MAIN.post(() -> {
+                applyFeaturedCategories(finalCategories);
+                endHomeLoad();
+            });
+        }).start();
+    }
+
+    private void applyFeaturedCategories(List<String> categories) {
+        if (categories == null || categories.isEmpty()) {
+            if (featuredServicesSection != null) featuredServicesSection.setVisibility(View.GONE);
+            return;
+        }
+
+        if (featuredServicesSection != null) featuredServicesSection.setVisibility(View.VISIBLE);
+        while (categories.size() < 3) {
+            categories.add(categories.get(categories.size() - 1));
+        }
+
+        featuredCategory1 = categories.get(0);
+        featuredCategory2 = categories.get(1);
+        featuredCategory3 = categories.get(2);
+
+        if (tvFeaturedTitle1 != null) tvFeaturedTitle1.setText(featuredCategory1);
+        if (tvFeaturedTitle2 != null) tvFeaturedTitle2.setText(featuredCategory2);
+        if (tvFeaturedTitle3 != null) tvFeaturedTitle3.setText(featuredCategory3);
+
+        if (tvFeaturedDesc1 != null) tvFeaturedDesc1.setText("Popular in your city");
+        if (tvFeaturedDesc2 != null) tvFeaturedDesc2.setText("Trusted professionals available");
+        if (tvFeaturedDesc3 != null) tvFeaturedDesc3.setText("Book verified experts instantly");
     }
     
     private void startBannerAutoSlide() {

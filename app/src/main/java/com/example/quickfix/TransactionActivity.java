@@ -86,14 +86,10 @@ public class TransactionActivity extends BaseActivity {
         progressBar = findViewById(R.id.progressBar);
         emptyState = findViewById(R.id.emptyState);
         tvEmptyMessage = findViewById(R.id.tvEmptyMessage);
-        
-        // Hide provider-specific summary cards from user view
-        hideProviderSpecificCards();
+        hideProviderSummaryCards();
     }
-    
-    private void hideProviderSpecificCards() {
-        // Hide the summary cards container that contains Total Earnings, This Month, Jobs Done
-        // These are provider-specific and should not be shown to users
+
+    private void hideProviderSummaryCards() {
         View summaryCards = findViewById(R.id.summaryCardsContainer);
         if (summaryCards != null) {
             summaryCards.setVisibility(View.GONE);
@@ -150,11 +146,12 @@ public class TransactionActivity extends BaseActivity {
 
     private void loadTransactions() {
         showLoading(true);
+        adapter.setTransactions(new ArrayList<>());
         new Thread(() -> {
             try {
                 String uid = android.net.Uri.encode(userId == null ? "" : userId.trim());
                 String dbId = android.net.Uri.encode(userDbId == null ? "" : userDbId.trim());
-                String url = BASE_URL + "/rest/v1/bookings?select=*&order=updated_at.desc&status=in.(paid,completed)";
+                String url = BASE_URL + "/rest/v1/bookings?select=*&order=created_at.desc";
                 if (!dbId.isEmpty() && !dbId.equals(uid)) {
                     url += "&or=(customer_id.eq." + uid + ",customer_id.eq." + dbId + ")";
                 } else {

@@ -157,7 +157,7 @@
     <string name="profile_provider_dashboard">Provider Dashboard</string>
     <string name="profile_logout_confirm_title">Logout</string>
     <string name="profile_logout_confirm_msg">Are you sure you want to logout?</string>
-    <string name="no_transactions_yet">No transactions yet</string>
+    <string name="no_transactions_yet">No transactions found</string>
     <string name="profile_version">QuickFix v1.0 · Made with ❤️</string>
 
     <!-- Bookings Screen -->

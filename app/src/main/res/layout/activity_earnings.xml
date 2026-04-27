@@ -25,14 +25,13 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="16dp">
-            <!-- Summary Cards (Provider Only - Hidden for Users) -->
             <LinearLayout
                 android:id="@+id/summaryCardsContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:weightSum="3"
-                android:visibility="gone">
+                android:weightSum="3">
+
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="0dp"
                     android:layout_height="100dp"
@@ -41,18 +40,21 @@
                     app:cardCornerRadius="12dp"
                     app:cardElevation="2dp"
                     app:cardBackgroundColor="#E8F5E9">
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:orientation="vertical"
                         android:gravity="center"
                         android:padding="8dp">
+
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="Total Earnings"
                             android:textColor="#388E3C"
                             android:textSize="12sp" />
+
                         <TextView
                             android:id="@+id/tvTotalEarnings"
                             android:layout_width="wrap_content"
@@ -64,6 +66,7 @@
                             android:textStyle="bold" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
+
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="0dp"
                     android:layout_height="100dp"
@@ -72,18 +75,21 @@
                     app:cardCornerRadius="12dp"
                     app:cardElevation="2dp"
                     app:cardBackgroundColor="#E3F2FD">
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:orientation="vertical"
                         android:gravity="center"
                         android:padding="8dp">
+
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="This Month"
                             android:textColor="#1976D2"
                             android:textSize="12sp" />
+
                         <TextView
                             android:id="@+id/tvMonthEarnings"
                             android:layout_width="wrap_content"
@@ -95,6 +101,7 @@
                             android:textStyle="bold" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
+
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="0dp"
                     android:layout_height="100dp"
@@ -103,18 +110,21 @@
                     app:cardCornerRadius="12dp"
                     app:cardElevation="2dp"
                     app:cardBackgroundColor="#FFF3E0">
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:orientation="vertical"
                         android:gravity="center"
                         android:padding="8dp">
+
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="Jobs Done"
                             android:textColor="#F57C00"
                             android:textSize="12sp" />
+
                         <TextView
                             android:id="@+id/tvCompletedJobs"
                             android:layout_width="wrap_content"
@@ -127,11 +137,12 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
+
             <!-- Transaction History Header -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
+                android:layout_marginTop="8dp"
                 android:layout_marginBottom="8dp"
                 android:text="Transaction History"
                 android:textColor="@color/text_primary"
@@ -174,9 +185,10 @@
                         android:gravity="center"
                         android:visibility="gone">
                         <TextView
+                            android:id="@+id/tvEmptyMessage"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="No earnings yet"
+                            android:text="No transactions found"
                             android:textColor="@color/text_secondary"
                             android:textSize="16sp" />
                     </LinearLayout>

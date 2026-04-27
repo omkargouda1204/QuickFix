@@ -144,7 +144,10 @@ public class MessagesActivity extends BaseActivity {
         btnSend.setOnClickListener(v -> sendMessage());
         if (swipeMessages != null) {
             swipeMessages.setColorSchemeResources(R.color.primary);
-            swipeMessages.setOnRefreshListener(() -> loadMessages(false));
+            swipeMessages.setOnRefreshListener(() -> {
+                if (adapter != null) adapter.setItems(new ArrayList<>());
+                loadMessages(false);
+            });
         }
     }
 

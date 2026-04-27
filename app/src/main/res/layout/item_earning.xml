@@ -44,6 +44,15 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/tvProviderName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Provider: --"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
@@ -90,7 +99,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Date"
+                    android:text="Date &amp; Time"
                     android:textColor="@color/text_secondary"
                     android:textSize="11sp"
                     android:textAllCaps="true"
@@ -101,7 +110,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="2024-03-04"
+                    android:text="2024-03-04 10:30 AM"
                     android:textColor="@color/text_primary"
                     android:textSize="13sp" />
             </LinearLayout>
@@ -123,7 +132,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Txn ID"
+                    android:text="Transaction ID"
                     android:textColor="@color/text_secondary"
                     android:textSize="11sp"
                     android:textAllCaps="true"
@@ -148,7 +157,7 @@
                 android:paddingEnd="12dp"
                 android:paddingTop="4dp"
                 android:paddingBottom="4dp"
-                android:text="COMPLETED"
+                android:text="PAID"
                 android:textColor="@color/white"
                 android:textSize="10sp"
                 android:textStyle="bold" />

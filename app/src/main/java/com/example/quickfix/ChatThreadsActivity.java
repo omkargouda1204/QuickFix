@@ -90,7 +90,10 @@ public class ChatThreadsActivity extends BaseActivity implements ChatThreadsAdap
         swipeThreads = findViewById(R.id.swipeThreads);
         if (swipeThreads != null) {
             swipeThreads.setColorSchemeResources(R.color.primary);
-            swipeThreads.setOnRefreshListener(this::loadThreads);
+            swipeThreads.setOnRefreshListener(() -> {
+                if (adapter != null) adapter.setItems(new ArrayList<>());
+                loadThreads();
+            });
         }
     }
 
