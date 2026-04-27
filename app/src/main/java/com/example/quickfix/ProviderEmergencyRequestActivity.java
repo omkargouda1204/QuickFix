@@ -517,6 +517,15 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             booking.put("provider_name", fallback(providerName, "Provider"));
             booking.put("service_name", fallback(request.optString("category", ""), "Emergency"));
             booking.put("category", fallback(request.optString("category", ""), "Emergency"));
+            
+            // Add service_id for emergency bookings
+            String serviceId = fetchServiceIdForCategory(fallback(request.optString("category", ""), "Emergency"));
+            if (serviceId.isEmpty()) {
+                booking.put("service_id", org.json.JSONObject.NULL);
+            } else {
+                booking.put("service_id", serviceId);
+            }
+            
             booking.put("address", safe(request.optString("address", "")));
             booking.put("description", safe(request.optString("description", "")));
             booking.put("status", "accepted");
@@ -640,6 +649,35 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 .addHeader("Prefer", "return=minimal")
                 .build();
         return http.newCall(insert).execute();
+    }
+    
+    private String fetchServiceIdForCategory(String category) {
+        String cat = safe(category);
+        if (cat.isEmpty()) return "";
+        try {
+            String url = BuildConfig.SUPABASE_URL
+                    + "/rest/v1/services?select=id&category=eq." + android.net.Uri.encode(cat)
+                    + "&limit=1";
+            Request request = new Request.Builder().url(url)
+                    .get()
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+            try (Response response = http.newCall(request).execute()) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String body = response.body().string();
+                    org.json.JSONArray arr = new org.json.JSONArray(body);
+                    if (arr.length() > 0) {
+                        return arr.getJSONObject(0).optString("id", "");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "fetchServiceIdForCategory: " + e.getMessage());
+            return "";
+        }
+        return "";
     }
 
     private void setLoading(boolean loading) {

@@ -24,7 +24,6 @@ import com.razorpay.PaymentResultListener;
 import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.textfield.TextInputLayout;
 import com.google.android.material.textfield.TextInputEditText;
-import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
@@ -38,6 +37,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -56,6 +57,7 @@ public class UserBookingsActivity extends BaseActivity
     private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
     private static final String BASE_URL = BuildConfig.SUPABASE_URL;
     private static final String CREATE_ORDER_FN_URL = BuildConfig.SUPABASE_CREATE_ORDER_FN_URL;
+    private static final String OFFER_VALIDATION_FN_URL = BuildConfig.SUPABASE_OFFER_VALIDATION_FN_URL;
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     private static final int REVIEW_MAX_CHARS = 500;
@@ -74,10 +76,8 @@ public class UserBookingsActivity extends BaseActivity
     private String userId;
     private String userDbId;
 
-    private final OkHttpClient HTTP = new OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .build();
+    // Use centralized HTTP client for optimized connection pooling
+    private final OkHttpClient HTTP = HttpClientProvider.getInstance();
     private final Handler MAIN = new Handler(Looper.getMainLooper());
     private Booking pendingPaymentBooking;
     private String pendingOrderId;
@@ -447,57 +447,68 @@ public class UserBookingsActivity extends BaseActivity
                                           TextView tvSummary) {
         new Thread(() -> {
             try {
-                String url = BASE_URL + "/rest/v1/coupons?select=*&code=eq." + android.net.Uri.encode(code);
-                Request req = new Request.Builder().url(url)
-                        .get()
+                String endpoint = clean(OFFER_VALIDATION_FN_URL);
+                if (endpoint.isEmpty()) {
+                    throw new IllegalStateException("Offer validation service is unavailable");
+                }
+
+                JSONObject payload = new JSONObject();
+                payload.put("code", code);
+                payload.put("amount", amountInr);
+                payload.put("booking_id", clean(booking.id));
+                payload.put("user_id", clean(userId));
+
+                Request req = new Request.Builder().url(endpoint)
+                        .post(RequestBody.create(payload.toString(), JSON))
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
                         .addHeader("Accept", "application/json")
                         .build();
 
                 try (Response r = HTTP.newCall(req).execute()) {
+                    String body = r.body() != null ? r.body().string() : "{}";
                     if (!r.isSuccessful()) {
-                        throw new IllegalStateException("Coupon lookup failed");
-                    }
-
-                    String body = r.body() != null ? r.body().string() : "[]";
-                    JSONArray arr = new JSONArray(body);
-                    if (arr.length() == 0) {
-                        throw new IllegalStateException("Invalid coupon code");
-                    }
-
-                    JSONObject coupon = arr.getJSONObject(0);
-                    if (!coupon.optBoolean("is_active", true)) {
-                        throw new IllegalStateException("Coupon is inactive");
-                    }
-
-                    String expiry = clean(coupon.optString("expiry_date", ""));
-                    if (!expiry.isEmpty() && expiry.length() >= 10) {
-                        String today = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date());
-                        if (expiry.substring(0, 10).compareTo(today) < 0) {
-                            throw new IllegalStateException("Coupon expired");
+                        String parsedError = parseSupabaseError(body);
+                        if (parsedError.toLowerCase(Locale.US).contains("unknown")) {
+                            CouponValidationResult fallback = validateCouponFromOffersTable(code, amountInr);
+                            applyCouponValidationResult(fallback, amountInr, code, dialog, tvSummary, booking, keyId);
+                            return;
                         }
+                        throw new IllegalStateException("Coupon validation failed: " + parsedError);
                     }
 
-                    double percent = coupon.optDouble("discount_percent", 0d);
-                    double maxDiscount = coupon.optDouble("max_discount", 0d);
-                    double discount = amountInr * (percent / 100d);
-                    if (maxDiscount > 0d) discount = Math.min(discount, maxDiscount);
-                    if (discount < 0d) discount = 0d;
+                    JSONObject result = new JSONObject(body);
+                    if (!result.optBoolean("valid", true)) {
+                        String msg = clean(result.optString("message", ""));
+                        throw new IllegalStateException(msg.isEmpty() ? "Invalid coupon code" : msg);
+                    }
 
-                    final double appliedDiscount = discount;
-                    final double finalAmount = Math.max(0.01d, amountInr - appliedDiscount);
-                    pendingCouponCode = code;
-                    pendingCouponDiscount = appliedDiscount;
-                    pendingFinalAmountInr = finalAmount;
+                    double discount = optDoubleAny(result,
+                            "discount_amount", "discount", "coupon_discount", "applied_discount");
+                    double finalAmount = optDoubleAny(result,
+                            "final_amount", "amount_after_discount", "payable_amount");
 
-                    MAIN.post(() -> {
-                        tvSummary.setText("Discount: ₹" + String.format(java.util.Locale.US, "%.2f", appliedDiscount)
-                                + "\nFinal amount: ₹" + String.format(java.util.Locale.US, "%.2f", finalAmount));
-                        dialog.dismiss();
-                        Toast.makeText(this, "Coupon applied", Toast.LENGTH_SHORT).show();
-                        createOrderAndLaunchCheckout(booking, finalAmount, keyId);
-                    });
+                    double computedFinalAmount = finalAmount;
+                    double computedDiscount = discount;
+                    if (computedFinalAmount <= 0d) {
+                        computedFinalAmount = Math.max(0.01d, amountInr - Math.max(0d, computedDiscount));
+                    }
+                    if (computedDiscount < 0d) {
+                        computedDiscount = Math.max(0d, amountInr - computedFinalAmount);
+                    }
+
+                    final double appliedDiscount = computedDiscount;
+                    final double payableAmount = computedFinalAmount;
+                    applyCouponValidationResult(
+                            new CouponValidationResult(true, "", appliedDiscount, payableAmount),
+                            amountInr,
+                            code,
+                            dialog,
+                            tvSummary,
+                            booking,
+                            keyId
+                    );
                 }
             } catch (Exception e) {
                 Log.e(TAG, "validateCouponAndProceed: " + e.getMessage(), e);
@@ -507,6 +518,126 @@ public class UserBookingsActivity extends BaseActivity
                 });
             }
         }).start();
+    }
+
+    private double optDoubleAny(JSONObject source, String... keys) {
+        if (source == null || keys == null) return -1d;
+        for (String key : keys) {
+            if (!source.has(key) || source.isNull(key)) continue;
+            try {
+                Object raw = source.get(key);
+                if (raw instanceof Number) return ((Number) raw).doubleValue();
+                String text = clean(String.valueOf(raw));
+                if (text.isEmpty()) continue;
+                return Double.parseDouble(text);
+            } catch (Exception ignore) {
+            }
+        }
+        return -1d;
+    }
+
+    private CouponValidationResult validateCouponFromOffersTable(String code, double amountInr) {
+        try {
+            String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
+            String encodedCode = android.net.Uri.encode(code);
+            String[] codeColumns = new String[]{"offer_code", "code"};
+
+            for (String codeColumn : codeColumns) {
+                String url = BASE_URL + "/rest/v1/offers?select=*"
+                        + "&" + codeColumn + "=eq." + encodedCode
+                        + "&is_active=eq.true"
+                        + "&expiry_date=gte." + today
+                        + "&limit=1";
+
+                Request req = new Request.Builder().url(url)
+                        .get()
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
+                try (Response r = HTTP.newCall(req).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                if (!r.isSuccessful()) {
+                        continue;
+                }
+
+                JSONArray arr = new JSONArray(body);
+                if (arr.length() == 0) {
+                        continue;
+                }
+
+                JSONObject offer = arr.getJSONObject(0);
+                int usageLimit = offer.optInt("usage_limit", -1);
+                int usedCount = offer.optInt("used_count", offer.optInt("usage_count", 0));
+                if (usageLimit >= 0 && usedCount >= usageLimit) {
+                    return new CouponValidationResult(false, "Invalid or expired coupon", 0d, amountInr);
+                }
+
+                double minAmount = offer.optDouble("min_booking_amount", 0d);
+                if (amountInr < minAmount) {
+                    return new CouponValidationResult(false, "Minimum booking amount not met", 0d, amountInr);
+                }
+
+                String discountType = clean(offer.optString("discount_type", ""));
+                double discountValue = offer.optDouble("discount_value", offer.optDouble("discount", 0d));
+                double discount = 0d;
+                if ("percentage".equalsIgnoreCase(discountType)) {
+                    discount = amountInr * (Math.max(0d, discountValue) / 100d);
+                } else {
+                    discount = Math.max(0d, discountValue);
+                }
+                discount = Math.min(discount, Math.max(0d, amountInr - 0.01d));
+                double finalAmount = Math.max(0.01d, amountInr - discount);
+                return new CouponValidationResult(true, "", discount, finalAmount);
+                }
+            }
+            return new CouponValidationResult(false, "Invalid or expired coupon", 0d, amountInr);
+        } catch (Exception e) {
+            Log.w(TAG, "validateCouponFromOffersTable failed: " + e.getMessage());
+            return new CouponValidationResult(false, "Invalid or expired coupon", 0d, amountInr);
+        }
+    }
+
+    private void applyCouponValidationResult(CouponValidationResult result,
+                                             double amountInr,
+                                             String code,
+                                             AlertDialog dialog,
+                                             TextView tvSummary,
+                                             Booking booking,
+                                             String keyId) {
+        if (result == null || !result.valid) {
+            String message = result == null ? "Invalid or expired coupon" : clean(result.message);
+            throw new IllegalStateException(message.isEmpty() ? "Invalid or expired coupon" : message);
+        }
+
+        final double appliedDiscount = result.discountAmount;
+        final double payableAmount = result.finalAmount > 0d ? result.finalAmount : Math.max(0.01d, amountInr - appliedDiscount);
+        pendingCouponCode = code;
+        pendingCouponDiscount = Math.max(0d, appliedDiscount);
+        pendingFinalAmountInr = payableAmount;
+
+        MAIN.post(() -> {
+            tvSummary.setText("Discount: ₹" + String.format(java.util.Locale.US, "%.2f", pendingCouponDiscount)
+                    + "\nFinal amount: ₹" + String.format(java.util.Locale.US, "%.2f", pendingFinalAmountInr));
+            dialog.dismiss();
+            Toast.makeText(this, "Coupon applied", Toast.LENGTH_SHORT).show();
+            createOrderAndLaunchCheckout(booking, pendingFinalAmountInr, keyId);
+        });
+    }
+
+    private static final class CouponValidationResult {
+        final boolean valid;
+        final String message;
+        final double discountAmount;
+        final double finalAmount;
+
+        CouponValidationResult(boolean valid, String message, double discountAmount, double finalAmount) {
+            this.valid = valid;
+            this.message = message;
+            this.discountAmount = discountAmount;
+            this.finalAmount = finalAmount;
+        }
     }
 
     @Override
@@ -962,7 +1093,7 @@ public class UserBookingsActivity extends BaseActivity
             String merged = message;
             if (!details.isEmpty()) merged += (merged.isEmpty() ? "" : " | ") + details;
             if (!hint.isEmpty()) merged += (merged.isEmpty() ? "" : " | ") + hint;
-            return merged.isEmpty() ? "Unknown Supabase error" : merged;
+            return merged.isEmpty() ? "Invalid or expired coupon" : merged;
         } catch (Exception ignore) {
             return clean(responseBody);
         }

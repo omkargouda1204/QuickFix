@@ -44,12 +44,8 @@ public class ApiClient {
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     private static final String USER_SELECT = "firebase_uid,name,email,phone,is_user,is_service_provider,is_admin";
 
-    // Timeouts: short enough that the user never waits more than ~10 s
-    private static final OkHttpClient client = new OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15,    TimeUnit.SECONDS)
-            .writeTimeout(15,   TimeUnit.SECONDS)
-            .build();
+    // Use centralized HTTP client for optimized connection pooling
+    private static final OkHttpClient client = HttpClientProvider.getInstance();
 
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
 

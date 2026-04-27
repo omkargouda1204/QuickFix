@@ -336,7 +336,8 @@ public class AdminProviderManagementActivity extends BaseActivity
             Request req = baseGet(url.toString());
             try (Response response = http.newCall(req).execute()) {
                 if (!response.isSuccessful() || response.body() == null) return 0d;
-                JSONArray arr = new JSONArray(response.body().string());
+                String body = response.body().string();
+                JSONArray arr = new JSONArray(body);
                 double sum = 0d;
                 for (int i = 0; i < arr.length(); i++) {
                     sum += arr.getJSONObject(i).optDouble("price", 0d);

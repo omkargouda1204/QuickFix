@@ -652,6 +652,15 @@ public class EmergencyHelpActivity extends BaseActivity {
             booking.put("provider_name", "");
             booking.put("service_name", fallback(category, "Emergency"));
             booking.put("category", fallback(category, "Emergency"));
+            
+            // Add service_id for emergency bookings
+            String serviceId = fetchServiceIdForCategory(fallback(category, "Emergency"));
+            if (serviceId.isEmpty()) {
+                booking.put("service_id", JSONObject.NULL);
+            } else {
+                booking.put("service_id", serviceId);
+            }
+            
             booking.put("address", safe(locationLabel));
             booking.put("description", safe(description));
             booking.put("status", "pending");
@@ -705,6 +714,35 @@ public class EmergencyHelpActivity extends BaseActivity {
                 .addHeader("Prefer", "return=minimal")
                 .build();
         return http.newCall(request).execute();
+    }
+    
+    private String fetchServiceIdForCategory(String category) {
+        String cat = safe(category);
+        if (cat.isEmpty()) return "";
+        try {
+            String url = BuildConfig.SUPABASE_URL
+                    + "/rest/v1/services?select=id&category=eq." + android.net.Uri.encode(cat)
+                    + "&limit=1";
+            Request request = new Request.Builder().url(url)
+                    .get()
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+            try (Response response = http.newCall(request).execute()) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String body = response.body().string();
+                    org.json.JSONArray arr = new org.json.JSONArray(body);
+                    if (arr.length() > 0) {
+                        return arr.getJSONObject(0).optString("id", "");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "fetchServiceIdForCategory: " + e.getMessage());
+            return "";
+        }
+        return "";
     }
 
     private List<String> fetchMatchingProviderFirebaseUids(String category,

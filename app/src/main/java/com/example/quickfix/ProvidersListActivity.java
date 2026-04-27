@@ -91,6 +91,8 @@ public class ProvidersListActivity extends BaseActivity
     private String                currentChip   = "All";
     private String                searchQuery   = "";
     private AppLocationManager    locationManager;
+    private double selectedLat = Double.NaN;
+    private double selectedLng = Double.NaN;
 
     private final OkHttpClient HTTP = new OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -119,6 +121,9 @@ public class ProvidersListActivity extends BaseActivity
 
         searchQuery = getIntent().getStringExtra(EXTRA_QUERY);
         if (searchQuery == null) searchQuery = "";
+
+        selectedLat = locationManager.getSavedLat();
+        selectedLng = locationManager.getSavedLng();
 
         bindViews();
         setupRecycler();
@@ -249,6 +254,13 @@ public class ProvidersListActivity extends BaseActivity
                     }
                 }, suggestion -> {
                     cityFilter = suggestion == null ? "" : safeText(suggestion.city);
+                    if (suggestion != null && suggestion.nearby && !Double.isNaN(suggestion.lat) && !Double.isNaN(suggestion.lng)) {
+                        selectedLat = suggestion.lat;
+                        selectedLng = suggestion.lng;
+                    } else if (cityFilter.isEmpty()) {
+                        selectedLat = Double.NaN;
+                        selectedLng = Double.NaN;
+                    }
                     updateHeader();
                     applyFilterAndSearch();
                 });
@@ -382,6 +394,7 @@ public class ProvidersListActivity extends BaseActivity
         try {
             ProviderProfile p = new ProviderProfile();
             p.id               = o.optString("id");
+            p.serviceId        = o.optString("service_id");
             p.firebaseUid      = o.optString("firebase_uid");
             p.businessName     = o.optString("business_name");
             p.ownerName        = o.optString("owner_name");
@@ -515,7 +528,14 @@ public class ProvidersListActivity extends BaseActivity
         }
 
         List<ProviderProfile> filtered = new ArrayList<>();
+        boolean filterByDistance = !Double.isNaN(selectedLat) && !Double.isNaN(selectedLng);
         for (ProviderProfile p : allProviders) {
+            if (filterByDistance) {
+                if (Double.isNaN(p.lat) || Double.isNaN(p.lng)) continue;
+                float[] distance = new float[1];
+                Location.distanceBetween(selectedLat, selectedLng, p.lat, p.lng, distance);
+                if (distance[0] > NEARBY_RADIUS_SECONDARY_METERS) continue;
+            }
             if (!matchesCity(cityFilter, p.city)) continue;
 
             boolean passChip = true;
@@ -701,6 +721,7 @@ public class ProvidersListActivity extends BaseActivity
         // Open provider detail screen (pass data as extras)
         Intent intent = new Intent(this, ProviderDetailActivity.class);
         intent.putExtra(ProviderDetailActivity.EXTRA_PROVIDER_ID,        provider.id);
+        intent.putExtra("service_id",                                    provider.serviceId);
         intent.putExtra(ProviderDetailActivity.EXTRA_FIREBASE_UID,       provider.firebaseUid);
         intent.putExtra(ProviderDetailActivity.EXTRA_BUSINESS_NAME,      provider.businessName);
         intent.putExtra(ProviderDetailActivity.EXTRA_OWNER_NAME,         provider.ownerName);

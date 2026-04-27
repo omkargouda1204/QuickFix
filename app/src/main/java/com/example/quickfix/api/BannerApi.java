@@ -16,13 +16,13 @@ import retrofit2.http.Query;
 
 public interface BannerApi {
 
-    @GET("rest/v1/banners")
+    @GET("rest/v1/banners?is_active=eq.true")
     Call<List<Banner>> getBanners(
             @Header("apikey") String apiKey,
             @Header("Authorization") String bearer,
             @Header("Content-Type") String contentType,
             @Query("select") String select,
-            @Query("is_active") String active,
+            @Query("expiry_date") String expiryDate,
             @Query("order") String order
     );
 

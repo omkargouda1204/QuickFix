@@ -188,7 +188,7 @@
                             android:id="@+id/tvEmptyMessage"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="No transactions found"
+                            android:text="@string/no_transactions_yet"
                             android:textColor="@color/text_secondary"
                             android:textSize="16sp" />
                     </LinearLayout>

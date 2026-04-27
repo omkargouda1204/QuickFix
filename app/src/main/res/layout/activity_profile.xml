@@ -569,11 +569,12 @@
                                 android:text="@string/profile_notifications"
                                 android:textColor="@color/text_primary"
                                 android:textSize="15sp" />
-                            <com.google.android.material.switchmaterial.SwitchMaterial
-                                android:id="@+id/switchNotifications"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:checked="true" />
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:src="@drawable/ic_arrow_right"
+                                app:tint="@color/muted_icon"
+                                android:contentDescription="@string/nav_home" />
                         </LinearLayout>
 
                         <View android:layout_width="match_parent" android:layout_height="1dp"

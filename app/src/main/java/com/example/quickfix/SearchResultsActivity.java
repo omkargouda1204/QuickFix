@@ -26,6 +26,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.quickfix.adapters.SearchResultsAdapter;
 import com.google.android.material.chip.ChipGroup;
@@ -76,6 +77,7 @@ public class SearchResultsActivity extends BaseActivity
     private ProgressBar progressBar;
     private LinearLayout emptyState;
     private RecyclerView rvResults;
+    private SwipeRefreshLayout swipeRefresh;
     private TextView    tvSearchLocation, tvResultCount, tvEmptyTitle, tvEmptySubtitle;
     private ChipGroup   chipGroup;
 
@@ -113,6 +115,7 @@ public class SearchResultsActivity extends BaseActivity
 
         bindViews();
         setupRecycler();
+        setupSwipeRefresh();
         setupListeners();
 
         // Prefill only when this screen was opened with an explicit query.
@@ -136,6 +139,7 @@ public class SearchResultsActivity extends BaseActivity
         progressBar      = findViewById(R.id.progressBar);
         emptyState       = findViewById(R.id.emptyState);
         rvResults        = findViewById(R.id.rvResults);
+        swipeRefresh     = findViewById(R.id.swipeRefresh);
         tvSearchLocation = findViewById(R.id.tvSearchLocation);
         tvResultCount    = findViewById(R.id.tvResultCount);
         tvEmptyTitle     = findViewById(R.id.tvEmptyTitle);
@@ -147,6 +151,16 @@ public class SearchResultsActivity extends BaseActivity
         adapter = new SearchResultsAdapter(this, this);
         rvResults.setLayoutManager(new LinearLayoutManager(this));
         rvResults.setAdapter(adapter);
+    }
+    
+    private void setupSwipeRefresh() {
+        if (swipeRefresh != null) {
+            swipeRefresh.setColorSchemeResources(R.color.primary);
+            swipeRefresh.setOnRefreshListener(() -> {
+                // Refresh search results
+                performSearch(queryText);
+            });
+        }
     }
 
     private void setupListeners() {
@@ -522,6 +536,10 @@ public class SearchResultsActivity extends BaseActivity
     }
 
     private void showLoading(boolean show) {
+        if (swipeRefresh != null && swipeRefresh.isRefreshing()) {
+            if (!show) swipeRefresh.setRefreshing(false);
+            return;
+        }
         progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
         if (show) {
             rvResults.setVisibility(View.GONE);
@@ -582,6 +600,7 @@ public class SearchResultsActivity extends BaseActivity
     private void openProviderDetail(JSONObject o) {
         Intent intent = new Intent(this, ProviderDetailActivity.class);
         intent.putExtra(ProviderDetailActivity.EXTRA_PROVIDER_ID, o.optString("id"));
+        intent.putExtra("service_id", o.optString("service_id", ""));
         intent.putExtra(ProviderDetailActivity.EXTRA_FIREBASE_UID, o.optString("firebase_uid"));
         intent.putExtra(ProviderDetailActivity.EXTRA_BUSINESS_NAME, o.optString("business_name"));
         intent.putExtra(ProviderDetailActivity.EXTRA_OWNER_NAME,

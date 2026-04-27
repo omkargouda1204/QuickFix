@@ -2,7 +2,6 @@ package com.example.quickfix;
 
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
@@ -48,8 +47,6 @@ import okhttp3.Response;
 public class ProfileActivity extends BaseActivity {
 
     private static final String TAG           = "ProfileActivity";
-    private static final String PREFS_NAME    = "quickfix_prefs";
-    private static final String KEY_NOTIF     = "notifications_enabled";
 
     // ── Header ────────────────────────────────────────────────────────────
     private TextView  tvAvatarInitial, tvUserName, tvUserEmail, tvRoleBadge;
@@ -89,7 +86,6 @@ public class ProfileActivity extends BaseActivity {
             .readTimeout(15, TimeUnit.SECONDS)
             .build();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
-    private SharedPreferences prefs;
 
     private final ActivityResultLauncher<Intent> profileDetailsLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -102,7 +98,6 @@ public class ProfileActivity extends BaseActivity {
     // ═════════════════════════════════════════════════════════════════════
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_profile);
 
@@ -142,7 +137,7 @@ public class ProfileActivity extends BaseActivity {
         menuAdminDashboard    = findViewById(R.id.menuAdminDashboard);
         menuProviderDashboard = findViewById(R.id.menuProviderDashboard);
         cardRoleDashboard     = findViewById(R.id.cardRoleDashboard);
-        switchNotifications   = findViewById(R.id.switchNotifications);
+        switchNotifications   = null;
         switchDarkMode        = findViewById(R.id.switchDarkMode);
         tvCurrentLanguage     = findViewById(R.id.tvCurrentLanguage);
         profileLoadingOverlay = findViewById(R.id.profileLoadingOverlay);
@@ -156,9 +151,6 @@ public class ProfileActivity extends BaseActivity {
         if (name != null && !name.isEmpty()) {
             tvUserName.setText(name);
             tvAvatarInitial.setText(String.valueOf(name.charAt(0)).toUpperCase());
-        } else if (email != null && !email.isEmpty()) {
-            tvUserName.setText(email.split("@")[0]);
-            tvAvatarInitial.setText(String.valueOf(email.charAt(0)).toUpperCase());
         } else {
             tvUserName.setText(R.string.app_name);
             tvAvatarInitial.setText("U");
@@ -360,11 +352,6 @@ public class ProfileActivity extends BaseActivity {
             startActivity(new Intent(this, NotificationsActivity.class));
             overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
         });
-        switchNotifications.setOnCheckedChangeListener((btn, checked) -> {
-            prefs.edit().putBoolean(KEY_NOTIF, checked).apply();
-            Toast.makeText(this, checked ? "Notifications enabled" : "Notifications disabled",
-                    Toast.LENGTH_SHORT).show();
-        });
 
         menuLanguage.setOnClickListener(v -> showLanguageBottomSheet());
 
@@ -512,7 +499,9 @@ public class ProfileActivity extends BaseActivity {
     // ── Dark Mode ─────────────────────────────────────────────────────────
 
     private void setupTogglesFromPrefs() {
-        switchNotifications.setChecked(prefs.getBoolean(KEY_NOTIF, true));
+        if (switchNotifications != null) {
+            switchNotifications.setVisibility(View.GONE);
+        }
         if (switchDarkMode != null) {
             switchDarkMode.setChecked(UserPreferenceManager.isDarkMode(this));
         }
@@ -600,7 +589,7 @@ public class ProfileActivity extends BaseActivity {
         if (ivHeaderAvatar != null) ivHeaderAvatar.setVisibility(View.GONE);
         if (tvAvatarInitial != null) {
             tvAvatarInitial.setVisibility(View.VISIBLE);
-            String source = !TextUtils.isEmpty(name) ? name : email;
+            String source = !TextUtils.isEmpty(name) ? name : "";
             String initial = !TextUtils.isEmpty(source)
                     ? String.valueOf(source.charAt(0)).toUpperCase()
                     : "U";

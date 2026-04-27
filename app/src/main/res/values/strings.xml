@@ -157,8 +157,8 @@
     <string name="profile_provider_dashboard">Provider Dashboard</string>
     <string name="profile_logout_confirm_title">Logout</string>
     <string name="profile_logout_confirm_msg">Are you sure you want to logout?</string>
-    <string name="no_transactions_yet">No transactions found</string>
-    <string name="profile_version">QuickFix v1.0 · Made with ❤️</string>
+     <string name="no_transactions_yet">No transactions yet</string>
+    <string name="profile_version">QuickFix v1.0.o · Made with ❤️</string>
 
     <!-- Bookings Screen -->
 
@@ -170,25 +170,25 @@
     <string name="settings_dark_mode">Dark Mode</string>
     <string name="settings_change_password">Change Password</string>
     <string name="settings_delete_account">Delete Account</string>
-    <string name="settings_delete_account_data_scope">Deletes Firebase and Supabase data</string>
-    <string name="settings_delete_dialog_warning">This action permanently deletes your account.</string>
-    <string name="settings_delete_dialog_message">The app will remove your Firebase Authentication account and all related Supabase data that belongs to this user. This cannot be undone.</string>
+    <string name="settings_delete_account_data_scope">Deletes your account and all your data</string>
+    <string name="settings_delete_dialog_warning">This action will permanently delete your account.</string>
+    <string name="settings_delete_dialog_message">This action will permanently delete your account and all your data. This cannot be undone.</string>
     <string name="settings_delete_dialog_checkbox">I understand that my account will be permanently deleted</string>
     <string name="settings_delete_dialog_title" translatable="false">Delete Account</string>
     <string name="settings_delete_dialog_confirm" translatable="false">Delete My Account</string>
     <string name="settings_delete_overlay_checking" translatable="false">Checking deletion eligibility...</string>
     <string name="settings_delete_overlay_profile_image" translatable="false">Deleting profile image...</string>
-    <string name="settings_delete_overlay_firebase" translatable="false">Deleting account from authentication...</string>
-    <string name="settings_delete_overlay_supabase" translatable="false">Deleting account data...</string>
+    <string name="settings_delete_overlay_firebase" translatable="false">Deleting your account...</string>
+    <string name="settings_delete_overlay_supabase" translatable="false">Deleting your data...</string>
     <string name="settings_delete_overlay_reauth" translatable="false">Re-authenticating...</string>
     <string name="settings_delete_overlay_signout" translatable="false">Signing out...</string>
     <string name="settings_delete_uid_missing" translatable="false">Could not determine your account ID. Please sign in again and retry.</string>
     <string name="settings_delete_uid_mismatch" translatable="false">Account verification failed due to an ID mismatch. Please sign in again and retry.</string>
-    <string name="settings_delete_supabase_error" translatable="false">Failed to delete your data from Supabase. Please try again.
+    <string name="settings_delete_supabase_error" translatable="false">Failed to delete your account data. Please try again.
 
 %1$s</string>
     <string name="settings_delete_firebase_error" translatable="false">Failed to delete account. Please try again.\n\n%1$s</string>
-    <string name="settings_delete_firebase_error_after_data_removed" translatable="false">Your app data was deleted, but Firebase account deletion failed. Please sign in again and retry account removal.\n\n%1$s</string>
+    <string name="settings_delete_firebase_error_after_data_removed" translatable="false">Your data was deleted, but final account removal failed. Please sign in again and retry.\n\n%1$s</string>
     <string name="settings_delete_password_title" translatable="false">Confirm Your Password</string>
     <string name="settings_delete_password_message" translatable="false">Please enter your password to permanently delete your account.</string>
     <string name="settings_delete_password_confirm" translatable="false">Confirm and Delete</string>

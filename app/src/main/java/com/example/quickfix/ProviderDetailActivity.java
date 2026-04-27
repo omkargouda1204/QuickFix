@@ -448,6 +448,9 @@ public class ProviderDetailActivity extends BaseActivity {
                 bookingBody.put("provider_name", providerName != null ? providerName : "");
                 String serviceId = normalizeUuidOrEmpty(serviceIdForBooking);
                 if (serviceId.isEmpty()) {
+                    serviceId = normalizeUuidOrEmpty(fetchServiceIdForCategory(providerCategory));
+                }
+                if (serviceId.isEmpty()) {
                     bookingBody.put("service_id", JSONObject.NULL);
                 } else {
                     bookingBody.put("service_id", serviceId);
@@ -941,6 +944,35 @@ public class ProviderDetailActivity extends BaseActivity {
             }
         } catch (Exception e) {
             Log.e(TAG, "fetchProviderProfileIdByFirebaseUid: " + e.getMessage());
+            return "";
+        }
+    }
+
+    private String fetchServiceIdForCategory(String category) {
+        String cat = safe(category);
+        if (cat.isEmpty()) return "";
+        try {
+            String url = SUPABASE_URL + "/rest/v1/services"
+                    + "?select=id"
+                    + "&category=ilike." + Uri.encode(cat)
+                    + "&is_active=eq.true"
+                    + "&order=created_at.desc&limit=1";
+
+            Request request = new Request.Builder().url(url)
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                String body = response.body() != null ? response.body().string() : "[]";
+                if (response.code() != 200) return "";
+                JSONArray arr = new JSONArray(body);
+                if (arr.length() == 0) return "";
+                return arr.getJSONObject(0).optString("id", "");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "fetchServiceIdForCategory: " + e.getMessage());
             return "";
         }
     }

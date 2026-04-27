@@ -151,14 +151,20 @@ public class TransactionActivity extends BaseActivity {
             try {
                 String uid = android.net.Uri.encode(userId == null ? "" : userId.trim());
                 String dbId = android.net.Uri.encode(userDbId == null ? "" : userDbId.trim());
-                String url = BASE_URL + "/rest/v1/bookings?select=*&order=created_at.desc";
-                if (!dbId.isEmpty() && !dbId.equals(uid)) {
-                    url += "&or=(customer_id.eq." + uid + ",customer_id.eq." + dbId + ")";
+
+                StringBuilder url = new StringBuilder(BASE_URL)
+                        .append("/rest/v1/bookings?select=*&order=created_at.desc");
+                if (!uid.isEmpty() && !dbId.isEmpty() && !uid.equals(dbId)) {
+                    url.append("&or=(customer_id.eq.").append(uid)
+                            .append(",customer_id.eq.").append(dbId).append(")");
+                } else if (!dbId.isEmpty()) {
+                    url.append("&customer_id=eq.").append(dbId);
                 } else {
-                    url += "&customer_id=eq." + uid;
+                    url.append("&customer_id=eq.").append(uid);
                 }
 
-                Request req = new Request.Builder().url(url)
+                Log.d(TAG, "Loading transactions from: " + url);
+                Request req = new Request.Builder().url(url.toString())
                         .get()
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
@@ -167,19 +173,26 @@ public class TransactionActivity extends BaseActivity {
 
                 try (Response r = HTTP.newCall(req).execute()) {
                     String body = r.body() != null ? r.body().string() : "[]";
+                    Log.d(TAG, "Transaction API response: " + r.code() + ", body length: " + body.length());
+                    
                     if (r.isSuccessful()) {
                         JSONArray arr = new JSONArray(body);
                         List<Booking> list = new ArrayList<>();
                         for (int i = 0; i < arr.length(); i++) {
                             Booking booking = Booking.fromJson(arr.getJSONObject(i));
-                            if (booking != null) list.add(booking);
+                                if (booking != null) {
+                                list.add(booking);
+                            }
                         }
+                        
+                        Log.d(TAG, "Valid transactions found: " + list.size());
                         MAIN.post(() -> {
                             adapter.setTransactions(list);
                             showEmptyState(list.isEmpty());
                             showLoading(false);
                         });
                     } else {
+                        Log.e(TAG, "Failed to load transactions: " + r.code());
                         MAIN.post(() -> {
                             showEmptyState(true);
                             showLoading(false);
@@ -196,6 +209,10 @@ public class TransactionActivity extends BaseActivity {
                 });
             }
         }).start();
+    }
+    
+    private boolean isValidTransaction(Booking booking) {
+        return booking != null;
     }
 
     private void showEmptyState(boolean show) {

@@ -56,7 +56,7 @@ public class EarningsAdapter extends RecyclerView.Adapter<EarningsAdapter.Earnin
     }
 
     static class EarningViewHolder extends RecyclerView.ViewHolder {
-        TextView tvBookingId, tvServiceName, tvProviderName, tvAmount, tvDate, tvTxnId, tvStatus;
+        TextView tvBookingId, tvServiceName, tvProviderName, tvAmount, tvDate, tvTxnId, tvOrderId, tvStatus, tvServiceId, tvPaymentMode;
 
         EarningViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -66,16 +66,21 @@ public class EarningsAdapter extends RecyclerView.Adapter<EarningsAdapter.Earnin
             tvAmount = itemView.findViewById(R.id.tvAmount);
             tvDate = itemView.findViewById(R.id.tvDate);
             tvTxnId = itemView.findViewById(R.id.tvTxnId);
+            tvOrderId = itemView.findViewById(R.id.tvOrderId);
             tvStatus = itemView.findViewById(R.id.tvStatus);
+            tvServiceId = itemView.findViewById(R.id.tvServiceId);
+            tvPaymentMode = itemView.findViewById(R.id.tvPaymentMode);
         }
 
         void bind(Booking booking) {
             String bid = booking.id != null ? booking.id.trim() : "";
-            tvBookingId.setText(bid.length() > 8 ? "#" + bid.substring(0, 8) : "#" + bid);
-            
+            tvBookingId.setText(bid.isEmpty() ? "-" : bid);
+
             tvServiceName.setText(booking.serviceName != null ? booking.serviceName : "Service");
             String providerName = booking.providerName != null ? booking.providerName.trim() : "";
             tvProviderName.setText("Provider: " + (providerName.isEmpty() ? "Not assigned" : providerName));
+            String sid = booking.serviceId != null ? booking.serviceId.trim() : "";
+            tvServiceId.setText(sid.isEmpty() ? "-" : sid);
 
             double amount = booking.paymentAmount > 0 ? booking.paymentAmount : booking.price;
             tvAmount.setText("₹" + String.format(Locale.US, "%.0f", amount));
@@ -87,19 +92,49 @@ public class EarningsAdapter extends RecyclerView.Adapter<EarningsAdapter.Earnin
                 txnId = booking.id != null ? booking.id.trim() : "";
             }
             tvTxnId.setText(txnId.isEmpty() ? "N/A" : txnId);
+            String orderId = booking.paymentOrderId == null ? "" : booking.paymentOrderId.trim();
+            tvOrderId.setText(orderId.isEmpty() ? "Order: -" : "Order: " + orderId);
+
+            String paymentMode = normalizePaymentMode(booking.paymentMode, booking.status, booking.paymentStatus);
+            tvPaymentMode.setText(paymentMode);
 
             String status = booking.paymentStatus != null ? booking.paymentStatus.trim() : "";
             if (status.isEmpty()) {
                 status = booking.status != null ? booking.status : "pending";
             }
-            status = status.toUpperCase(Locale.US);
-            tvStatus.setText(status);
-            
-            if ("COMPLETED".equals(status) || "PAID".equals(status) || "SUCCESS".equals(status)) {
+            String normalizedStatus = normalizeStatus(status);
+            tvStatus.setText(normalizedStatus);
+
+            if ("SUCCESS".equals(normalizedStatus)) {
                 tvStatus.setBackgroundResource(R.drawable.badge_completed);
+            } else if ("FAILED".equals(normalizedStatus) || "CANCELLED".equals(normalizedStatus)) {
+                tvStatus.setBackgroundResource(R.drawable.badge_cancelled);
             } else {
                 tvStatus.setBackgroundResource(R.drawable.badge_pending);
             }
+        }
+
+        private String normalizeStatus(String rawStatus) {
+            String s = rawStatus == null ? "" : rawStatus.trim().toLowerCase(Locale.US);
+            if ("paid".equals(s) || "success".equals(s) || "completed".equals(s)) return "SUCCESS";
+            if ("failed".equals(s) || "failure".equals(s) || "cancelled".equals(s)) return "FAILED";
+            if (s.isEmpty()) return "PENDING";
+            return s.toUpperCase(Locale.US);
+        }
+
+        private String normalizePaymentMode(String rawMode, String bookingStatus, String paymentStatus) {
+            String mode = rawMode == null ? "" : rawMode.trim();
+            if (!mode.isEmpty()) {
+                String lower = mode.toLowerCase(Locale.US);
+                if (lower.contains("upi")) return "UPI";
+                if (lower.contains("card")) return "Card";
+                if (lower.contains("cash")) return "Cash";
+                return Character.toUpperCase(mode.charAt(0)) + mode.substring(1).toLowerCase(Locale.US);
+            }
+            String pay = paymentStatus == null ? "" : paymentStatus.trim().toLowerCase(Locale.US);
+            String book = bookingStatus == null ? "" : bookingStatus.trim().toLowerCase(Locale.US);
+            if ("success".equals(pay) || "paid".equals(book)) return "Online";
+            return "Pending";
         }
 
         private String formatDateTime(Booking booking) {

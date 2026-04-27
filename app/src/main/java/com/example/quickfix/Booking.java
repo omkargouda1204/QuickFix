@@ -25,6 +25,8 @@ public class Booking {
     public String status; // pending, accepted, completed, cancelled
     public String paymentStatus;
     public String paymentId;
+    public String paymentOrderId;
+    public String paymentMode;
     public double paymentAmount;
     public String createdAt;
     public String completedAt;
@@ -64,6 +66,11 @@ public class Booking {
         b.status = s(o, "status");
         b.paymentStatus = s(o, "payment_status");
         b.paymentId = s(o, "payment_id");
+        b.paymentOrderId = s(o, "payment_order_id");
+        if (b.paymentOrderId.isEmpty()) b.paymentOrderId = s(o, "order_id");
+        b.paymentMode = s(o, "payment_mode");
+        if (b.paymentMode.isEmpty()) b.paymentMode = s(o, "payment_method");
+        if (b.paymentMode.isEmpty()) b.paymentMode = s(o, "mode");
         b.paymentAmount = o.optDouble("payment_amount", 0d);
         b.createdAt = s(o, "created_at");
         b.completedAt = s(o, "completed_at");

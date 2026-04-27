@@ -6,6 +6,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
@@ -52,8 +53,9 @@ public class ImageDetectionActivity extends AppCompatActivity {
     private ImageView ivSelectedImage;
     private Button btnTakePhoto, btnChooseGallery;
     private MaterialCardView resultCard;
+    private View loadingContainer;
     private ProgressBar progressBar;
-    private TextView tvResultTitle, tvResultSubtitle, tvDetectedService, tvConfidence;
+    private TextView tvResultTitle, tvResultSubtitle, tvDetectedService, tvDetectedLabels, tvConfidence;
     private Button btnBookService, btnManualPlumbing, btnManualElectrical, btnManualCleaning, btnManualRepair;
     private View layoutManualSelection;
 
@@ -63,8 +65,9 @@ public class ImageDetectionActivity extends AppCompatActivity {
     private static final float HIGH_CONFIDENCE_THRESHOLD = 0.68f;
     private static final float LOW_CONFIDENCE_THRESHOLD = 0.45f;
 
-    // Service mapping for ML Kit labels
+    // Enhanced service mapping for ML Kit labels with improved accuracy
     private final Map<String, String> labelToServiceMap = new HashMap<String, String>() {{
+        // Plumbing - expanded keywords
         put("pipe", "Plumbing");
         put("water", "Plumbing");
         put("leak", "Plumbing");
@@ -72,7 +75,14 @@ public class ImageDetectionActivity extends AppCompatActivity {
         put("drain", "Plumbing");
         put("toilet", "Plumbing");
         put("sink", "Plumbing");
+        put("plumbing", "Plumbing");
+        put("bathroom", "Plumbing");
+        put("shower", "Plumbing");
+        put("bathtub", "Plumbing");
+        put("valve", "Plumbing");
+        put("fixture", "Plumbing");
         
+        // Electrical - expanded keywords
         put("wire", "Electrical");
         put("switch", "Electrical");
         put("switchboard", "Electrical");
@@ -89,13 +99,20 @@ public class ImageDetectionActivity extends AppCompatActivity {
         put("electric", "Electrical");
         put("power", "Electrical");
         put("light", "Electrical");
+        put("bulb", "Electrical");
+        put("lamp", "Electrical");
+        put("ceiling fan", "Electrical");
         
+        // Painting - expanded keywords
         put("wall", "Painting");
         put("paint", "Painting");
         put("color", "Painting");
         put("surface", "Painting");
         put("texture", "Painting");
+        put("interior", "Painting");
+        put("exterior", "Painting");
         
+        // Cleaning - expanded keywords
         put("dust", "Cleaning");
         put("dirty", "Cleaning");
         put("mess", "Cleaning");
@@ -103,25 +120,46 @@ public class ImageDetectionActivity extends AppCompatActivity {
         put("floor", "Cleaning");
         put("window", "Cleaning");
         put("carpet", "Cleaning");
+        put("upholstery", "Cleaning");
+        put("vacuum", "Cleaning");
+        put("mop", "Cleaning");
         
+        // Carpentry - expanded keywords
         put("wood", "Carpentry");
         put("furniture", "Carpentry");
         put("chair", "Carpentry");
         put("table", "Carpentry");
         put("cabinet", "Carpentry");
         put("door", "Carpentry");
+        put("shelf", "Carpentry");
+        put("drawer", "Carpentry");
         
+        // AC Service - expanded keywords
         put("fan", "AC Service");
         put("air", "AC Service");
         put("conditioner", "AC Service");
         put("ventilation", "AC Service");
         put("hvac", "AC Service");
+        put("ac", "AC Service");
+        put("air conditioner", "AC Service");
+        put("cooling", "AC Service");
         
+        // Repair - expanded keywords
         put("broken", "Repair");
         put("damage", "Repair");
+        put("damaged", "Repair");
         put("crack", "Repair");
         put("fix", "Repair");
         put("maintenance", "Repair");
+        put("repair", "Repair");
+        put("service", "Repair");
+        put("technician", "Repair");
+        
+        // Cross-category mappings with priority
+        put("leakage", "Plumbing");
+        put("moisture", "Plumbing");
+        put("mold", "Cleaning");
+        put("rust", "Repair");
     }};
 
     @Override
@@ -146,10 +184,12 @@ public class ImageDetectionActivity extends AppCompatActivity {
         btnTakePhoto = findViewById(R.id.btnTakePhoto);
         btnChooseGallery = findViewById(R.id.btnChooseGallery);
         resultCard = findViewById(R.id.resultCard);
+        loadingContainer = findViewById(R.id.loadingContainer);
         progressBar = findViewById(R.id.progressBar);
         tvResultTitle = findViewById(R.id.tvResultTitle);
         tvResultSubtitle = findViewById(R.id.tvResultSubtitle);
         tvDetectedService = findViewById(R.id.tvDetectedService);
+        tvDetectedLabels = findViewById(R.id.tvDetectedLabels);
         tvConfidence = findViewById(R.id.tvConfidence);
         btnBookService = findViewById(R.id.btnBookService);
         layoutManualSelection = findViewById(R.id.layoutManualSelection);
@@ -189,10 +229,13 @@ public class ImageDetectionActivity extends AppCompatActivity {
     }
 
     private void checkStoragePermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) 
+        String permission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                ? Manifest.permission.READ_MEDIA_IMAGES
+                : Manifest.permission.READ_EXTERNAL_STORAGE;
+        if (ContextCompat.checkSelfPermission(this, permission)
                 != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, 
-                    new String[]{Manifest.permission.READ_MEDIA_IMAGES}, STORAGE_PERMISSION_REQ);
+            ActivityCompat.requestPermissions(this,
+                    new String[]{permission}, STORAGE_PERMISSION_REQ);
         } else {
             openGallery();
         }
@@ -278,17 +321,14 @@ public class ImageDetectionActivity extends AppCompatActivity {
     }
 
     private void processLabels(List<ImageLabel> labels) {
-        StringBuilder detectedLabels = new StringBuilder();
         Map<String, Float> serviceScores = new HashMap<>();
+        List<ImageLabel> sortedLabels = new ArrayList<>(labels);
+        sortedLabels.sort((a, b) -> Float.compare(b.getConfidence(), a.getConfidence()));
+        String topLabelSummary = topLabelSummary(sortedLabels);
 
-        for (ImageLabel label : labels) {
+        for (ImageLabel label : sortedLabels) {
             String labelText = label.getText().toLowerCase();
             float confidence = label.getConfidence();
-
-            detectedLabels.append(label.getText())
-                    .append(" (")
-                    .append(String.format("%.0f%%", confidence * 100))
-                    .append("), ");
 
             for (Map.Entry<String, String> entry : labelToServiceMap.entrySet()) {
                 if (labelText.contains(entry.getKey())) {
@@ -303,7 +343,7 @@ public class ImageDetectionActivity extends AppCompatActivity {
         }
 
         if (serviceScores.isEmpty()) {
-            showNoServiceDetected(trimLabelOutput(detectedLabels.toString()), topSuggestions(labels));
+            showNoServiceDetected(topLabelSummary, topSuggestions(labels));
             return;
         }
 
@@ -311,21 +351,23 @@ public class ImageDetectionActivity extends AppCompatActivity {
         ranked.sort((a, b) -> Float.compare(b.getValue(), a.getValue()));
         String bestService = ranked.get(0).getKey();
         float bestScore = ranked.get(0).getValue();
+        String rankedServices = topServiceSuggestions(ranked);
 
         if (bestScore >= HIGH_CONFIDENCE_THRESHOLD) {
-            showResult(bestService, bestScore, topServiceSuggestions(ranked));
+            showResult(bestService, bestScore, rankedServices, topLabelSummary);
         } else if (bestScore >= LOW_CONFIDENCE_THRESHOLD) {
-            showLowConfidence(bestService, bestScore, topServiceSuggestions(ranked));
+            showLowConfidence(bestService, bestScore, rankedServices, topLabelSummary);
         } else {
-            showNoServiceDetected(trimLabelOutput(detectedLabels.toString()), topServiceSuggestions(ranked));
+            showNoServiceDetected(topLabelSummary, rankedServices);
         }
     }
 
-    private void showResult(String service, float confidence, String suggestions) {
+    private void showResult(String service, float confidence, String suggestions, String labels) {
         resultCard.setVisibility(View.VISIBLE);
-        tvResultTitle.setText("✅ Service Detected!");
-        tvResultSubtitle.setText("AI has identified the service you need");
+        tvResultTitle.setText(service + " Issue Detected");
+        tvResultSubtitle.setText("AI detected multiple objects and ranked the best service match.");
         tvDetectedService.setText(service);
+        tvDetectedLabels.setText("Top labels: " + labels + "\nOther service matches: " + suggestions);
         tvConfidence.setText(String.format("Confidence: %.0f%%", confidence * 100));
         btnBookService.setVisibility(View.VISIBLE);
         showManualSelection(false);
@@ -334,11 +376,12 @@ public class ImageDetectionActivity extends AppCompatActivity {
         btnBookService.setTag(service);
     }
 
-    private void showLowConfidence(String service, float confidence, String suggestions) {
+    private void showLowConfidence(String service, float confidence, String suggestions, String labels) {
         resultCard.setVisibility(View.VISIBLE);
-        tvResultTitle.setText("🤔 Low confidence detection");
+        tvResultTitle.setText("Low confidence detection");
         tvResultSubtitle.setText("Top match: " + service + " (" + String.format("%.0f%%", confidence * 100) + ")");
         tvDetectedService.setText("Suggestions: " + suggestions);
+        tvDetectedLabels.setText("Top labels: " + labels);
         tvConfidence.setText("You can continue or choose manually below");
         btnBookService.setTag(service);
         btnBookService.setVisibility(View.VISIBLE);
@@ -347,10 +390,11 @@ public class ImageDetectionActivity extends AppCompatActivity {
 
     private void showNoServiceDetected(String labels, String suggestions) {
         resultCard.setVisibility(View.VISIBLE);
-        tvResultTitle.setText("🤔 Could not map service");
+        tvResultTitle.setText("Could not map service");
         tvResultSubtitle.setText(labels.isEmpty() ? "Try a clearer image with the issue in focus"
                 : "Detected labels: " + labels);
         tvDetectedService.setText("Suggestions: " + suggestions);
+        tvDetectedLabels.setText("Top labels: " + labels);
         tvConfidence.setText("Manual selection recommended");
         btnBookService.setVisibility(View.GONE);
         showManualSelection(true);
@@ -361,6 +405,7 @@ public class ImageDetectionActivity extends AppCompatActivity {
         tvResultTitle.setText("❌ No Results");
         tvResultSubtitle.setText("Could not identify any objects in the image");
         tvDetectedService.setText("Try again with a clearer photo");
+        tvDetectedLabels.setText("Top labels: -");
         tvConfidence.setText("");
         btnBookService.setVisibility(View.GONE);
         showManualSelection(true);
@@ -371,13 +416,18 @@ public class ImageDetectionActivity extends AppCompatActivity {
         tvResultTitle.setText("⚠️ Error");
         tvResultSubtitle.setText(message);
         tvDetectedService.setText("");
+        tvDetectedLabels.setText("Top labels: -");
         tvConfidence.setText("");
         btnBookService.setVisibility(View.GONE);
         showManualSelection(true);
     }
 
     private void showLoading(boolean show) {
-        progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (loadingContainer != null) {
+            loadingContainer.setVisibility(show ? View.VISIBLE : View.GONE);
+        } else {
+            progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
         btnTakePhoto.setEnabled(!show);
         btnChooseGallery.setEnabled(!show);
     }
@@ -408,14 +458,48 @@ public class ImageDetectionActivity extends AppCompatActivity {
     }
 
     private float keywordWeight(String keyword) {
+        // High-confidence keywords for specific services
         if ("switchboard".equals(keyword)
                 || "electrical panel".equals(keyword)
                 || "distribution board".equals(keyword)
                 || "wiring".equals(keyword)
-                || "socket".equals(keyword)) {
-            return 1.2f;
+                || "socket".equals(keyword)
+                || "circuit".equals(keyword)
+                || "breaker".equals(keyword)) {
+            return 1.4f; // Electrical components
         }
-        return 1.0f;
+        
+        if ("faucet".equals(keyword)
+                || "valve".equals(keyword)
+                || "fixture".equals(keyword)
+                || "drain".equals(keyword)
+                || "leak".equals(keyword)
+                || "leakage".equals(keyword)) {
+            return 1.3f; // Plumbing components
+        }
+        
+        if ("air conditioner".equals(keyword)
+                || "hvac".equals(keyword)
+                || "ventilation".equals(keyword)
+                || "cooling".equals(keyword)) {
+            return 1.3f; // AC components
+        }
+        
+        if ("crack".equals(keyword)
+                || "broken".equals(keyword)
+                || "damage".equals(keyword)
+                || "damaged".equals(keyword)) {
+            return 1.2f; // Damage indicators
+        }
+        
+        if ("mold".equals(keyword)
+                || "stain".equals(keyword)
+                || "rust".equals(keyword)
+                || "moisture".equals(keyword)) {
+            return 1.2f; // Problem indicators
+        }
+        
+        return 1.0f; // Default weight
     }
 
     private String trimLabelOutput(String raw) {
@@ -440,6 +524,22 @@ public class ImageDetectionActivity extends AppCompatActivity {
         }
         if (picks.isEmpty()) return "Plumbing, Electrical, Cleaning";
         return String.join(", ", picks);
+    }
+
+    private String topLabelSummary(List<ImageLabel> labels) {
+        if (labels == null || labels.isEmpty()) return "-";
+        StringBuilder out = new StringBuilder();
+        int count = 0;
+        for (ImageLabel label : labels) {
+            if (label == null) continue;
+            if (count >= 4) break;
+            if (out.length() > 0) out.append(", ");
+            out.append(label.getText())
+                    .append(" ")
+                    .append(String.format("(%.0f%%)", label.getConfidence() * 100f));
+            count++;
+        }
+        return out.length() == 0 ? "-" : out.toString();
     }
 
     private String topServiceSuggestions(List<Map.Entry<String, Float>> ranked) {

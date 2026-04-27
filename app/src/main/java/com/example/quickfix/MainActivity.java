@@ -148,10 +148,8 @@ public class MainActivity extends BaseActivity {
     private TextView navHomeText, navBookingsText, navMessagesText, navProfileText;
 
     private FirebaseAuth mAuth;
-    private final OkHttpClient HTTP = new OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
-            .build();
+    // Use centralized HTTP client for optimized connection pooling
+    private final OkHttpClient HTTP = HttpClientProvider.getInstance();
     private final Handler MAIN = new Handler(Looper.getMainLooper());
 
     private BannerApi bannerApi;
@@ -311,8 +309,36 @@ public class MainActivity extends BaseActivity {
     private void setupLocationSelector() {
         if (locationSelector != null) {
             locationSelector.setOnClickListener(v -> {
-                // TODO: Open location picker
+                LocationSearchBottomSheet.show(this, locationManager,
+                        new LocationSearchBottomSheet.PermissionDelegate() {
+                            @Override
+                            public boolean hasLocationPermission() {
+                                return ContextCompat.checkSelfPermission(MainActivity.this,
+                                        Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                                        || ContextCompat.checkSelfPermission(MainActivity.this,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                            }
+
+                            @Override
+                            public void requestLocationPermission() {
+                                ActivityCompat.requestPermissions(
+                                        MainActivity.this,
+                                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
+                                        LOCATION_PERMISSION_REQ
+                                );
+                            }
+                        }, suggestion -> {
+                            if (tvSelectedLocation == null) return;
+                            String city = suggestion == null ? "" : (suggestion.city == null ? "" : suggestion.city.trim());
+                            tvSelectedLocation.setText(city.isEmpty() ? "Select Location" : city);
+                            reloadHomeData(false);
+                        });
             });
+        }
+
+        if (locationManager != null && tvSelectedLocation != null) {
+            String label = locationManager.getSavedLocationLabel();
+            tvSelectedLocation.setText(label.isEmpty() ? "Select Location" : label);
         }
     }
 
@@ -339,7 +365,10 @@ public class MainActivity extends BaseActivity {
             else if (id == R.id.catAC) category = "AC Service";
             else if (id == R.id.catPainting) category = "Painting";
             else if (id == R.id.catCarpentry) category = "Carpentry";
-            else if (id == R.id.catMore) category = "More";
+            else if (id == R.id.catMore) {
+                startActivity(new Intent(this, CategoriesActivity.class));
+                return;
+            }
 
             if (!category.isEmpty()) {
                 openProvidersList(category);
@@ -414,7 +443,25 @@ public class MainActivity extends BaseActivity {
     }
 
     private void loadUserData(FirebaseUser user) {
-        if (welcomeMessage != null) welcomeMessage.setText("Hello, " + user.getDisplayName());
+        String fallbackName = user.getDisplayName() != null ? user.getDisplayName().trim() : "";
+        if (fallbackName.isEmpty()) fallbackName = "User";
+        if (welcomeMessage != null) welcomeMessage.setText("Hello, " + fallbackName);
+
+        SupabaseClient.getUserDisplayName(user.getUid(), user.getEmail(), new SupabaseClient.StringCallback() {
+            @Override
+            public void onSuccess(String value) {
+                String dbName = value == null ? "" : value.trim();
+                if (!dbName.isEmpty() && welcomeMessage != null) {
+                    welcomeMessage.setText("Hello, " + dbName);
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                Log.d(TAG, "Using fallback display name: " + message);
+            }
+        });
+
         // Set professional greeting subtitle
         if (userEmail != null) {
             userEmail.setText("Find trusted services near you");
@@ -498,8 +545,8 @@ public class MainActivity extends BaseActivity {
                 "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                 "application/json",
                 "*",
-                "eq.true",
-                "sort_order.asc"
+                "gte." + getTodayIsoDate(),
+                "created_at.desc"
         ).enqueue(new Callback<List<Banner>>() {
             @Override
             public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
@@ -526,8 +573,14 @@ public class MainActivity extends BaseActivity {
                             }
                         }
                     } else {
+                        String raw = "";
+                        try {
+                            raw = response.errorBody() != null ? response.errorBody().string() : "";
+                        } catch (Exception ignored) {
+                        }
                         String errorMsg = "Failed to load banners (HTTP " + response.code() + ")";
                         Log.e(TAG, errorMsg);
+                        if (!raw.isEmpty()) Log.e(TAG, "Banner error body: " + raw);
                         showBannerError(true, errorMsg);
                     }
                     endHomeLoad();
@@ -563,8 +616,8 @@ public class MainActivity extends BaseActivity {
                 "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                 "application/json",
                 "*",
-                "eq.true",
-                "sort_order.asc"
+                "gte." + getTodayIsoDate(),
+                "created_at.desc"
         ).enqueue(new Callback<List<Offer>>() {
             @Override
             public void onResponse(Call<List<Offer>> call, retrofit2.Response<List<Offer>> response) {
@@ -590,8 +643,14 @@ public class MainActivity extends BaseActivity {
                             }
                         }
                     } else {
+                        String raw = "";
+                        try {
+                            raw = response.errorBody() != null ? response.errorBody().string() : "";
+                        } catch (Exception ignored) {
+                        }
                         String errorMsg = "Failed to load offers (HTTP " + response.code() + ")";
                         Log.e(TAG, errorMsg);
+                        if (!raw.isEmpty()) Log.e(TAG, "Offer error body: " + raw);
                         showOffersError(true, errorMsg);
                     }
                     endHomeLoad();
@@ -818,6 +877,27 @@ public class MainActivity extends BaseActivity {
         android.content.ClipData clip = android.content.ClipData.newPlainText("Coupon Code", code);
         clipboard.setPrimaryClip(clip);
         Toast.makeText(this, "Coupon code copied: " + code, Toast.LENGTH_SHORT).show();
+    }
+
+    private String getTodayIsoDate() {
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION_REQ) {
+            boolean granted = false;
+            for (int result : grantResults) {
+                if (result == PackageManager.PERMISSION_GRANTED) {
+                    granted = true;
+                    break;
+                }
+            }
+            if (!granted) {
+                Toast.makeText(this, "Location permission is required to use live location", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     private <T extends View> T findViewSafe(int id) {

@@ -654,8 +654,7 @@ public class ProfileDetailsActivity extends BaseActivity {
         cachedProfileImagePath = safeStr(imagePath);
 
         // Header
-        String displayName = TextUtils.isEmpty(cachedName)
-                ? splitEmail(cachedEmail) : cachedName;
+        String displayName = TextUtils.isEmpty(cachedName) ? "User" : cachedName;
         if (tvName  != null) tvName .setText(TextUtils.isEmpty(displayName) ? "User" : displayName);
         if (tvEmail != null) tvEmail.setText(cachedEmail);
 
@@ -708,8 +707,6 @@ public class ProfileDetailsActivity extends BaseActivity {
             tvAvatarInitial.setVisibility(View.VISIBLE);
             String initial = !TextUtils.isEmpty(name)
                     ? String.valueOf(name.charAt(0)).toUpperCase()
-                    : !TextUtils.isEmpty(cachedEmail)
-                    ? String.valueOf(cachedEmail.charAt(0)).toUpperCase()
                     : "U";
             tvAvatarInitial.setText(initial);
         }
@@ -753,11 +750,6 @@ public class ProfileDetailsActivity extends BaseActivity {
         if (et != null) et.setText(val != null ? val : "");
     }
 
-    private static String splitEmail(String email) {
-        if (TextUtils.isEmpty(email)) return "";
-        int at = email.indexOf('@');
-        return at > 0 ? email.substring(0, at) : email;
-    }
 
     private static String nullSafe(JSONObject o, String key) {
         if (o == null || o.isNull(key)) return "";

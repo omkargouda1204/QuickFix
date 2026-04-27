@@ -3,6 +3,7 @@ package com.example.quickfix;
 /** Model for a provider fetched from provider_profiles. */
 public class ProviderProfile {
     public String id;
+    public String serviceId;
     public String firebaseUid;
     public String businessName;
     public String ownerName;
