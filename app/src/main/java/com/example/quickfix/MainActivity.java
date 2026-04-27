@@ -545,7 +545,8 @@ public class MainActivity extends BaseActivity {
                 "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                 "application/json",
                 "*",
-                "gte." + getTodayIsoDate(),
+                "eq.true",
+                "gt." + getTodayIsoDate(),
                 "created_at.desc"
         ).enqueue(new Callback<List<Banner>>() {
             @Override
@@ -558,14 +559,29 @@ public class MainActivity extends BaseActivity {
                         List<Banner> banners = response.body();
                         Log.d(TAG, "Banners loaded successfully: " + banners.size() + " items");
                         
+                        // Client-side validation: filter only active and not expired banners
+                        List<Banner> validBanners = new ArrayList<>();
+                        String today = getTodayIsoDate();
+                        
+                        for (Banner banner : banners) {
+                            if (banner != null && banner.isActive) {
+                                // Check expiry date
+                                if (banner.expiryDate != null && !banner.expiryDate.isEmpty()) {
+                                    if (banner.expiryDate.compareTo(today) >= 0) {
+                                        validBanners.add(banner);
+                                    }
+                                }
+                            }
+                        }
+                        
                         homeBanners.clear();
-                        homeBanners.addAll(banners);
+                        homeBanners.addAll(validBanners);
                         
                         if (homeBanners.isEmpty()) {
-                            Log.d(TAG, "No active banners found");
+                            Log.d(TAG, "No valid banners found after validation");
                             showBannerEmpty(true);
                         } else {
-                            Log.d(TAG, "Displaying " + homeBanners.size() + " banners");
+                            Log.d(TAG, "Displaying " + homeBanners.size() + " validated banners");
                             showBannerContent(true);
                             if (homeBannerAdapter != null) {
                                 homeBannerAdapter.notifyDataSetChanged();
@@ -616,7 +632,8 @@ public class MainActivity extends BaseActivity {
                 "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                 "application/json",
                 "*",
-                "gte." + getTodayIsoDate(),
+                "eq.true",
+                "gt." + getTodayIsoDate(),
                 "created_at.desc"
         ).enqueue(new Callback<List<Offer>>() {
             @Override
@@ -629,14 +646,33 @@ public class MainActivity extends BaseActivity {
                         List<Offer> offers = response.body();
                         Log.d(TAG, "Offers loaded successfully: " + offers.size() + " items");
                         
+                        // Client-side validation: filter only active and not expired offers
+                        List<Offer> validOffers = new ArrayList<>();
+                        String today = getTodayIsoDate();
+                        
+                        for (Offer offer : offers) {
+                            if (offer != null && offer.isActive) {
+                                // Check expiry date
+                                if (offer.expiryDate != null && !offer.expiryDate.isEmpty()) {
+                                    if (offer.expiryDate.compareTo(today) >= 0) {
+                                        // Normalize offer code for case-insensitive matching
+                                        if (offer.offerCode != null) {
+                                            offer.offerCode = offer.offerCode.trim().toUpperCase();
+                                        }
+                                        validOffers.add(offer);
+                                    }
+                                }
+                            }
+                        }
+                        
                         homeOffers.clear();
-                        homeOffers.addAll(offers);
+                        homeOffers.addAll(validOffers);
                         
                         if (homeOffers.isEmpty()) {
-                            Log.d(TAG, "No active offers found");
+                            Log.d(TAG, "No valid offers found after validation");
                             showOffersEmpty(true);
                         } else {
-                            Log.d(TAG, "Displaying " + homeOffers.size() + " offers");
+                            Log.d(TAG, "Displaying " + homeOffers.size() + " validated offers");
                             showOffersContent(true);
                             if (homeOfferAdapter != null) {
                                 homeOfferAdapter.notifyDataSetChanged();

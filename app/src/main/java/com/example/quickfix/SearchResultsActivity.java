@@ -64,7 +64,7 @@ public class SearchResultsActivity extends BaseActivity
     private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
     private static final String BASE_URL = BuildConfig.SUPABASE_URL;
     private static final int LOCATION_PERMISSION_REQ = 1014;
-    private static final float NEARBY_RADIUS_PRIMARY_KM = 20f;
+    private static final float NEARBY_RADIUS_PRIMARY_KM = 25f;
     private static final float NEARBY_RADIUS_SECONDARY_KM = 25f;
 
     // ...existing fields...

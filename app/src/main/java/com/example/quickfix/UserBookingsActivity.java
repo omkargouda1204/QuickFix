@@ -452,11 +452,14 @@ public class UserBookingsActivity extends BaseActivity
                     throw new IllegalStateException("Offer validation service is unavailable");
                 }
 
+                String cleanCode = code.trim().toUpperCase(Locale.US);
                 JSONObject payload = new JSONObject();
-                payload.put("code", code);
+                payload.put("code", cleanCode);
                 payload.put("amount", amountInr);
                 payload.put("booking_id", clean(booking.id));
                 payload.put("user_id", clean(userId));
+
+                Log.d(TAG, "Coupon Request: URL=" + endpoint + ", Payload=" + payload.toString());
 
                 Request req = new Request.Builder().url(endpoint)
                         .post(RequestBody.create(payload.toString(), JSON))
@@ -468,6 +471,8 @@ public class UserBookingsActivity extends BaseActivity
 
                 try (Response r = HTTP.newCall(req).execute()) {
                     String body = r.body() != null ? r.body().string() : "{}";
+                    Log.d(TAG, "Coupon Response: Code=" + r.code() + ", Body=" + body);
+
                     if (!r.isSuccessful()) {
                         String parsedError = parseSupabaseError(body);
                         if (parsedError.toLowerCase(Locale.US).contains("unknown")) {
@@ -479,9 +484,21 @@ public class UserBookingsActivity extends BaseActivity
                     }
 
                     JSONObject result = new JSONObject(body);
-                    if (!result.optBoolean("valid", true)) {
+                    boolean isValid = result.optBoolean("valid", false);
+                    boolean isActive = result.optBoolean("is_active", true); // Default to true if not present
+
+                    if (!isValid || !isActive) {
                         String msg = clean(result.optString("message", ""));
-                        throw new IllegalStateException(msg.isEmpty() ? "Invalid coupon code" : msg);
+                        throw new IllegalStateException(msg.isEmpty() ? "Invalid or inactive coupon" : msg);
+                    }
+
+                    // Check expiry date if returned by function
+                    String expiry = result.optString("expiry_date", "");
+                    if (!expiry.isEmpty()) {
+                        String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
+                        if (expiry.compareTo(today) < 0) {
+                            throw new IllegalStateException("Coupon has expired");
+                        }
                     }
 
                     double discount = optDoubleAny(result,

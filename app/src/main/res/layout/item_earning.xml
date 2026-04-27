@@ -45,6 +45,17 @@
         </LinearLayout>
 
         <TextView
+            android:id="@+id/tvCouponInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Coupon: SAVE10 (-₹50)"
+            android:textColor="#2E7D32"
+            android:textSize="12sp"
+            android:textStyle="italic"
+            android:visibility="gone" />
+
+        <TextView
             android:id="@+id/tvProviderName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

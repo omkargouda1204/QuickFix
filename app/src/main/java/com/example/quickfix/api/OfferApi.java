@@ -16,12 +16,13 @@ import retrofit2.http.Query;
 
 public interface OfferApi {
 
-    @GET("rest/v1/offers?is_active=eq.true")
+    @GET("rest/v1/offers")
     Call<List<Offer>> getOffers(
             @Header("apikey") String apiKey,
             @Header("Authorization") String bearer,
             @Header("Content-Type") String contentType,
             @Query("select") String select,
+            @Query("is_active") String isActive,
             @Query("expiry_date") String expiryDate,
             @Query("order") String order
     );

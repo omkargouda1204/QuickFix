@@ -126,7 +126,6 @@ public class ProfileActivity extends BaseActivity {
         menuListBusiness      = findViewById(R.id.menuListBusiness);
         menuMyBookings        = findViewById(R.id.menuMyBookings);
         menuTransactionHistory = findViewById(R.id.menuTransactionHistory);
-        menuNotifications     = findViewById(R.id.menuNotifications);
         menuLanguage          = findViewById(R.id.menuLanguage);
         menuDarkMode          = findViewById(R.id.menuDarkMode);
         menuHelpSupport       = findViewById(R.id.menuHelpSupport);
@@ -346,12 +345,6 @@ public class ProfileActivity extends BaseActivity {
                 overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
             });
         }
-
-
-        menuNotifications.setOnClickListener(v -> {
-            startActivity(new Intent(this, NotificationsActivity.class));
-            overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
-        });
 
         menuLanguage.setOnClickListener(v -> showLanguageBottomSheet());
 

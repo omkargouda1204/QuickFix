@@ -64,9 +64,8 @@ public class ProvidersListActivity extends BaseActivity
 
     private static final String TAG = "ProvidersListActivity";
     private static final int LOCATION_PERMISSION_REQ = 4301;
-    private static final float NEARBY_RADIUS_PRIMARY_METERS = 20000f;
-    private static final float NEARBY_RADIUS_SECONDARY_METERS = 25000f;
-    private static final int PROVIDERS_PAGE_SIZE = 10;
+    private static final float NEARBY_RADIUS_KM = 25.0f;
+    private static final int   PROVIDERS_PAGE_SIZE = 10;
 
     // ── Views ─────────────────────────────────────────────────────────────
     private TextView          tvCategoryTitle, tvResultSubtitle, tvLocationLabel, tvEmptySubtitle;
@@ -359,6 +358,12 @@ public class ProvidersListActivity extends BaseActivity
                     if (p == null) continue;
                     if (!isProviderEligible(p)) continue;
                     if (!matchesCategory(category, p.category)) continue;
+                    
+                    // Apply location-based filtering if location is selected
+                    if (hasValidLocation() && !isProviderWithinRadius(p)) {
+                        continue;
+                    }
+                    
                     list.add(p);
                 }
                 return list;
@@ -377,6 +382,39 @@ public class ProvidersListActivity extends BaseActivity
 
     private boolean matchesCategory(String selectedCategory, String providerCategory) {
         return CategoryMatcher.matches(selectedCategory, providerCategory);
+    }
+
+    private boolean hasValidLocation() {
+        return !Double.isNaN(selectedLat) && !Double.isNaN(selectedLng);
+    }
+
+    private boolean isProviderWithinRadius(ProviderProfile provider) {
+        if (!hasValidLocation() || provider == null) {
+            return true; 
+        }
+
+        double providerLat = provider.lat;
+        double providerLng = provider.lng;
+
+        if (Double.isNaN(providerLat) || Double.isNaN(providerLng)) {
+            // Fallback to city match if provider has no coordinates
+            return matchesCity(cityFilter, provider.city);
+        }
+
+        double distanceKm = haversineDistance(selectedLat, selectedLng, providerLat, providerLng);
+        return distanceKm <= NEARBY_RADIUS_KM;
+    }
+
+    private double haversineDistance(double lat1, double lng1, double lat2, double lng2) {
+        final int R = 6371; // Radius of Earth in km
+
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
     }
 
     private boolean matchesCity(String selectedCity, String providerCity) {
@@ -517,51 +555,36 @@ public class ProvidersListActivity extends BaseActivity
         }
     }
 
-    // ── Filter + Search ───────────────────────────────────────────────────
     private void applyFilterAndSearch() {
-        String q = normalizeSearchQuery(searchQuery);
-        Log.d("SEARCH_QUERY", q);
-
-        if (q.contains("nearby")) {
-            applyNearbyFilterFromGps(q.replace("nearby", "").replace("near me", "").trim());
+        if (allProviders.isEmpty()) {
+            renderProviderList(new ArrayList<>(), true);
             return;
         }
 
         List<ProviderProfile> filtered = new ArrayList<>();
-        boolean filterByDistance = !Double.isNaN(selectedLat) && !Double.isNaN(selectedLng);
+        String query = normalizeSearchQuery(searchQuery);
+
         for (ProviderProfile p : allProviders) {
-            if (filterByDistance) {
-                if (Double.isNaN(p.lat) || Double.isNaN(p.lng)) continue;
-                float[] distance = new float[1];
-                Location.distanceBetween(selectedLat, selectedLng, p.lat, p.lng, distance);
-                if (distance[0] > NEARBY_RADIUS_SECONDARY_METERS) continue;
-            }
-            if (!matchesCity(cityFilter, p.city)) continue;
+            if (!matchesCategory(category, p.category)) continue;
 
-            boolean passChip = true;
-            switch (currentChip) {
-                case "Verified":
-                    passChip = p.isVerified;
-                    break;
-                case "TopRated":
-                    passChip = p.rating >= 4.0f;
-                    break;
-                default:
-                    break;
-            }
-            if (!passChip) continue;
+            // Eligibility check (status, verified etc based on current chip)
+            if (!isProviderEligible(p)) continue;
 
-            if (!q.isEmpty()) {
-                boolean matchBusiness = p.businessName != null
-                        && p.businessName.toLowerCase(Locale.getDefault()).contains(q);
-                boolean matchCategory = p.category != null
-                        && p.category.toLowerCase(Locale.getDefault()).contains(q);
-                boolean matchOwner = p.ownerName != null
-                        && p.ownerName.toLowerCase(Locale.getDefault()).contains(q);
-                boolean matchCity = p.city != null
-                        && p.city.toLowerCase(Locale.getDefault()).contains(q);
-                if (!(matchBusiness || matchCategory || matchOwner || matchCity)) continue;
+            // Search text check
+            boolean matchesQuery = query.isEmpty()
+                    || (p.businessName != null && p.businessName.toLowerCase(Locale.US).contains(query))
+                    || (p.category != null && p.category.toLowerCase(Locale.US).contains(query))
+                    || (p.city != null && p.city.toLowerCase(Locale.US).contains(query));
+
+            if (!matchesQuery) continue;
+
+            // Proximity/City check
+            if (hasValidLocation()) {
+                if (!isProviderWithinRadius(p)) continue;
+            } else if (!cityFilter.isEmpty()) {
+                if (!matchesCity(cityFilter, p.city)) continue;
             }
+
             filtered.add(p);
         }
 
@@ -569,7 +592,7 @@ public class ProvidersListActivity extends BaseActivity
             filtered.sort((a, b) -> Float.compare(b.rating, a.rating));
         }
 
-        visibleProvidersCount = PROVIDERS_PAGE_SIZE;
+        latestFilteredProviders = filtered;
         renderProviderList(filtered, true);
     }
 
@@ -593,71 +616,45 @@ public class ProvidersListActivity extends BaseActivity
         locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
             @Override
             public void onSuccess(String city, String area, double lat, double lng) {
-                List<ProviderProfile> within20Km = filterByDistanceAndQuery(cleanedQuery, lat, lng, NEARBY_RADIUS_PRIMARY_METERS);
-                if (!within20Km.isEmpty()) {
-                    runOnUiThread(() -> {
-                        visibleProvidersCount = PROVIDERS_PAGE_SIZE;
-                        renderProviderList(within20Km, true);
-                    });
-                    return;
+                List<ProviderProfile> nearby = new ArrayList<>();
+                String q = cleanedQuery == null ? "" : cleanedQuery.toLowerCase(Locale.US).trim();
+
+                for (ProviderProfile p : allProviders) {
+                    if (Double.isNaN(p.lat) || Double.isNaN(p.lng)) continue;
+                    double distanceKm = haversineDistance(lat, lng, p.lat, p.lng);
+                    if (distanceKm > NEARBY_RADIUS_KM) continue;
+
+                    if (!q.isEmpty()) {
+                        boolean matchBusiness = p.businessName != null && p.businessName.toLowerCase(Locale.US).contains(q);
+                        boolean matchCategory = p.category != null && p.category.toLowerCase(Locale.US).contains(q);
+                        if (!(matchBusiness || matchCategory)) continue;
+                    }
+                    nearby.add(p);
                 }
 
-                List<ProviderProfile> within25Km = filterByDistanceAndQuery(cleanedQuery, lat, lng, NEARBY_RADIUS_SECONDARY_METERS);
-                if (!within25Km.isEmpty()) {
+                if (!nearby.isEmpty()) {
                     runOnUiThread(() -> {
                         visibleProvidersCount = PROVIDERS_PAGE_SIZE;
-                        renderProviderList(within25Km, true);
+                        renderProviderList(nearby, true);
                     });
-                    return;
+                } else {
+                    runOnUiThread(() -> {
+                        Toast.makeText(ProvidersListActivity.this, "No providers in 25km. Showing city results.", Toast.LENGTH_SHORT).show();
+                        searchQuery = cleanedQuery;
+                        applyFilterAndSearch();
+                    });
                 }
-
-                // Final fallback: use city/category results instead of empty nearby list.
-                runOnUiThread(() -> {
-                    Toast.makeText(ProvidersListActivity.this,
-                            "No providers in 25km. Showing city results.",
-                            Toast.LENGTH_SHORT).show();
-                    searchQuery = cleanedQuery;
-                    applyFilterAndSearch();
-                });
             }
 
             @Override
             public void onFailure(String reason) {
                 runOnUiThread(() -> {
-                    Toast.makeText(ProvidersListActivity.this,
-                            "Unable to get current location. Showing city results.",
-                            Toast.LENGTH_SHORT).show();
+                    Toast.makeText(ProvidersListActivity.this, "Unable to get current location. Showing city results.", Toast.LENGTH_SHORT).show();
                     searchQuery = cleanedQuery;
                     applyFilterAndSearch();
                 });
             }
         });
-    }
-
-    private List<ProviderProfile> filterByDistanceAndQuery(String cleanedQuery, double lat, double lng, float radiusMeters) {
-        List<ProviderProfile> filtered = new ArrayList<>();
-        String q = cleanedQuery == null ? "" : cleanedQuery.toLowerCase(Locale.getDefault()).trim();
-
-        for (ProviderProfile p : allProviders) {
-            if (Double.isNaN(p.lat) || Double.isNaN(p.lng)) continue;
-            float[] result = new float[1];
-            Location.distanceBetween(lat, lng, p.lat, p.lng, result);
-            if (result[0] > radiusMeters) continue;
-
-            if (!q.isEmpty()) {
-                boolean matchBusiness = p.businessName != null
-                        && p.businessName.toLowerCase(Locale.getDefault()).contains(q);
-                boolean matchCategory = p.category != null
-                        && p.category.toLowerCase(Locale.getDefault()).contains(q);
-                boolean matchOwner = p.ownerName != null
-                        && p.ownerName.toLowerCase(Locale.getDefault()).contains(q);
-                boolean matchCity = p.city != null
-                        && p.city.toLowerCase(Locale.getDefault()).contains(q);
-                if (!(matchBusiness || matchCategory || matchOwner || matchCity)) continue;
-            }
-            filtered.add(p);
-        }
-        return filtered;
     }
 
     private void renderProviderList(List<ProviderProfile> filtered, boolean resetPagingWindow) {

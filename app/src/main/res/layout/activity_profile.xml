@@ -537,49 +537,6 @@
                         android:layout_height="wrap_content"
                         android:orientation="vertical">
 
-                        <!-- Notifications -->
-                        <LinearLayout
-                            android:id="@+id/menuNotifications"
-                            android:layout_width="match_parent"
-                            android:layout_height="56dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical"
-                            android:paddingStart="16dp"
-                            android:paddingEnd="16dp"
-                            android:background="@drawable/bg_profile_menu_item_ripple"
-                            android:clickable="true"
-                            android:focusable="true">
-                            <FrameLayout
-                                android:layout_width="36dp"
-                                android:layout_height="36dp"
-                                android:background="@drawable/bg_profile_section_header">
-                                <ImageView
-                                    android:layout_width="20dp"
-                                    android:layout_height="20dp"
-                                    android:layout_gravity="center"
-                                    android:src="@drawable/ic_notifications_menu"
-                                    app:tint="@color/primary"
-                                    android:contentDescription="@string/profile_notifications" />
-                            </FrameLayout>
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:layout_marginStart="14dp"
-                                android:text="@string/profile_notifications"
-                                android:textColor="@color/text_primary"
-                                android:textSize="15sp" />
-                            <ImageView
-                                android:layout_width="16dp"
-                                android:layout_height="16dp"
-                                android:src="@drawable/ic_arrow_right"
-                                app:tint="@color/muted_icon"
-                                android:contentDescription="@string/nav_home" />
-                        </LinearLayout>
-
-                        <View android:layout_width="match_parent" android:layout_height="1dp"
-                            android:layout_marginStart="66dp" android:background="@color/divider" />
-
                         <!-- Language -->
                         <LinearLayout
                             android:id="@+id/menuLanguage"

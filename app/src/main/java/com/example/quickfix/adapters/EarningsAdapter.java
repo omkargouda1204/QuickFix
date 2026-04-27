@@ -56,7 +56,7 @@ public class EarningsAdapter extends RecyclerView.Adapter<EarningsAdapter.Earnin
     }
 
     static class EarningViewHolder extends RecyclerView.ViewHolder {
-        TextView tvBookingId, tvServiceName, tvProviderName, tvAmount, tvDate, tvTxnId, tvOrderId, tvStatus, tvServiceId, tvPaymentMode;
+        TextView tvBookingId, tvServiceName, tvProviderName, tvAmount, tvDate, tvTxnId, tvOrderId, tvStatus, tvServiceId, tvPaymentMode, tvCouponInfo;
 
         EarningViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -70,6 +70,7 @@ public class EarningsAdapter extends RecyclerView.Adapter<EarningsAdapter.Earnin
             tvStatus = itemView.findViewById(R.id.tvStatus);
             tvServiceId = itemView.findViewById(R.id.tvServiceId);
             tvPaymentMode = itemView.findViewById(R.id.tvPaymentMode);
+            tvCouponInfo = itemView.findViewById(R.id.tvCouponInfo);
         }
 
         void bind(Booking booking) {
@@ -82,8 +83,17 @@ public class EarningsAdapter extends RecyclerView.Adapter<EarningsAdapter.Earnin
             String sid = booking.serviceId != null ? booking.serviceId.trim() : "";
             tvServiceId.setText(sid.isEmpty() ? "-" : sid);
 
-            double amount = booking.paymentAmount > 0 ? booking.paymentAmount : booking.price;
-            tvAmount.setText("₹" + String.format(Locale.US, "%.0f", amount));
+            double amount = booking.finalAmount > 0 ? booking.finalAmount : (booking.paymentAmount > 0 ? booking.paymentAmount : booking.price);
+            tvAmount.setText("₹" + String.format(Locale.US, "%.2f", amount));
+
+            if (tvCouponInfo != null) {
+                if (booking.couponCode != null && !booking.couponCode.isEmpty()) {
+                    tvCouponInfo.setVisibility(View.VISIBLE);
+                    tvCouponInfo.setText("Coupon: " + booking.couponCode + " (-₹" + String.format(Locale.US, "%.2f", booking.couponDiscount) + ")");
+                } else {
+                    tvCouponInfo.setVisibility(View.GONE);
+                }
+            }
 
             tvDate.setText(formatDateTime(booking));
 

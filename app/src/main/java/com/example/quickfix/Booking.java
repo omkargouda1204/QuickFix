@@ -34,6 +34,9 @@ public class Booking {
     public String type;
     public boolean isEmergency;
     public String emergencyRequestId;
+    public String couponCode;
+    public double couponDiscount;
+    public double finalAmount;
 
     // Optional provider review payload (joined or mapped after fetch)
     public String reviewId;
@@ -81,6 +84,9 @@ public class Booking {
                 || "emergency".equalsIgnoreCase(b.category)
                 || "emergency".equalsIgnoreCase(b.serviceName);
         b.emergencyRequestId = s(o, "emergency_request_id");
+        b.couponCode = s(o, "coupon_code");
+        b.couponDiscount = o.optDouble("coupon_discount", 0d);
+        b.finalAmount = o.optDouble("final_amount", 0d);
 
         // Read review if API includes an embedded relation or flat columns.
         JSONObject reviewObj = null;
@@ -107,6 +113,10 @@ public class Booking {
             b.reviewUpdatedAt = s(o, "review_updated_at");
         }
         return b;
+    }
+
+    public String getPaymentStatus() {
+        return paymentStatus;
     }
 
     private static String s(JSONObject o, String key) {

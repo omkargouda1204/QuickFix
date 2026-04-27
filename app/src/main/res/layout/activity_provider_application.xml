@@ -80,13 +80,15 @@
 
                 <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                     android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                    <TextView android:layout_width="28dp" android:layout_height="28dp"
+                    <TextView
+                        android:id="@+id/tvStepIndicator1"
+                        android:layout_width="28dp" android:layout_height="28dp"
                         android:background="@drawable/bg_step_circle_active"
                         android:gravity="center" android:text="1" android:textColor="@color/white"
                         android:textStyle="bold" android:textSize="12sp" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:layout_marginTop="4dp" android:text="Details"
-                        android:textColor="@color/on_gradient_muted" android:textSize="10sp" />
+                        android:textColor="@color/white" android:textSize="10sp" />
                 </LinearLayout>
 
                 <View android:layout_width="0dp" android:layout_height="2dp"
@@ -95,12 +97,14 @@
 
                 <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                     android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                    <TextView android:layout_width="28dp" android:layout_height="28dp"
-                        android:background="@drawable/bg_step_circle_active"
-                        android:gravity="center" android:text="2" android:textColor="@color/white"
+                    <TextView
+                        android:id="@+id/tvStepIndicator2"
+                        android:layout_width="28dp" android:layout_height="28dp"
+                        android:background="@drawable/bg_step_circle_inactive"
+                        android:gravity="center" android:text="2" android:textColor="@color/on_gradient_muted"
                         android:textStyle="bold" android:textSize="12sp" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp" android:text="Service"
+                        android:layout_marginTop="4dp" android:text="Location"
                         android:textColor="@color/on_gradient_muted" android:textSize="10sp" />
                 </LinearLayout>
 
@@ -110,7 +114,9 @@
 
                 <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                     android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                    <TextView android:layout_width="28dp" android:layout_height="28dp"
+                    <TextView
+                        android:id="@+id/tvStepIndicator3"
+                        android:layout_width="28dp" android:layout_height="28dp"
                         android:background="@drawable/bg_step_circle_inactive"
                         android:gravity="center" android:text="3" android:textColor="@color/on_gradient_muted"
                         android:textStyle="bold" android:textSize="12sp" />
@@ -367,19 +373,51 @@
                             android:padding="16dp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
-                    <!-- City -->
+                    <!-- Location Selection -->
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="City *" android:textColor="@color/text_primary"
-                        android:textSize="13sp" android:textStyle="bold" android:layout_marginBottom="6dp" />
+                        android:text="Service Location *" android:textColor="@color/text_primary"
+                        android:textSize="13sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="12dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnLiveLocation"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="52dp"
+                            android:layout_weight="1"
+                            android:text="Use GPS"
+                            app:icon="@drawable/ic_location"
+                            app:cornerRadius="12dp"
+                            android:textAllCaps="false" />
+
+                        <Space android:layout_width="12dp" android:layout_height="wrap_content" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnManualLocation"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="52dp"
+                            android:layout_weight="1"
+                            android:text="Manual"
+                            app:icon="@drawable/ic_city"
+                            app:cornerRadius="12dp"
+                            android:textAllCaps="false" />
+                    </LinearLayout>
+
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/layoutCity"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:layout_marginBottom="18dp"
+                        android:layout_marginBottom="10dp"
                         app:startIconDrawable="@drawable/ic_city" app:startIconTint="@color/accent_teal"
                         app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
                         app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp"
-                        app:hintTextColor="@color/accent_teal" android:hint="Enter your city name">
+                        app:hintTextColor="@color/accent_teal" android:hint="City / Area Name">
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etCity"
                             android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -387,6 +425,33 @@
                             android:textSize="15sp" android:inputType="textCapWords"
                             android:imeOptions="actionNext" />
                     </com.google.android.material.textfield.TextInputLayout>
+
+                    <LinearLayout
+                        android:id="@+id/layoutLocationDisplay"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:background="@drawable/bg_location_selected"
+                        android:padding="12dp"
+                        android:layout_marginBottom="18dp"
+                        android:visibility="gone">
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_location"
+                            app:tint="@color/primary" />
+                        <TextView
+                            android:id="@+id/tvSelectedLocationLabel"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="10dp"
+                            android:text="Location: Shediguri"
+                            android:textColor="@color/primary"
+                            android:textStyle="bold"
+                            android:textSize="13sp" />
+                    </LinearLayout>
 
                     <!-- Years of Experience -->
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"

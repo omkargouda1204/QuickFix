@@ -149,22 +149,20 @@ public class TransactionActivity extends BaseActivity {
         adapter.setTransactions(new ArrayList<>());
         new Thread(() -> {
             try {
-                String uid = android.net.Uri.encode(userId == null ? "" : userId.trim());
-                String dbId = android.net.Uri.encode(userDbId == null ? "" : userDbId.trim());
+                // Requirement: Use logged-in user UID (userId), not email.
+                String uid = userId == null ? "" : userId.trim();
 
-                StringBuilder url = new StringBuilder(BASE_URL)
-                        .append("/rest/v1/bookings?select=*&order=created_at.desc");
-                if (!uid.isEmpty() && !dbId.isEmpty() && !uid.equals(dbId)) {
-                    url.append("&or=(customer_id.eq.").append(uid)
-                            .append(",customer_id.eq.").append(dbId).append(")");
-                } else if (!dbId.isEmpty()) {
-                    url.append("&customer_id=eq.").append(dbId);
-                } else {
-                    url.append("&customer_id=eq.").append(uid);
-                }
+                // Fetch bookings where customer_id matches the UID and payment_status is 'success'
+                String url = BASE_URL + "/rest/v1/bookings"
+                        + "?select=*"
+                        + "&customer_id=eq." + android.net.Uri.encode(uid)
+                        + "&payment_status=eq.success"
+                        + "&order=created_at.desc";
 
-                Log.d(TAG, "Loading transactions from: " + url);
-                Request req = new Request.Builder().url(url.toString())
+                Log.d(TAG, "Transaction Fetch -> UID used: [" + uid + "]");
+                Log.d(TAG, "Transaction Fetch -> URL: " + url);
+
+                Request req = new Request.Builder().url(url)
                         .get()
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
@@ -173,19 +171,19 @@ public class TransactionActivity extends BaseActivity {
 
                 try (Response r = HTTP.newCall(req).execute()) {
                     String body = r.body() != null ? r.body().string() : "[]";
-                    Log.d(TAG, "Transaction API response: " + r.code() + ", body length: " + body.length());
+                    Log.d(TAG, "Transaction Fetch -> Code: " + r.code());
+                    Log.d(TAG, "Transaction Fetch -> Response Body: " + body);
                     
                     if (r.isSuccessful()) {
                         JSONArray arr = new JSONArray(body);
                         List<Booking> list = new ArrayList<>();
                         for (int i = 0; i < arr.length(); i++) {
                             Booking booking = Booking.fromJson(arr.getJSONObject(i));
-                                if (booking != null) {
+                            if (booking != null) {
                                 list.add(booking);
                             }
                         }
                         
-                        Log.d(TAG, "Valid transactions found: " + list.size());
                         MAIN.post(() -> {
                             adapter.setTransactions(list);
                             showEmptyState(list.isEmpty());
@@ -212,7 +210,7 @@ public class TransactionActivity extends BaseActivity {
     }
     
     private boolean isValidTransaction(Booking booking) {
-        return booking != null;
+        return booking != null && "success".equals(booking.getPaymentStatus());
     }
 
     private void showEmptyState(boolean show) {

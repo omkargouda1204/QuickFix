@@ -708,6 +708,8 @@ public class ProviderOnboardingActivity extends BaseActivity {
                 String.valueOf(experienceYrs),
                 bizImgUrl,
                 idProofUrl,
+                Double.NaN,
+                Double.NaN,
                 new ProviderApplicationRepository.Callback() {
                     @Override
                     public void onSuccess() {

@@ -72,7 +72,7 @@ public class EmergencyHelpActivity extends BaseActivity {
     );
 
     private static final long STATUS_POLL_MS = 4000L;
-    private static final double NEARBY_RADIUS_KM = 30d;
+    private static final double NEARBY_RADIUS_KM = 25d;
     private static final int PROVIDER_PAGE_SIZE = 500;
     private static final int PROVIDER_MAX_PAGES = 20;
 
@@ -95,6 +95,8 @@ public class EmergencyHelpActivity extends BaseActivity {
     private ImageView btnBack;
     private MaterialButton btnSubmit;
     private MaterialButton btnSelectLocation;
+    private MaterialButton btnAcceptProvider;
+    private MaterialButton btnRejectProvider;
     private ProgressBar progress;
     private TextView tvStatus;
     private TextView tvName;
@@ -149,6 +151,8 @@ public class EmergencyHelpActivity extends BaseActivity {
         btnBack = findViewById(R.id.btnBack);
         btnSubmit = findViewById(R.id.btnEmergencyRequest);
         btnSelectLocation = findViewById(R.id.btnEmergencySelectLocation);
+        btnAcceptProvider = findViewById(R.id.btnAcceptProvider);
+        btnRejectProvider = findViewById(R.id.btnRejectProvider);
         progress = findViewById(R.id.progressEmergency);
         tvStatus = findViewById(R.id.tvEmergencyRequestStatus);
         tvName = findViewById(R.id.tvEmergencyUserName);
@@ -178,6 +182,12 @@ public class EmergencyHelpActivity extends BaseActivity {
         }
         if (btnSubmit != null) {
             btnSubmit.setOnClickListener(v -> submitEmergencyRequest());
+        }
+        if (btnAcceptProvider != null) {
+            btnAcceptProvider.setOnClickListener(v -> acceptProvider());
+        }
+        if (btnRejectProvider != null) {
+            btnRejectProvider.setOnClickListener(v -> rejectProvider());
         }
     }
 
@@ -417,8 +427,8 @@ public class EmergencyHelpActivity extends BaseActivity {
         }
         if (tvLocationHint != null) {
             tvLocationHint.setText(locationReady
-                    ? "Using selected location to find active providers within 30 km."
-                    : "Accurate location is required to find active providers within 30 km.");
+                    ? "Using selected location to find active providers within 25 km."
+                    : "Accurate location is required to find active providers within 25 km.");
         }
         updateSubmitButtonState();
     }
@@ -521,7 +531,7 @@ public class EmergencyHelpActivity extends BaseActivity {
                     if (finalProviderLookupFailed) {
                         setStatus("Status: Request submitted. Searching nearby providers...");
                     } else if (notifiedProviders == 0) {
-                        setStatus("Status: No providers available within 30 km.");
+                        setStatus("Status: No providers available within 25 km.");
                     } else {
                         setStatus("Status: Request sent to nearby providers");
                     }
@@ -532,7 +542,7 @@ public class EmergencyHelpActivity extends BaseActivity {
                     } else if (notifiedProviders > 0) {
                         showToast("Request sent to nearby providers");
                     } else {
-                        showToast("No providers available within 30 km right now.");
+                        showToast("No providers available within 25 km right now.");
                     }
                 });
             } catch (Exception e) {
@@ -578,33 +588,21 @@ public class EmergencyHelpActivity extends BaseActivity {
                                             boolean includeExtendedFields) throws Exception {
         JSONObject payload = new JSONObject();
         payload.put("user_id", safe(currentUserId));
-        payload.put("user_firebase_uid", safe(currentUserId));
-        payload.put("name", safe(currentUserName));
         payload.put("user_name", safe(currentUserName));
         payload.put("phone", safe(currentUserPhone));
-        payload.put("service", safe(category));
-        payload.put("service_type", safe(category));
         payload.put("category", safe(category));
-        payload.put("issue", safe(description));
         payload.put("description", safe(description));
         payload.put("address", safe(locationLabel));
-        if (!Double.isNaN(selectedLat) && !Double.isNaN(selectedLng)) {
-            payload.put("location", selectedLat + "," + selectedLng);
-        }
         payload.put("status", "pending");
-        payload.put("city", safe(selectedCity));
-        payload.put("area", safe(selectedArea));
         if (!Double.isNaN(selectedLat)) {
-            payload.put("lat", selectedLat);
+            payload.put("latitude", selectedLat);
         }
         if (!Double.isNaN(selectedLng)) {
-            payload.put("lng", selectedLng);
-        }
-        if (includeExtendedFields) {
-            payload.put("type", "Emergency");
-            payload.put("timestamp", isoNow());
+            payload.put("longitude", selectedLng);
         }
         payload.put("created_at", isoNow());
+        
+        Log.d(TAG, "Emergency Insert Payload: " + payload.toString());
         return payload;
     }
 
@@ -620,6 +618,9 @@ public class EmergencyHelpActivity extends BaseActivity {
 
         try (Response response = http.newCall(request).execute()) {
             String body = response.body() != null ? response.body().string() : "[]";
+            Log.d(TAG, "Emergency Insert -> Code: " + response.code());
+            Log.d(TAG, "Emergency Insert -> Body: " + body);
+
             if (response.code() != 201 && response.code() != 200) {
                 String apiError = extractApiErrorMessage(body, "Submit failed HTTP " + response.code());
                 throw new IllegalStateException(apiError);
@@ -981,6 +982,18 @@ public class EmergencyHelpActivity extends BaseActivity {
         );
         String providerLocation = AppLocationManager.composeLocationLabel(providerCity, providerArea);
         setText(tvProviderLocation, "Location: " + fallback(providerLocation, "Not available"));
+        
+        // Show Accept/Reject buttons when provider is assigned
+        if (btnAcceptProvider != null && btnRejectProvider != null) {
+            // Check if request is still pending
+            if (!activeRequestId.isEmpty()) {
+                btnAcceptProvider.setVisibility(View.VISIBLE);
+                btnRejectProvider.setVisibility(View.VISIBLE);
+            } else {
+                btnAcceptProvider.setVisibility(View.GONE);
+                btnRejectProvider.setVisibility(View.GONE);
+            }
+        }
     }
 
     private JSONObject extractProviderSnapshotFromRequest(JSONObject request) {
@@ -1250,6 +1263,89 @@ public class EmergencyHelpActivity extends BaseActivity {
             }
             return compact.isEmpty() ? fallback : compact;
         }
+    }
+
+    private void acceptProvider() {
+        if (activeRequestId.isEmpty()) {
+            showToast("No active request to accept");
+            return;
+        }
+        
+        updateEmergencyRequestStatus(activeRequestId, "accepted");
+    }
+    
+    private void rejectProvider() {
+        if (activeRequestId.isEmpty()) {
+            showToast("No active request to reject");
+            return;
+        }
+        
+        updateEmergencyRequestStatus(activeRequestId, "rejected");
+    }
+    
+    private void updateEmergencyRequestStatus(String requestId, String status) {
+        if (!hasValidSupabaseConfig()) {
+            showToast("Configuration error");
+            return;
+        }
+        
+        if (!NetworkHelper.isOnline(this)) {
+            showToast("No internet connection");
+            return;
+        }
+        
+        setLoading(true);
+        
+        new Thread(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("status", status);
+                if ("accepted".equals(status)) {
+                    payload.put("accepted_at", isoNow());
+                } else if ("rejected".equals(status)) {
+                    payload.put("rejected_at", isoNow());
+                }
+                
+                String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests"
+                        + "?id=eq." + encode(requestId);
+                
+                Request request = new Request.Builder()
+                        .url(url)
+                        .patch(RequestBody.create(payload.toString(), JSON))
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
+                        .build();
+                
+                try (Response response = http.newCall(request).execute()) {
+                    runOnUiThread(() -> {
+                        setLoading(false);
+                        if (response.code() == 200 || response.code() == 204) {
+                            setStatus("Status: " + status.substring(0, 1).toUpperCase() + status.substring(1));
+                            showToast("Request " + status + " successfully");
+                            
+                            // Hide buttons after action
+                            if (btnAcceptProvider != null) btnAcceptProvider.setVisibility(View.GONE);
+                            if (btnRejectProvider != null) btnRejectProvider.setVisibility(View.GONE);
+                            
+                            // Stop polling if request is finalized
+                            if ("accepted".equals(status) || "rejected".equals(status)) {
+                                mainHandler.removeCallbacks(statusPollingRunnable);
+                            }
+                        } else {
+                            showToast("Failed to update request status");
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "updateEmergencyRequestStatus failed", e);
+                runOnUiThread(() -> {
+                    setLoading(false);
+                    showToast("Failed to update request: " + e.getMessage());
+                });
+            }
+        }).start();
     }
 
     private String safe(String value) {

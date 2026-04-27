@@ -91,6 +91,8 @@ public class ProviderApplicationRepository {
             String experience,
             String businessImageUrl,
             String idProofUrl,
+            Double latitude,
+            Double longitude,
             Callback callback) {
 
         new Thread(() -> {
@@ -150,6 +152,10 @@ public class ProviderApplicationRepository {
                 body.put("terms_accepted",      true);
                 body.put("status",              autoApprove ? "approved" : "pending");
                 body.put("submitted_at",        timestamp);
+                
+                if (latitude != null && !latitude.isNaN()) body.put("latitude", latitude);
+                if (longitude != null && !longitude.isNaN()) body.put("longitude", longitude);
+
                 if (autoApprove) {
                     body.put("approved_at", timestamp);
                     body.put("reviewed_at", timestamp);

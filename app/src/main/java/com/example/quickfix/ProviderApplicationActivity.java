@@ -21,6 +21,17 @@ import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import android.widget.TextView;
+import org.json.JSONObject;
+import okhttp3.MediaType;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import android.util.Log;
+import java.util.Locale;
+import com.google.android.material.textfield.TextInputLayout;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
 /**
  * ProviderApplicationActivity — "Become a Service Provider" form.
@@ -44,13 +55,18 @@ public class ProviderApplicationActivity extends BaseActivity {
     private ScrollView       termsScrollView;
     private View             tvScrollHint;   // now a LinearLayout in XML
     private MaterialCheckBox checkboxTerms;
-    private MaterialButton   btnSubmit, btnSuccessHome;
+    private MaterialButton   btnSubmit, btnSuccessHome, btnLiveLocation, btnManualLocation;
     private FrameLayout      successOverlay;
-    private LinearLayout     layoutStatusBadge;
+    private LinearLayout     layoutStatusBadge, layoutLocationDisplay;
+    private TextView         tvSelectedLocationLabel, tvStepIndicator1, tvStepIndicator2, tvStepIndicator3;
 
     // ── State ─────────────────────────────────────────────────────────────
     private boolean termsScrolledToBottom = false;
     private boolean isSubmitting          = false;
+
+    private double             selectedLat = Double.NaN;
+    private double             selectedLng = Double.NaN;
+    private AppLocationManager locationManager;
 
     private static final String[] CATEGORIES = {
             "Plumbing", "Electrical", "Cleaning", "Repair & Maintenance",
@@ -64,6 +80,7 @@ public class ProviderApplicationActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_provider_application);
 
+        locationManager = new AppLocationManager(this);
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) {
             startActivity(new Intent(this, LoginActivity.class));
@@ -79,6 +96,7 @@ public class ProviderApplicationActivity extends BaseActivity {
         setupFieldWatchers();
         setupSubmitButton(user);
         setupSuccessButton();
+        setupLocationOptions();
         checkExistingApplication(user.getUid());
     }
 
@@ -120,9 +138,86 @@ public class ProviderApplicationActivity extends BaseActivity {
         successOverlay    = findViewById(R.id.successOverlay);
         btnSuccessHome    = findViewById(R.id.btnSuccessHome);
         layoutStatusBadge = findViewById(R.id.layoutStatusBadge);
+
+        btnLiveLocation    = findViewById(R.id.btnLiveLocation);
+        btnManualLocation  = findViewById(R.id.btnManualLocation);
+        layoutLocationDisplay = findViewById(R.id.layoutLocationDisplay);
+        tvSelectedLocationLabel = findViewById(R.id.tvSelectedLocationLabel);
+
+        tvStepIndicator1   = findViewById(R.id.tvStepIndicator1);
+        tvStepIndicator2   = findViewById(R.id.tvStepIndicator2);
+        tvStepIndicator3   = findViewById(R.id.tvStepIndicator3);
+    }
+    private void setupLocationOptions() {
+        if (btnLiveLocation == null || btnManualLocation == null) return;
+
+        btnLiveLocation.setOnClickListener(v -> {
+            showLoading(true);
+            locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
+                @Override
+                public void onSuccess(String city, String area, double lat, double lng) {
+                    runOnUiThread(() -> {
+                        showLoading(false);
+                        selectedLat = lat;
+                        selectedLng = lng;
+                        
+                        // Use area as city fallback
+                        String areaName = (area != null && !area.isEmpty()) ? area : city;
+                        etCity.setText(areaName);
+                        
+                        layoutCity.setVisibility(View.GONE);
+                        layoutLocationDisplay.setVisibility(View.VISIBLE);
+                        tvSelectedLocationLabel.setText("Location: " + areaName);
+                        
+                        updateStepIndicators(2);
+                        updateSubmitButtonState();
+                    });
+                }
+
+                @Override
+                public void onFailure(String error) {
+                    runOnUiThread(() -> {
+                        showLoading(false);
+                        showError("Location not available. Please enter manually.");
+                        switchToManualLocation();
+                    });
+                }
+            });
+        });
+
+        btnManualLocation.setOnClickListener(v -> switchToManualLocation());
     }
 
-    // ── Category Dropdown ─────────────────────────────────────────────────
+    private void switchToManualLocation() {
+        selectedLat = Double.NaN;
+        selectedLng = Double.NaN;
+        layoutCity.setVisibility(View.VISIBLE);
+        layoutLocationDisplay.setVisibility(View.GONE);
+        updateStepIndicators(2);
+        updateSubmitButtonState();
+    }
+
+    private void updateStepIndicators(int step) {
+        if (tvStepIndicator1 == null) return;
+
+        // Step 1: Details
+        // Step 2: Location (Service)
+        // Step 3: Terms
+
+        int activeColor = getResources().getColor(R.color.white);
+        int inactiveColor = getResources().getColor(R.color.on_gradient_muted);
+        int activeBg = R.drawable.bg_step_circle_active;
+        int inactiveBg = R.drawable.bg_step_circle_inactive;
+
+        tvStepIndicator1.setBackgroundResource(step >= 1 ? activeBg : inactiveBg);
+        tvStepIndicator1.setTextColor(step >= 1 ? activeColor : inactiveColor);
+
+        tvStepIndicator2.setBackgroundResource(step >= 2 ? activeBg : inactiveBg);
+        tvStepIndicator2.setTextColor(step >= 2 ? activeColor : inactiveColor);
+
+        tvStepIndicator3.setBackgroundResource(step >= 3 ? activeBg : inactiveBg);
+        tvStepIndicator3.setTextColor(step >= 3 ? activeColor : inactiveColor);
+    }
     private void setupCategoryDropdown() {
         ArrayAdapter<String> adapter = new ArrayAdapter<>(
                 this, android.R.layout.simple_dropdown_item_1line, CATEGORIES);
@@ -212,7 +307,7 @@ public class ProviderApplicationActivity extends BaseActivity {
     private void setupSubmitButton(FirebaseUser user) {
         btnSubmit.setOnClickListener(v -> {
             if (isSubmitting) return;
-            if (!validateAllFields()) return;
+            if (!validateAllFields(true)) return;
 
             isSubmitting = true;
             btnSubmit.setEnabled(false);
@@ -231,6 +326,8 @@ public class ProviderApplicationActivity extends BaseActivity {
                     str(etExperience),
                     null,
                     null,
+                    selectedLat,
+                    selectedLng,
                     new ProviderApplicationRepository.Callback() {
                         @Override public void onSuccess() {
                             isSubmitting = false;
@@ -254,16 +351,16 @@ public class ProviderApplicationActivity extends BaseActivity {
     }
 
     // ── Full validation (on submit tap) ───────────────────────────────────
-    private boolean validateAllFields() {
+    private boolean validateAllFields(boolean showErrors) {
         boolean valid = true;
 
         // Business Name — letters/spaces/basic punctuation only
         String biz = str(etBusinessName);
         if (biz.isEmpty()) {
-            layoutBusinessName.setError("Business name is required.");
+            if (showErrors) layoutBusinessName.setError("Business name is required.");
             valid = false;
         } else if (!biz.matches("[a-zA-Z\\s.&'-]+")) {
-            layoutBusinessName.setError("Business name must contain letters only.");
+            if (showErrors) layoutBusinessName.setError("Business name must contain letters only.");
             valid = false;
         } else {
             layoutBusinessName.setError(null);
@@ -271,7 +368,7 @@ public class ProviderApplicationActivity extends BaseActivity {
 
         // Owner Name
         if (str(etOwnerName).isEmpty()) {
-            layoutOwnerName.setError("Owner name is required.");
+            if (showErrors) layoutOwnerName.setError("Owner name is required.");
             valid = false;
         } else {
             layoutOwnerName.setError(null);
@@ -280,10 +377,10 @@ public class ProviderApplicationActivity extends BaseActivity {
         // Phone — exactly 10 digits
         String phone = str(etPhone);
         if (phone.isEmpty()) {
-            layoutPhone.setError("Phone number is required.");
+            if (showErrors) layoutPhone.setError("Phone number is required.");
             valid = false;
         } else if (!phone.matches("\\d{10}")) {
-            layoutPhone.setError("Enter a valid 10-digit mobile number.");
+            if (showErrors) layoutPhone.setError("Enter a valid 10-digit mobile number.");
             valid = false;
         } else {
             layoutPhone.setError(null);
@@ -291,7 +388,7 @@ public class ProviderApplicationActivity extends BaseActivity {
 
         // Email (read-only, should always be filled)
         if (str(etEmail).isEmpty()) {
-            layoutEmail.setError("Email is required.");
+            if (showErrors) layoutEmail.setError("Email is required.");
             valid = false;
         } else {
             layoutEmail.setError(null);
@@ -299,15 +396,15 @@ public class ProviderApplicationActivity extends BaseActivity {
 
         // Category
         if (str(spinnerCategory).isEmpty()) {
-            layoutCategory.setError("Please select a service category.");
+            if (showErrors) layoutCategory.setError("Please select a service category.");
             valid = false;
         } else {
             layoutCategory.setError(null);
         }
 
         // City
-        if (str(etCity).isEmpty()) {
-            layoutCity.setError("City is required.");
+        if (Double.isNaN(selectedLat) && str(etCity).isEmpty()) {
+            if (showErrors) layoutCity.setError("City or live location is required.");
             valid = false;
         } else {
             layoutCity.setError(null);
@@ -316,10 +413,10 @@ public class ProviderApplicationActivity extends BaseActivity {
         // Years of Experience — numbers only, 1–99
         String exp = str(etExperience);
         if (exp.isEmpty()) {
-            layoutExperience.setError("Years of experience is required.");
+            if (showErrors) layoutExperience.setError("Years of experience is required.");
             valid = false;
         } else if (!exp.matches("\\d{1,2}") || exp.equals("0")) {
-            layoutExperience.setError("Enter a valid number (1–99).");
+            if (showErrors) layoutExperience.setError("Enter a valid number (1–99).");
             valid = false;
         } else {
             layoutExperience.setError(null);
@@ -327,18 +424,21 @@ public class ProviderApplicationActivity extends BaseActivity {
 
         // Description
         if (str(etDescription).isEmpty()) {
-            layoutDescription.setError("Please describe your services.");
+            if (showErrors) layoutDescription.setError("Please describe your services.");
             valid = false;
         } else {
             layoutDescription.setError(null);
         }
 
-        // Terms
-        if (!checkboxTerms.isChecked()) {
+        return valid;
+    }
+
+    private boolean validateAllFields() {
+        boolean valid = validateAllFields(true);
+        if (valid && !checkboxTerms.isChecked()) {
             showError("Please read and accept the Terms & Conditions.");
             valid = false;
         }
-
         return valid;
     }
 
@@ -400,6 +500,10 @@ public class ProviderApplicationActivity extends BaseActivity {
 
     private void showError(String msg) {
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+    }
+
+    private void showLoading(boolean show) {
+        if (show) Toast.makeText(this, "Processing...", Toast.LENGTH_SHORT).show();
     }
 }
 
