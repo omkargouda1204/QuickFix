@@ -33,6 +33,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
+import com.bumptech.glide.Glide;
 import com.example.quickfix.adapters.SearchSuggestionsAdapter;
 import com.example.quickfix.adapters.HomeBannerAdapter;
 import com.example.quickfix.adapters.HomeOfferAdapter;
@@ -103,14 +104,16 @@ public class MainActivity extends BaseActivity {
 
     private LinearLayout quickBookService, quickEmergency, quickTrackBooking;
 
-    private CardView featuredCard1, featuredCard2, featuredCard3;
+    private RecyclerView rvTopRated, rvTopBooked;
+    private com.example.quickfix.adapters.TopRatedAdapter topRatedAdapter;
+    private com.example.quickfix.adapters.TopRatedAdapter topBookedAdapter;
+    private final List<ProviderProfile> topRatedProviders = new ArrayList<>();
+    private final List<ProviderProfile> topBookedProviders = new ArrayList<>();
+    private View topRatedLoadingState, topBookedLoadingState;
+    private TextView btnSeeAllTopRated, btnSeeAllTopBooked;
+
     private CardView cardImageDetection;
-    private View featuredServicesSection;
-    private TextView tvFeaturedTitle1, tvFeaturedDesc1, tvFeaturedTitle2, tvFeaturedDesc2, tvFeaturedTitle3, tvFeaturedDesc3;
     private View providerDashboardSection;
-    private String featuredCategory1 = "Cleaning";
-    private String featuredCategory2 = "Electrical";
-    private String featuredCategory3 = "Plumbing";
 
     private View continueSection;
     private View continueContentContainer, continueLoadingState, continueEmptyState, continueErrorState;
@@ -126,6 +129,7 @@ public class MainActivity extends BaseActivity {
     private TextView           tvBannerErrorMessage;
     private MaterialButton     btnRetryBannerLoad;
     private ViewPager2         vpBannersCarousel;
+    private ImageView          bannerImg;
     private RecyclerView       rvOffersStrip;
     private WormDotsIndicator  bannerDotsLayout;
     private HomeBannerAdapter  homeBannerAdapter;
@@ -148,9 +152,6 @@ public class MainActivity extends BaseActivity {
     private TextView navHomeText, navBookingsText, navMessagesText, navProfileText;
 
     private FirebaseAuth mAuth;
-    // Use centralized HTTP client for optimized connection pooling
-    private final OkHttpClient HTTP = HttpClientProvider.getInstance();
-    private final Handler MAIN = new Handler(Looper.getMainLooper());
 
     private BannerApi bannerApi;
     private OfferApi offerApi;
@@ -175,7 +176,7 @@ public class MainActivity extends BaseActivity {
         setupSearchBar();
         setupCategoryClickListeners();
         setupQuickActionListeners();
-        setupFeaturedCardListeners();
+        setupNewSections();
         setupBottomNav();
         setupPullToRefresh();
         setupListBusinessCard(user);
@@ -227,17 +228,14 @@ public class MainActivity extends BaseActivity {
             quickEmergency = findViewSafe(R.id.quickEmergency);
             quickTrackBooking = findViewSafe(R.id.quickTrackBooking);
 
-            featuredCard1 = findViewSafe(R.id.featuredCard1);
-            featuredCard2 = findViewSafe(R.id.featuredCard2);
-            featuredCard3 = findViewSafe(R.id.featuredCard3);
+            rvTopRated = findViewSafe(R.id.rvTopRated);
+            rvTopBooked = findViewSafe(R.id.rvTopBooked);
+            topRatedLoadingState = findViewSafe(R.id.topRatedLoadingState);
+            topBookedLoadingState = findViewSafe(R.id.topBookedLoadingState);
+            btnSeeAllTopRated = findViewSafe(R.id.btnSeeAllTopRated);
+            btnSeeAllTopBooked = findViewSafe(R.id.btnSeeAllTopBooked);
+
             cardImageDetection = findViewSafe(R.id.cardImageDetection);
-            featuredServicesSection = findViewSafe(R.id.featuredServicesSection);
-            tvFeaturedTitle1 = findViewSafe(R.id.tvFeaturedTitle1);
-            tvFeaturedDesc1 = findViewSafe(R.id.tvFeaturedDesc1);
-            tvFeaturedTitle2 = findViewSafe(R.id.tvFeaturedTitle2);
-            tvFeaturedDesc2 = findViewSafe(R.id.tvFeaturedDesc2);
-            tvFeaturedTitle3 = findViewSafe(R.id.tvFeaturedTitle3);
-            tvFeaturedDesc3 = findViewSafe(R.id.tvFeaturedDesc3);
 
             providerDashboardSection = findViewSafe(R.id.providerDashboardSection);
             listBusinessSection = findViewSafe(R.id.listBusinessSection);
@@ -253,6 +251,7 @@ public class MainActivity extends BaseActivity {
             btnRetryBannerLoad = findViewSafe(R.id.btnRetryBannerLoad);
             btnRetryBannerLoad.setOnClickListener(v -> loadBanners());
             vpBannersCarousel = findViewSafe(R.id.vpBannersCarousel);
+            bannerImg = findViewSafe(R.id.bannerImg);
             rvOffersStrip = findViewSafe(R.id.rvOffersStrip);
             bannerDotsLayout = findViewSafe(R.id.bannerDotsLayout);
 
@@ -395,10 +394,32 @@ public class MainActivity extends BaseActivity {
         });
     }
 
-    private void setupFeaturedCardListeners() {
-        if (featuredCard1 != null) featuredCard1.setOnClickListener(v -> openProvidersList(featuredCategory1));
-        if (featuredCard2 != null) featuredCard2.setOnClickListener(v -> openProvidersList(featuredCategory2));
-        if (featuredCard3 != null) featuredCard3.setOnClickListener(v -> openProvidersList(featuredCategory3));
+    private void setupNewSections() {
+        if (rvTopRated != null) {
+            topRatedAdapter = new com.example.quickfix.adapters.TopRatedAdapter(this, topRatedProviders, p -> {
+                Intent intent = new Intent(this, ProviderDetailActivity.class);
+                intent.putExtra("provider_id", p.id);
+                startActivity(intent);
+            });
+            rvTopRated.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+            rvTopRated.setAdapter(topRatedAdapter);
+        }
+
+        if (rvTopBooked != null) {
+            topBookedAdapter = new com.example.quickfix.adapters.TopRatedAdapter(this, topBookedProviders, p -> {
+                Intent intent = new Intent(this, ProviderDetailActivity.class);
+                intent.putExtra("provider_id", p.id);
+                startActivity(intent);
+            });
+            rvTopBooked.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+            rvTopBooked.setAdapter(topBookedAdapter);
+        }
+
+        if (btnSeeAllTopRated != null) btnSeeAllTopRated.setOnClickListener(v -> openProvidersList(""));
+        if (btnSeeAllTopBooked != null) btnSeeAllTopBooked.setOnClickListener(v -> {
+            startActivity(new Intent(this, CategoriesActivity.class));
+        });
+        
         if (cardImageDetection != null) cardImageDetection.setOnClickListener(v -> openImageDetection());
     }
 
@@ -433,10 +454,11 @@ public class MainActivity extends BaseActivity {
         if (btnListBusinessStart != null) {
             btnListBusinessStart.setOnClickListener(v -> {
                 try {
-                    startActivity(new Intent(this, ProviderApplicationActivity.class));
+                    // Always check status first
+                    startActivity(new Intent(this, ApplicationStatusActivity.class));
                 } catch (Exception e) {
-                    Log.e(TAG, "Error opening provider application: " + e.getMessage());
-                    Toast.makeText(this, "Unable to open provider form", Toast.LENGTH_SHORT).show();
+                    Log.e(TAG, "Error opening status screen: " + e.getMessage());
+                    Toast.makeText(this, "Unable to check application status", Toast.LENGTH_SHORT).show();
                 }
             });
         }
@@ -509,13 +531,18 @@ public class MainActivity extends BaseActivity {
         if (fromPullToRefresh) {
             homeBanners.clear();
             homeOffers.clear();
+            topRatedProviders.clear();
+            topBookedProviders.clear();
             if (homeBannerAdapter != null) homeBannerAdapter.notifyDataSetChanged();
             if (homeOfferAdapter != null) homeOfferAdapter.notifyDataSetChanged();
+            if (topRatedAdapter != null) topRatedAdapter.notifyDataSetChanged();
+            if (topBookedAdapter != null) topBookedAdapter.notifyDataSetChanged();
         }
         pendingHomeLoads = 0;
         loadBanners();
         loadOffers();
-        loadFeaturedServices();
+        loadTopRated();
+        loadTopBooked();
     }
 
     private void beginHomeLoad() {
@@ -530,86 +557,40 @@ public class MainActivity extends BaseActivity {
     }
 
     private void loadBanners() {
-        if (bannerApi == null) {
-            Log.e(TAG, "Banner API is null");
-            endHomeLoad();
-            return;
-        }
-        
-        Log.d(TAG, "Loading banners from Supabase...");
+        Log.d(TAG, "Loading banners from Supabase Storage bucket...");
         beginHomeLoad();
         showBannerLoading(true);
-        
-        bannerApi.getBanners(
-                BuildConfig.SUPABASE_ANON_KEY,
-                "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
-                "application/json",
-                "*",
-                "eq.true",
-                "gt." + getTodayIsoDate(),
-                "created_at.desc"
-        ).enqueue(new Callback<List<Banner>>() {
+
+        SupabaseStorageHelper.listFiles("banner-images", new SupabaseStorageHelper.ListFilesCallback() {
             @Override
-            public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
-                runOnUiThread(() -> {
-                    showBannerLoading(false);
-                    Log.d(TAG, "Banner API response code: " + response.code());
+            public void onSuccess(List<String> fileNames) {
+                if (!fileNames.isEmpty()) {
+                    String firstFile = fileNames.get(0);
+                    String bannerUrl = SupabaseStorageHelper.getPublicObjectUrl("banner-images", firstFile);
                     
-                    if (response.isSuccessful() && response.body() != null) {
-                        List<Banner> banners = response.body();
-                        Log.d(TAG, "Banners loaded successfully: " + banners.size() + " items");
-                        
-                        // Client-side validation: filter only active and not expired banners
-                        List<Banner> validBanners = new ArrayList<>();
-                        String today = getTodayIsoDate();
-                        
-                        for (Banner banner : banners) {
-                            if (banner != null && banner.isActive) {
-                                // Check expiry date
-                                if (banner.expiryDate != null && !banner.expiryDate.isEmpty()) {
-                                    if (banner.expiryDate.compareTo(today) >= 0) {
-                                        validBanners.add(banner);
-                                    }
-                                }
-                            }
-                        }
-                        
-                        homeBanners.clear();
-                        homeBanners.addAll(validBanners);
-                        
-                        if (homeBanners.isEmpty()) {
-                            Log.d(TAG, "No valid banners found after validation");
-                            showBannerEmpty(true);
-                        } else {
-                            Log.d(TAG, "Displaying " + homeBanners.size() + " validated banners");
-                            showBannerContent(true);
-                            if (homeBannerAdapter != null) {
-                                homeBannerAdapter.notifyDataSetChanged();
-                                startBannerAutoSlide();
-                            }
-                        }
-                    } else {
-                        String raw = "";
-                        try {
-                            raw = response.errorBody() != null ? response.errorBody().string() : "";
-                        } catch (Exception ignored) {
-                        }
-                        String errorMsg = "Failed to load banners (HTTP " + response.code() + ")";
-                        Log.e(TAG, errorMsg);
-                        if (!raw.isEmpty()) Log.e(TAG, "Banner error body: " + raw);
-                        showBannerError(true, errorMsg);
-                    }
-                    endHomeLoad();
-                });
+                    runOnUiThread(() -> {
+                        showBannerLoading(false);
+                        updateHeroBanner(bannerUrl);
+                        showBannerContent(true);
+                        endHomeLoad();
+                    });
+                } else {
+                    Log.d(TAG, "No banners found in bucket.");
+                    runOnUiThread(() -> {
+                        showBannerLoading(false);
+                        if (bannersSection != null) bannersSection.setVisibility(View.GONE);
+                        endHomeLoad();
+                    });
+                }
             }
-            
+
             @Override
-            public void onFailure(Call<List<Banner>> call, Throwable t) {
+            public void onError(String message) {
+                Log.e(TAG, "Failed to list banners: " + message);
                 runOnUiThread(() -> {
                     showBannerLoading(false);
-                    String errorMsg = "Network error: " + t.getMessage();
-                    Log.e(TAG, "Banner API network failure", t);
-                    showBannerError(true, errorMsg);
+                    // Hide if error or no banners
+                    if (bannersSection != null) bannersSection.setVisibility(View.GONE);
                     endHomeLoad();
                 });
             }
@@ -719,7 +700,8 @@ public class MainActivity extends BaseActivity {
     }
     
     private void showBannerEmpty(boolean show) {
-        if (bannersSection != null) bannersSection.setVisibility(show ? View.VISIBLE : View.GONE);
+        // If show is true (empty), we hide the whole section as per request
+        if (bannersSection != null) bannersSection.setVisibility(show ? View.GONE : View.VISIBLE);
         if (bannerEmptyState != null) {
             bannerEmptyState.setVisibility(show ? View.VISIBLE : View.GONE);
         }
@@ -733,7 +715,11 @@ public class MainActivity extends BaseActivity {
     private void showBannerError(boolean show, String message) {
         boolean shouldShowError = show && homeBanners.isEmpty();
 
-        if (bannersSection != null) bannersSection.setVisibility(shouldShowError ? View.VISIBLE : View.GONE);
+        // If it's an error and we have no banners, hide the section instead of showing error card?
+        // User said "Else → hide banner section". 
+        // But usually errors should be shown for retry. I'll hide it for a cleaner UI if desired.
+        if (bannersSection != null) bannersSection.setVisibility(shouldShowError ? View.GONE : View.VISIBLE);
+
         if (bannerErrorState != null) {
             bannerErrorState.setVisibility(shouldShowError ? View.VISIBLE : View.GONE);
         }
@@ -758,6 +744,44 @@ public class MainActivity extends BaseActivity {
             if (bannerLoadingState != null) bannerLoadingState.setVisibility(View.GONE);
             if (bannerEmptyState != null) bannerEmptyState.setVisibility(View.GONE);
             if (bannerErrorState != null) bannerErrorState.setVisibility(View.GONE);
+        }
+    }
+
+    private void updateHeroBanner(String bannerUrl) {
+        if (bannerImg == null) return;
+
+        // Home uses a single hero banner; keep carousel hidden for this flow.
+        if (vpBannersCarousel != null) vpBannersCarousel.setVisibility(View.GONE);
+        if (bannerDotsLayout != null) bannerDotsLayout.setVisibility(View.GONE);
+        bannerImg.setVisibility(View.VISIBLE);
+
+        if (bannerUrl != null && !bannerUrl.isEmpty()) {
+            Glide.with(this)
+                .load(bannerUrl)
+                .placeholder(R.drawable.default_banner)
+                .error(R.drawable.default_banner)
+                .listener(new com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable>() {
+                    @Override
+                    public boolean onLoadFailed(@androidx.annotation.Nullable com.bumptech.glide.load.engine.GlideException e, Object model, @NonNull com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, boolean isFirstResource) {
+                        if (bannerImg != null) {
+                            bannerImg.setVisibility(View.VISIBLE);
+                            bannerImg.setImageResource(R.drawable.default_banner);
+                        }
+                        if (bannersSection != null) bannersSection.setVisibility(View.VISIBLE);
+                        return false;
+                    }
+
+                    @Override
+                    public boolean onResourceReady(@NonNull android.graphics.drawable.Drawable resource, @NonNull Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, @NonNull com.bumptech.glide.load.DataSource dataSource, boolean isFirstResource) {
+                        if (bannerImg != null) bannerImg.setVisibility(View.VISIBLE);
+                        if (bannersSection != null) bannersSection.setVisibility(View.VISIBLE);
+                        return false;
+                    }
+                })
+                .into(bannerImg);
+        } else {
+            bannerImg.setImageResource(R.drawable.default_banner);
+            if (bannersSection != null) bannersSection.setVisibility(View.VISIBLE);
         }
     }
     
@@ -816,76 +840,67 @@ public class MainActivity extends BaseActivity {
         }
     }
 
-    private void loadFeaturedServices() {
+    private void loadTopRated() {
         beginHomeLoad();
-        new Thread(() -> {
-            List<String> categories = new ArrayList<>();
-            try {
-                String url = BuildConfig.SUPABASE_URL
-                        + "/rest/v1/services?select=title,category,is_active&is_active=eq.true&order=created_at.desc&limit=40";
-                Request req = new Request.Builder().url(url)
-                        .get()
-                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Accept", "application/json")
-                        .build();
-                try (Response r = HTTP.newCall(req).execute()) {
-                    String body = r.body() != null ? r.body().string() : "[]";
-                    if (r.isSuccessful()) {
-                        JSONArray arr = new JSONArray(body);
-                        Set<String> unique = new LinkedHashSet<>();
-                        for (int i = 0; i < arr.length(); i++) {
-                            JSONObject row = arr.getJSONObject(i);
-                            String category = row.optString("category", "").trim();
-                            if (category.isEmpty()) {
-                                category = row.optString("title", "").trim();
-                            }
-                            if (!category.isEmpty()) {
-                                unique.add(category);
-                            }
-                            if (unique.size() >= 3) {
-                                break;
-                            }
-                        }
-                        categories.addAll(unique);
-                    } else {
-                        Log.w(TAG, "Failed loading services for featured cards: HTTP " + r.code());
-                    }
+        if (topRatedLoadingState != null) topRatedLoadingState.setVisibility(View.VISIBLE);
+        
+        double lat = locationManager != null ? locationManager.getSavedLat() : Double.NaN;
+        double lng = locationManager != null ? locationManager.getSavedLng() : Double.NaN;
+        
+        if (topRatedAdapter != null) topRatedAdapter.setUserLocation(lat, lng);
+
+        HomeRepository.fetchTopRated(lat, lng, new HomeRepository.TopRatedCallback() {
+            @Override
+            public void onSuccess(List<ProviderProfile> providers, boolean isNearby) {
+                if (topRatedLoadingState != null) topRatedLoadingState.setVisibility(View.GONE);
+                topRatedProviders.clear();
+                topRatedProviders.addAll(providers);
+                if (topRatedAdapter != null) topRatedAdapter.notifyDataSetChanged();
+                
+                if (!isNearby && !providers.isEmpty() && !Double.isNaN(lat)) {
+                    // Fallback message could be shown here
+                    Log.d(TAG, "No nearby providers, showing best overall");
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "loadFeaturedServices", e);
+                endHomeLoad();
             }
 
-            List<String> finalCategories = categories;
-            MAIN.post(() -> {
-                applyFeaturedCategories(finalCategories);
+            @Override
+            public void onError(String message) {
+                if (topRatedLoadingState != null) topRatedLoadingState.setVisibility(View.GONE);
+                Log.e(TAG, "Top Rated error: " + message);
                 endHomeLoad();
-            });
-        }).start();
+            }
+        });
     }
 
-    private void applyFeaturedCategories(List<String> categories) {
-        if (categories == null || categories.isEmpty()) {
-            if (featuredServicesSection != null) featuredServicesSection.setVisibility(View.GONE);
-            return;
+    private void loadTopBooked() {
+        beginHomeLoad();
+        if (topBookedLoadingState != null) topBookedLoadingState.setVisibility(View.VISIBLE);
+
+        double lat = locationManager != null ? locationManager.getSavedLat() : Double.NaN;
+        double lng = locationManager != null ? locationManager.getSavedLng() : Double.NaN;
+
+        if (topBookedAdapter != null) {
+             topBookedAdapter.setUserLocation(lat, lng);
         }
 
-        if (featuredServicesSection != null) featuredServicesSection.setVisibility(View.VISIBLE);
-        while (categories.size() < 3) {
-            categories.add(categories.get(categories.size() - 1));
-        }
+        HomeRepository.fetchTopBookedProviders(lat, lng, new HomeRepository.TopRatedCallback() {
+            @Override
+            public void onSuccess(List<ProviderProfile> providers, boolean isNearby) {
+                if (topBookedLoadingState != null) topBookedLoadingState.setVisibility(View.GONE);
+                topBookedProviders.clear();
+                topBookedProviders.addAll(providers);
+                if (topBookedAdapter != null) topBookedAdapter.notifyDataSetChanged();
+                endHomeLoad();
+            }
 
-        featuredCategory1 = categories.get(0);
-        featuredCategory2 = categories.get(1);
-        featuredCategory3 = categories.get(2);
-
-        if (tvFeaturedTitle1 != null) tvFeaturedTitle1.setText(featuredCategory1);
-        if (tvFeaturedTitle2 != null) tvFeaturedTitle2.setText(featuredCategory2);
-        if (tvFeaturedTitle3 != null) tvFeaturedTitle3.setText(featuredCategory3);
-
-        if (tvFeaturedDesc1 != null) tvFeaturedDesc1.setText("Popular in your city");
-        if (tvFeaturedDesc2 != null) tvFeaturedDesc2.setText("Trusted professionals available");
-        if (tvFeaturedDesc3 != null) tvFeaturedDesc3.setText("Book verified experts instantly");
+            @Override
+            public void onError(String message) {
+                if (topBookedLoadingState != null) topBookedLoadingState.setVisibility(View.GONE);
+                Log.e(TAG, "Top Booked error: " + message);
+                endHomeLoad();
+            }
+        });
     }
     
     private void startBannerAutoSlide() {

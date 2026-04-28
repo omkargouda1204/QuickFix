@@ -297,6 +297,73 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- ── Section: Admin Location Details (Req 5) ── -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="20dp"
+                android:paddingTop="20dp"
+                android:paddingBottom="8dp"
+                android:text="Detailed Location (Admin Only)"
+                android:textColor="@color/error_red"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="3dp"
+                app:cardBackgroundColor="@color/card_bg"
+                app:strokeColor="@color/divider"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+                    <!-- Full Address -->
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="top"
+                        android:layout_marginBottom="14dp">
+                        <ImageView android:layout_width="18dp" android:layout_height="18dp"
+                            android:src="@drawable/ic_location" app:tint="@color/error_red"
+                            android:layout_marginEnd="12dp" android:layout_marginTop="2dp" />
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="Full Business Address" android:textColor="@color/text_secondary"
+                                android:textSize="11sp" android:textStyle="bold" />
+                            <TextView android:id="@+id/tvAdminFullAddress"
+                                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:textColor="@color/text_primary" android:textSize="14sp"
+                                android:layout_marginTop="2dp" android:text="-" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- Coordinates -->
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <ImageView android:layout_width="18dp" android:layout_height="18dp"
+                            android:src="@drawable/ic_my_location" app:tint="@color/error_red"
+                            android:layout_marginEnd="12dp" />
+                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                            android:layout_weight="1" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="GPS Coordinates" android:textColor="@color/text_secondary"
+                                android:textSize="11sp" android:textStyle="bold" />
+                            <TextView android:id="@+id/tvAdminCoordinates"
+                                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:textColor="@color/text_primary" android:textSize="14sp"
+                                android:layout_marginTop="2dp" android:text="0.0, 0.0" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
             <!-- ── Section: Application Meta ── -->
             <TextView
                 android:layout_width="match_parent"

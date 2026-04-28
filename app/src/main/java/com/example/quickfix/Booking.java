@@ -16,10 +16,12 @@ public class Booking {
     public String providerName;
     public String serviceId;
     public String serviceName;
+    public String serviceCategory;
     public String category;
     public String bookingDate;
     public String bookingTime;
     public String address;
+    public String location;
     public String city;
     public double price;
     public String status; // pending, accepted, completed, cancelled
@@ -70,10 +72,14 @@ public class Booking {
         }
         if (b.serviceName.isEmpty()) b.serviceName = "-";
 
+        b.serviceCategory = s(o, "serviceCategory");
+        if (b.serviceCategory.isEmpty()) b.serviceCategory = s(o, "service_category");
         b.category = s(o, "category");
         b.bookingDate = s(o, "booking_date");
         b.bookingTime = s(o, "booking_time");
         b.address = s(o, "address");
+        b.location = s(o, "location");
+        if (b.location.isEmpty()) b.location = s(o, "location_label");
         b.city = s(o, "city");
         b.price = o.optDouble("price", 0);
         b.status = s(o, "status");

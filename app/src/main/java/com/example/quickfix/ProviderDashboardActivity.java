@@ -131,31 +131,42 @@ public class ProviderDashboardActivity extends BaseActivity {
 
         final String uid = user.getUid();
         new Thread(() -> {
-            int totalBookings = 0;
             double totalEarnings = 0d;
-            float rating = 0f;
+            int totalBookingsCount = 0;
+            int emergencyCount = 0;
+            float ratingValue = 0f;
 
             try {
                 String providerProfileId = "";
 
                 JSONArray profileArr = getJsonArray(BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles"
                         + "?firebase_uid=eq." + Uri.encode(uid)
-                        + "&select=id,rating"
+                        + "&select=id,total_bookings,rating"
                         + "&limit=1");
 
                 if (profileArr.length() > 0) {
                     JSONObject p = profileArr.getJSONObject(0);
                     providerProfileId = p.optString("id", "").trim();
-                    rating = (float) p.optDouble("rating", 0d);
+                    totalBookingsCount = p.optInt("total_bookings", 0);
+                    ratingValue = (float) p.optDouble("rating", 0d);
                 }
 
                 providerProfileIdForDashboard = providerProfileId;
 
                 JSONArray bookingArr = getProviderBookings(providerProfileId, uid);
+                // If total_bookings column in profile is 0, fallback to current active bookings count
+                if (totalBookingsCount <= 0) {
+                    totalBookingsCount = bookingArr.length();
+                }
+                
                 for (int i = 0; i < bookingArr.length(); i++) {
                     JSONObject b = bookingArr.getJSONObject(i);
                     String status = b.optString("status", "").trim().toLowerCase(Locale.US);
-                    totalBookings++;
+                    
+                    if (b.optBoolean("is_emergency", false) || "Emergency".equalsIgnoreCase(b.optString("type"))) {
+                        emergencyCount++;
+                    }
+
                     if ("paid".equals(status) || "completed".equals(status)) {
                         double amount = parseDoubleSafe(b.opt("price"));
                         if (amount <= 0d) {
@@ -165,21 +176,30 @@ public class ProviderDashboardActivity extends BaseActivity {
                     }
                 }
 
-                if (rating <= 0f) {
-                    // Fallback if rating on provider_profiles is stale.
-                    rating = loadRatingFallback(providerProfileId, uid);
+                if (ratingValue <= 0f) {
+                    ratingValue = loadRatingFallback(providerProfileId, uid);
                 }
 
             } catch (Exception ignored) {
             }
 
-            final int finalBookings = totalBookings;
             final double finalEarnings = totalEarnings;
-            final float finalRating = rating;
+            final int finalTotal = Math.max(0, totalBookingsCount);
+            final int finalEmergency = emergencyCount;
+            final float finalRating = Math.max(0f, ratingValue);
+            
             runOnUiThread(() -> {
-                if (tvStatsBookings != null) tvStatsBookings.setText(String.valueOf(finalBookings));
+                if (tvStatsBookings != null) {
+                    tvStatsBookings.setText(String.valueOf(finalTotal));
+                }
+                
+                TextView tvEmergency = findViewById(R.id.tvStatsEmergency);
+                if (tvEmergency != null) {
+                    tvEmergency.setText(String.valueOf(finalEmergency));
+                }
+
                 if (tvStatsRating != null) {
-                    tvStatsRating.setText(String.format(Locale.US, "%.1f", Math.max(0f, finalRating)));
+                    tvStatsRating.setText(String.format(Locale.US, "⭐ %.1f", finalRating));
                 }
                 if (tvStatsEarnings != null) {
                     tvStatsEarnings.setText("₹" + formatCurrency(finalEarnings));

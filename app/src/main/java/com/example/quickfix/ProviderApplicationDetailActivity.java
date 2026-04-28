@@ -39,6 +39,8 @@ public class ProviderApplicationDetailActivity extends BaseActivity {
     public static final String EXTRA_AREA             = "area";
     public static final String EXTRA_CITY             = "city";
     public static final String EXTRA_ADDRESS          = "address";
+    public static final String EXTRA_LAT              = "latitude";
+    public static final String EXTRA_LNG              = "longitude";
     public static final String EXTRA_EXPERIENCE       = "experience";
     public static final String EXTRA_DESCRIPTION      = "description";
     public static final String EXTRA_STATUS           = "status";
@@ -50,6 +52,7 @@ public class ProviderApplicationDetailActivity extends BaseActivity {
     private TextView     tvHeaderStatus, tvHeaderBusinessName;
     private TextView     tvBusinessName, tvOwnerName, tvEmail, tvPhone;
     private TextView     tvCategory, tvArea, tvExperience, tvDescription;
+    private TextView     tvAdminFullAddress, tvAdminCoordinates;
     private TextView     tvDate, tvRejectionReason;
     private LinearLayout layoutRejectionReason, layoutActionButtons;
     private TextView     tvBusinessImage, tvIdProof;
@@ -91,6 +94,8 @@ public class ProviderApplicationDetailActivity extends BaseActivity {
         tvPhone              = findViewById(R.id.tvPhone);
         tvCategory           = findViewById(R.id.tvCategory);
         tvArea               = findViewById(R.id.tvArea);
+        tvAdminFullAddress   = findViewById(R.id.tvAdminFullAddress);
+        tvAdminCoordinates   = findViewById(R.id.tvAdminCoordinates);
         tvExperience         = findViewById(R.id.tvExperience);
         tvDescription        = findViewById(R.id.tvDescription);
         tvDate               = findViewById(R.id.tvDate);
@@ -118,6 +123,8 @@ public class ProviderApplicationDetailActivity extends BaseActivity {
         app.area            = safe(i.getStringExtra(EXTRA_AREA));
         app.city            = safe(i.getStringExtra(EXTRA_CITY));
         app.address         = safe(i.getStringExtra(EXTRA_ADDRESS));
+        app.latitude        = i.getDoubleExtra(EXTRA_LAT, Double.NaN);
+        app.longitude       = i.getDoubleExtra(EXTRA_LNG, Double.NaN);
         app.experience      = safe(i.getStringExtra(EXTRA_EXPERIENCE));
         app.description     = safe(i.getStringExtra(EXTRA_DESCRIPTION));
         app.status          = safe(i.getStringExtra(EXTRA_STATUS));
@@ -145,6 +152,12 @@ public class ProviderApplicationDetailActivity extends BaseActivity {
         set(tvExperience,  app.experience.isEmpty() ? "-" : app.experience + " years");
         set(tvDescription, app.description);
         set(tvDate, fmtDate(app.submittedAt));
+
+        // Req 5: Admin Panel Detailed Location
+        set(tvAdminFullAddress, app.address);
+        String coords = (Double.isNaN(app.latitude) ? "0.0" : String.format(Locale.US, "%.6f", app.latitude))
+                + ", " + (Double.isNaN(app.longitude) ? "0.0" : String.format(Locale.US, "%.6f", app.longitude));
+        set(tvAdminCoordinates, coords);
 
         if (!app.rejectionReason.isEmpty()) {
             layoutRejectionReason.setVisibility(View.VISIBLE);

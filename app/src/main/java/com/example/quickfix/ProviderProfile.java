@@ -22,6 +22,7 @@ public class ProviderProfile {
     public boolean isAvailable = true;
     public float   rating;
     public int     reviewCount;
+    public int     totalBookings;
     public String  status;
     public String  createdAt;
 

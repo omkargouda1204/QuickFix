@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     android:background="@color/screen_background">
 
-    <!-- ══════════════ APP BAR ══════════════ -->
+    <!-- AppBar -->
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -38,6 +38,7 @@
                 android:gravity="center_vertical">
 
                 <TextView
+                    android:id="@+id/tvHeaderIcon"
                     android:layout_width="44dp"
                     android:layout_height="44dp"
                     android:background="@drawable/bg_icon_circle_white"
@@ -56,7 +57,7 @@
                         android:id="@+id/tvHeaderTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Become a Service Provider"
+                        android:text="Become a Provider"
                         android:textColor="@color/white"
                         android:textSize="20sp"
                         android:textStyle="bold" />
@@ -71,67 +72,65 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- Step indicators -->
+            <!-- Step Indicators -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginTop="18dp"
-                android:gravity="center_vertical">
+                android:gravity="center"
+                android:layout_marginTop="20dp">
 
-                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                    android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                    <TextView
-                        android:id="@+id/tvStepIndicator1"
-                        android:layout_width="28dp" android:layout_height="28dp"
-                        android:background="@drawable/bg_step_circle_active"
-                        android:gravity="center" android:text="1" android:textColor="@color/white"
-                        android:textStyle="bold" android:textSize="12sp" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp" android:text="Details"
-                        android:textColor="@color/white" android:textSize="10sp" />
-                </LinearLayout>
+                <TextView
+                    android:id="@+id/tvStepIndicator1"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:background="@drawable/bg_step_circle_active"
+                    android:gravity="center"
+                    android:text="1"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
 
-                <View android:layout_width="0dp" android:layout_height="2dp"
-                    android:layout_weight="0.8" android:background="@color/on_gradient_muted"
-                    android:layout_marginBottom="14dp" />
+                <View
+                    android:layout_width="40dp"
+                    android:layout_height="2dp"
+                    android:background="#4DFFFFFF"
+                    android:layout_marginHorizontal="10dp" />
 
-                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                    android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                    <TextView
-                        android:id="@+id/tvStepIndicator2"
-                        android:layout_width="28dp" android:layout_height="28dp"
-                        android:background="@drawable/bg_step_circle_inactive"
-                        android:gravity="center" android:text="2" android:textColor="@color/on_gradient_muted"
-                        android:textStyle="bold" android:textSize="12sp" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp" android:text="Location"
-                        android:textColor="@color/on_gradient_muted" android:textSize="10sp" />
-                </LinearLayout>
+                <TextView
+                    android:id="@+id/tvStepIndicator2"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:background="@drawable/bg_step_circle_inactive"
+                    android:gravity="center"
+                    android:text="2"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
 
-                <View android:layout_width="0dp" android:layout_height="2dp"
-                    android:layout_weight="0.8" android:background="@color/on_gradient_muted"
-                    android:layout_marginBottom="14dp" />
+                <View
+                    android:layout_width="40dp"
+                    android:layout_height="2dp"
+                    android:background="#4DFFFFFF"
+                    android:layout_marginHorizontal="10dp" />
 
-                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                    android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                    <TextView
-                        android:id="@+id/tvStepIndicator3"
-                        android:layout_width="28dp" android:layout_height="28dp"
-                        android:background="@drawable/bg_step_circle_inactive"
-                        android:gravity="center" android:text="3" android:textColor="@color/on_gradient_muted"
-                        android:textStyle="bold" android:textSize="12sp" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp" android:text="Terms"
-                        android:textColor="@color/on_gradient_muted" android:textSize="10sp" />
-                </LinearLayout>
+                <TextView
+                    android:id="@+id/tvStepIndicator3"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:background="@drawable/bg_step_circle_inactive"
+                    android:gravity="center"
+                    android:text="3"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
             </LinearLayout>
         </LinearLayout>
-
     </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- ══════════════ SCROLLABLE BODY ══════════════ -->
+    <!-- Scrollable content -->
     <androidx.core.widget.NestedScrollView
+        android:id="@+id/mainScroll"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
@@ -141,59 +140,54 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
+            android:paddingTop="16dp"
             android:paddingBottom="40dp">
 
-            <!-- Pending status badge -->
-            <LinearLayout
+            <!-- Status Badge (shown if application is pending) -->
+            <com.google.android.material.card.MaterialCardView
                 android:id="@+id/layoutStatusBadge"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="16dp"
-                android:layout_marginTop="16dp"
-                android:background="@color/warning_bg"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:padding="14dp"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="2dp"
+                app:cardBackgroundColor="#FFF3E0"
+                app:strokeColor="#FFE0B2"
+                app:strokeWidth="1dp"
                 android:visibility="gone">
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="⏳  Your application is under review. Admin will contact you soon."
-                    android:textColor="@color/warning_text"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:gravity="center" />
-            </LinearLayout>
+                    android:orientation="horizontal"
+                    android:padding="12dp"
+                    android:gravity="center_vertical">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⏳"
+                        android:textSize="18sp" />
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="10dp"
+                        android:text="Your application is currently pending review. You can view but not re-submit until reviewed."
+                        android:textColor="#E65100"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
-            <!-- ─────── SECTION 1: Business Details ─────── -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingHorizontal="20dp"
-                android:paddingTop="24dp"
-                android:paddingBottom="10dp">
-                <View android:layout_width="4dp" android:layout_height="20dp"
-                    android:background="@color/primary" android:layout_marginEnd="10dp" />
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                    android:layout_weight="1" android:text="Business Details"
-                    android:textColor="@color/text_primary" android:textSize="16sp" android:textStyle="bold" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:background="@color/info_bg" android:paddingHorizontal="10dp"
-                    android:paddingVertical="4dp" android:text="Step 1"
-                    android:textColor="@color/primary" android:textSize="11sp" android:textStyle="bold" />
-            </LinearLayout>
-
+            <!-- ── SECTION 1: Business Details ── -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="16dp"
-                app:cardCornerRadius="18dp"
-                app:cardElevation="4dp"
-                app:cardBackgroundColor="@color/card_bg"
-                app:strokeColor="@color/divider"
-                app:strokeWidth="1dp">
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="3dp"
+                app:cardBackgroundColor="@color/card_bg">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -201,150 +195,100 @@
                     android:orientation="vertical"
                     android:padding="20dp">
 
-                    <!-- Business Name label + field -->
                     <TextView
-                        android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Business Name *" android:textColor="@color/text_primary"
-                        android:textSize="13sp" android:textStyle="bold"
-                        android:layout_marginBottom="6dp" />
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Business Details"
+                        android:textColor="@color/primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="16dp" />
+
                     <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/layoutBusinessName"
+                        android:id="@+id/tilBusinessName"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                        android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:layout_marginBottom="4dp"
-                        app:startIconDrawable="@drawable/ic_business" app:startIconTint="@color/primary"
-                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp"
-                        app:hintTextColor="@color/primary" android:hint="e.g. QuickFix Plumbing Co.">
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Business Name *"
+                        android:layout_marginBottom="12dp">
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etBusinessName"
-                            android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:textColor="@color/text_primary" android:textColorHint="@color/input_hint"
-                            android:textSize="15sp" android:inputType="textCapWords"
-                            android:imeOptions="actionNext" />
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textCapWords" />
                     </com.google.android.material.textfield.TextInputLayout>
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Letters only · no numbers or special characters"
-                        android:textColor="#9E9E9E" android:textSize="11sp"
-                        android:layout_marginStart="4dp" android:layout_marginBottom="18dp" />
 
-                    <!-- Owner Name label + field -->
-                    <TextView
-                        android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Owner / Full Name *" android:textColor="@color/text_primary"
-                        android:textSize="13sp" android:textStyle="bold"
-                        android:layout_marginBottom="6dp" />
                     <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/layoutOwnerName"
+                        android:id="@+id/tilOwnerName"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                        android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:layout_marginBottom="18dp"
-                        app:startIconDrawable="@drawable/ic_person" app:startIconTint="@color/primary"
-                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp"
-                        app:hintTextColor="@color/primary" android:hint="Enter your full name">
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Owner Name (Auto)"
+                        android:layout_marginBottom="12dp">
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etOwnerName"
-                            android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:textColor="@color/text_primary" android:textColorHint="@color/input_hint"
-                            android:textSize="15sp" android:inputType="textPersonName"
-                            android:imeOptions="actionNext" />
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:focusable="false"
+                            android:enabled="false" />
                     </com.google.android.material.textfield.TextInputLayout>
 
-                    <!-- Email label + field (read-only) — SEPARATE ROW -->
-                    <TextView
-                        android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Email Address" android:textColor="@color/text_primary"
-                        android:textSize="13sp" android:textStyle="bold"
-                        android:layout_marginBottom="6dp" />
                     <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/layoutEmail"
+                        android:id="@+id/tilEmail"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                        android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:layout_marginBottom="4dp"
-                        app:startIconDrawable="@drawable/ic_email" app:startIconTint="@color/primary"
-                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp"
-                        app:boxBackgroundColor="@color/card_bg" app:boxStrokeColor="@color/divider"
-                        app:hintTextColor="@color/primary" android:hint="Email from your account">
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Email (Auto)"
+                        android:layout_marginBottom="12dp">
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etEmail"
-                            android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:textColor="@color/readonly_text" android:textColorHint="@color/input_hint"
-                            android:textSize="15sp" android:inputType="textEmailAddress"
-                            android:focusable="false" android:focusableInTouchMode="false"
-                            android:clickable="false" android:cursorVisible="false"
-                            android:imeOptions="actionNext" />
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:focusable="false"
+                            android:enabled="false" />
                     </com.google.android.material.textfield.TextInputLayout>
-                    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical"
-                        android:layout_marginStart="4dp" android:layout_marginBottom="18dp">
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="🔒 " android:textSize="11sp" />
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="Linked to your account · cannot be changed"
-                            android:textColor="@color/text_secondary" android:textSize="11sp" />
-                    </LinearLayout>
 
-                    <!-- Phone Number label + field — SEPARATE ROW, full width -->
-                    <TextView
-                        android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Phone Number *" android:textColor="@color/text_primary"
-                        android:textSize="13sp" android:textStyle="bold"
-                        android:layout_marginBottom="6dp" />
                     <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/layoutPhone"
+                        android:id="@+id/tilPhone"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                        android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:layout_marginBottom="4dp"
-                        app:startIconDrawable="@drawable/ic_phone" app:startIconTint="@color/primary"
-                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp"
-                        app:hintTextColor="@color/primary" android:hint="Enter 10-digit mobile number">
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Phone (10 Digits) *"
+                        android:layout_marginBottom="12dp">
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etPhone"
-                            android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:textColor="@color/text_primary" android:textColorHint="@color/input_hint"
-                            android:textSize="15sp" android:inputType="phone"
-                            android:maxLength="10" android:imeOptions="actionNext" />
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="phone"
+                            android:maxLength="10" />
                     </com.google.android.material.textfield.TextInputLayout>
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Must be exactly 10 digits (mobile number)"
-                        android:textColor="@color/text_secondary" android:textSize="11sp"
-                        android:layout_marginStart="4dp" android:layout_marginBottom="4dp" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilCategory"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Service Category *"
+                        android:layout_marginBottom="12dp">
+                        <AutoCompleteTextView
+                            android:id="@+id/actCategory"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="none" />
+                    </com.google.android.material.textfield.TextInputLayout>
 
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- ─────── SECTION 2: Service Information ─────── -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingHorizontal="20dp"
-                android:paddingTop="24dp"
-                android:paddingBottom="10dp">
-                <View android:layout_width="4dp" android:layout_height="20dp"
-                    android:background="@color/accent_teal" android:layout_marginEnd="10dp" />
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                    android:layout_weight="1" android:text="Service Information"
-                    android:textColor="@color/text_primary" android:textSize="16sp" android:textStyle="bold" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:background="@color/surface_variant_alt" android:paddingHorizontal="10dp"
-                    android:paddingVertical="4dp" android:text="Step 2"
-                    android:textColor="@color/accent_teal" android:textSize="11sp" android:textStyle="bold" />
-            </LinearLayout>
-
+            <!-- ── SECTION 2: Location ── -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="16dp"
-                app:cardCornerRadius="18dp"
-                app:cardElevation="4dp"
-                app:cardBackgroundColor="@color/card_bg"
-                app:strokeColor="@color/divider"
-                app:strokeWidth="1dp">
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="3dp"
+                app:cardBackgroundColor="@color/card_bg">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -352,42 +296,23 @@
                     android:orientation="vertical"
                     android:padding="20dp">
 
-                    <!-- Service Category -->
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Service Category *" android:textColor="@color/text_primary"
-                        android:textSize="13sp" android:textStyle="bold" android:layout_marginBottom="6dp" />
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/layoutCategory"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
-                        android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:layout_marginBottom="18dp"
-                        app:startIconDrawable="@drawable/ic_services" app:startIconTint="@color/accent_teal"
-                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp"
-                        app:hintTextColor="@color/accent_teal" android:hint="Select your service type">
-                        <AutoCompleteTextView
-                            android:id="@+id/spinnerCategory"
-                            android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:textColor="@color/text_primary" android:textColorHint="@color/input_hint"
-                            android:textSize="15sp" android:inputType="none"
-                            android:focusable="false" android:cursorVisible="false"
-                            android:padding="16dp" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <!-- Location Selection -->
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Business Location *" android:textColor="@color/text_primary"
-                        android:textSize="13sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Business Location"
+                        android:textColor="@color/primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="16dp" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnSetBusinessLocation"
+                        android:id="@+id/btnFetchLocation"
                         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                         android:layout_width="match_parent"
                         android:layout_height="52dp"
-                        android:text="Set Business Location"
-                        app:icon="@drawable/ic_location"
+                        android:text="Fetch GPS Location"
+                        app:icon="@drawable/ic_my_location"
                         app:cornerRadius="12dp"
-                        android:textAllCaps="false"
                         android:layout_marginBottom="12dp" />
 
                     <LinearLayout
@@ -398,107 +323,74 @@
                         android:gravity="center_vertical"
                         android:background="@drawable/bg_location_selected"
                         android:padding="12dp"
-                        android:layout_marginBottom="18dp"
+                        android:layout_marginBottom="12dp"
                         android:visibility="gone">
                         <ImageView
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:src="@drawable/ic_location"
-                            app:tint="@color/primary"
-                            android:contentDescription="Location Icon" />
+                            app:tint="@color/primary" />
                         <TextView
-                            android:id="@+id/tvSelectedLocationLabel"
-                            android:layout_width="0dp"
+                            android:id="@+id/tvLocationLabel"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
                             android:layout_marginStart="10dp"
-                            android:text="Thodar"
+                            android:text="Place name - Pincode"
                             android:textColor="@color/primary"
-                            android:textStyle="bold"
-                            android:textSize="14sp" />
+                            android:textStyle="bold" />
                     </LinearLayout>
 
-                    <!-- Years of Experience -->
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Years of Experience *" android:textColor="@color/text_primary"
-                        android:textSize="13sp" android:textStyle="bold" android:layout_marginBottom="6dp" />
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/layoutExperience"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                        android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:layout_marginBottom="4dp"
-                        app:startIconDrawable="@drawable/ic_calendar" app:startIconTint="@color/accent_teal"
-                        app:suffixText="yrs"
-                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp"
-                        app:hintTextColor="@color/accent_teal" android:hint="e.g. 5">
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etExperience"
-                            android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:textColor="@color/text_primary" android:textColorHint="@color/input_hint"
-                            android:textSize="15sp" android:inputType="number"
-                            android:maxLength="2" android:imeOptions="actionNext" />
-                    </com.google.android.material.textfield.TextInputLayout>
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Numbers only (1–99 years)"
-                        android:textColor="@color/text_secondary" android:textSize="11sp"
-                        android:layout_marginStart="4dp" android:layout_marginBottom="18dp" />
+                    <TextView
+                        android:id="@+id/tvLocationError"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Please fetch GPS location"
+                        android:textColor="#D32F2F"
+                        android:textSize="12sp"
+                        android:layout_marginBottom="8dp"
+                        android:visibility="gone" />
 
-                    <!-- Business Description -->
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Business Description *" android:textColor="@color/text_primary"
-                        android:textSize="13sp" android:textStyle="bold" android:layout_marginBottom="6dp" />
                     <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/layoutDescription"
+                        android:id="@+id/tilPincode"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                        android:layout_width="match_parent" android:layout_height="wrap_content"
-                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp"
-                        app:counterEnabled="true" app:counterMaxLength="300"
-                        app:hintTextColor="@color/accent_teal"
-                        android:hint="Describe your services, expertise and what you offer…">
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Pincode (6 digits) *"
+                        android:layout_marginBottom="12dp">
                         <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etDescription"
-                            android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:textColor="@color/text_primary" android:textColorHint="@color/input_hint"
-                            android:textSize="15sp"
-                            android:inputType="textMultiLine|textCapSentences"
-                            android:lines="4" android:maxLines="6"
-                            android:gravity="top|start" android:imeOptions="actionDone" />
+                            android:id="@+id/etPincode"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="number"
+                            android:maxLength="6" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilAddress"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Business Address *"
+                        android:layout_marginBottom="12dp">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etAddress"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textPostalAddress" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- ─────── SECTION 3: Terms & Conditions ─────── -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingHorizontal="20dp"
-                android:paddingTop="24dp"
-                android:paddingBottom="10dp">
-                <View android:layout_width="4dp" android:layout_height="20dp"
-                    android:background="@color/accent_purple" android:layout_marginEnd="10dp" />
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                    android:layout_weight="1" android:text="Terms &amp; Conditions"
-                    android:textColor="@color/text_primary" android:textSize="16sp" android:textStyle="bold" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:background="@color/surface_variant" android:paddingHorizontal="10dp"
-                    android:paddingVertical="4dp" android:text="Step 3"
-                    android:textColor="@color/accent_purple" android:textSize="11sp" android:textStyle="bold" />
-            </LinearLayout>
-
+            <!-- ── SECTION 3: Expertise ── -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="16dp"
-                app:cardCornerRadius="18dp"
-                app:cardElevation="4dp"
-                app:cardBackgroundColor="@color/card_bg"
-                app:strokeColor="@color/divider"
-                app:strokeWidth="1dp">
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="3dp"
+                app:cardBackgroundColor="@color/card_bg">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -506,167 +398,283 @@
                     android:orientation="vertical"
                     android:padding="20dp">
 
-                    <!-- Scroll-to-read banner -->
-                    <LinearLayout
-                        android:id="@+id/tvScrollHint"
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Professional Info"
+                        android:textColor="@color/primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="16dp" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilExperience"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:background="@color/warning_bg"
-                        android:padding="12dp"
+                        android:hint="Experience (1-50 Years) *"
                         android:layout_marginBottom="12dp">
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="⬇️  " android:textSize="15sp" />
-                        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Scroll to bottom to read all terms before ticking"
-                            android:textColor="@color/warning_text" android:textSize="12sp" android:textStyle="bold" />
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etExperience"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="number"
+                            android:maxLength="2" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilDescription"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Description (10-300 chars) *"
+                        app:counterEnabled="true"
+                        app:counterMaxLength="300"
+                        android:layout_marginBottom="12dp">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etDescription"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textMultiLine"
+                            android:minLines="3"
+                            android:gravity="top" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ── SECTION 4: Documents ── -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="3dp"
+                app:cardBackgroundColor="@color/card_bg">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Upload Documents"
+                        android:textColor="@color/primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="16dp" />
+
+                    <!-- ID Proof -->
+                    <LinearLayout
+                        android:id="@+id/layoutIdProof"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:gravity="center"
+                        android:background="@drawable/bg_upload_zone"
+                        android:padding="16dp"
+                        android:layout_marginBottom="16dp"
+                        android:clickable="true"
+                        android:focusable="true">
+                        <ImageView
+                            android:id="@+id/ivIdProofPreview"
+                            android:layout_width="80dp"
+                            android:layout_height="80dp"
+                            android:src="@drawable/ic_camera"
+                            app:tint="@color/text_secondary" />
+                        <TextView
+                            android:id="@+id/tvIdProofLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Tap to upload ID Proof *"
+                            android:textColor="@color/text_secondary"
+                            android:layout_marginTop="8dp" />
                     </LinearLayout>
 
-                    <!-- Terms NestedScrollView -->
-                    <androidx.core.widget.NestedScrollView
-                        android:id="@+id/termsScrollView"
+                    <TextView
+                        android:id="@+id/tvIdError"
                         android:layout_width="match_parent"
-                        android:layout_height="220dp"
-                        android:background="@drawable/bg_terms_scroll"
-                        android:padding="4dp"
-                        android:scrollbars="vertical"
-                        android:overScrollMode="always"
-                        android:fadeScrollbars="false">
+                        android:layout_height="wrap_content"
+                        android:text="Upload ID proof required"
+                        android:textColor="#D32F2F"
+                        android:textSize="12sp"
+                        android:layout_marginBottom="16dp"
+                        android:visibility="gone" />
 
+                    <!-- Business Image -->
+                    <LinearLayout
+                        android:id="@+id/layoutBizImage"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:gravity="center"
+                        android:background="@drawable/bg_upload_zone"
+                        android:padding="16dp"
+                        android:layout_marginBottom="16dp"
+                        android:clickable="true"
+                        android:focusable="true">
+                        <ImageView
+                            android:id="@+id/ivBizImagePreview"
+                            android:layout_width="80dp"
+                            android:layout_height="80dp"
+                            android:src="@drawable/ic_image"
+                            app:tint="@color/text_secondary" />
+                        <TextView
+                            android:id="@+id/tvBizImageLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Tap to upload Business Image (Optional)"
+                            android:textColor="@color/text_secondary"
+                            android:layout_marginTop="8dp" />
+                    </LinearLayout>
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ── SECTION 5: Terms ── -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="3dp"
+                app:cardBackgroundColor="@color/card_bg">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <TextView
+                        android:id="@+id/tvTermsScrollMsg"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Scroll to bottom to read terms"
+                        android:textColor="@color/warning_text"
+                        android:textSize="12sp"
+                        android:layout_marginBottom="8dp" />
+
+                    <ScrollView
+                        android:id="@+id/scrollTerms"
+                        android:layout_width="match_parent"
+                        android:layout_height="150dp"
+                        android:background="@drawable/bg_terms_box"
+                        android:padding="10dp">
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:padding="14dp"
-                            android:textColor="@color/text_primary"
-                            android:textSize="13sp"
-                            android:lineSpacingMultiplier="1.6"
-                            android:text="@string/provider_terms_full" />
-                    </androidx.core.widget.NestedScrollView>
+                            android:text="@string/provider_terms_full"
+                            android:textSize="12sp" />
+                    </ScrollView>
 
-                    <!-- Checkbox -->
                     <com.google.android.material.checkbox.MaterialCheckBox
-                        android:id="@+id/checkboxTerms"
+                        android:id="@+id/cbTerms"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:text="I have read and agree to all Terms &amp; Conditions"
-                        android:textColor="@color/text_primary"
-                        android:textSize="14sp"
+                        android:text="I agree to the Terms and Conditions"
+                        android:layout_marginTop="12dp"
                         android:enabled="false" />
 
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- ══ SUBMIT BUTTON ══ -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSubmit"
                 android:layout_width="match_parent"
                 android:layout_height="58dp"
                 android:layout_marginHorizontal="16dp"
-                android:layout_marginTop="28dp"
-                android:layout_marginBottom="6dp"
                 android:text="Submit Application"
                 android:textSize="16sp"
                 android:textStyle="bold"
-                android:letterSpacing="0.03"
-                android:enabled="false"
                 app:cornerRadius="16dp"
                 app:backgroundTint="@color/primary"
-                app:icon="@drawable/ic_approval"
-                app:iconGravity="textStart"
-                app:iconPadding="10dp"
-                app:elevation="4dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:gravity="center"
-                android:paddingHorizontal="16dp"
-                android:layout_marginBottom="8dp"
-                android:text="Fill all required fields and accept terms to submit"
-                android:textColor="#BDBDBD"
-                android:textSize="12sp" />
+                android:enabled="false" />
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
-    <!-- ══════════════ SUCCESS OVERLAY ══════════════ -->
+    <!-- Loading Overlay -->
+    <FrameLayout
+        android:id="@+id/loadingOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#CC000000"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center">
+            <ProgressBar
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:indeterminateTint="@color/white" />
+            <TextView
+                android:id="@+id/tvLoadingMsg"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Submitting..."
+                android:textColor="@color/white"
+                android:layout_marginTop="16dp" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Success Overlay -->
     <FrameLayout
         android:id="@+id/successOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#CC000000"
-        android:visibility="gone">
-
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="310dp"
+        android:background="@color/screen_background"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            app:cardCornerRadius="24dp"
-            app:cardElevation="20dp"
-            app:cardBackgroundColor="@color/card_bg">
-
-            <LinearLayout
-                android:layout_width="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="32dp">
+            <ImageView
+                android:layout_width="100dp"
+                android:layout_height="100dp"
+                android:src="@drawable/ic_check_circle"
+                app:tint="@color/success_green" />
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
+                android:text="Application Submitted!"
+                android:textColor="@color/text_primary"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:layout_marginTop="24dp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="We have received your application. Our team will review it and notify you within 24-48 hours."
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
                 android:gravity="center"
-                android:padding="32dp">
-
-                <TextView
-                    android:layout_width="72dp"
-                    android:layout_height="72dp"
-                    android:background="@drawable/bg_success_circle"
-                    android:gravity="center"
-                    android:text="✓"
-                    android:textColor="@color/white"
-                    android:textSize="30sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:text="Application Submitted!"
-                    android:textColor="@color/text_primary"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:gravity="center" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:text="🎉 Our team will review your application and get back to you shortly."
-                    android:textColor="#555555"
-                    android:textSize="14sp"
-                    android:gravity="center"
-                    android:lineSpacingMultiplier="1.5"
-                    android:paddingHorizontal="8dp" />
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#F0F0F0"
-                    android:layout_marginTop="20dp"
-                    android:layout_marginBottom="20dp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnSuccessHome"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:text="Back to Home"
-                    android:textSize="15sp"
-                    android:textStyle="bold"
-                    app:cornerRadius="14dp"
-                    app:backgroundTint="@color/primary" />
-
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
+                android:layout_marginTop="12dp" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSuccessHome"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:text="Back to Home"
+                android:layout_marginTop="40dp"
+                app:cornerRadius="16dp"
+                app:backgroundTint="@color/primary"
+                android:textStyle="bold" />
+        </LinearLayout>
     </FrameLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
-

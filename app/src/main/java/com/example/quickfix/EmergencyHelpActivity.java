@@ -97,9 +97,11 @@ public class EmergencyHelpActivity extends BaseActivity {
 
     private String currentUserId = "", currentUserName = "", currentUserPhone = "";
     private String selectedCity = "", selectedArea = "";
+    private String selectedAddress = "", selectedPincode = "";
     private double selectedLat = Double.NaN, selectedLng = Double.NaN;
     private String activeRequestId = "";
     private boolean isSubmitting = false;
+    private boolean pendingOpenLocationPicker = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -114,6 +116,7 @@ public class EmergencyHelpActivity extends BaseActivity {
         loadProfile();
         setupFormValidation();
         updateSubmitButtonState();
+        refreshLocationState();
     }
 
     private void bindViews() {
@@ -168,32 +171,76 @@ public class EmergencyHelpActivity extends BaseActivity {
         selectedLat = getIntent().getDoubleExtra(EXTRA_LOCATION_LAT, Double.NaN);
         selectedLng = getIntent().getDoubleExtra(EXTRA_LOCATION_LNG, Double.NaN);
 
+        selectedAddress = locationManager.getSavedAddress();
+        selectedPincode = locationManager.getSavedPincode();
+
         if (TextUtils.isEmpty(selectedCity)) {
             selectedCity = locationManager.getSavedCity();
             selectedArea = locationManager.getSavedArea();
             selectedLat = locationManager.getSavedLat();
             selectedLng = locationManager.getSavedLng();
+            selectedAddress = locationManager.getSavedAddress();
+            selectedPincode = locationManager.getSavedPincode();
         }
         updateLocationUi();
     }
 
     private void updateLocationUi() {
-        String label = AppLocationManager.composeLocationLabel(selectedCity, selectedArea);
+        String label = AppLocationManager.composeLocationLabel(selectedCity, selectedPincode);
+        if (TextUtils.isEmpty(label)) {
+            label = AppLocationManager.composeLocationLabel(selectedCity, selectedArea);
+        }
+        boolean locationReady = hasValidLocation();
+
         tvLocationSummary.setText(label.isEmpty() ? "No location selected" : label);
         tvAddress.setText("Emergency Location: " + (label.isEmpty() ? "Not set" : label));
+        if (btnSelectLocation != null) {
+            btnSelectLocation.setVisibility(locationReady ? View.GONE : View.VISIBLE);
+            btnSelectLocation.setText(locationReady ? "Location Ready" : "Select Location");
+        }
+        if (tvLocationHint != null) {
+            tvLocationHint.setText(locationReady
+                    ? "We will search nearby providers within 25 km."
+                    : "Enable GPS so we can find nearby providers within 25 km.");
+        }
         updateSubmitButtonState();
+    }
+
+    private void refreshLocationState() {
+        if (!hasValidLocation() && btnSelectLocation != null) {
+            btnSelectLocation.setVisibility(View.VISIBLE);
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                    != PackageManager.PERMISSION_GRANTED
+                    && androidx.core.content.ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                    != PackageManager.PERMISSION_GRANTED) {
+                pendingOpenLocationPicker = true;
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
+                        LOCATION_PERMISSION_REQ);
+            }
+        }
     }
 
     private void openLocationPicker() {
         LocationSearchBottomSheet.show(this, locationManager, new LocationSearchBottomSheet.PermissionDelegate() {
-            @Override public boolean hasLocationPermission() { return ContextCompat.checkSelfPermission(EmergencyHelpActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED; }
-            @Override public void requestLocationPermission() { ActivityCompat.requestPermissions(EmergencyHelpActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQ); }
+            @Override public boolean hasLocationPermission() {
+                return ContextCompat.checkSelfPermission(EmergencyHelpActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                        || ContextCompat.checkSelfPermission(EmergencyHelpActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            }
+            @Override public void requestLocationPermission() {
+                pendingOpenLocationPicker = true;
+                ActivityCompat.requestPermissions(EmergencyHelpActivity.this,
+                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
+                        LOCATION_PERMISSION_REQ);
+            }
         }, suggestion -> {
             if (suggestion == null) return;
             selectedCity = suggestion.city;
             selectedArea = suggestion.area;
             selectedLat = suggestion.lat;
             selectedLng = suggestion.lng;
+            selectedAddress = locationManager.getSavedAddress();
+            selectedPincode = locationManager.getSavedPincode();
             updateLocationUi();
         });
     }
@@ -202,63 +249,168 @@ public class EmergencyHelpActivity extends BaseActivity {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) { finish(); return; }
         currentUserId = user.getUid();
-        currentUserName = user.getDisplayName();
-        // Fetch phone from DB or user if needed
-        tvName.setText("User: " + (currentUserName == null ? "Member" : currentUserName));
+        currentUserName = user.getDisplayName() == null ? "" : user.getDisplayName().trim();
+        currentUserPhone = user.getPhoneNumber() == null ? "" : user.getPhoneNumber().trim();
+        if (currentUserName.isEmpty()) currentUserName = "Member";
+
+        tvName.setText("User: " + currentUserName);
+        tvPhone.setText("Phone: " + (currentUserPhone.isEmpty() ? "Loading..." : currentUserPhone));
+
+        UserRepository.fetchUserByUid(user.getUid(), new UserRepository.UserCallback() {
+            @Override
+            public void onSuccess(UserModel userModel) {
+                if (userModel == null) return;
+                if (!TextUtils.isEmpty(userModel.name)) {
+                    currentUserName = userModel.name.trim();
+                    tvName.setText("User: " + currentUserName);
+                }
+                if (!TextUtils.isEmpty(userModel.phone)) {
+                    currentUserPhone = userModel.phone.trim();
+                    tvPhone.setText("Phone: " + currentUserPhone);
+                }
+            }
+
+            @Override
+            public void onError(String msg) {
+                Log.d(TAG, "Using Firebase auth profile fallback: " + msg);
+            }
+        });
     }
 
-    private void submitEmergencyRequest() {
-        if (isSubmitting) return;
-        setLoading(true);
-        setStatus("Searching for nearby providers...");
+     private void submitEmergencyRequest() {
+         if (isSubmitting) return;
+         if (!hasValidLocation()) {
+             setStatus("Please enable location to continue.");
+             openLocationPicker();
+             return;
+         }
+         
+         isSubmitting = true;
+         setLoading(true);
+         setStatus("Submitting emergency request...");
+         btnSubmit.setEnabled(false);
+         btnSubmit.setAlpha(0.6f);
 
-        new Thread(() -> {
-            try {
-                // 1. Fetch nearby providers
-                List<String> providers = fetchNearbyProviders(actCategory.getText().toString());
-                
-                // 2. Create request in DB
-                String rid = createRequestInDb();
-                activeRequestId = rid;
+         new Thread(() -> {
+             try {
+                 String rid = createRequestInDb();
+                 activeRequestId = rid;
 
-                // 3. Notify providers
-                if (!providers.isEmpty()) {
-                    FcmNotificationHelper.notifyEmergencyProviders(providers, "Emergency!", "New request from " + currentUserName, rid, new JSONObject(), null);
-                    runOnUiThread(() -> setStatus("Request sent to " + providers.size() + " nearby providers."));
-                } else {
-                    runOnUiThread(() -> setStatus("No providers found within 25km. Try a different category."));
-                }
-                
-                startStatusPolling();
-            } catch (Exception e) {
-                runOnUiThread(() -> { setLoading(false); setStatus("Failed to submit request."); });
-            }
-        }).start();
+                 List<String> providers = fetchNearbyProviders(actCategory.getText().toString());
+
+                 if (!providers.isEmpty()) {
+                     JSONObject payload = buildEmergencyNotificationPayload(rid);
+                     
+                     for (String providerUid : providers) {
+                         // 1. Insert into notifications table (DB storage)
+                         FcmNotificationHelper.saveNotificationToDb(
+                                 providerUid,
+                                 "Emergency Request",
+                                 "New emergency request for " + actCategory.getText().toString() + " near " + selectedCity,
+                                 rid,
+                                 "emergency"
+                         );
+                         
+                         // 2. Insert into bookings table (status = pending)
+                         createPendingEmergencyBookingForProvider(rid, providerUid);
+                     }
+
+                     // 3. Send FCM push notification
+                     FcmNotificationHelper.notifyEmergencyProviders(
+                             providers,
+                             "Emergency Request",
+                             "New emergency request from " + currentUserName,
+                             rid,
+                             payload,
+                             null
+                     );
+                     
+                     runOnUiThread(() -> {
+                         setLoading(false);
+                         setStatus("✓ Request submitted successfully! Waiting for acceptance...");
+                         Toast.makeText(this, "Emergency request submitted successfully!", Toast.LENGTH_LONG).show();
+                     });
+                 } else {
+                     runOnUiThread(() -> {
+                         setLoading(false);
+                         setStatus("✓ Request submitted. No providers within 25km found yet.");
+                         Toast.makeText(this, "Request submitted but no nearby providers available.", Toast.LENGTH_LONG).show();
+                     });
+                 }
+
+                 startStatusPolling();
+             } catch (Exception e) {
+                 Log.e(TAG, "submitEmergencyRequest failed", e);
+                 runOnUiThread(() -> { 
+                     setLoading(false);
+                     isSubmitting = false;
+                     btnSubmit.setEnabled(true);
+                     btnSubmit.setAlpha(1f);
+                     setStatus("✗ Failed to submit request: " + e.getMessage());
+                     Toast.makeText(EmergencyHelpActivity.this, "Failed to submit request", Toast.LENGTH_SHORT).show();
+                 });
+             }
+         }).start();
+     }
+
+    private void createPendingEmergencyBookingForProvider(String requestId, String providerUid) {
+        try {
+            JSONObject booking = new JSONObject();
+            booking.put("customer_id", currentUserId);
+            booking.put("customer_name", currentUserName);
+            booking.put("customer_phone", currentUserPhone);
+            booking.put("provider_id", providerUid);
+            booking.put("provider_name", "Awaiting Acceptance");
+            booking.put("service_name", "Emergency - " + actCategory.getText().toString().trim());
+            booking.put("category", actCategory.getText().toString().trim());
+            booking.put("address", selectedAddress != null ? selectedAddress : selectedCity);
+            booking.put("description", etDescription.getText() != null ? etDescription.getText().toString().trim() : "");
+            booking.put("status", "pending");
+            booking.put("type", "Emergency");
+            booking.put("is_emergency", true);
+            booking.put("emergency_request_id", requestId);
+            booking.put("booking_date", new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date()));
+            booking.put("booking_time", new SimpleDateFormat("HH:mm:ss", Locale.US).format(new java.util.Date()));
+            booking.put("created_at", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(new java.util.Date()));
+
+            tryInsertBooking(booking);
+        } catch (Exception e) {
+            Log.w(TAG, "createPendingEmergencyBookingForProvider skipped: " + e.getMessage());
+        }
     }
 
     private List<String> fetchNearbyProviders(String category) throws Exception {
         List<String> uids = new ArrayList<>();
-        String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles?select=firebase_uid,latitude,longitude,area,city,status&status=eq.active";
-        
-        Request req = new Request.Builder().url(url).addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY).build();
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles?select=firebase_uid,category,latitude,longitude,area,city,status&status=eq.active&is_approved=eq.true";
+
+        Request req = new Request.Builder().url(url)
+                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .build();
         try (Response res = http.newCall(req).execute()) {
             if (!res.isSuccessful()) return uids;
             JSONArray arr = new JSONArray(res.body().string());
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
-                double pLat = o.optDouble("latitude", o.optDouble("lat", Double.NaN));
-                double pLng = o.optDouble("longitude", o.optDouble("lng", Double.NaN));
+                double pLat = o.optDouble("latitude", Double.NaN);
+                double pLng = o.optDouble("longitude", Double.NaN);
                 String pArea = o.optString("area", "");
                 String pCity = o.optString("city", "");
+                String pCategory = o.optString("category", "");
 
                 boolean match = false;
                 if (!Double.isNaN(selectedLat) && !Double.isNaN(pLat)) {
                     double dist = haversine(selectedLat, selectedLng, pLat, pLng);
                     if (dist <= NEARBY_RADIUS_KM) match = true;
                 } else {
-                    // Fallback to area matching
+                    // Fallback to area matching if GPS missing
                     if (!TextUtils.isEmpty(selectedArea) && selectedArea.equalsIgnoreCase(pArea)) match = true;
                     else if (!TextUtils.isEmpty(selectedCity) && selectedCity.equalsIgnoreCase(pCity)) match = true;
+                }
+
+                if (match && !TextUtils.isEmpty(category)) {
+                    match = matchesCategory(category, pCategory);
                 }
 
                 if (match) uids.add(o.getString("firebase_uid"));
@@ -269,23 +421,52 @@ public class EmergencyHelpActivity extends BaseActivity {
 
     private String createRequestInDb() throws Exception {
         JSONObject body = new JSONObject();
-        body.put("user_id", currentUserId);
         body.put("category", actCategory.getText().toString());
         body.put("description", etDescription.getText() != null ? etDescription.getText().toString().trim() : "");
-        body.put("status", "pending");
+        body.put("user_name", currentUserName);
+        body.put("phone", currentUserPhone);
+        body.put("lat", selectedLat);
+        body.put("lng", selectedLng);
         body.put("latitude", selectedLat);
         body.put("longitude", selectedLng);
-        body.put("area", selectedArea);
+        body.put("pincode", selectedPincode);
         body.put("city", selectedCity);
-        body.put("created_at", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).format(new java.util.Date()));
+        body.put("location_label", AppLocationManager.composeLocationLabel(selectedCity, selectedPincode));
+        body.put("status", "pending");
+        body.put("user_id", currentUserId);
 
         Request req = new Request.Builder().url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?select=id")
                 .post(RequestBody.create(body.toString(), JSON))
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Content-Type", "application/json")
                 .addHeader("Prefer", "return=representation").build();
         try (Response res = http.newCall(req).execute()) {
-            JSONArray arr = new JSONArray(res.body().string());
+            String raw = res.body() != null ? res.body().string() : "[]";
+            if (!res.isSuccessful()) {
+                throw new IllegalStateException("Create request failed HTTP " + res.code() + " " + raw);
+            }
+            JSONArray arr = new JSONArray(raw);
             return arr.getJSONObject(0).getString("id");
+        }
+    }
+
+    private boolean tryInsertBooking(JSONObject payload) {
+        try {
+            Request insert = new Request.Builder()
+                    .url(BuildConfig.SUPABASE_URL + "/rest/v1/bookings")
+                    .post(RequestBody.create(payload.toString(), JSON))
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "return=minimal")
+                    .build();
+            try (Response response = http.newCall(insert).execute()) {
+                return response.code() == 200 || response.code() == 201 || response.code() == 204;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "tryInsertBooking failed: " + e.getMessage());
+            return false;
         }
     }
 
@@ -347,6 +528,37 @@ public class EmergencyHelpActivity extends BaseActivity {
         }).start();
     }
 
+    private JSONObject buildEmergencyNotificationPayload(String requestId) throws Exception {
+        JSONObject data = new JSONObject();
+        data.put("request_id", requestId);
+        data.put("type", "emergency_request");
+        data.put("user_name", currentUserName);
+        data.put("phone", currentUserPhone);
+        data.put("category", actCategory.getText().toString());
+        data.put("city", selectedCity);
+        data.put("area", selectedArea);
+        data.put("address", selectedAddress);
+        data.put("pincode", selectedPincode);
+        data.put("lat", selectedLat);
+        data.put("lng", selectedLng);
+        data.put("title", "Emergency Request");
+        data.put("body", "New emergency request from " + currentUserName);
+        return data;
+    }
+
+    private boolean hasValidLocation() {
+        return !Double.isNaN(selectedLat)
+                && !Double.isNaN(selectedLng)
+                && !TextUtils.isEmpty(selectedCity);
+    }
+
+    private boolean matchesCategory(String requested, String providerCategory) {
+        String a = requested == null ? "" : requested.trim().toLowerCase(Locale.getDefault());
+        String b = providerCategory == null ? "" : providerCategory.trim().toLowerCase(Locale.getDefault());
+        if (a.isEmpty() || b.isEmpty()) return true;
+        return a.equals(b) || a.contains(b) || b.contains(a);
+    }
+
     private double haversine(double lat1, double lon1, double lat2, double lon2) {
         final double R = 6371;
         double dLat = Math.toRadians(lat2 - lat1);
@@ -368,7 +580,7 @@ public class EmergencyHelpActivity extends BaseActivity {
     private void updateSubmitButtonState() {
         String cat = actCategory.getText().toString();
         String desc = etDescription.getText() != null ? etDescription.getText().toString().trim() : "";
-        boolean locOk = !Double.isNaN(selectedLat) && !TextUtils.isEmpty(selectedCity);
+        boolean locOk = !Double.isNaN(selectedLat) && !Double.isNaN(selectedLng) && !TextUtils.isEmpty(selectedCity);
 
         // Req 6: Validation rules
         boolean catOk = !TextUtils.isEmpty(cat);
@@ -388,4 +600,27 @@ public class EmergencyHelpActivity extends BaseActivity {
 
     private void setLoading(boolean l) { isSubmitting = l; progress.setVisibility(l ? View.VISIBLE : View.GONE); }
     private void setStatus(String s) { tvStatus.setText(s); }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION_REQ) {
+            boolean granted = false;
+            for (int result : grantResults) {
+                if (result == PackageManager.PERMISSION_GRANTED) {
+                    granted = true;
+                    break;
+                }
+            }
+            if (granted) {
+                if (pendingOpenLocationPicker) {
+                    pendingOpenLocationPicker = false;
+                    openLocationPicker();
+                }
+            } else {
+                setStatus("Location permission is required to find nearby providers.");
+                Toast.makeText(this, "Location permission is required to find nearby providers.", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
 }

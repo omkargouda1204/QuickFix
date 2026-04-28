@@ -249,35 +249,62 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         setLoading(true);
         new Thread(() -> {
             try {
-                JSONObject latest = fetchRequestById(requestId);
-                String status = safe(latest.optString("status", "pending")).toLowerCase(Locale.getDefault());
-                if (!"pending".equals(status)) {
-                    runOnUiThread(() -> {
-                        setLoading(false);
-                        bindRequest(latest);
-                        updateAcceptStateFromStatus(latest);
-                        showToast("Request is no longer pending.");
-                    });
-                    return;
+                // Reject logic as requested: update status to rejected if not already assigned
+                JSONObject body = new JSONObject();
+                body.put("status", "rejected");
+                
+                String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests"
+                        + "?id=eq." + urlEncode(requestId)
+                        + "&assigned_provider_id=is.null";
+
+                Request request = new Request.Builder()
+                        .url(url)
+                        .patch(RequestBody.create(body.toString(), JSON))
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .build();
+
+                try (Response r = http.newCall(request).execute()) {
+                    Log.d(TAG, "rejectRequest HTTP " + r.code());
                 }
 
-                upsertProviderResponse("rejected");
+                // Remove the local pending booking for THIS provider
+                deleteMyPendingBooking(requestId);
+                
                 rejectedByCurrentProvider = true;
 
                 runOnUiThread(() -> {
                     setLoading(false);
-                    setText(tvEmergencyStatus, "Status: Rejected by you (waiting for another provider)");
-                    updateAcceptStateFromStatus(latest);
-                    showToast("Rejected. Another nearby provider can still accept this request.");
+                    showToast("Request rejected.");
+                    finish();
                 });
             } catch (Exception e) {
                 Log.e(TAG, "rejectRequest failed", e);
                 runOnUiThread(() -> {
                     setLoading(false);
-                    showToast(extractErrorMessage(e, "Could not reject request. Please try again."));
+                    showToast("Could not reject request.");
                 });
             }
         }).start();
+    }
+
+    private void deleteMyPendingBooking(String emergencyId) {
+        try {
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
+                    + "?emergency_request_id=eq." + urlEncode(emergencyId)
+                    + "&provider_id=eq." + urlEncode(providerProfileId)
+                    + "&status=eq.pending";
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .delete()
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .build();
+
+            http.newCall(request).execute().close();
+        } catch (Exception ignored) {}
     }
 
     private void acceptRequest() {
@@ -301,15 +328,22 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
                 JSONObject updated = updatedRows.getJSONObject(0);
                 rejectedByCurrentProvider = false;
+                
+                // Update THIS provider's booking record to 'accepted'
+                updateMyBookingToAccepted(requestId);
+                
+                // Remove other providers' pending bookings for this emergency
+                cleanupOtherEmergencyBookings(requestId);
+                
                 upsertProviderResponse("accepted");
                 notifyUserAssigned(updated);
-                mirrorEmergencyBooking(updated);
+                // mirrorEmergencyBooking(updated); // Not needed anymore as we create them beforehand
 
                 runOnUiThread(() -> {
                     setLoading(false);
                     bindRequest(updated);
                     updateAcceptStateFromStatus(updated);
-                    showToast("Emergency request accepted.");
+                    showToast("Emergency request accepted!");
                 });
             } catch (Exception e) {
                 Log.e(TAG, "acceptRequest failed", e);
@@ -319,6 +353,58 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 });
             }
         }).start();
+    }
+
+    private void updateMyBookingToAccepted(String emergencyId) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("status", "accepted");
+            body.put("provider_name", providerName != null ? providerName : "Provider");
+            body.put("provider_phone", providerPhone != null ? providerPhone : "");
+
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
+                    + "?emergency_request_id=eq." + urlEncode(emergencyId)
+                    + "&provider_id=eq." + urlEncode(providerProfileId);
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .patch(RequestBody.create(body.toString(), JSON))
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .build();
+
+            try (Response response = http.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    Log.w(TAG, "updateMyBookingToAccepted failed: " + response.code());
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "updateMyBookingToAccepted error: " + e.getMessage());
+        }
+    }
+
+    private void cleanupOtherEmergencyBookings(String emergencyId) {
+        try {
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
+                    + "?emergency_request_id=eq." + urlEncode(emergencyId)
+                    + "&provider_id=neq." + urlEncode(providerProfileId);
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .delete()
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .build();
+
+            try (Response response = http.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    Log.w(TAG, "cleanupOtherEmergencyBookings failed: " + response.code());
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "cleanupOtherEmergencyBookings error: " + e.getMessage());
+        }
     }
 
     private void triggerQuickActionIfNeeded() {
@@ -489,195 +575,9 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         }
     }
 
-    private void mirrorEmergencyBooking(JSONObject request) {
-        try {
-            String customerId = safe(request.optString("user_id", ""));
-            String providerId = safe(providerProfileId);
-            if (TextUtils.isEmpty(customerId) || TextUtils.isEmpty(providerId)) return;
-            String emergencyRequestId = safe(request.optString("id", ""));
-            if (TextUtils.isEmpty(emergencyRequestId)) {
-                emergencyRequestId = requestId;
-            }
-
-            if (!TextUtils.isEmpty(emergencyRequestId)
-                    && bookingExistsForEmergency(providerId, emergencyRequestId)) {
-                return;
-            }
-
-            if (!TextUtils.isEmpty(emergencyRequestId)
-                    && tryUpdateEmergencyBookingOnAccept(customerId, emergencyRequestId)) {
-                return;
-            }
-
-            JSONObject booking = new JSONObject();
-            booking.put("customer_id", customerId);
-            booking.put("provider_id", providerId);
-            booking.put("customer_name", fallback(request.optString("user_name", ""), "Customer"));
-            booking.put("customer_phone", safe(request.optString("phone", "")));
-            booking.put("provider_name", fallback(providerName, "Provider"));
-            booking.put("service_name", fallback(request.optString("category", ""), "Emergency"));
-            booking.put("category", fallback(request.optString("category", ""), "Emergency"));
-            
-            // Add service_id for emergency bookings
-            String serviceId = fetchServiceIdForCategory(fallback(request.optString("category", ""), "Emergency"));
-            if (serviceId.isEmpty()) {
-                booking.put("service_id", org.json.JSONObject.NULL);
-            } else {
-                booking.put("service_id", serviceId);
-            }
-            
-            booking.put("address", safe(request.optString("address", "")));
-            booking.put("description", safe(request.optString("description", "")));
-            booking.put("status", "accepted");
-            booking.put("is_emergency", true);
-            booking.put("type", "Emergency");
-            if (!TextUtils.isEmpty(emergencyRequestId)) {
-                booking.put("emergency_request_id", emergencyRequestId);
-            }
-
-            if (tryInsertBooking(booking)) return;
-
-            booking.remove("is_emergency");
-            if (tryInsertBooking(booking)) return;
-
-            booking.remove("type");
-            booking.remove("emergency_request_id");
-            booking.put("booking_date", new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                    .format(new java.util.Date()));
-
-            booking.put("booking_time", new java.text.SimpleDateFormat("HH:mm:ss", Locale.US)
-                    .format(new java.util.Date()));
-
-            try (Response fallbackResponse = postBookingInsert(booking)) {
-                // Keep acceptance successful even if booking mirror fails.
-                if (fallbackResponse.code() >= 400) {
-                    Log.w(TAG, "mirrorEmergencyBooking fallback HTTP " + fallbackResponse.code());
-                }
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "mirrorEmergencyBooking failed: " + e.getMessage());
-        }
-    }
-
-    private boolean tryUpdateEmergencyBookingOnAccept(String customerId, String emergencyRequestId) {
-        try {
-            JSONObject patch = new JSONObject();
-            patch.put("provider_id", safe(providerProfileId));
-            patch.put("provider_name", fallback(providerName, "Provider"));
-            patch.put("status", "accepted");
-            patch.put("type", "Emergency");
-            patch.put("is_emergency", true);
-
-            String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
-                    + "?customer_id=eq." + urlEncode(customerId)
-                    + "&emergency_request_id=eq." + urlEncode(emergencyRequestId)
-                    + "&status=eq.pending";
-
-            Request request = new Request.Builder()
-                    .url(url)
-                    .patch(RequestBody.create(patch.toString(), JSON))
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Prefer", "return=representation")
-                    .build();
-
-            try (Response response = http.newCall(request).execute()) {
-                if (response.code() != 200) {
-                    return false;
-                }
-                String body = response.body() != null ? response.body().string() : "[]";
-                JSONArray rows = new JSONArray(body);
-                return rows.length() > 0;
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "tryUpdateEmergencyBookingOnAccept failed: " + e.getMessage());
-            return false;
-        }
-    }
-
     private String extractErrorMessage(Throwable throwable, String fallback) {
         String msg = safe(throwable != null ? throwable.getMessage() : "");
         return TextUtils.isEmpty(msg) ? fallback : msg;
-    }
-
-    private boolean bookingExistsForEmergency(String providerId, String emergencyRequestId) {
-        try {
-            String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
-                    + "?provider_id=eq." + urlEncode(providerId)
-                    + "&emergency_request_id=eq." + urlEncode(emergencyRequestId)
-                    + "&select=id&limit=1";
-
-            Request request = new Request.Builder()
-                    .url(url)
-                    .get()
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Accept", "application/json")
-                    .build();
-
-            try (Response response = http.newCall(request).execute()) {
-                if (response.code() != 200) {
-                    return false;
-                }
-                String body = response.body() != null ? response.body().string() : "[]";
-                JSONArray arr = new JSONArray(body);
-                return arr.length() > 0;
-            }
-        } catch (Exception ignored) {
-            // emergency_request_id column may not exist on all schema variants.
-            return false;
-        }
-    }
-
-    private boolean tryInsertBooking(JSONObject payload) {
-        try (Response response = postBookingInsert(payload)) {
-            return response.code() == 200 || response.code() == 201 || response.code() == 204;
-        } catch (Exception e) {
-            Log.w(TAG, "tryInsertBooking failed: " + e.getMessage());
-            return false;
-        }
-    }
-
-    private Response postBookingInsert(JSONObject payload) throws Exception {
-        Request insert = new Request.Builder()
-                .url(BuildConfig.SUPABASE_URL + "/rest/v1/bookings")
-                .post(RequestBody.create(payload.toString(), JSON))
-                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Prefer", "return=minimal")
-                .build();
-        return http.newCall(insert).execute();
-    }
-    
-    private String fetchServiceIdForCategory(String category) {
-        String cat = safe(category);
-        if (cat.isEmpty()) return "";
-        try {
-            String url = BuildConfig.SUPABASE_URL
-                    + "/rest/v1/services?select=id&category=eq." + android.net.Uri.encode(cat)
-                    + "&limit=1";
-            Request request = new Request.Builder().url(url)
-                    .get()
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Accept", "application/json")
-                    .build();
-            try (Response response = http.newCall(request).execute()) {
-                if (response.isSuccessful() && response.body() != null) {
-                    String body = response.body().string();
-                    org.json.JSONArray arr = new org.json.JSONArray(body);
-                    if (arr.length() > 0) {
-                        return arr.getJSONObject(0).optString("id", "");
-                    }
-                }
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "fetchServiceIdForCategory: " + e.getMessage());
-            return "";
-        }
-        return "";
     }
 
     private void setLoading(boolean loading) {
@@ -728,7 +628,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     }
 
     @Override
-    protected void onNewIntent(android.content.Intent intent) {
+    protected void onNewIntent(@androidx.annotation.NonNull android.content.Intent intent) {
         super.onNewIntent(intent);
         if (intent == null) return;
         setIntent(intent);

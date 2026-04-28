@@ -49,7 +49,7 @@ public class ProfileActivity extends BaseActivity {
     private static final String TAG           = "ProfileActivity";
 
     // ── Header ────────────────────────────────────────────────────────────
-    private TextView  tvAvatarInitial, tvUserName, tvUserEmail, tvRoleBadge;
+    private TextView  tvAvatarInitial, tvUserName, tvUserEmail, tvUserLocation, tvRoleBadge;
     private ImageView btnBack;
     private ImageView ivHeaderAvatar;
 
@@ -118,6 +118,7 @@ public class ProfileActivity extends BaseActivity {
         tvAvatarInitial       = findViewById(R.id.tvAvatarInitial);
         tvUserName            = findViewById(R.id.tvUserName);
         tvUserEmail           = findViewById(R.id.tvUserEmail);
+        tvUserLocation        = findViewById(R.id.tvUserLocation);
         tvRoleBadge           = findViewById(R.id.tvRoleBadge);
         btnBack               = findViewById(R.id.btnBack);
         ivHeaderAvatar        = findViewById(R.id.ivHeaderAvatar);
@@ -166,9 +167,40 @@ public class ProfileActivity extends BaseActivity {
 
         new Thread(() -> {
             UserModel model = fetchUserRow(uid, email);
-            MAIN.post(() -> { showLoading(false); if (model != null) applyUserModel(model); });
+            
+            // Check if user exists in provider_profiles
+            boolean hasProfile = checkProviderProfileExists(uid);
+            
+            MAIN.post(() -> { 
+                showLoading(false); 
+                if (model != null) {
+                    model.isServiceProvider = hasProfile;
+                    applyUserModel(model); 
+                }
+            });
             checkProviderApplication(uid);
         }).start();
+    }
+
+    private boolean checkProviderProfileExists(String uid) {
+        try {
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles?firebase_uid=eq." + uid + "&select=id&limit=1";
+            Request request = new Request.Builder()
+                    .url(url)
+                    .get()
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .build();
+            try (Response response = HTTP.newCall(request).execute()) {
+                if (response.isSuccessful() && response.body() != null) {
+                    JSONArray arr = new JSONArray(response.body().string());
+                    return arr.length() > 0;
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "checkProviderProfileExists error: " + e.getMessage());
+        }
+        return false;
     }
 
     private UserModel fetchUserRow(String uid, String email) {
@@ -176,7 +208,7 @@ public class ProfileActivity extends BaseActivity {
             String encodedUid = android.net.Uri.encode(uid);
             String url = BuildConfig.SUPABASE_URL
                     + "/rest/v1/users?firebase_uid=eq." + encodedUid
-                    + "&select=id,firebase_uid,name,email,phone,profile_image,is_user,is_service_provider,is_admin,dark_mode,language&limit=1";
+                    + "&select=id,firebase_uid,name,email,phone,profile_image,is_user,is_service_provider,is_admin,dark_mode,language,city,pincode,address&limit=1";
             try (Response r = HTTP.newCall(buildGet(url)).execute()) {
                 String body = r.body() != null ? r.body().string() : "[]";
                 if (r.code() == 200) {
@@ -206,7 +238,7 @@ public class ProfileActivity extends BaseActivity {
                 String enc = android.net.Uri.encode(email);
                 String urlE = BuildConfig.SUPABASE_URL
                         + "/rest/v1/users?email=eq." + enc
-                        + "&select=id,firebase_uid,name,email,phone,profile_image,is_user,is_service_provider,is_admin,dark_mode,language&limit=1";
+                        + "&select=id,firebase_uid,name,email,phone,profile_image,is_user,is_service_provider,is_admin,dark_mode,language,city,pincode,address&limit=1";
                 try (Response r2 = HTTP.newCall(buildGet(urlE)).execute()) {
                     String body2 = r2.body() != null ? r2.body().string() : "[]";
                     if (r2.code() == 200) {
@@ -232,6 +264,9 @@ public class ProfileActivity extends BaseActivity {
         m.isUser            = o.optBoolean("is_user", true);
         m.darkMode          = o.optBoolean("dark_mode", false);
         m.language          = o.optString("language", "en");
+        m.city              = o.optString("city", "");
+        m.pincode           = o.optString("pincode", "");
+        m.address           = o.optString("address", "");
         return m;
     }
 
@@ -244,16 +279,56 @@ public class ProfileActivity extends BaseActivity {
 
         if (m.name  != null && !m.name.isEmpty())  { tvUserName.setText(m.name);  tvAvatarInitial.setText(String.valueOf(m.name.charAt(0)).toUpperCase()); }
         if (m.email != null && !m.email.isEmpty())   tvUserEmail.setText(m.email);
+        
+        // Req 5: Show city + pincode in User Profile
+        if (tvUserLocation != null) {
+            String loc = safeStr(m.city);
+            if (!safeStr(m.pincode).isEmpty()) loc += (loc.isEmpty() ? "" : " - ") + m.pincode;
+            if (!loc.isEmpty()) {
+                tvUserLocation.setText(loc);
+                tvUserLocation.setVisibility(View.VISIBLE);
+            } else {
+                tvUserLocation.setVisibility(View.GONE);
+            }
+        }
+
         applyAvatar(m.name, m.email, m.profileImage);
         isAdmin    = m.isAdmin;
         isProvider = m.isServiceProvider;
+        
         applyRoleBadge(isAdmin ? "Admin" : isProvider ? "Provider" : "User");
-        if (isAdmin || isProvider) {
+
+        // Role-based visibility logic
+        if (isAdmin) {
+            menuAdminDashboard.setVisibility(View.VISIBLE);
+            TextView tvAdminLabel = findViewById(R.id.tvAdminDashboardLabel);
+            if (tvAdminLabel == null) {
+                // Find first child TextView if ID missing
+                tvAdminLabel = findLabelInLayout(menuAdminDashboard);
+            }
+            if (tvAdminLabel != null) tvAdminLabel.setText("Visit Admin Dashboard");
+
+            menuProviderDashboard.setVisibility(View.GONE);
+            menuListBusiness.setVisibility(View.GONE);
             cardRoleDashboard.setVisibility(View.VISIBLE);
+        } else if (isProvider) {
+            menuAdminDashboard.setVisibility(View.GONE);
+            menuProviderDashboard.setVisibility(View.VISIBLE);
+            TextView tvProviderLabel = findViewById(R.id.tvProviderDashboardLabel);
+            if (tvProviderLabel != null) tvProviderLabel.setText("Visit Provider Dashboard");
+
+            menuListBusiness.setVisibility(View.GONE);
+            cardRoleDashboard.setVisibility(View.VISIBLE);
+        } else {
+            menuAdminDashboard.setVisibility(View.GONE);
+            menuProviderDashboard.setVisibility(View.GONE);
+            menuListBusiness.setVisibility(View.VISIBLE);
+            cardRoleDashboard.setVisibility(View.GONE);
+        }
+
+        if (cardRoleDashboard.getVisibility() == View.VISIBLE) {
             cardRoleDashboard.animate().alpha(1f).setDuration(300).start();
         }
-        if (isAdmin)    menuAdminDashboard.setVisibility(View.VISIBLE);
-        if (isProvider) menuProviderDashboard.setVisibility(View.VISIBLE);
 
         FirebaseUser current = mAuth != null ? mAuth.getCurrentUser() : null;
         if (current != null) {
@@ -270,6 +345,19 @@ public class ProfileActivity extends BaseActivity {
         if (tvCurrentLanguage != null) {
             tvCurrentLanguage.setText(LocaleHelper.codeToDisplayName(UserPreferenceManager.getLanguageCode(this)));
         }
+    }
+
+    private TextView findLabelInLayout(LinearLayout layout) {
+        if (layout == null) return null;
+        for (int i = 0; i < layout.getChildCount(); i++) {
+            View v = layout.getChildAt(i);
+            if (v instanceof TextView) return (TextView) v;
+            if (v instanceof LinearLayout) {
+                TextView found = findLabelInLayout((LinearLayout) v);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     private void applyRoleBadge(String role) {

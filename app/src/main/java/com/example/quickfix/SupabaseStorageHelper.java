@@ -13,7 +13,12 @@ import com.example.quickfix.api.SupabaseStorageApi;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -69,9 +74,17 @@ public class SupabaseStorageHelper {
         void onError(String message);
     }
 
-    // ── Bucket names ───────────────────────────────────────────────────────
-    public static final String BUCKET_BUSINESS_IMAGES = "provider-business-images";
-    public static final String BUCKET_ID_PROOFS       = "provider-id-proofs";
+    // ── Bucket names (Fetched from BuildConfig / supabase.properties) ──────
+    /** Bucket for business images shown to users (public bucket) */
+    public static final String SUPABASE_BUCKET_BUSINESS_IMG = BuildConfig.SUPABASE_BUCKET_BUSINESS_IMG;
+    
+    /** Bucket for ID proofs (sensitive – private bucket, use service role for access) */
+    public static final String SUPABASE_BUCKET_ID_PROOF    = BuildConfig.SUPABASE_BUCKET_ID_PROOF;
+
+    // Legacy names (Aliases for compatibility)
+    public static final String BUCKET_BUSINESS_IMAGES = SUPABASE_BUCKET_BUSINESS_IMG;
+    public static final String BUCKET_ID_PROOFS       = SUPABASE_BUCKET_ID_PROOF;
+
     public static final String BUCKET_PROFILE_IMAGES  = "profile-images";
     public static final String BUCKET_QUICKFIX        = "Quickfix";
 
@@ -81,6 +94,51 @@ public class SupabaseStorageHelper {
     private static final int PROFILE_MAX_UPLOAD_BYTES = 1024 * 1024;      // 1 MB
     private static final int MEDIA_IMAGE_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;  // 2 MB
     private static final int MEDIA_VIDEO_MAX_SOURCE_BYTES = 30 * 1024 * 1024; // 30 MB
+
+    public interface ListFilesCallback {
+        void onSuccess(List<String> fileNames);
+        void onError(String message);
+    }
+
+    public static void listFiles(String bucket, ListFilesCallback callback) {
+        new Thread(() -> {
+            try {
+                String url = SUPABASE_URL + "/storage/v1/object/list/" + bucket;
+                JSONObject body = new JSONObject();
+                body.put("limit", 100);
+                body.put("offset", 0);
+                body.put("prefix", ""); // Required for many storage API versions
+                body.put("sortBy", new JSONObject().put("column", "name").put("order", "asc"));
+
+                Request request = new Request.Builder()
+                        .url(url)
+                        .post(RequestBody.create(body.toString(), MediaType.parse("application/json")))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .build();
+
+                try (Response response = HTTP.newCall(request).execute()) {
+                    String responseBody = response.body() != null ? response.body().string() : "[]";
+                    if (response.isSuccessful()) {
+                        JSONArray arr = new JSONArray(responseBody);
+                        List<String> names = new ArrayList<>();
+                        for (int i = 0; i < arr.length(); i++) {
+                            JSONObject obj = arr.getJSONObject(i);
+                            String name = obj.optString("name", "");
+                            if (!name.isEmpty() && !name.equals(".emptyKeep")) {
+                                names.add(name);
+                            }
+                        }
+                        MAIN.post(() -> callback.onSuccess(names));
+                    } else {
+                        MAIN.post(() -> callback.onError("HTTP " + response.code()));
+                    }
+                }
+            } catch (Exception e) {
+                MAIN.post(() -> callback.onError(e.getMessage()));
+            }
+        }).start();
+    }
 
     /**
      * Upload a file from a Uri to a Supabase Storage bucket.

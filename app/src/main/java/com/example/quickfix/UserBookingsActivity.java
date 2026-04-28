@@ -168,44 +168,57 @@ public class UserBookingsActivity extends BaseActivity
         new Thread(() -> {
             try {
                 String uid = android.net.Uri.encode(userId);
-                String dbId = android.net.Uri.encode(userDbId);
+                List<Booking> list = new ArrayList<>();
+
                 String url = BASE_URL
-                        + "/rest/v1/bookings?or=(customer_id.eq." + uid + ",customer_id.eq." + dbId + ")"
+                        + "/rest/v1/bookings?customer_id=eq." + uid
                         + "&select=*&order=created_at.desc";
-                Request req = new Request.Builder().url(url)
+                try (Response r = HTTP.newCall(new Request.Builder().url(url)
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
                         .addHeader("Accept", "application/json")
-                        .build();
-                try (Response r = HTTP.newCall(req).execute()) {
+                        .build()).execute()) {
                     String body = r.body() != null ? r.body().string() : "[]";
-                    Log.d(TAG, "loadBookings HTTP " + r.code());
                     if (r.code() == 200) {
                         JSONArray arr = new JSONArray(body);
-                        List<Booking> list = new ArrayList<>();
                         for (int i = 0; i < arr.length(); i++) {
                             Booking b = Booking.fromJson(arr.getJSONObject(i));
                             if (b != null) list.add(b);
                         }
-
-                        try {
-                            attachReviewData(list);
-                        } catch (Exception reviewErr) {
-                            Log.w(TAG, "attachReviewData skipped: " + reviewErr.getMessage());
-                        }
-
-                        allBookings = list;
-                        MAIN.post(() -> {
-                            showLoading(false);
-                            applyFilter();
-                        });
-                    } else {
-                        MAIN.post(() -> {
-                            showLoading(false);
-                            Toast.makeText(this, "Failed to load bookings", Toast.LENGTH_SHORT).show();
-                        });
                     }
                 }
+
+                // Load emergency requests and convert to bookings for unified display
+                String emergencyUrl = BASE_URL
+                        + "/rest/v1/emergency_requests?user_firebase_uid=eq." + uid
+                        + "&select=*&order=created_at.desc";
+                try (Response rEmerg = HTTP.newCall(new Request.Builder().url(emergencyUrl)
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build()).execute()) {
+                    String bodyEmerg = rEmerg.body() != null ? rEmerg.body().string() : "[]";
+                    if (rEmerg.code() == 200) {
+                        JSONArray arrEmerg = new JSONArray(bodyEmerg);
+                        for (int i = 0; i < arrEmerg.length(); i++) {
+                            JSONObject o = arrEmerg.getJSONObject(i);
+                            Booking b = convertEmergencyToBooking(o);
+                            if (b != null) list.add(b);
+                        }
+                    }
+                }
+
+                try {
+                    attachReviewData(list);
+                } catch (Exception reviewErr) {
+                    Log.w(TAG, "attachReviewData skipped: " + reviewErr.getMessage());
+                }
+
+                allBookings = list;
+                MAIN.post(() -> {
+                    showLoading(false);
+                    applyFilter();
+                });
             } catch (Exception e) {
                 Log.e(TAG, "loadBookings: " + e.getMessage());
                 MAIN.post(() -> {
@@ -214,6 +227,26 @@ public class UserBookingsActivity extends BaseActivity
                 });
             }
         }).start();
+    }
+
+    private Booking convertEmergencyToBooking(JSONObject o) {
+        try {
+            Booking b = new Booking();
+            b.id = o.optString("id", "");
+            b.customerId = o.optString("user_firebase_uid", "");
+            b.providerName = o.optString("assigned_provider_name", "Awaiting Provider");
+            b.serviceCategory = o.optString("category", "Emergency");
+            b.serviceName = "🚨 " + o.optString("category", "Emergency Service");
+            b.status = o.optString("status", "pending");
+            b.price = 0;
+            b.location = o.optString("location_label", "");
+            b.description = o.optString("description", "Emergency request");
+            b.createdAt = o.optString("created_at", "");
+            return b;
+        } catch (Exception e) {
+            Log.e(TAG, "convertEmergencyToBooking: " + e.getMessage());
+            return null;
+        }
     }
 
     private void attachReviewData(List<Booking> bookings) throws Exception {
@@ -1029,23 +1062,14 @@ public class UserBookingsActivity extends BaseActivity
             try {
                 JSONObject body = new JSONObject();
                 body.put("status", "cancelled");
-                String uid = userId != null ? userId.trim() : "";
-                String dbId = userDbId != null ? userDbId.trim() : "";
-                String bookingId = clean(booking.id);
-                String url = BASE_URL + "/rest/v1/bookings?id=eq." + android.net.Uri.encode(bookingId);
-                if (!uid.isEmpty() || !dbId.isEmpty()) {
-                    url += "&or=(";
-                    boolean hasPrev = false;
-                    if (!uid.isEmpty()) {
-                        url += "customer_id.eq." + android.net.Uri.encode(uid);
-                        hasPrev = true;
-                    }
-                    if (!dbId.isEmpty()) {
-                        if (hasPrev) url += ",";
-                        url += "customer_id.eq." + android.net.Uri.encode(dbId);
-                    }
-                    url += ")";
+                
+                String table = booking.isEmergency ? "emergency_requests" : "bookings";
+                String url = BASE_URL + "/rest/v1/" + table + "?id=eq." + android.net.Uri.encode(booking.id);
+                
+                if (booking.isEmergency) {
+                    url += "&status=eq.pending";
                 }
+
                 Request req = new Request.Builder().url(url)
                         .patch(RequestBody.create(body.toString(), MediaType.get("application/json")))
                         .addHeader("apikey", ANON_KEY)
@@ -1058,10 +1082,15 @@ public class UserBookingsActivity extends BaseActivity
                         if (r.code() == 200 || r.code() == 204) {
                             booking.status = "cancelled";
                             adapter.notifyDataSetChanged();
-                            Toast.makeText(this, "Booking cancelled", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Cancelled successfully", Toast.LENGTH_SHORT).show();
+                            
+                            if (booking.isEmergency) {
+                                cancelRelatedEmergencyBookings(booking.id);
+                            }
+                            
                             loadBookings();
                         } else {
-                            Toast.makeText(this, "Failed to cancel. Try again.", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Failed to cancel. Request may already be accepted.", Toast.LENGTH_LONG).show();
                         }
                     });
                 }
@@ -1069,6 +1098,23 @@ public class UserBookingsActivity extends BaseActivity
                 Log.e(TAG, "cancelBooking: " + e.getMessage());
                 MAIN.post(() -> Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
             }
+        }).start();
+    }
+
+    private void cancelRelatedEmergencyBookings(String emergencyRequestId) {
+        new Thread(() -> {
+            try {
+                JSONObject body = new JSONObject();
+                body.put("status", "cancelled");
+                String url = BASE_URL + "/rest/v1/bookings?emergency_request_id=eq." + emergencyRequestId + "&status=eq.pending";
+                Request req = new Request.Builder().url(url)
+                        .patch(RequestBody.create(body.toString(), MediaType.get("application/json")))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .build();
+                HTTP.newCall(req).execute().close();
+            } catch (Exception ignored) {}
         }).start();
     }
 

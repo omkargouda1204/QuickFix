@@ -102,6 +102,21 @@
                         android:textColor="#E0FFFFFF"
                         android:textSize="13sp" />
 
+                    <!-- Req 5: User Location (City + Pincode) -->
+                    <TextView
+                        android:id="@+id/tvUserLocation"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text=""
+                        android:textColor="#E0FFFFFF"
+                        android:textSize="13sp"
+                        app:drawableStartCompat="@drawable/ic_location"
+                        android:drawablePadding="6dp"
+                        app:drawableTint="#E0FFFFFF"
+                        android:gravity="center_vertical"
+                        android:visibility="gone" />
+
                     <TextView
                         android:id="@+id/tvRoleBadge"
                         android:layout_width="wrap_content"
@@ -453,6 +468,7 @@
                                     android:contentDescription="@string/profile_admin_dashboard" />
                             </FrameLayout>
                             <TextView
+                                android:id="@+id/tvAdminDashboardLabel"
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -494,6 +510,7 @@
                                     android:contentDescription="@string/profile_provider_dashboard" />
                             </FrameLayout>
                             <TextView
+                                android:id="@+id/tvProviderDashboardLabel"
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"

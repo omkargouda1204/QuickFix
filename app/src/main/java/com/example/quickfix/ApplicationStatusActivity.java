@@ -55,7 +55,27 @@ public class ApplicationStatusActivity extends BaseActivity {
 
         setupToolbar();
         bindViews();
+        
+        // Show cached status for fast UI
+        showCachedStatus();
+        
         loadStatus();
+    }
+
+    private void showCachedStatus() {
+        android.content.SharedPreferences prefs = getSharedPreferences("app_status_prefs", MODE_PRIVATE);
+        String cachedStatus = prefs.getString("last_status", "");
+        if (!cachedStatus.isEmpty()) {
+            // Optionally show some indicator that this is cached data
+            Log.d(TAG, "Showing cached status: " + cachedStatus);
+            // We can't fully populate UI without the full app object, 
+            // but we can at least show a partial state if we cached the whole JSON.
+        }
+    }
+
+    private void saveStatusToCache(String status) {
+        android.content.SharedPreferences prefs = getSharedPreferences("app_status_prefs", MODE_PRIVATE);
+        prefs.edit().putString("last_status", status).apply();
     }
 
     @Override
@@ -99,6 +119,29 @@ public class ApplicationStatusActivity extends BaseActivity {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) { finish(); return; }
 
+        // 1. Check if user is ALREADY a provider in provider_profiles
+        ProviderApplicationRepository.checkProfileExists(user.getUid(),
+                new ProviderApplicationRepository.ProviderExistsCallback() {
+                    @Override
+                    public void onExists() {
+                        showLoading(false);
+                        showAlreadyProviderState();
+                    }
+
+                    @Override
+                    public void onNotExists() {
+                        // 2. Not a profile yet, check their latest application
+                        fetchLatestApplication(user);
+                    }
+
+                    @Override
+                    public void onError(String msg) {
+                        fetchLatestApplication(user);
+                    }
+                });
+    }
+
+    private void fetchLatestApplication(FirebaseUser user) {
         ProviderApplicationRepository.fetchApplicationFull(user.getUid(),
                 new ProviderApplicationRepository.ApplicationCallback() {
                     @Override public void onFound(ProviderApplication app) {
@@ -120,7 +163,7 @@ public class ApplicationStatusActivity extends BaseActivity {
     }
 
     private void populateUI(ProviderApplication app, FirebaseUser user) {
-        // Common fields
+        // ... (existing code remains same) ...
         setText(tvBusinessName, app.businessName);
         setText(tvCategory,     app.category);
         String location = (app.area != null && !app.area.isEmpty()) ? app.area : app.city;
@@ -131,14 +174,38 @@ public class ApplicationStatusActivity extends BaseActivity {
 
         switch (status) {
             case "approved":
+                saveStatusToCache("approved");
                 showApprovedState();
                 break;
             case "rejected":
+                saveStatusToCache("rejected");
                 showRejectedState(app, user.getUid());
                 break;
             default: // pending or unknown
+                saveStatusToCache(status);
                 showPendingState();
                 break;
+        }
+    }
+
+    // ── ALREADY PROVIDER ──────────────────────────────────────────────────
+    private void showAlreadyProviderState() {
+        applyBadge("PROVIDER", R.color.success_text, R.color.success_bg);
+        setText(tvStatusTitle,    "You are already a provider");
+        setText(tvStatusSubtitle, "Manage your business and services from your dashboard.");
+
+        if (layoutRejectionSection != null) layoutRejectionSection.setVisibility(View.GONE);
+        if (layoutCountdown        != null) layoutCountdown.setVisibility(View.GONE);
+        if (layoutApprovedInfo     != null) layoutApprovedInfo.setVisibility(View.VISIBLE);
+
+        if (statusIconView != null) statusIconView.setBackgroundResource(R.drawable.bg_status_approved);
+
+        if (btnAction != null) {
+            btnAction.setText("Go to Provider Dashboard");
+            btnAction.setOnClickListener(v -> {
+                startActivity(new Intent(this, ProviderDashboardActivity.class));
+                finish();
+            });
         }
     }
 

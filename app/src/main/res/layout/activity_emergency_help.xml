@@ -299,7 +299,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Accurate location is required to find active providers within 30 km."
+                    android:text="Accurate GPS location is required to find nearby providers within 25 km."
             android:textColor="@color/text_secondary"
             android:textSize="12sp" />
 
@@ -308,7 +308,7 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="10dp"
-            android:text="Select or Enable Location"
+            android:text="Select Location"
             android:textAllCaps="false"
             app:cornerRadius="14dp"
             app:icon="@drawable/ic_my_location"

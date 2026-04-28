@@ -706,6 +706,8 @@ public class ProviderOnboardingActivity extends BaseActivity {
                 address,
                 city,
                 "", // area not collected
+                "", // pincode not collected
+                address, // fullAddress (fallback to address)
                 String.valueOf(experienceYrs),
                 bizImgUrl,
                 idProofUrl,

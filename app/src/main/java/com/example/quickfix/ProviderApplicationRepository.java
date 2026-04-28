@@ -89,6 +89,8 @@ public class ProviderApplicationRepository {
             String address,
             String city,
             String area,
+            String pincode,
+            String fullAddress,
             String experience,
             String businessImageUrl,
             String idProofUrl,
@@ -139,6 +141,7 @@ public class ProviderApplicationRepository {
 
                 JSONObject body = new JSONObject();
                 body.put("firebase_uid",        firebaseUid);
+                body.put("owner_name",         name != null ? name.trim() : "");
                 body.put("user_name",           name != null ? name.trim() : "");
                 body.put("user_email",          email != null ? email.trim() : "");
                 body.put("user_phone",          phone != null ? phone.trim() : "");
@@ -147,18 +150,20 @@ public class ProviderApplicationRepository {
                 body.put("description",         description != null ? description.trim() : "");
                 body.put("address",             address != null ? address.trim() : "");
                 body.put("city",                city != null ? city.trim() : "");
-                body.put("area",                area != null ? area.trim() : "");
+                body.put("pincode",             pincode != null ? pincode.trim() : "");
+                body.put("full_address",        fullAddress != null ? fullAddress.trim() : "");
                 
                 int expYrs = 0;
                 try { expYrs = Integer.parseInt(experience != null ? experience.trim() : "0"); } catch (Exception ignored) {}
                 body.put("experience_yrs",      expYrs);
                 body.put("terms_accepted",      true);
+                body.put("phone",               phone != null ? phone.trim() : "");
                 body.put("status",              autoApprove ? "approved" : "pending");
                 body.put("submitted_at",        timestamp);
                 
                 if (latitude != null && !latitude.isNaN()) {
                     body.put("latitude", latitude);
-                    body.put("lat", latitude); // duplication for safety
+                    body.put("lat", latitude);
                 }
                 if (longitude != null && !longitude.isNaN()) {
                     body.put("longitude", longitude);
@@ -338,6 +343,8 @@ public class ProviderApplicationRepository {
                                     app.city = dbApp.city;
                                 if (app.area == null || app.area.isEmpty())
                                     app.area = dbApp.area;
+                                if (app.pincode == null || app.pincode.isEmpty())
+                                    app.pincode = dbApp.pincode;
                                 if (Double.isNaN(app.latitude))
                                     app.latitude = dbApp.latitude;
                                 if (Double.isNaN(app.longitude))
@@ -378,6 +385,7 @@ public class ProviderApplicationRepository {
                 putSafe(profile, "category",      app.category);
                 putSafe(profile, "city",          app.city);
                 putSafe(profile, "area",          app.area);
+                putSafe(profile, "pincode",       app.pincode);
                 if (!Double.isNaN(app.latitude)) {
                     profile.put("latitude", app.latitude);
                     profile.put("lat", app.latitude);
@@ -436,6 +444,7 @@ public class ProviderApplicationRepository {
                         putSafe(minProfile, "category",      app.category);
                         putSafe(minProfile, "city",          app.city);
                         putSafe(minProfile, "area",          app.area);
+                        putSafe(minProfile, "pincode",       app.pincode);
                         if (!Double.isNaN(app.latitude)) minProfile.put("latitude", app.latitude);
                         if (!Double.isNaN(app.longitude)) minProfile.put("longitude", app.longitude);
                         minProfile.put("status",      "active");
@@ -778,6 +787,33 @@ public class ProviderApplicationRepository {
                 }
             } catch (Exception e) {
                 MAIN.post(callback::onNotExists); // non-fatal
+            }
+        }).start();
+    }
+
+    public static void checkProfileExists(String firebaseUid, ProviderExistsCallback callback) {
+        new Thread(() -> {
+            try {
+                String url = SUPABASE_URL + "/rest/v1/provider_profiles"
+                        + "?firebase_uid=eq." + firebaseUid
+                        + "&select=id&limit=1";
+                Request req = new Request.Builder().url(url).get()
+                        .addHeader("apikey",        ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept",        "application/json")
+                        .build();
+                try (Response r = HTTP.newCall(req).execute()) {
+                    String b = r.body() != null ? r.body().string() : "[]";
+                    if (r.code() == 200) {
+                        JSONArray arr = new JSONArray(b);
+                        if (arr.length() > 0) MAIN.post(callback::onExists);
+                        else                  MAIN.post(callback::onNotExists);
+                    } else {
+                        MAIN.post(callback::onNotExists);
+                    }
+                }
+            } catch (Exception e) {
+                MAIN.post(callback::onNotExists);
             }
         }).start();
     }

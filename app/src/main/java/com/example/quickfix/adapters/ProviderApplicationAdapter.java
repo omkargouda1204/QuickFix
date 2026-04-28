@@ -108,7 +108,12 @@ public class ProviderApplicationAdapter
             set(tvEmail,        str(app.email).isEmpty() ? "-" : str(app.email));
             set(tvPhone,        str(app.phone).isEmpty() ? "-" : str(app.phone));
             set(tvCategory,     str(app.category));
-            set(tvCity,         str(app.city));
+            
+            // Req 5: show city + pincode on card
+            String loc = str(app.city);
+            if (!str(app.pincode).isEmpty()) loc += " - " + app.pincode;
+            set(tvCity,         loc);
+
             set(tvExperience,   expText(app.experience));
             set(tvDate,         "Applied: " + fmtDate(app.submittedAt));
 

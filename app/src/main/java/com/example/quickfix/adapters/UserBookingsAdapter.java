@@ -94,7 +94,10 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             }
             tvServiceName.setText(serviceTitle);
             
-            String pName = b.providerName == null || b.providerName.isEmpty() ? "Provider" : b.providerName;
+            String pName = b.providerName;
+            if (pName == null || pName.isEmpty() || "null".equalsIgnoreCase(pName) || "Awaiting Acceptance".equalsIgnoreCase(pName)) {
+                pName = "Waiting for provider...";
+            }
             tvProviderName.setText("By: " + pName);
             tvProviderName.setOnClickListener(v -> {
                 if (listener != null) listener.onProviderClick(b);
