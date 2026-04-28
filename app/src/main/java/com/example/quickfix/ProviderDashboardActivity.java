@@ -41,8 +41,11 @@ public class ProviderDashboardActivity extends BaseActivity {
     private TextView providerNameText, providerEmailText;
     private TextView tvStatsBookings, tvStatsRating, tvStatsEarnings;
     private CardView cardMyBookings, cardEarnings, cardProfile;
+    private CardView cardRating;
     private com.google.android.material.button.MaterialButton btnBackToHome;
     private FirebaseAuth mAuth;
+
+    private String providerProfileIdForDashboard = "";
 
     private final OkHttpClient http = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -98,6 +101,7 @@ public class ProviderDashboardActivity extends BaseActivity {
         cardMyBookings = findViewById(R.id.cardMyBookings);
         cardEarnings = findViewById(R.id.cardEarnings);
         cardProfile = findViewById(R.id.cardProfile);
+        cardRating = findViewById(R.id.cardRating);
         btnBackToHome = findViewById(R.id.btnBackToHome);
     }
 
@@ -144,6 +148,8 @@ public class ProviderDashboardActivity extends BaseActivity {
                     providerProfileId = p.optString("id", "").trim();
                     rating = (float) p.optDouble("rating", 0d);
                 }
+
+                providerProfileIdForDashboard = providerProfileId;
 
                 JSONArray bookingArr = getProviderBookings(providerProfileId, uid);
                 for (int i = 0; i < bookingArr.length(); i++) {
@@ -265,6 +271,9 @@ public class ProviderDashboardActivity extends BaseActivity {
         if (cardProfile != null)
             cardProfile.setOnClickListener(v -> startActivity(new Intent(this, BusinessProfileActivity.class)));
 
+        if (cardRating != null)
+            cardRating.setOnClickListener(v -> openProviderReviews());
+
         if (btnBackToHome != null)
             btnBackToHome.setOnClickListener(v -> {
                 // Provider is also a user — go back to home screen
@@ -273,6 +282,18 @@ public class ProviderDashboardActivity extends BaseActivity {
                 startActivity(i);
                 finish();
             });
+    }
+
+    private void openProviderReviews() {
+        FirebaseUser user = mAuth.getCurrentUser();
+        if (user == null) return;
+
+        Intent intent = new Intent(this, ProviderReviewsActivity.class);
+        intent.putExtra(ProviderReviewsActivity.EXTRA_PROVIDER_UID, user.getUid());
+        if (providerProfileIdForDashboard != null && !providerProfileIdForDashboard.isEmpty()) {
+            intent.putExtra(ProviderReviewsActivity.EXTRA_PROVIDER_ID, providerProfileIdForDashboard);
+        }
+        startActivity(intent);
     }
 
     private void goBackToHome() {

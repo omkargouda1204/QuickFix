@@ -142,10 +142,13 @@
 
                 <!-- Rating stat -->
                 <androidx.cardview.widget.CardView
+                    android:id="@+id/cardRating"
                     android:layout_width="0dp"
                     android:layout_height="80dp"
                     android:layout_marginEnd="8dp"
                     android:layout_weight="1"
+                    android:clickable="true"
+                    android:focusable="true"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="3dp">
                     <LinearLayout

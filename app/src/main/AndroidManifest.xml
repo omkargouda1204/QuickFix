@@ -322,6 +322,12 @@
             android:parentActivityName=".ProviderDashboardActivity"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Provider Reviews Activity -->
+        <activity
+            android:name=".ProviderReviewsActivity"
+            android:exported="false"
+            android:parentActivityName=".ProviderDashboardActivity" />
+
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- FCM SERVICE — handles token refresh & incoming push messages   -->
         <!-- Token is stored silently in Supabase; NEVER shown in the UI    -->

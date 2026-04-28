@@ -99,13 +99,6 @@ public class SearchResultsAdapter extends RecyclerView.Adapter<SearchResultsAdap
 
         h.tvName.setText(r.name == null ? "" : r.name.trim());
 
-        String subtitle = r.subtitle == null ? "" : r.subtitle.trim();
-        h.tvSubtitle.setText(subtitle);
-
-        String city = r.city == null ? "" : r.city.trim();
-        h.tvCity.setText(city);
-        h.tvCity.setVisibility(city.isEmpty() ? View.GONE : View.VISIBLE);
-
         if (r.profileImage != null && !r.profileImage.trim().isEmpty()) {
             Glide.with(ctx)
                     .load(r.profileImage)
@@ -116,31 +109,14 @@ public class SearchResultsAdapter extends RecyclerView.Adapter<SearchResultsAdap
             h.ivIcon.setImageResource(R.drawable.ic_business);
         }
 
-        h.tvType.setBackgroundResource(R.drawable.bg_role_badge_provider);
-        h.tvType.setTextColor(0xFF2E7D32);
-        String typeLabel = SearchResult.TYPE_SERVICE.equals(r.type) ? "Service" : "Provider";
-        h.tvType.setText(typeLabel);
-        h.ivVerified.setVisibility(r.isVerified ? View.VISIBLE : View.GONE);
-
-        h.tvAvailability.setVisibility(View.VISIBLE);
-
-        boolean hasRating = r.rating > 0f;
-        h.tvRating.setVisibility(hasRating ? View.VISIBLE : View.GONE);
-        h.tvRating.setText(hasRating ? "★ " + String.format(Locale.getDefault(), "%.1f", r.rating) : "");
-
-        boolean hasDistance = r.distanceKm >= 0f;
-        h.tvDistance.setVisibility(hasDistance ? View.VISIBLE : View.GONE);
-        h.tvDistance.setText(hasDistance
-                ? String.format(Locale.getDefault(), "• %.1f km", r.distanceKm)
-                : "");
-
-        h.tvAvailability.setText((r.availabilityStatus == null || r.availabilityStatus.isEmpty())
-                ? "Available"
-                : r.availabilityStatus);
-
-        boolean hasPrice = r.priceText != null && !r.priceText.trim().isEmpty();
-        h.tvPrice.setVisibility(hasPrice ? View.VISIBLE : View.GONE);
-        h.tvPrice.setText(hasPrice ? r.priceText.trim() : "");
+        h.ivVerified.setVisibility(View.GONE);
+        h.tvSubtitle.setVisibility(View.GONE);
+        h.tvCity.setVisibility(View.GONE);
+        h.tvType.setVisibility(View.GONE);
+        h.tvRating.setVisibility(View.GONE);
+        h.tvDistance.setVisibility(View.GONE);
+        h.tvAvailability.setVisibility(View.GONE);
+        h.tvPrice.setVisibility(View.GONE);
 
         h.itemView.setOnClickListener(v -> { if (listener != null) listener.onResultClick(r); });
     }

@@ -21,6 +21,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.content.ContextCompat;
+import androidx.core.widget.NestedScrollView;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
@@ -59,7 +60,7 @@ public class ProviderDetailActivity extends BaseActivity {
     private static final String TAG = "ProviderDetail";
     private static final int SECTION_CONTACT = 0;
     private static final int SECTION_ABOUT = 1;
-    private static final int SECTION_REVIEWS = 2;
+    public static final int SECTION_REVIEWS = 2;
     private static final int SECTION_SHOWCASE = 3;
 
     public static final String EXTRA_PROVIDER_ID  = "provider_id";
@@ -77,6 +78,7 @@ public class ProviderDetailActivity extends BaseActivity {
     public static final String EXTRA_IS_VERIFIED  = "is_verified";
     public static final String EXTRA_RATING       = "rating";
     public static final String EXTRA_OPEN_BOOKING = "open_booking";
+    public static final String EXTRA_OPEN_SECTION = "open_section";
 
     private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
@@ -174,6 +176,14 @@ public class ProviderDetailActivity extends BaseActivity {
         boolean isVerified = i.getBooleanExtra(EXTRA_IS_VERIFIED, false);
         float   rating     = i.getFloatExtra(EXTRA_RATING, 0f);
         boolean openBooking= i.getBooleanExtra(EXTRA_OPEN_BOOKING, false);
+        int openSection    = i.getIntExtra(EXTRA_OPEN_SECTION, -1);
+
+        if (openSection == SECTION_CONTACT
+                || openSection == SECTION_ABOUT
+                || openSection == SECTION_REVIEWS
+                || openSection == SECTION_SHOWCASE) {
+            selectedSection = openSection;
+        }
 
         providerName = businessName != null ? businessName : "";
 
@@ -248,6 +258,17 @@ public class ProviderDetailActivity extends BaseActivity {
             ratingRow.setVisibility(View.GONE);
         }
 
+        if (ratingRow != null) {
+            ratingRow.setOnClickListener(v -> {
+                selectSection(SECTION_REVIEWS);
+                View reviewsCard = findViewById(R.id.cardRecentReviews);
+                NestedScrollView scroll = findViewById(R.id.providerDetailScroll);
+                if (scroll != null && reviewsCard != null) {
+                    scroll.post(() -> scroll.smoothScrollTo(0, reviewsCard.getTop()));
+                }
+            });
+        }
+
         // Phone
         LinearLayout rowPhone = findViewById(R.id.rowPhone);
         if (phone != null && !phone.isEmpty()) {
@@ -278,7 +299,14 @@ public class ProviderDetailActivity extends BaseActivity {
 
         // Book button
         MaterialButton btnBook = findViewById(R.id.btnDetailBook);
-        btnBook.setOnClickListener(v -> showBookingDialog());
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        boolean isSelf = currentUser != null && isSelfBookingByUid(currentUser.getUid());
+        if (btnBook != null) {
+            btnBook.setVisibility(isSelf ? View.GONE : View.VISIBLE);
+            if (!isSelf) {
+                btnBook.setOnClickListener(v -> showBookingDialog());
+            }
+        }
     }
 
     private void openChat() {
@@ -302,6 +330,10 @@ public class ProviderDetailActivity extends BaseActivity {
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
         if (currentUser == null) {
             Toast.makeText(this, getString(R.string.provider_detail_login_to_book), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (isSelfBookingByUid(currentUser.getUid())) {
+            Toast.makeText(this, getString(R.string.provider_self_booking_blocked), Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -425,6 +457,13 @@ public class ProviderDetailActivity extends BaseActivity {
                 if (providerIdForInsert.isEmpty()) {
                     mainHandler.post(() -> Toast.makeText(ProviderDetailActivity.this,
                             getString(R.string.provider_detail_booking_failed_provider_missing), Toast.LENGTH_LONG).show());
+                    return;
+                }
+
+                String currentProviderProfileId = normalizeUuidOrEmpty(fetchProviderProfileIdByFirebaseUid(customerId));
+                if (!currentProviderProfileId.isEmpty() && currentProviderProfileId.equals(providerIdForInsert)) {
+                    mainHandler.post(() -> Toast.makeText(ProviderDetailActivity.this,
+                            getString(R.string.provider_self_booking_blocked), Toast.LENGTH_SHORT).show());
                     return;
                 }
 
@@ -994,6 +1033,13 @@ public class ProviderDetailActivity extends BaseActivity {
 
     private String notEmpty(String val, String fallback) {
         return (val != null && !val.trim().isEmpty()) ? val.trim() : fallback;
+    }
+
+    private boolean isSelfBookingByUid(String currentUid) {
+        if (currentUid == null || currentUid.trim().isEmpty()) return false;
+        String uid = currentUid.trim();
+        if (providerFirebaseUid != null && uid.equals(providerFirebaseUid.trim())) return true;
+        return providerIdForBooking != null && uid.equals(providerIdForBooking.trim());
     }
 
     private int dp(int value) {

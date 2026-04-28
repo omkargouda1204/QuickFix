@@ -171,9 +171,10 @@ public class EarningsActivity extends BaseActivity {
 
     private void loadEarningsByProviderId() {
         String encodedUid = encodeValue(providerFirebaseUid);
+        
+        // Use select=* or ensure all columns are correct to avoid HTTP 400 (Invalid Column)
         String url = SUPABASE_URL + "/rest/v1/bookings"
-                + "?select=id,customer_name,customer_phone,provider_name,service_name,category,"
-                + "booking_date,booking_time,address,city,price,status,created_at,completed_at,description"
+                + "?select=*"
                 + "&order=created_at.desc";
 
         if (providerProfileId != null && !providerProfileId.isEmpty()) {
@@ -243,35 +244,38 @@ public class EarningsActivity extends BaseActivity {
                 Booking booking = Booking.fromJson(arr.getJSONObject(i));
                 if (booking == null) continue;
 
-                String status = booking.status == null ? "" : booking.status.trim().toLowerCase(Locale.US);
-                if (!("paid".equals(status) || "completed".equals(status))) {
+                if (isCancelled(booking)) {
                     continue;
                 }
 
-                double amount = booking.price > 0 ? booking.price : booking.paymentAmount;
+                double amount = booking.finalAmount > 0 ? booking.finalAmount
+                        : (booking.paymentAmount > 0 ? booking.paymentAmount : booking.price);
                 booking.price = amount;
 
                 completedBookings.add(booking);
-                totalEarnings += amount;
-                completedCount++;
 
-                String dateToCheck = booking.completedAt;
-                if (dateToCheck == null || dateToCheck.isEmpty()) {
-                    dateToCheck = booking.createdAt;
-                }
+                if (isSuccessful(booking)) {
+                    totalEarnings += amount;
+                    completedCount++;
 
-                if (dateToCheck != null && !dateToCheck.isEmpty() && dateToCheck.length() >= 10) {
-                    try {
-                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-                        Calendar bookingCal = Calendar.getInstance();
-                        bookingCal.setTime(sdf.parse(dateToCheck.substring(0, 10)));
+                    String dateToCheck = booking.completedAt;
+                    if (dateToCheck == null || dateToCheck.isEmpty()) {
+                        dateToCheck = booking.createdAt;
+                    }
 
-                        if (bookingCal.get(Calendar.MONTH) == currentMonth
-                                && bookingCal.get(Calendar.YEAR) == currentYear) {
-                            monthEarnings += amount;
+                    if (dateToCheck != null && !dateToCheck.isEmpty() && dateToCheck.length() >= 10) {
+                        try {
+                            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+                            Calendar bookingCal = Calendar.getInstance();
+                            bookingCal.setTime(sdf.parse(dateToCheck.substring(0, 10)));
+
+                            if (bookingCal.get(Calendar.MONTH) == currentMonth
+                                    && bookingCal.get(Calendar.YEAR) == currentYear) {
+                                monthEarnings += amount;
+                            }
+                        } catch (Exception e) {
+                            Log.e(TAG, "Date parse error: " + e.getMessage());
                         }
-                    } catch (Exception e) {
-                        Log.e(TAG, "Date parse error: " + e.getMessage());
                     }
                 }
             }
@@ -293,6 +297,37 @@ public class EarningsActivity extends BaseActivity {
             Log.e(TAG, "Parse error: " + e.getMessage());
             Toast.makeText(this, "Error parsing earnings data", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private boolean isSuccessful(Booking booking) {
+        String status = normalize(booking.status);
+        String payment = normalize(booking.paymentStatus);
+        return "paid".equals(status)
+                || "completed".equals(status)
+                || "done".equals(status)
+                || "success".equals(status)
+                || "paid".equals(payment)
+                || "success".equals(payment);
+    }
+
+    private boolean isCancelled(Booking booking) {
+        String status = normalize(booking.status);
+        String payment = normalize(booking.paymentStatus);
+        return "cancelled".equals(status)
+                || "canceled".equals(status)
+                || "failed".equals(status)
+                || "cancelled".equals(payment)
+                || "canceled".equals(payment)
+                || "failed".equals(payment);
+    }
+
+    private boolean hasAmount(Booking booking) {
+        if (booking == null) return false;
+        return booking.finalAmount > 0 || booking.paymentAmount > 0 || booking.price > 0;
+    }
+
+    private String normalize(String raw) {
+        return raw == null ? "" : raw.trim().toLowerCase(Locale.US);
     }
 
     private String encodeValue(String raw) {
