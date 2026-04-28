@@ -3,7 +3,7 @@
 
 -- API role access
 grant usage on schema public to anon, authenticated;
-grant select, insert, update on table public.provider_reviews to anon, authenticated;
+grant select, insert, update, delete on table public.provider_reviews to anon, authenticated;
 
 -- RLS policies for app reads/writes
 alter table public.provider_reviews enable row level security;
@@ -35,6 +35,13 @@ with check (
     rating between 1 and 5
     and char_length(comment) <= 500
 );
+
+drop policy if exists provider_reviews_delete_all on public.provider_reviews;
+create policy provider_reviews_delete_all
+on public.provider_reviews
+for delete
+to anon, authenticated
+using (true);
 
 -- Triggered profile rating sync should not depend on anon update rights.
 create or replace function public.refresh_provider_profile_rating(p_provider_id text)
@@ -89,4 +96,3 @@ begin
     return new;
 end;
 $$;
-

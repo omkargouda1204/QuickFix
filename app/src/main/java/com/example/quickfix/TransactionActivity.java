@@ -23,6 +23,7 @@ import org.json.JSONArray;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -125,7 +126,8 @@ public class TransactionActivity extends BaseActivity {
 
                 try (Response r = HTTP.newCall(req).execute()) {
                     if (r.isSuccessful() && r.body() != null) {
-                        JSONArray arr = new JSONArray(r.body().string());
+                        String responseBody = r.body().string();
+                        JSONArray arr = new JSONArray(responseBody);
                         if (arr.length() > 0) {
                             userDbId = arr.getJSONObject(0).optString("id", "");
                         }
@@ -146,21 +148,20 @@ public class TransactionActivity extends BaseActivity {
 
     private void loadTransactions() {
         showLoading(true);
-        adapter.setTransactions(new ArrayList<>());
         new Thread(() -> {
             try {
-                // Requirement: Use logged-in user UID (userId), not email.
                 String uid = userId == null ? "" : userId.trim();
+                String dbId = userDbId == null ? "" : userDbId.trim();
 
-                // Fetch bookings where customer_id matches the UID and payment_status is 'success'
+                // Fetch all bookings for this user to ensure we don't miss anything.
+                // We use an OR filter for the customer ID (Firebase UID or Supabase ID).
                 String url = BASE_URL + "/rest/v1/bookings"
                         + "?select=*"
-                        + "&customer_id=eq." + android.net.Uri.encode(uid)
-                        + "&payment_status=eq.success"
+                        + "&or=(customer_id.eq." + android.net.Uri.encode(uid) 
+                        + ",customer_id.eq." + android.net.Uri.encode(dbId) + ")"
                         + "&order=created_at.desc";
 
-                Log.d(TAG, "Transaction Fetch -> UID used: [" + uid + "]");
-                Log.d(TAG, "Transaction Fetch -> URL: " + url);
+                Log.d(TAG, "Transaction Fetch URL: " + url);
 
                 Request req = new Request.Builder().url(url)
                         .get()
@@ -171,15 +172,14 @@ public class TransactionActivity extends BaseActivity {
 
                 try (Response r = HTTP.newCall(req).execute()) {
                     String body = r.body() != null ? r.body().string() : "[]";
-                    Log.d(TAG, "Transaction Fetch -> Code: " + r.code());
-                    Log.d(TAG, "Transaction Fetch -> Response Body: " + body);
+                    Log.d(TAG, "Transaction Fetch HTTP " + r.code() + " | Body: " + body);
                     
                     if (r.isSuccessful()) {
                         JSONArray arr = new JSONArray(body);
                         List<Booking> list = new ArrayList<>();
                         for (int i = 0; i < arr.length(); i++) {
                             Booking booking = Booking.fromJson(arr.getJSONObject(i));
-                            if (booking != null) {
+                            if (booking != null && isTransaction(booking)) {
                                 list.add(booking);
                             }
                         }
@@ -190,7 +190,7 @@ public class TransactionActivity extends BaseActivity {
                             showLoading(false);
                         });
                     } else {
-                        Log.e(TAG, "Failed to load transactions: " + r.code());
+                        Log.e(TAG, "Failed to load transactions: " + r.code() + " | " + body);
                         MAIN.post(() -> {
                             showEmptyState(true);
                             showLoading(false);
@@ -208,11 +208,30 @@ public class TransactionActivity extends BaseActivity {
             }
         }).start();
     }
-    
-    private boolean isValidTransaction(Booking booking) {
-        return booking != null && "success".equals(booking.getPaymentStatus());
+
+    /**
+     * Define what constitutes a "transaction" in the history.
+     * We broaden this to include anything that has been accepted or paid.
+     */
+    private boolean isTransaction(Booking booking) {
+        if (booking == null) return false;
+        String status = normalize(booking.status);
+        String payment = normalize(booking.paymentStatus);
+        
+        return "paid".equals(status)
+                || "completed".equals(status)
+                || "done".equals(status)
+                || "success".equals(status)
+                || "accepted".equals(status)
+                || "price_set".equals(status)
+                || "paid".equals(payment)
+                || "success".equals(payment);
     }
 
+    private String normalize(String raw) {
+        return raw == null ? "" : raw.trim().toLowerCase(Locale.US);
+    }
+    
     private void showEmptyState(boolean show) {
         if (emptyState != null) {
             emptyState.setVisibility(show ? View.VISIBLE : View.GONE);
@@ -231,4 +250,3 @@ public class TransactionActivity extends BaseActivity {
         if (progressBar != null) progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 }
-
