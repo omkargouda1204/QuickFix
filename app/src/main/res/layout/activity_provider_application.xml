@@ -53,6 +53,7 @@
                     android:paddingStart="14dp">
 
                     <TextView
+                        android:id="@+id/tvHeaderTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Become a Service Provider"
@@ -375,56 +376,19 @@
 
                     <!-- Location Selection -->
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Service Location *" android:textColor="@color/text_primary"
+                        android:text="Business Location *" android:textColor="@color/text_primary"
                         android:textSize="13sp" android:textStyle="bold" android:layout_marginBottom="10dp" />
 
-                    <LinearLayout
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSetBusinessLocation"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginBottom="12dp">
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnLiveLocation"
-                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                            android:layout_width="0dp"
-                            android:layout_height="52dp"
-                            android:layout_weight="1"
-                            android:text="Use GPS"
-                            app:icon="@drawable/ic_location"
-                            app:cornerRadius="12dp"
-                            android:textAllCaps="false" />
-
-                        <Space android:layout_width="12dp" android:layout_height="wrap_content" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnManualLocation"
-                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                            android:layout_width="0dp"
-                            android:layout_height="52dp"
-                            android:layout_weight="1"
-                            android:text="Manual"
-                            app:icon="@drawable/ic_city"
-                            app:cornerRadius="12dp"
-                            android:textAllCaps="false" />
-                    </LinearLayout>
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/layoutCity"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                        android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:layout_marginBottom="10dp"
-                        app:startIconDrawable="@drawable/ic_city" app:startIconTint="@color/accent_teal"
-                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp"
-                        app:hintTextColor="@color/accent_teal" android:hint="City / Area Name">
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etCity"
-                            android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:textColor="@color/text_primary" android:textColorHint="@color/input_hint"
-                            android:textSize="15sp" android:inputType="textCapWords"
-                            android:imeOptions="actionNext" />
-                    </com.google.android.material.textfield.TextInputLayout>
+                        android:layout_height="52dp"
+                        android:text="Set Business Location"
+                        app:icon="@drawable/ic_location"
+                        app:cornerRadius="12dp"
+                        android:textAllCaps="false"
+                        android:layout_marginBottom="12dp" />
 
                     <LinearLayout
                         android:id="@+id/layoutLocationDisplay"
@@ -440,17 +404,18 @@
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:src="@drawable/ic_location"
-                            app:tint="@color/primary" />
+                            app:tint="@color/primary"
+                            android:contentDescription="Location Icon" />
                         <TextView
                             android:id="@+id/tvSelectedLocationLabel"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:layout_marginStart="10dp"
-                            android:text="Location: Shediguri"
+                            android:text="Thodar"
                             android:textColor="@color/primary"
                             android:textStyle="bold"
-                            android:textSize="13sp" />
+                            android:textSize="14sp" />
                     </LinearLayout>
 
                     <!-- Years of Experience -->
@@ -559,8 +524,8 @@
                             android:textColor="@color/warning_text" android:textSize="12sp" android:textStyle="bold" />
                     </LinearLayout>
 
-                    <!-- Terms ScrollView -->
-                    <ScrollView
+                    <!-- Terms NestedScrollView -->
+                    <androidx.core.widget.NestedScrollView
                         android:id="@+id/termsScrollView"
                         android:layout_width="match_parent"
                         android:layout_height="220dp"
@@ -578,7 +543,7 @@
                             android:textSize="13sp"
                             android:lineSpacingMultiplier="1.6"
                             android:text="@string/provider_terms_full" />
-                    </ScrollView>
+                    </androidx.core.widget.NestedScrollView>
 
                     <!-- Checkbox -->
                     <com.google.android.material.checkbox.MaterialCheckBox

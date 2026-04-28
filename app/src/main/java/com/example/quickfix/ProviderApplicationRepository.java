@@ -88,6 +88,7 @@ public class ProviderApplicationRepository {
             String description,
             String address,
             String city,
+            String area,
             String experience,
             String businessImageUrl,
             String idProofUrl,
@@ -97,7 +98,7 @@ public class ProviderApplicationRepository {
 
         new Thread(() -> {
             try {
-                // ── 1. Duplicate check ────────────────────────────────────
+                // ... (duplicate check remains same) ...
                 String checkUrl = SUPABASE_URL
                         + "/rest/v1/provider_applications"
                         + "?firebase_uid=eq." + firebaseUid
@@ -146,6 +147,8 @@ public class ProviderApplicationRepository {
                 body.put("description",         description != null ? description.trim() : "");
                 body.put("address",             address != null ? address.trim() : "");
                 body.put("city",                city != null ? city.trim() : "");
+                body.put("area",                area != null ? area.trim() : "");
+                
                 int expYrs = 0;
                 try { expYrs = Integer.parseInt(experience != null ? experience.trim() : "0"); } catch (Exception ignored) {}
                 body.put("experience_yrs",      expYrs);
@@ -153,8 +156,14 @@ public class ProviderApplicationRepository {
                 body.put("status",              autoApprove ? "approved" : "pending");
                 body.put("submitted_at",        timestamp);
                 
-                if (latitude != null && !latitude.isNaN()) body.put("latitude", latitude);
-                if (longitude != null && !longitude.isNaN()) body.put("longitude", longitude);
+                if (latitude != null && !latitude.isNaN()) {
+                    body.put("latitude", latitude);
+                    body.put("lat", latitude); // duplication for safety
+                }
+                if (longitude != null && !longitude.isNaN()) {
+                    body.put("longitude", longitude);
+                    body.put("lng", longitude);
+                }
 
                 if (autoApprove) {
                     body.put("approved_at", timestamp);
@@ -327,6 +336,12 @@ public class ProviderApplicationRepository {
                                     app.category = dbApp.category;
                                 if (app.city == null || app.city.isEmpty())
                                     app.city = dbApp.city;
+                                if (app.area == null || app.area.isEmpty())
+                                    app.area = dbApp.area;
+                                if (Double.isNaN(app.latitude))
+                                    app.latitude = dbApp.latitude;
+                                if (Double.isNaN(app.longitude))
+                                    app.longitude = dbApp.longitude;
                                 if (app.address == null || app.address.isEmpty())
                                     app.address = dbApp.address;
                                 if (app.description == null || app.description.isEmpty())
@@ -362,6 +377,15 @@ public class ProviderApplicationRepository {
                 putSafe(profile, "business_name", app.businessName);
                 putSafe(profile, "category",      app.category);
                 putSafe(profile, "city",          app.city);
+                putSafe(profile, "area",          app.area);
+                if (!Double.isNaN(app.latitude)) {
+                    profile.put("latitude", app.latitude);
+                    profile.put("lat", app.latitude);
+                }
+                if (!Double.isNaN(app.longitude)) {
+                    profile.put("longitude", app.longitude);
+                    profile.put("lng", app.longitude);
+                }
                 putSafe(profile, "address",       app.address   != null ? app.address   : "");
                 putSafe(profile, "description",   app.description != null ? app.description : "");
 
@@ -411,6 +435,9 @@ public class ProviderApplicationRepository {
                         putSafe(minProfile, "email",         email);
                         putSafe(minProfile, "category",      app.category);
                         putSafe(minProfile, "city",          app.city);
+                        putSafe(minProfile, "area",          app.area);
+                        if (!Double.isNaN(app.latitude)) minProfile.put("latitude", app.latitude);
+                        if (!Double.isNaN(app.longitude)) minProfile.put("longitude", app.longitude);
                         minProfile.put("status",      "active");
                         minProfile.put("approved_at", timestamp);
                         Log.d(TAG, "approveApplication fallback INSERT: " + minProfile);

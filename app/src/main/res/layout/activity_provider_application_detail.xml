@@ -236,26 +236,7 @@
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- City -->
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical"
-                        android:layout_marginBottom="14dp">
-                        <ImageView android:layout_width="18dp" android:layout_height="18dp"
-                            android:src="@drawable/ic_city" app:tint="#00897B"
-                            android:layout_marginEnd="12dp" />
-                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                            android:layout_weight="1" android:orientation="vertical">
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="City" android:textColor="@color/text_secondary"
-                                android:textSize="11sp" android:textStyle="bold" />
-                            <TextView android:id="@+id/tvCity"
-                                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:textColor="@color/text_primary" android:textSize="15sp"
-                                android:layout_marginTop="2dp" android:text="-" />
-                        </LinearLayout>
-                    </LinearLayout>
-
-                    <!-- Address -->
+                    <!-- Location / Area -->
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical"
                         android:layout_marginBottom="14dp">
@@ -265,9 +246,9 @@
                         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                             android:layout_weight="1" android:orientation="vertical">
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="Address" android:textColor="@color/text_secondary"
+                                android:text="Business Location" android:textColor="@color/text_secondary"
                                 android:textSize="11sp" android:textStyle="bold" />
-                            <TextView android:id="@+id/tvAddress"
+                            <TextView android:id="@+id/tvArea"
                                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                                 android:textColor="@color/text_primary" android:textSize="15sp"
                                 android:layout_marginTop="2dp" android:text="-" />

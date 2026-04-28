@@ -705,11 +705,12 @@ public class ProviderOnboardingActivity extends BaseActivity {
                 description,
                 address,
                 city,
+                "", // area not collected
                 String.valueOf(experienceYrs),
                 bizImgUrl,
                 idProofUrl,
-                Double.NaN,
-                Double.NaN,
+                null, // latitude
+                null, // longitude
                 new ProviderApplicationRepository.Callback() {
                     @Override
                     public void onSuccess() {

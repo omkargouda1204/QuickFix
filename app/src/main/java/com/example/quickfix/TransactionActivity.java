@@ -153,10 +153,9 @@ public class TransactionActivity extends BaseActivity {
                 String uid = userId == null ? "" : userId.trim();
                 String dbId = userDbId == null ? "" : userDbId.trim();
 
-                // Fetch all bookings for this user to ensure we don't miss anything.
-                // We use an OR filter for the customer ID (Firebase UID or Supabase ID).
+                // Req 5: Fetch service_id from bookings join services to get name
                 String url = BASE_URL + "/rest/v1/bookings"
-                        + "?select=*"
+                        + "?select=*,services(name)"
                         + "&or=(customer_id.eq." + android.net.Uri.encode(uid) 
                         + ",customer_id.eq." + android.net.Uri.encode(dbId) + ")"
                         + "&order=created_at.desc";

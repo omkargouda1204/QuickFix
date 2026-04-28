@@ -12,8 +12,16 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.widget.NestedScrollView;
+import androidx.appcompat.app.AlertDialog;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import androidx.core.app.ActivityCompat;
+import androidx.annotation.NonNull;
+import java.util.List;
+import android.location.Geocoder;
+import android.location.Address;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.checkbox.MaterialCheckBox;
@@ -22,40 +30,30 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import android.widget.TextView;
-import org.json.JSONObject;
-import okhttp3.MediaType;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 import android.util.Log;
 import java.util.Locale;
-import com.google.android.material.textfield.TextInputLayout;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
 
 /**
  * ProviderApplicationActivity — "Become a Service Provider" form.
  *
- * Validators:
- *  • Business Name  : letters/spaces only (no digits, no special chars)
- *  • Phone          : exactly 10 digits
- *  • Experience     : numbers only, 1–99
- *  • Email          : pre-filled from account, read-only
- *  • Terms          : must scroll to bottom first, then tick checkbox
+ * Requirements:
+ *  • Business Location: Set via GPS, converts to area name.
+ *  • Terms & Conditions: Must scroll to bottom to enable checkbox.
+ *  • Validation: Ensure all fields including location are set.
  */
 public class ProviderApplicationActivity extends BaseActivity {
 
     // ── Views ─────────────────────────────────────────────────────────────
     private TextInputLayout  layoutBusinessName, layoutOwnerName, layoutPhone,
-                             layoutEmail, layoutCategory, layoutCity,
+                             layoutEmail, layoutCategory,
                              layoutExperience, layoutDescription;
     private TextInputEditText etBusinessName, etOwnerName, etPhone,
-                              etEmail, etCity, etExperience, etDescription;
+                              etEmail, etExperience, etDescription;
     private AutoCompleteTextView spinnerCategory;
-    private ScrollView       termsScrollView;
-    private View             tvScrollHint;   // now a LinearLayout in XML
+    private NestedScrollView termsScrollView;
+    private View             tvScrollHint;
     private MaterialCheckBox checkboxTerms;
-    private MaterialButton   btnSubmit, btnSuccessHome, btnLiveLocation, btnManualLocation;
+    private MaterialButton   btnSubmit, btnSuccessHome, btnSetBusinessLocation;
     private FrameLayout      successOverlay;
     private LinearLayout     layoutStatusBadge, layoutLocationDisplay;
     private TextView         tvSelectedLocationLabel, tvStepIndicator1, tvStepIndicator2, tvStepIndicator3;
@@ -66,6 +64,8 @@ public class ProviderApplicationActivity extends BaseActivity {
 
     private double             selectedLat = Double.NaN;
     private double             selectedLng = Double.NaN;
+    private String             selectedCity = "";
+    private String             selectedArea = "";
     private AppLocationManager locationManager;
 
     private static final String[] CATEGORIES = {
@@ -96,11 +96,10 @@ public class ProviderApplicationActivity extends BaseActivity {
         setupFieldWatchers();
         setupSubmitButton(user);
         setupSuccessButton();
-        setupLocationOptions();
+        setupLocationLogic();
         checkExistingApplication(user.getUid());
     }
 
-    // ── Toolbar ───────────────────────────────────────────────────────────
     private void setupToolbar() {
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -111,14 +110,12 @@ public class ProviderApplicationActivity extends BaseActivity {
         toolbar.setNavigationOnClickListener(v -> finish());
     }
 
-    // ── Bind views ────────────────────────────────────────────────────────
     private void bindViews() {
         layoutBusinessName = findViewById(R.id.layoutBusinessName);
         layoutOwnerName    = findViewById(R.id.layoutOwnerName);
         layoutPhone        = findViewById(R.id.layoutPhone);
         layoutEmail        = findViewById(R.id.layoutEmail);
         layoutCategory     = findViewById(R.id.layoutCategory);
-        layoutCity         = findViewById(R.id.layoutCity);
         layoutExperience   = findViewById(R.id.layoutExperience);
         layoutDescription  = findViewById(R.id.layoutDescription);
 
@@ -127,7 +124,6 @@ public class ProviderApplicationActivity extends BaseActivity {
         etPhone        = findViewById(R.id.etPhone);
         etEmail        = findViewById(R.id.etEmail);
         spinnerCategory= findViewById(R.id.spinnerCategory);
-        etCity         = findViewById(R.id.etCity);
         etExperience   = findViewById(R.id.etExperience);
         etDescription  = findViewById(R.id.etDescription);
 
@@ -139,8 +135,7 @@ public class ProviderApplicationActivity extends BaseActivity {
         btnSuccessHome    = findViewById(R.id.btnSuccessHome);
         layoutStatusBadge = findViewById(R.id.layoutStatusBadge);
 
-        btnLiveLocation    = findViewById(R.id.btnLiveLocation);
-        btnManualLocation  = findViewById(R.id.btnManualLocation);
+        btnSetBusinessLocation = findViewById(R.id.btnSetBusinessLocation);
         layoutLocationDisplay = findViewById(R.id.layoutLocationDisplay);
         tvSelectedLocationLabel = findViewById(R.id.tvSelectedLocationLabel);
 
@@ -148,122 +143,167 @@ public class ProviderApplicationActivity extends BaseActivity {
         tvStepIndicator2   = findViewById(R.id.tvStepIndicator2);
         tvStepIndicator3   = findViewById(R.id.tvStepIndicator3);
     }
-    private void setupLocationOptions() {
-        if (btnLiveLocation == null || btnManualLocation == null) return;
 
-        btnLiveLocation.setOnClickListener(v -> {
-            showLoading(true);
-            locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
-                @Override
-                public void onSuccess(String city, String area, double lat, double lng) {
-                    runOnUiThread(() -> {
-                        showLoading(false);
-                        selectedLat = lat;
-                        selectedLng = lng;
-                        
-                        // Use area as city fallback
-                        String areaName = (area != null && !area.isEmpty()) ? area : city;
-                        etCity.setText(areaName);
-                        
-                        layoutCity.setVisibility(View.GONE);
-                        layoutLocationDisplay.setVisibility(View.VISIBLE);
-                        tvSelectedLocationLabel.setText("Location: " + areaName);
-                        
-                        updateStepIndicators(2);
-                        updateSubmitButtonState();
-                    });
-                }
-
-                @Override
-                public void onFailure(String error) {
-                    runOnUiThread(() -> {
-                        showLoading(false);
-                        showError("Location not available. Please enter manually.");
-                        switchToManualLocation();
-                    });
-                }
-            });
+    private void setupLocationLogic() {
+        btnSetBusinessLocation.setOnClickListener(v -> {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 100);
+                return;
+            }
+            fetchLocation();
         });
-
-        btnManualLocation.setOnClickListener(v -> switchToManualLocation());
     }
 
-    private void switchToManualLocation() {
-        selectedLat = Double.NaN;
-        selectedLng = Double.NaN;
-        layoutCity.setVisibility(View.VISIBLE);
-        layoutLocationDisplay.setVisibility(View.GONE);
-        updateStepIndicators(2);
-        updateSubmitButtonState();
-    }
+    private void fetchLocation() {
+        showLoading(true, "Fetching GPS location...");
+        locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
+            @Override
+            public void onSuccess(String city, String area, double lat, double lng) {
+                runOnUiThread(() -> {
+                    showLoading(false, "");
+                    selectedLat = lat;
+                    selectedLng = lng;
+                    
+                    // Convert lat/lng to area/city using Geocoder (Req 2)
+                    resolveAddress(lat, lng);
+                });
+            }
 
-    private void updateStepIndicators(int step) {
-        if (tvStepIndicator1 == null) return;
-
-        // Step 1: Details
-        // Step 2: Location (Service)
-        // Step 3: Terms
-
-        int activeColor = getResources().getColor(R.color.white);
-        int inactiveColor = getResources().getColor(R.color.on_gradient_muted);
-        int activeBg = R.drawable.bg_step_circle_active;
-        int inactiveBg = R.drawable.bg_step_circle_inactive;
-
-        tvStepIndicator1.setBackgroundResource(step >= 1 ? activeBg : inactiveBg);
-        tvStepIndicator1.setTextColor(step >= 1 ? activeColor : inactiveColor);
-
-        tvStepIndicator2.setBackgroundResource(step >= 2 ? activeBg : inactiveBg);
-        tvStepIndicator2.setTextColor(step >= 2 ? activeColor : inactiveColor);
-
-        tvStepIndicator3.setBackgroundResource(step >= 3 ? activeBg : inactiveBg);
-        tvStepIndicator3.setTextColor(step >= 3 ? activeColor : inactiveColor);
-    }
-    private void setupCategoryDropdown() {
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                this, android.R.layout.simple_dropdown_item_1line, CATEGORIES);
-        spinnerCategory.setAdapter(adapter);
-        spinnerCategory.setOnItemClickListener((parent, view, position, id) ->
-                updateSubmitButtonState());
-    }
-
-    // ── Pre-fill from Firebase ────────────────────────────────────────────
-    private void prefillFromFirebase(FirebaseUser user) {
-        // Email — read-only, from account
-        if (user.getEmail() != null) {
-            etEmail.setText(user.getEmail());
-        }
-        etEmail.setFocusable(false);
-        etEmail.setFocusableInTouchMode(false);
-        etEmail.setClickable(false);
-        etEmail.setCursorVisible(false);
-
-        // Owner name pre-fill if available
-        if (user.getDisplayName() != null && !user.getDisplayName().isEmpty()) {
-            etOwnerName.setText(user.getDisplayName());
-        }
-    }
-
-    // ── Terms scroll detection ────────────────────────────────────────────
-    private void setupTermsScrollDetection() {
-        termsScrollView.getViewTreeObserver().addOnScrollChangedListener(() -> {
-            if (termsScrolledToBottom) return;
-            View child = termsScrollView.getChildAt(0);
-            if (child == null) return;
-            int diff = child.getHeight()
-                    - (termsScrollView.getHeight() + termsScrollView.getScrollY());
-            if (diff <= 8) {
-                termsScrolledToBottom = true;
-                checkboxTerms.setEnabled(true);
-                if (tvScrollHint != null) {
-                    // Change banner to "all read" success style
-                    tvScrollHint.setBackgroundColor(getColor(R.color.success_bg));
-                }
-                updateSubmitButtonState();
+            @Override
+            public void onFailure(String error) {
+                runOnUiThread(() -> {
+                    showLoading(false, "");
+                    showError("Location failed: " + error + ". Please ensure GPS is ON.");
+                });
             }
         });
     }
 
-    // ── Text watchers ─────────────────────────────────────────────────────
+    private void resolveAddress(double lat, double lng) {
+        try {
+            Geocoder geocoder = new Geocoder(this, Locale.getDefault());
+            List<Address> addresses = geocoder.getFromLocation(lat, lng, 1);
+            if (addresses != null && !addresses.isEmpty()) {
+                Address addr = addresses.get(0);
+                selectedCity = addr.getLocality(); // City
+                selectedArea = addr.getSubLocality(); // Area
+                if (selectedArea == null || selectedArea.isEmpty()) selectedArea = addr.getFeatureName();
+                
+                String fullAddress = addr.getAddressLine(0);
+                
+                // Req 2 & 3: Display ONLY area/city name, no Plus Codes
+                String display = (selectedArea != null && !selectedArea.isEmpty()) ? selectedArea : selectedCity;
+                if (display == null || display.isEmpty()) display = "Unknown Location";
+
+                layoutLocationDisplay.setVisibility(View.VISIBLE);
+                tvSelectedLocationLabel.setText(display);
+                btnSetBusinessLocation.setText("Change Business Location");
+                
+                updateStepIndicators(2);
+                updateSubmitButtonState();
+            }
+        } catch (Exception e) {
+            Log.e("ProvApp", "Geocode failed", e);
+            showError("Could not resolve area name.");
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 100) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                fetchLocation();
+            } else {
+                showPermissionDeniedDialog();
+            }
+        }
+    }
+
+    private void showPermissionDeniedDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Permission Required")
+                .setMessage("Enable location permission to set your business location. This is mandatory for service providers.")
+                .setPositiveButton("Grant", (d, w) -> ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 100))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void updateStepIndicators(int step) {
+        if (tvStepIndicator1 == null) return;
+        int activeBg = R.drawable.bg_step_circle_active;
+        int inactiveBg = R.drawable.bg_step_circle_inactive;
+        int white = getResources().getColor(R.color.white);
+        int muted = getResources().getColor(R.color.on_gradient_muted);
+
+        tvStepIndicator1.setBackgroundResource(step >= 1 ? activeBg : inactiveBg);
+        tvStepIndicator1.setTextColor(step >= 1 ? white : muted);
+        tvStepIndicator2.setBackgroundResource(step >= 2 ? activeBg : inactiveBg);
+        tvStepIndicator2.setTextColor(step >= 2 ? white : muted);
+        tvStepIndicator3.setBackgroundResource(step >= 3 ? activeBg : inactiveBg);
+        tvStepIndicator3.setTextColor(step >= 3 ? white : muted);
+    }
+
+    private void setupCategoryDropdown() {
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_dropdown_item_1line, CATEGORIES);
+        spinnerCategory.setAdapter(adapter);
+        spinnerCategory.setOnItemClickListener((parent, view, position, id) -> {
+            String selected = CATEGORIES[position];
+            updateHeaderTitle(selected);
+            updateSubmitButtonState();
+        });
+    }
+
+    private void updateHeaderTitle(String category) {
+        TextView title = findViewById(R.id.tvHeaderTitle);
+        if (title != null) {
+            title.setText("Become a " + category + " Provider");
+        }
+    }
+
+    private void prefillFromFirebase(FirebaseUser user) {
+        if (user.getEmail() != null) etEmail.setText(user.getEmail());
+        
+        // Fetch user name from Supabase users table (Req 4)
+        UserRepository.fetchUserByUid(user.getUid(), new UserRepository.UserCallback() {
+            @Override
+            public void onSuccess(UserModel u) {
+                if (u != null && !u.name.isEmpty() && !"Unknown".equals(u.name)) {
+                    etOwnerName.setText(u.name);
+                }
+            }
+            @Override
+            public void onError(String msg) {
+                // Fallback to Google name if Supabase fetch fails
+                if (user.getDisplayName() != null && !user.getDisplayName().isEmpty()) {
+                    etOwnerName.setText(user.getDisplayName());
+                }
+            }
+        });
+    }
+
+    private void setupTermsScrollDetection() {
+        termsScrollView.setOnScrollChangeListener((NestedScrollView.OnScrollChangeListener) (v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+            if (termsScrolledToBottom) return;
+            View child = v.getChildAt(0);
+            if (child != null) {
+                int diff = child.getMeasuredHeight() - (v.getMeasuredHeight() + scrollY);
+                if (diff <= 20) { // 20px tolerance
+                    termsScrolledToBottom = true;
+                    checkboxTerms.setEnabled(true);
+                    if (tvScrollHint != null) {
+                        tvScrollHint.setBackgroundResource(R.color.success_bg);
+                        TextView hintText = (TextView) ((LinearLayout) tvScrollHint).getChildAt(1);
+                        hintText.setText("✅ Terms read. You can now accept.");
+                        hintText.setTextColor(getResources().getColor(R.color.success_green));
+                    }
+                    updateSubmitButtonState();
+                }
+            }
+        });
+    }
+
     private void setupFieldWatchers() {
         TextWatcher watcher = new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
@@ -273,41 +313,45 @@ public class ProviderApplicationActivity extends BaseActivity {
         etBusinessName.addTextChangedListener(watcher);
         etOwnerName.addTextChangedListener(watcher);
         etPhone.addTextChangedListener(watcher);
-        etCity.addTextChangedListener(watcher);
         etExperience.addTextChangedListener(watcher);
         etDescription.addTextChangedListener(watcher);
-        checkboxTerms.setOnCheckedChangeListener((btn, checked) -> updateSubmitButtonState());
+        checkboxTerms.setOnCheckedChangeListener((btn, checked) -> {
+            if (checked) updateStepIndicators(3);
+            updateSubmitButtonState();
+        });
     }
 
-    // ── Real-time submit button enablement ────────────────────────────────
     private void updateSubmitButtonState() {
         String phone = str(etPhone);
         String exp   = str(etExperience);
+        String desc  = str(etDescription);
         String biz   = str(etBusinessName);
 
-        boolean phoneOk = phone.matches("\\d{10}");
-        boolean expOk   = exp.matches("\\d{1,2}") && !exp.equals("0");
-        boolean bizOk   = biz.matches("[a-zA-Z\\s.&'-]+") && !biz.isEmpty();
+        // Req 10: Validation rules
+        boolean phoneOk = phone.length() == 10 && phone.matches("\\d{10}");
+        boolean expOk   = !exp.isEmpty() && Integer.parseInt(exp) >= 1 && Integer.parseInt(exp) <= 50;
+        boolean descOk  = desc.length() >= 10 && desc.length() <= 300;
+        boolean bizOk   = !biz.isEmpty() && biz.length() >= 3;
+        boolean locOk   = !Double.isNaN(selectedLat);
+        boolean categoryOk = !str(spinnerCategory).isEmpty();
 
         boolean allFilled = bizOk
                 && isNotEmpty(etOwnerName)
                 && phoneOk
-                && isNotEmpty(etEmail)
-                && isNotEmpty(spinnerCategory)
-                && isNotEmpty(etCity)
+                && categoryOk
+                && locOk
                 && expOk
-                && isNotEmpty(etDescription);
+                && descOk;
 
         boolean ready = allFilled && checkboxTerms.isChecked();
         btnSubmit.setEnabled(ready);
         btnSubmit.setAlpha(ready ? 1f : 0.5f);
     }
 
-    // ── Submit ────────────────────────────────────────────────────────────
     private void setupSubmitButton(FirebaseUser user) {
         btnSubmit.setOnClickListener(v -> {
             if (isSubmitting) return;
-            if (!validateAllFields(true)) return;
+            if (!validateAllFields()) return;
 
             isSubmitting = true;
             btnSubmit.setEnabled(false);
@@ -321,11 +365,12 @@ public class ProviderApplicationActivity extends BaseActivity {
                     str(etBusinessName),
                     str(spinnerCategory),
                     str(etDescription),
-                    "",
-                    str(etCity),
+                    "", // address
+                    selectedCity,
+                    selectedArea,
                     str(etExperience),
-                    null,
-                    null,
+                    null, // business image
+                    null, // id proof
                     selectedLat,
                     selectedLng,
                     new ProviderApplicationRepository.Callback() {
@@ -339,9 +384,6 @@ public class ProviderApplicationActivity extends BaseActivity {
                             btnSubmit.setText("Submit Application");
                             if ("DUPLICATE".equals(message)) {
                                 showError("You already have a pending or approved application.");
-                                showStatusBadge();
-                            } else if ("NETWORK_ERROR".equals(message)) {
-                                showError(getString(R.string.error_network_retry));
                             } else {
                                 showError("Submission failed: " + message);
                             }
@@ -350,130 +392,40 @@ public class ProviderApplicationActivity extends BaseActivity {
         });
     }
 
-    // ── Full validation (on submit tap) ───────────────────────────────────
-    private boolean validateAllFields(boolean showErrors) {
-        boolean valid = true;
-
-        // Business Name — letters/spaces/basic punctuation only
-        String biz = str(etBusinessName);
-        if (biz.isEmpty()) {
-            if (showErrors) layoutBusinessName.setError("Business name is required.");
-            valid = false;
-        } else if (!biz.matches("[a-zA-Z\\s.&'-]+")) {
-            if (showErrors) layoutBusinessName.setError("Business name must contain letters only.");
-            valid = false;
-        } else {
-            layoutBusinessName.setError(null);
-        }
-
-        // Owner Name
-        if (str(etOwnerName).isEmpty()) {
-            if (showErrors) layoutOwnerName.setError("Owner name is required.");
-            valid = false;
-        } else {
-            layoutOwnerName.setError(null);
-        }
-
-        // Phone — exactly 10 digits
-        String phone = str(etPhone);
-        if (phone.isEmpty()) {
-            if (showErrors) layoutPhone.setError("Phone number is required.");
-            valid = false;
-        } else if (!phone.matches("\\d{10}")) {
-            if (showErrors) layoutPhone.setError("Enter a valid 10-digit mobile number.");
-            valid = false;
-        } else {
-            layoutPhone.setError(null);
-        }
-
-        // Email (read-only, should always be filled)
-        if (str(etEmail).isEmpty()) {
-            if (showErrors) layoutEmail.setError("Email is required.");
-            valid = false;
-        } else {
-            layoutEmail.setError(null);
-        }
-
-        // Category
-        if (str(spinnerCategory).isEmpty()) {
-            if (showErrors) layoutCategory.setError("Please select a service category.");
-            valid = false;
-        } else {
-            layoutCategory.setError(null);
-        }
-
-        // City
-        if (Double.isNaN(selectedLat) && str(etCity).isEmpty()) {
-            if (showErrors) layoutCity.setError("City or live location is required.");
-            valid = false;
-        } else {
-            layoutCity.setError(null);
-        }
-
-        // Years of Experience — numbers only, 1–99
-        String exp = str(etExperience);
-        if (exp.isEmpty()) {
-            if (showErrors) layoutExperience.setError("Years of experience is required.");
-            valid = false;
-        } else if (!exp.matches("\\d{1,2}") || exp.equals("0")) {
-            if (showErrors) layoutExperience.setError("Enter a valid number (1–99).");
-            valid = false;
-        } else {
-            layoutExperience.setError(null);
-        }
-
-        // Description
-        if (str(etDescription).isEmpty()) {
-            if (showErrors) layoutDescription.setError("Please describe your services.");
-            valid = false;
-        } else {
-            layoutDescription.setError(null);
-        }
-
-        return valid;
-    }
-
     private boolean validateAllFields() {
-        boolean valid = validateAllFields(true);
-        if (valid && !checkboxTerms.isChecked()) {
-            showError("Please read and accept the Terms & Conditions.");
-            valid = false;
+        if (str(etBusinessName).isEmpty()) {
+            layoutBusinessName.setError("Business name is required.");
+            return false;
         }
-        return valid;
+        if (Double.isNaN(selectedLat)) {
+            showError("Please set business location");
+            return false;
+        }
+        if (!checkboxTerms.isChecked()) {
+            showError("Please accept the Terms & Conditions.");
+            return false;
+        }
+        return true;
     }
 
-    // ── Existing application check ────────────────────────────────────────
     private void checkExistingApplication(String uid) {
         ProviderApplicationRepository.checkApplicationStatus(uid,
                 new ProviderApplicationRepository.StatusCallback() {
                     @Override public void onFound(String status) {
                         if ("approved".equals(status)) {
-                            Toast.makeText(ProviderApplicationActivity.this,
-                                    "Your application is already approved!", Toast.LENGTH_LONG).show();
-                            startActivity(new Intent(ProviderApplicationActivity.this,
-                                    ProviderDashboardActivity.class));
+                            startActivity(new Intent(ProviderApplicationActivity.this, ProviderDashboardActivity.class));
                             finish();
                         } else if ("pending".equals(status)) {
-                            showStatusBadge();
-                            disableFormForResubmission();
+                            layoutStatusBadge.setVisibility(View.VISIBLE);
+                            btnSubmit.setEnabled(false);
+                            btnSubmit.setText("Application Pending Review");
                         }
                     }
-                    @Override public void onNotFound() { /* form ready */ }
-                    @Override public void onError(String message) { /* non-fatal */ }
+                    @Override public void onNotFound() {}
+                    @Override public void onError(String message) {}
                 });
     }
 
-    private void showStatusBadge() {
-        if (layoutStatusBadge != null) layoutStatusBadge.setVisibility(View.VISIBLE);
-    }
-
-    private void disableFormForResubmission() {
-        btnSubmit.setEnabled(false);
-        btnSubmit.setText("Application Pending Review");
-        btnSubmit.setAlpha(0.6f);
-    }
-
-    // ── Success overlay ───────────────────────────────────────────────────
     private void showSuccessOverlay() {
         successOverlay.setVisibility(View.VISIBLE);
         successOverlay.setAlpha(0f);
@@ -483,13 +435,12 @@ public class ProviderApplicationActivity extends BaseActivity {
     private void setupSuccessButton() {
         btnSuccessHome.setOnClickListener(v -> {
             Intent intent = new Intent(this, MainActivity.class);
-            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
             startActivity(intent);
             finish();
         });
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────
     private String str(android.widget.TextView tv) {
         return (tv != null && tv.getText() != null) ? tv.getText().toString().trim() : "";
     }
@@ -502,8 +453,9 @@ public class ProviderApplicationActivity extends BaseActivity {
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
     }
 
-    private void showLoading(boolean show) {
-        if (show) Toast.makeText(this, "Processing...", Toast.LENGTH_SHORT).show();
+    private void showLoading(boolean show, String message) {
+        if (show) {
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        }
     }
 }
-

@@ -123,7 +123,8 @@ public class ApplicationStatusActivity extends BaseActivity {
         // Common fields
         setText(tvBusinessName, app.businessName);
         setText(tvCategory,     app.category);
-        setText(tvCity,         app.city);
+        String location = (app.area != null && !app.area.isEmpty()) ? app.area : app.city;
+        setText(tvCity,         location);
         setText(tvAppliedDate,  "Applied: " + fmtDate(app.submittedAt));
 
         String status = app.status != null ? app.status.toLowerCase(Locale.US) : "pending";

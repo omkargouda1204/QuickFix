@@ -60,6 +60,16 @@ public class Booking {
         b.providerName = s(o, "provider_name");
         b.serviceId = s(o, "service_id");
         b.serviceName = s(o, "service_name");
+        
+        // Req 5: If service_name is null/empty, try to get from joined services table
+        if (b.serviceName.isEmpty()) {
+            JSONObject sObj = o.optJSONObject("services");
+            if (sObj != null) {
+                b.serviceName = s(sObj, "name");
+            }
+        }
+        if (b.serviceName.isEmpty()) b.serviceName = "-";
+
         b.category = s(o, "category");
         b.bookingDate = s(o, "booking_date");
         b.bookingTime = s(o, "booking_time");
