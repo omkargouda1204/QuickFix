@@ -221,8 +221,8 @@ public final class FcmNotificationHelper {
                         title,
                         body,
                         "emergency_request",
-                        requestId,
-                        data,
+                    requestId,
+                    enrichEmergencyPayload(data, requestId),
                         callback
                 );
             } catch (Exception e) {
@@ -265,8 +265,8 @@ public final class FcmNotificationHelper {
                         title,
                         body,
                         "emergency_assigned",
-                        requestId,
-                        data
+                    requestId,
+                    enrichEmergencyPayload(data, requestId)
                 );
             } catch (Exception e) {
                 Log.w(TAG, "notifyEmergencyUserAssigned failed: " + e.getMessage());
@@ -830,6 +830,17 @@ public final class FcmNotificationHelper {
         if (callback == null) return;
         String safeMessage = trimToEmpty(message).isEmpty() ? "Notification failed." : message.trim();
         MAIN.post(() -> callback.onFailure(safeMessage));
+    }
+
+    private static JSONObject enrichEmergencyPayload(JSONObject data, String requestId) {
+        JSONObject payload = data != null ? new JSONObject(data.toString()) : new JSONObject();
+        try {
+            if (!payload.has("request_id")) payload.put("request_id", requestId);
+            if (!payload.has("booking_id")) payload.put("booking_id", requestId);
+            if (!payload.has("emergency_request_id")) payload.put("emergency_request_id", requestId);
+        } catch (Exception ignored) {
+        }
+        return payload;
     }
 
     private static List<String> sanitize(List<String> values) {

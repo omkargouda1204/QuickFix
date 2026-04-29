@@ -20,6 +20,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
 import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -153,59 +154,75 @@ public class TransactionActivity extends BaseActivity {
                 String uid = userId == null ? "" : userId.trim();
                 String dbId = userDbId == null ? "" : userDbId.trim();
 
-                // Req 5: Fetch service_id from bookings join services to get name
-                String url = BASE_URL + "/rest/v1/bookings"
-                        + "?select=*,services(name)"
-                        + "&or=(customer_id.eq." + android.net.Uri.encode(uid) 
-                        + ",customer_id.eq." + android.net.Uri.encode(dbId) + ")"
-                        + "&order=created_at.desc";
+                List<Booking> list = new ArrayList<>();
+                list.addAll(fetchTransactionRows(
+                        BASE_URL + "/rest/v1/bookings"
+                                + "?select=*"
+                                + "&or=(customer_id.eq." + android.net.Uri.encode(uid)
+                                + ",customer_id.eq." + android.net.Uri.encode(dbId)
+                                + ",customer_firebase_uid.eq." + android.net.Uri.encode(uid)
+                                + ",user_firebase_uid.eq." + android.net.Uri.encode(uid)
+                                + ",user_id.eq." + android.net.Uri.encode(uid) + ")"
+                                + "&order=created_at.desc",
+                        "bookings"));
 
-                Log.d(TAG, "Transaction Fetch URL: " + url);
+                list.addAll(fetchTransactionRows(
+                        BASE_URL + "/rest/v1/emergency_requests"
+                                + "?select=*"
+                                + "&or=(user_firebase_uid.eq." + android.net.Uri.encode(uid)
+                                + ",user_id.eq." + android.net.Uri.encode(dbId)
+                                + ",user_id.eq." + android.net.Uri.encode(uid) + ")"
+                                + "&order=created_at.desc",
+                        "emergency_requests"));
 
-                Request req = new Request.Builder().url(url)
-                        .get()
-                        .addHeader("apikey", ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept", "application/json")
-                        .build();
-
-                try (Response r = HTTP.newCall(req).execute()) {
-                    String body = r.body() != null ? r.body().string() : "[]";
-                    Log.d(TAG, "Transaction Fetch HTTP " + r.code() + " | Body: " + body);
-                    
-                    if (r.isSuccessful()) {
-                        JSONArray arr = new JSONArray(body);
-                        List<Booking> list = new ArrayList<>();
-                        for (int i = 0; i < arr.length(); i++) {
-                            Booking booking = Booking.fromJson(arr.getJSONObject(i));
-                            if (booking != null && isTransaction(booking)) {
-                                list.add(booking);
-                            }
-                        }
-                        
-                        MAIN.post(() -> {
-                            adapter.setTransactions(list);
-                            showEmptyState(list.isEmpty());
-                            showLoading(false);
-                        });
-                    } else {
-                        Log.e(TAG, "Failed to load transactions: " + r.code() + " | " + body);
-                        MAIN.post(() -> {
-                            showEmptyState(true);
-                            showLoading(false);
-                            Toast.makeText(this, "Failed to load transactions", Toast.LENGTH_SHORT).show();
-                        });
+                List<Booking> filtered = new ArrayList<>();
+                for (Booking booking : list) {
+                    if (booking != null && isTransaction(booking)) {
+                        filtered.add(booking);
                     }
                 }
+
+                MAIN.post(() -> {
+                    adapter.setTransactions(filtered);
+                    showEmptyState(filtered.isEmpty());
+                    showLoading(false);
+                });
             } catch (Exception e) {
                 Log.e(TAG, "loadTransactions: " + e.getMessage(), e);
                 MAIN.post(() -> {
-                    showEmptyState(true);
+                    showEmptyState(true, "Failed to load transactions. Pull to retry.");
                     showLoading(false);
                     Toast.makeText(this, "Unable to load transactions", Toast.LENGTH_SHORT).show();
                 });
             }
         }).start();
+    }
+
+    private List<Booking> fetchTransactionRows(String url, String label) throws Exception {
+        Log.d(TAG, "Transaction fetch " + label + " URL: " + url);
+
+        Request req = new Request.Builder().url(url)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .build();
+
+        List<Booking> list = new ArrayList<>();
+        try (Response r = HTTP.newCall(req).execute()) {
+            String body = r.body() != null ? r.body().string() : "[]";
+            Log.d(TAG, label + " HTTP " + r.code() + " | Body: " + body);
+            if (!r.isSuccessful() || !body.startsWith("[")) {
+                return list;
+            }
+
+            JSONArray arr = new JSONArray(body);
+            for (int i = 0; i < arr.length(); i++) {
+                Booking booking = Booking.fromJson(arr.getJSONObject(i));
+                if (booking != null) list.add(booking);
+            }
+        }
+        return list;
     }
 
     /**
@@ -222,6 +239,8 @@ public class TransactionActivity extends BaseActivity {
                 || "done".equals(status)
                 || "success".equals(status)
                 || "accepted".equals(status)
+            || "processing".equals(status)
+            || "settled".equals(status)
                 || "price_set".equals(status)
                 || "paid".equals(payment)
                 || "success".equals(payment);
@@ -232,13 +251,27 @@ public class TransactionActivity extends BaseActivity {
     }
     
     private void showEmptyState(boolean show) {
+        showEmptyState(show, R.string.no_transactions_yet);
+    }
+
+    private void showEmptyState(boolean show, String message) {
         if (emptyState != null) {
             emptyState.setVisibility(show ? View.VISIBLE : View.GONE);
         }
         if (recyclerView != null) {
             recyclerView.setVisibility(show ? View.GONE : View.VISIBLE);
         }
-        if (tvEmptyMessage != null) tvEmptyMessage.setText(R.string.no_transactions_yet);
+        if (tvEmptyMessage != null) tvEmptyMessage.setText(message);
+    }
+
+    private void showEmptyState(boolean show, int messageRes) {
+        if (emptyState != null) {
+            emptyState.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        if (recyclerView != null) {
+            recyclerView.setVisibility(show ? View.GONE : View.VISIBLE);
+        }
+        if (tvEmptyMessage != null) tvEmptyMessage.setText(messageRes);
     }
 
     private void showLoading(boolean show) {

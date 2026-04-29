@@ -307,8 +307,13 @@ public class EmergencyHelpActivity extends BaseActivity {
 
          new Thread(() -> {
              try {
+                 Log.d(TAG, "submitEmergencyRequest category=" + actCategory.getText() +
+                         " lat=" + selectedLat + " lng=" + selectedLng +
+                         " city=" + selectedCity + " area=" + selectedArea);
+
                  // 1. Fetch nearby providers FIRST
                  List<NearbyProvider> providers = fetchNearbyProviders(actCategory.getText().toString());
+                 Log.d(TAG, "Nearby providers found=" + providers.size());
 
                  if (providers.isEmpty()) {
                      runOnUiThread(() -> {
@@ -413,11 +418,24 @@ public class EmergencyHelpActivity extends BaseActivity {
 
     private List<NearbyProvider> fetchNearbyProviders(String category) throws Exception {
         List<NearbyProvider> fromRpc = fetchNearbyProvidersFromRpc(category);
-        if (!fromRpc.isEmpty()) {
-            return fromRpc;
+        List<NearbyProvider> fallback = fetchNearbyProvidersClientFallback(category);
+
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        List<NearbyProvider> merged = new ArrayList<>();
+
+        for (NearbyProvider provider : fromRpc) {
+            if (provider == null || !provider.isValid()) continue;
+            String key = provider.providerId + "|" + provider.firebaseUid;
+            if (seen.add(key)) merged.add(provider);
+        }
+        for (NearbyProvider provider : fallback) {
+            if (provider == null || !provider.isValid()) continue;
+            String key = provider.providerId + "|" + provider.firebaseUid;
+            if (seen.add(key)) merged.add(provider);
         }
 
-        return fetchNearbyProvidersClientFallback(category);
+        Log.d(TAG, "fetchNearbyProviders rpc=" + fromRpc.size() + " fallback=" + fallback.size() + " merged=" + merged.size());
+        return merged;
     }
 
     private List<NearbyProvider> fetchNearbyProvidersFromRpc(String category) {
@@ -467,8 +485,7 @@ public class EmergencyHelpActivity extends BaseActivity {
         List<NearbyProvider> providers = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles"
-                + "?select=id,firebase_uid,category,latitude,longitude,lat,lng,status,is_approved"
-                + "&status=eq.active&is_approved=eq.true"
+                + "?select=id,firebase_uid,business_name,category,latitude,longitude,lat,lng,status,is_approved,city,area"
                 + "&limit=" + PROVIDER_PAGE_SIZE;
 
         Request req = new Request.Builder().url(url)
@@ -486,26 +503,76 @@ public class EmergencyHelpActivity extends BaseActivity {
                 String uid = o.optString("firebase_uid", "").trim();
                 if (providerId.isEmpty()) continue;
 
-                double pLat = o.has("latitude") && !o.isNull("latitude")
-                        ? o.optDouble("latitude", Double.NaN)
-                        : o.optDouble("lat", Double.NaN);
-                double pLng = o.has("longitude") && !o.isNull("longitude")
-                        ? o.optDouble("longitude", Double.NaN)
-                        : o.optDouble("lng", Double.NaN);
-                if (Double.isNaN(pLat) || Double.isNaN(pLng)) continue;
+                if (!isProviderEligible(o, category)) {
+                    continue;
+                }
 
-                if (!matchesCategory(category, o.optString("category", ""))) continue;
+                double pLat = readLatitude(o);
+                double pLng = readLongitude(o);
+                if (Double.isNaN(pLat) || Double.isNaN(pLng)) continue;
 
                 double distKm = haversine(selectedLat, selectedLng, pLat, pLng);
                 if (!Double.isNaN(distKm) && distKm <= NEARBY_RADIUS_KM) {
                     String key = providerId + "|" + uid;
                     if (!seen.add(key)) continue;
                     providers.add(new NearbyProvider(providerId, uid));
+                    Log.d(TAG, "Nearby provider match id=" + providerId +
+                            " uid=" + uid +
+                            " category=" + o.optString("category", "") +
+                            " distanceKm=" + distKm);
                 }
             }
         }
 
         return providers;
+    }
+
+    private boolean isProviderEligible(JSONObject provider, String requestedCategory) {
+        if (provider == null) return false;
+
+        String status = provider.optString("status", "").trim().toLowerCase(Locale.US);
+        boolean approved = provider.optBoolean("is_approved", false);
+        boolean statusOk = status.isEmpty()
+                || "active".equals(status)
+                || "approved".equals(status)
+                || "available".equals(status)
+                || "online".equals(status);
+
+        if (!statusOk && !approved) {
+            Log.d(TAG, "Skipping provider id=" + provider.optString("id", "") + " status=" + status + " approved=" + approved);
+            return false;
+        }
+
+        String providerCategory = provider.optString("category", "");
+        if (!matchesCategory(requestedCategory, providerCategory)) {
+            Log.d(TAG, "Skipping provider id=" + provider.optString("id", "") +
+                    " category mismatch request=" + requestedCategory + " provider=" + providerCategory);
+            return false;
+        }
+
+        return true;
+    }
+
+    private double readLatitude(JSONObject o) {
+        if (o == null) return Double.NaN;
+        if (o.has("latitude") && !o.isNull("latitude")) {
+            return o.optDouble("latitude", Double.NaN);
+        }
+        if (o.has("lat") && !o.isNull("lat")) {
+            return o.optDouble("lat", Double.NaN);
+        }
+        return Double.NaN;
+    }
+
+    private double readLongitude(JSONObject o) {
+        if (o == null) return Double.NaN;
+        if (o.has("longitude") && !o.isNull("longitude")) {
+            return o.optDouble("longitude", Double.NaN);
+        }
+        if (o.has("lng") && !o.isNull("lng")) {
+            return o.optDouble("lng", Double.NaN);
+        }
+        return Double.NaN;
     }
 
     private String createRequestInDb() throws Exception {
@@ -644,10 +711,23 @@ public class EmergencyHelpActivity extends BaseActivity {
     }
 
     private boolean matchesCategory(String requested, String providerCategory) {
-        String a = requested == null ? "" : requested.trim().toLowerCase(Locale.getDefault());
-        String b = providerCategory == null ? "" : providerCategory.trim().toLowerCase(Locale.getDefault());
+        String a = normalizeCategory(requested);
+        String b = normalizeCategory(providerCategory);
         if (a.isEmpty() || b.isEmpty()) return true;
         return a.equals(b) || a.contains(b) || b.contains(a);
+    }
+
+    private String normalizeCategory(String raw) {
+        String value = raw == null ? "" : raw.trim().toLowerCase(Locale.getDefault());
+        if (value.isEmpty()) return "";
+        if (value.contains("electric")) return "electrical";
+        if (value.contains("plumb")) return "plumbing";
+        if (value.contains("ac")) return "ac service";
+        if (value.contains("repair")) return "general repair";
+        if (value.contains("clean")) return "cleaning";
+        if (value.contains("paint")) return "painting";
+        if (value.contains("carpent")) return "carpentry";
+        return value;
     }
 
     private double haversine(double lat1, double lon1, double lat2, double lon2) {

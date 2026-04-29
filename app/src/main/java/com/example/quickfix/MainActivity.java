@@ -2,6 +2,7 @@ package com.example.quickfix;
 
 import android.Manifest;
 import android.animation.ObjectAnimator;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -263,6 +264,10 @@ public class MainActivity extends BaseActivity {
             btnRetryOffersLoad = findViewSafe(R.id.btnRetryOffersLoad);
             btnRetryOffersLoad.setOnClickListener(v -> loadOffers());
 
+            if (micBtn != null) {
+                micBtn.setOnClickListener(v -> launchVoiceSearch());
+            }
+
             bannerApi = RetrofitProvider.get().create(BannerApi.class);
             offerApi = RetrofitProvider.get().create(OfferApi.class);
 
@@ -507,9 +512,24 @@ public class MainActivity extends BaseActivity {
         openProvidersList(query);
     }
 
+    private void launchVoiceSearch() {
+        try {
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Say a service to search");
+            startActivityForResult(intent, VOICE_SEARCH_REQ);
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(this, "Voice search is not available on this device.", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Log.e(TAG, "launchVoiceSearch failed", e);
+            Toast.makeText(this, "Could not start voice search.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void openProvidersList(String category) {
         try {
-            Intent intent = new Intent(this, ProviderListActivity.class);
+            Intent intent = new Intent(this, ProvidersListActivity.class);
             if (category != null && !category.trim().isEmpty()) {
                 intent.putExtra("category", category);
                 intent.putExtra("query", category);
@@ -523,6 +543,32 @@ public class MainActivity extends BaseActivity {
 
     private void openImageDetection() {
         startActivity(new Intent(this, ImageDetectionActivity.class));
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != VOICE_SEARCH_REQ || resultCode != RESULT_OK || data == null) {
+            return;
+        }
+
+        ArrayList<String> matches = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+        if (matches == null || matches.isEmpty()) {
+            Toast.makeText(this, "No speech recognized.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String spoken = matches.get(0) == null ? "" : matches.get(0).trim();
+        if (spoken.isEmpty()) {
+            Toast.makeText(this, "No speech recognized.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (etSearch != null) {
+            etSearch.setText(spoken);
+            etSearch.setSelection(spoken.length());
+        }
+        performSearch(spoken);
     }
 
     private void redirectToLogin() {

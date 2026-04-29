@@ -51,7 +51,17 @@ public class Booking {
         Booking b = new Booking();
         b.id = s(o, "id");
         b.customerId = s(o, "customer_id");
+        if (b.customerId.isEmpty()) {
+            b.customerId = s(o, "customer_firebase_uid");
+        }
+        if (b.customerId.isEmpty()) {
+            b.customerId = s(o, "user_firebase_uid");
+        }
+        if (b.customerId.isEmpty()) {
+            b.customerId = s(o, "user_id");
+        }
         b.customerName = s(o, "customer_name");
+        if (b.customerName.isEmpty()) b.customerName = s(o, "user_name");
         b.customerPhone = s(o, "customer_phone");
         b.customerEmail = s(o, "customer_email");
         // Current schema: provider_id. Keep firebase_uid as backward-compatible fallback.
@@ -59,7 +69,11 @@ public class Booking {
         if (b.providerId.isEmpty()) {
             b.providerId = s(o, "firebase_uid");
         }
+        if (b.providerId.isEmpty()) {
+            b.providerId = s(o, "assigned_provider_id");
+        }
         b.providerName = s(o, "provider_name");
+        if (b.providerName.isEmpty()) b.providerName = s(o, "assigned_provider_name");
         b.serviceId = s(o, "service_id");
         b.serviceName = s(o, "service_name");
         
@@ -75,15 +89,18 @@ public class Booking {
         b.serviceCategory = s(o, "serviceCategory");
         if (b.serviceCategory.isEmpty()) b.serviceCategory = s(o, "service_category");
         b.category = s(o, "category");
+        if (b.category.isEmpty()) b.category = s(o, "service_category");
         b.bookingDate = s(o, "booking_date");
         b.bookingTime = s(o, "booking_time");
         b.address = s(o, "address");
         b.location = s(o, "location");
         if (b.location.isEmpty()) b.location = s(o, "location_label");
+        if (b.location.isEmpty()) b.location = s(o, "assigned_provider_city");
         b.city = s(o, "city");
         b.price = o.optDouble("price", 0);
         b.status = s(o, "status");
         b.paymentStatus = s(o, "payment_status");
+        if (b.paymentStatus.isEmpty()) b.paymentStatus = s(o, "payment_state");
         b.paymentId = s(o, "payment_id");
         b.paymentOrderId = s(o, "payment_order_id");
         if (b.paymentOrderId.isEmpty()) b.paymentOrderId = s(o, "order_id");
