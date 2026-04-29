@@ -27,10 +27,15 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
     private final Context ctx;
     private List<ProviderProfile> items = new ArrayList<>();
     private final OnProviderActionListener listener;
+    private String displayMode = "All"; // All | TopRated | TopBooked
 
     public ProvidersAdapter(Context ctx, OnProviderActionListener listener) {
         this.ctx = ctx;
         this.listener = listener;
+    }
+
+    public void setMode(String mode) {
+        this.displayMode = mode == null ? "All" : mode;
     }
 
     public void setProviders(List<ProviderProfile> list) {
@@ -65,6 +70,20 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
 
         // Names
         h.tvBusinessName.setText(notEmpty(p.businessName, "Business"));
+        h.tvCategory.setText(notEmpty(p.category, "General"));
+
+        // Rating: only visible in TopRated mode and when rating > 0
+        if ("TopRated".equalsIgnoreCase(displayMode) && p.rating > 0) {
+            h.tvRating.setVisibility(View.VISIBLE);
+            h.tvRating.setText("⭐ " + String.format(java.util.Locale.US, "%.1f", p.rating));
+        } else {
+            h.tvRating.setVisibility(View.GONE);
+        }
+
+        // Book button — open provider detail / booking flow
+        h.btnBook.setOnClickListener(v -> {
+            if (listener != null) listener.onViewProfile(p);
+        });
 
         // Whole card click → view profile
         h.itemView.setOnClickListener(v -> { if (listener != null) listener.onViewProfile(p); });
@@ -80,11 +99,17 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
     static class VH extends RecyclerView.ViewHolder {
         ImageView      ivBusinessImage;
         TextView       tvBusinessName;
+        TextView       tvCategory;
+        TextView       tvRating;
+        com.google.android.material.button.MaterialButton btnBook;
 
         VH(View v) {
             super(v);
             ivBusinessImage    = v.findViewById(R.id.ivBusinessImage);
             tvBusinessName     = v.findViewById(R.id.tvBusinessName);
+            tvCategory         = v.findViewById(R.id.tvProviderCategory);
+            tvRating           = v.findViewById(R.id.tvProviderRating);
+            btnBook            = v.findViewById(R.id.btnBook);
         }
     }
 }

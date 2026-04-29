@@ -192,6 +192,13 @@ public class TransactionActivity extends BaseActivity {
                     }
                 }
 
+                // Resolve missing provider names for display
+                try {
+                    resolveProviderNamesForTransactions(filtered);
+                } catch (Exception e) {
+                    Log.w(TAG, "resolveProviderNamesForTransactions failed: " + e.getMessage());
+                }
+
                 Log.d(TAG, "Final filtered transactions: " + filtered.size() + " (from " + list.size() + " total)");
 
                 MAIN.post(() -> {
@@ -211,6 +218,52 @@ public class TransactionActivity extends BaseActivity {
                 });
             }
         }).start();
+    }
+
+    private void resolveProviderNamesForTransactions(List<Booking> bookings) throws Exception {
+        if (bookings == null || bookings.isEmpty()) return;
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (Booking b : bookings) {
+            if (b == null) continue;
+            String pid = b.providerId == null ? "" : b.providerId.trim();
+            String pname = b.providerName == null ? "" : b.providerName.trim();
+            if (pid.isEmpty()) continue;
+            if (pname.isEmpty() || "null".equalsIgnoreCase(pname) || "Awaiting Acceptance".equalsIgnoreCase(pname)) ids.add(pid);
+        }
+        if (ids.isEmpty()) return;
+
+        String joined = String.join(",", ids);
+        String url = BASE_URL + "/rest/v1/provider_profiles?select=id,business_name&limit=" + ids.size()
+            + "&id=in.(" + joined + ")";
+
+        Request req = new Request.Builder().url(url)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .build();
+
+        try (Response r = HTTP.newCall(req).execute()) {
+            if (r.code() != 200) return;
+            String body = r.body() != null ? r.body().string() : "[]";
+            JSONArray arr = new JSONArray(body);
+            java.util.Map<String, String> map = new java.util.HashMap<>();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                String id = o.optString("id", "");
+                String name = o.optString("business_name", "");
+                if (id != null && !id.isEmpty() && name != null && !name.isEmpty()) map.put(id, name);
+            }
+
+            for (Booking b : bookings) {
+                if (b == null) continue;
+                String pid = b.providerId == null ? "" : b.providerId.trim();
+                if (!pid.isEmpty() && (b.providerName == null || b.providerName.trim().isEmpty() || "null".equalsIgnoreCase(b.providerName))) {
+                    String resolved = map.get(pid);
+                    if (resolved != null && !resolved.trim().isEmpty()) b.providerName = resolved;
+                }
+            }
+        }
     }
 
     private List<Booking> fetchTransactionRows(String url, String label) throws Exception {

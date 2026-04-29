@@ -29,11 +29,17 @@ public class TopRatedAdapter extends RecyclerView.Adapter<TopRatedAdapter.VH> {
     private final OnProviderClickListener listener;
     private double userLat = Double.NaN;
     private double userLng = Double.NaN;
+    private String displayMode = "TopRated"; // TopRated | TopBooked | Default
 
     public TopRatedAdapter(Context ctx, List<ProviderProfile> items, OnProviderClickListener listener) {
         this.ctx = ctx;
         this.items = items != null ? items : new ArrayList<>();
         this.listener = listener;
+    }
+
+    public void setMode(String mode) {
+        this.displayMode = mode == null ? "TopRated" : mode;
+        notifyDataSetChanged();
     }
 
     public void setUserLocation(double lat, double lng) {
@@ -57,21 +63,35 @@ public class TopRatedAdapter extends RecyclerView.Adapter<TopRatedAdapter.VH> {
         
         // Hide category as requested
         h.tvCategory.setVisibility(View.GONE);
-        
-        // Show bookings
-        if (h.tvBookings != null) {
-            h.tvBookings.setText(ctx.getString(R.string.bookings_count_suffix, p.totalBookings));
-            h.tvBookings.setVisibility(View.VISIBLE);
-        }
 
-        h.tvRating.setText(String.format(java.util.Locale.US, "%.1f", p.rating));
-
-        if (!Double.isNaN(userLat) && !Double.isNaN(userLng) && !Double.isNaN(p.latitude) && !Double.isNaN(p.longitude)) {
-            double dist = calculateDistance(userLat, userLng, p.latitude, p.longitude);
-            h.tvDistance.setText(String.format(java.util.Locale.US, "%.1f km", dist));
-            h.tvDistance.setVisibility(View.VISIBLE);
-        } else {
+        // Display rules:
+        // - TopRated: show only rating
+        // - TopBooked: show only profile (no rating/count)
+        // - Default: show rating and bookings where available
+        if ("TopRated".equalsIgnoreCase(displayMode)) {
+            if (h.tvBookings != null) h.tvBookings.setVisibility(View.GONE);
+            h.tvRating.setVisibility(View.VISIBLE);
+            h.tvRating.setText(String.format(java.util.Locale.US, "%.1f", p.rating));
             h.tvDistance.setVisibility(View.GONE);
+        } else if ("TopBooked".equalsIgnoreCase(displayMode)) {
+            // Minimal profile card — hide rating, bookings and distance
+            if (h.tvBookings != null) h.tvBookings.setVisibility(View.GONE);
+            h.tvRating.setVisibility(View.GONE);
+            h.tvDistance.setVisibility(View.GONE);
+        } else {
+            // Default behavior
+            if (h.tvBookings != null) {
+                h.tvBookings.setText(ctx.getString(R.string.bookings_count_suffix, p.totalBookings));
+                h.tvBookings.setVisibility(View.VISIBLE);
+            }
+            h.tvRating.setText(String.format(java.util.Locale.US, "%.1f", p.rating));
+            if (!Double.isNaN(userLat) && !Double.isNaN(userLng) && !Double.isNaN(p.latitude) && !Double.isNaN(p.longitude)) {
+                double dist = calculateDistance(userLat, userLng, p.latitude, p.longitude);
+                h.tvDistance.setText(String.format(java.util.Locale.US, "%.1f km", dist));
+                h.tvDistance.setVisibility(View.VISIBLE);
+            } else {
+                h.tvDistance.setVisibility(View.GONE);
+            }
         }
 
         Glide.with(ctx)

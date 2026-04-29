@@ -170,9 +170,14 @@ public class UserBookingsActivity extends BaseActivity
                 String uid = android.net.Uri.encode(userId);
                 List<Booking> list = new ArrayList<>();
 
-                String url = BASE_URL
-                        + "/rest/v1/bookings?customer_id=eq." + uid
-                        + "&select=*&order=created_at.desc";
+                // Build an OR query to find bookings by multiple possible ids (db id or firebase uid)
+                String orClause = "or=(customer_id.eq." + android.net.Uri.encode(userDbId)
+                        + ",customer_id.eq." + android.net.Uri.encode(userId)
+                        + ",customer_firebase_uid.eq." + android.net.Uri.encode(userId)
+                        + ",user_firebase_uid.eq." + android.net.Uri.encode(userId)
+                        + ",user_id.eq." + android.net.Uri.encode(userId) + ")";
+
+                String url = BASE_URL + "/rest/v1/bookings?select=*&" + orClause + "&order=created_at.desc";
                 try (Response r = HTTP.newCall(new Request.Builder().url(url)
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
@@ -206,6 +211,13 @@ public class UserBookingsActivity extends BaseActivity
                             if (b != null) list.add(b);
                         }
                     }
+                }
+
+                // Ensure provider names are resolved for any bookings missing providerName
+                try {
+                    resolveMissingProviderNames(list);
+                } catch (Exception e) {
+                    Log.w(TAG, "resolveMissingProviderNames failed: " + e.getMessage());
                 }
 
                 try {
@@ -370,6 +382,62 @@ public class UserBookingsActivity extends BaseActivity
         }
         emptyState.setVisibility(filtered.isEmpty() ? View.VISIBLE : View.GONE);
         recyclerView.setVisibility(filtered.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    // Fetch provider profiles in batch to fill missing provider names
+    private void resolveMissingProviderNames(List<Booking> bookings) throws Exception {
+        if (bookings == null || bookings.isEmpty()) return;
+        // Collect provider ids which are non-empty and where providerName is missing or placeholder
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (Booking b : bookings) {
+            if (b == null) continue;
+            String pid = b.providerId == null ? "" : b.providerId.trim();
+            String pname = b.providerName == null ? "" : b.providerName.trim();
+            if (pid.isEmpty()) continue;
+            if (pname.isEmpty() || "Awaiting Acceptance".equalsIgnoreCase(pname) || "null".equalsIgnoreCase(pname)) {
+                ids.add(pid);
+            }
+        }
+        if (ids.isEmpty()) return;
+
+        // Build id.in clause
+        StringBuilder inClause = new StringBuilder();
+        inClause.append("id=in.({ids})");
+        // Use comma separated and url-encode
+        String joined = String.join(",", ids);
+        String url = BASE_URL + "/rest/v1/provider_profiles?select=id,business_name,firebase_uid&limit=" + ids.size()
+            + "&id=in.(" + joined + ")";
+
+        Request req = new Request.Builder().url(url)
+                .get()
+                .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .build();
+
+        try (Response r = HTTP.newCall(req).execute()) {
+            if (r.code() != 200) return;
+            String body = r.body() != null ? r.body().string() : "[]";
+            JSONArray arr = new JSONArray(body);
+            java.util.Map<String, String> map = new java.util.HashMap<>();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                String id = o.optString("id", "");
+                String name = o.optString("business_name", "");
+                if (id != null && !id.isEmpty() && name != null && !name.isEmpty()) map.put(id, name);
+            }
+
+            for (Booking b : bookings) {
+                if (b == null) continue;
+                String pid = b.providerId == null ? "" : b.providerId.trim();
+                if (!pid.isEmpty() && (b.providerName == null || b.providerName.trim().isEmpty() || "Awaiting Acceptance".equalsIgnoreCase(b.providerName) || "null".equalsIgnoreCase(b.providerName))) {
+                    String resolved = map.get(pid);
+                    if (resolved != null && !resolved.trim().isEmpty()) {
+                        b.providerName = resolved;
+                    }
+                }
+            }
+        }
     }
 
     @Override

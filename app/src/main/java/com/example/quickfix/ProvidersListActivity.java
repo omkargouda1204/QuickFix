@@ -382,6 +382,7 @@ public class ProvidersListActivity extends BaseActivity
     private void renderProviderList(List<ProviderProfile> filtered, boolean reset) {
         if (reset) visibleProvidersCount = PROVIDERS_PAGE_SIZE;
         int end = Math.min(filtered.size(), visibleProvidersCount);
+        adapter.setMode(currentChip);
         adapter.setProviders(filtered.subList(0, end));
 
         if (filtered.isEmpty()) {

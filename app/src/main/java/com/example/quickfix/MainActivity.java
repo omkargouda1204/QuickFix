@@ -409,6 +409,7 @@ public class MainActivity extends BaseActivity {
                 intent.putExtra("provider_id", p.id);
                 startActivity(intent);
             });
+            topRatedAdapter.setMode("TopRated");
             rvTopRated.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
             rvTopRated.setAdapter(topRatedAdapter);
         }
@@ -419,6 +420,7 @@ public class MainActivity extends BaseActivity {
                 intent.putExtra("provider_id", p.id);
                 startActivity(intent);
             });
+            topBookedAdapter.setMode("TopBooked");
             rvTopBooked.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
             rvTopBooked.setAdapter(topBookedAdapter);
         }

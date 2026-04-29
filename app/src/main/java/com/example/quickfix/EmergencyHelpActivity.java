@@ -292,100 +292,95 @@ public class EmergencyHelpActivity extends BaseActivity {
     }
 
      private void submitEmergencyRequest() {
-         if (isSubmitting) return;
-         if (!hasValidLocation()) {
-             setStatus("Please enable location to continue.");
-             openLocationPicker();
-             return;
-         }
-         
-         isSubmitting = true;
-         setLoading(true);
-         setStatus("Searching for nearby providers...");
-         btnSubmit.setEnabled(false);
-         btnSubmit.setAlpha(0.6f);
+        if (isSubmitting) return;
+        if (!hasValidLocation()) {
+            setStatus("Please enable location to continue.");
+            openLocationPicker();
+            return;
+        }
 
-         new Thread(() -> {
-             try {
-                 Log.d(TAG, "submitEmergencyRequest category=" + actCategory.getText() +
-                         " lat=" + selectedLat + " lng=" + selectedLng +
-                         " city=" + selectedCity + " area=" + selectedArea);
+        isSubmitting = true;
+        setLoading(true);
+        setStatus("Sending emergency request...");
+        btnSubmit.setEnabled(false);
+        btnSubmit.setAlpha(0.6f);
 
-                 // 1. Fetch nearby providers FIRST
-                 List<NearbyProvider> providers = fetchNearbyProviders(actCategory.getText().toString());
-                 Log.d(TAG, "Nearby providers found=" + providers.size());
+        new Thread(() -> {
+            try {
+                JSONObject body = new JSONObject();
+                body.put("user_id", currentUserId);
+                body.put("user_name", currentUserName);
+                body.put("phone", currentUserPhone);
+                body.put("category", actCategory.getText().toString());
+                body.put("description", etDescription.getText() != null ? etDescription.getText().toString().trim() : "");
+                body.put("lat", selectedLat);
+                body.put("lng", selectedLng);
+                body.put("city", selectedCity);
+                body.put("area", selectedArea);
+                body.put("address", selectedAddress);
 
-                 if (providers.isEmpty()) {
-                     runOnUiThread(() -> {
-                         setLoading(false);
-                         isSubmitting = false;
-                         btnSubmit.setEnabled(true);
-                         btnSubmit.setAlpha(1f);
-                         setStatus("✗ No providers found within 25km. Emergency request cancelled.");
-                         Toast.makeText(this, "No providers found near you. Please try a different category or location.", Toast.LENGTH_LONG).show();
-                     });
-                     return;
-                 }
+                String url = BuildConfig.SUPABASE_CREATE_EMERGENCY_URL != null && !BuildConfig.SUPABASE_CREATE_EMERGENCY_URL.isEmpty()
+                        ? BuildConfig.SUPABASE_CREATE_EMERGENCY_URL
+                        : BuildConfig.SUPABASE_URL + "/functions/v1/create-emergency";
 
-                 // 2. Providers exist, insert into "emergency_requests"
-                 String rid = createRequestInDb();
-                 activeRequestId = rid;
+                Request req = new Request.Builder()
+                        .url(url)
+                        .post(RequestBody.create(body.toString(), JSON))
+                        .addHeader("Content-Type", "application/json")
+                        .build();
 
-                 JSONObject payload = buildEmergencyNotificationPayload(rid);
-                 
-                 LinkedHashSet<String> providerUidsForPush = new LinkedHashSet<>();
-                 for (NearbyProvider provider : providers) {
-                     if (!provider.isValid()) continue;
+                try (Response res = http.newCall(req).execute()) {
+                    String raw = res.body() != null ? res.body().string() : "";
+                    if (res.code() != 200) {
+                        final String msg = "Request failed: HTTP " + res.code() + " " + raw;
+                        runOnUiThread(() -> {
+                            setLoading(false);
+                            isSubmitting = false;
+                            btnSubmit.setEnabled(true);
+                            btnSubmit.setAlpha(1f);
+                            setStatus("✗ " + msg);
+                            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+                        });
+                        return;
+                    }
 
-                     if (!provider.firebaseUid.isEmpty()) {
-                         providerUidsForPush.add(provider.firebaseUid);
-                     }
+                    JSONObject result = new JSONObject(raw);
+                    boolean success = result.optBoolean("success", false);
+                    if (!success) {
+                        final String message = result.optString("message", "No providers available within 25km");
+                        runOnUiThread(() -> {
+                            setLoading(false);
+                            isSubmitting = false;
+                            btnSubmit.setEnabled(true);
+                            btnSubmit.setAlpha(1f);
+                            setStatus("✗ " + message);
+                            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                        });
+                        return;
+                    }
 
-                     // 3. Save to DB for history
-                     if (!provider.firebaseUid.isEmpty()) {
-                         FcmNotificationHelper.saveNotificationToDb(
-                                 provider.firebaseUid,
-                                 "Emergency Request",
-                                 "New emergency request for " + actCategory.getText().toString() + " near " + selectedArea,
-                                 rid,
-                                 "emergency"
-                         );
-                     }
-                     
-                     // 4. Create pending booking for ALL nearby providers
-                     createPendingEmergencyBookingForProvider(rid, provider);
-                 }
+                    final String requestId = result.optString("request_id", "");
+                    runOnUiThread(() -> {
+                        setLoading(false);
+                        activeRequestId = requestId;
+                        setStatus("✓ Emergency sent. Waiting for provider...");
+                        Toast.makeText(this, "Emergency sent successfully!", Toast.LENGTH_LONG).show();
+                    });
 
-                 // 5. Send FCM push notification to all
-                 if (!providerUidsForPush.isEmpty()) {
-                     FcmNotificationHelper.notifyEmergencyProviders(
-                             new ArrayList<>(providerUidsForPush),
-                             "🚨 Emergency Help Required!",
-                             "New emergency request from " + currentUserName + " at " + selectedArea,
-                             rid,
-                             payload,
-                             null
-                     );
-                 }
-                 
-                 runOnUiThread(() -> {
-                     setLoading(false);
-                     setStatus("✓ Request sent to " + providers.size() + " providers! Waiting for acceptance...");
-                     Toast.makeText(this, "Emergency broadcast sent successfully!", Toast.LENGTH_LONG).show();
-                 });
-
-                 startStatusPolling();
-             } catch (Exception e) {
-                 Log.e(TAG, "submitEmergencyRequest failed", e);
-                 runOnUiThread(() -> { 
-                     setLoading(false);
-                     isSubmitting = false;
-                     btnSubmit.setEnabled(true);
-                     btnSubmit.setAlpha(1f);
-                     setStatus("✗ Request failed: " + e.getMessage());
-                 });
-             }
-         }).start();
+                    startStatusPolling();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "submitEmergencyRequest edge call failed", e);
+                runOnUiThread(() -> {
+                    setLoading(false);
+                    isSubmitting = false;
+                    btnSubmit.setEnabled(true);
+                    btnSubmit.setAlpha(1f);
+                    setStatus("✗ Request failed: " + e.getMessage());
+                    Toast.makeText(this, "Request failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
      }
 
     private void createPendingEmergencyBookingForProvider(String requestId, NearbyProvider provider) {
