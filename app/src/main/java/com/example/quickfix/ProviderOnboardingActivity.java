@@ -705,11 +705,14 @@ public class ProviderOnboardingActivity extends BaseActivity {
                 description,
                 address,
                 city,
+                "", // area not collected
+                "", // pincode not collected
+                address, // fullAddress (fallback to address)
                 String.valueOf(experienceYrs),
                 bizImgUrl,
                 idProofUrl,
-                Double.NaN,
-                Double.NaN,
+                null, // latitude
+                null, // longitude
                 new ProviderApplicationRepository.Callback() {
                     @Override
                     public void onSuccess() {

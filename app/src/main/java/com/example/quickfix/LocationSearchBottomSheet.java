@@ -170,7 +170,19 @@ public class LocationSearchBottomSheet {
                         if (liveProgress != null) {
                             liveProgress.setVisibility(View.GONE);
                         }
-                        locationManager.saveLocation(city, area, lat, lng);
+                        String addressLine = "";
+                        String pincode = "";
+                        try {
+                            Geocoder geocoder = new Geocoder(activity, Locale.getDefault());
+                            List<Address> addresses = geocoder.getFromLocation(lat, lng, 1);
+                            if (addresses != null && !addresses.isEmpty()) {
+                                Address address = addresses.get(0);
+                                addressLine = safe(address.getAddressLine(0));
+                                pincode = safe(address.getPostalCode());
+                            }
+                        } catch (Exception ignored) {
+                        }
+                        locationManager.saveLocation(city, area, addressLine, pincode, lat, lng);
                         if (listener != null) {
                             listener.onLocationPicked(new LocationSuggestion(city, area, "", lat, lng, true, 0f));
                         }

@@ -1,19 +1,32 @@
 package com.example.quickfix;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.location.Address;
+import android.location.Geocoder;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.Editable;
+import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
+import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AppCompatActivity;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ActivityCompat;
+import androidx.core.widget.NestedScrollView;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.checkbox.MaterialCheckBox;
@@ -21,44 +34,26 @@ import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import android.widget.TextView;
-import org.json.JSONObject;
-import okhttp3.MediaType;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-import android.util.Log;
-import java.util.Locale;
-import com.google.android.material.textfield.TextInputLayout;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
 
-/**
- * ProviderApplicationActivity — "Become a Service Provider" form.
- *
- * Validators:
- *  • Business Name  : letters/spaces only (no digits, no special chars)
- *  • Phone          : exactly 10 digits
- *  • Experience     : numbers only, 1–99
- *  • Email          : pre-filled from account, read-only
- *  • Terms          : must scroll to bottom first, then tick checkbox
- */
+import java.util.List;
+import java.util.Locale;
+
 public class ProviderApplicationActivity extends BaseActivity {
 
+    private static final String TAG = "ProvAppActivity";
+
     // ── Views ─────────────────────────────────────────────────────────────
-    private TextInputLayout  layoutBusinessName, layoutOwnerName, layoutPhone,
-                             layoutEmail, layoutCategory, layoutCity,
-                             layoutExperience, layoutDescription;
-    private TextInputEditText etBusinessName, etOwnerName, etPhone,
-                              etEmail, etCity, etExperience, etDescription;
-    private AutoCompleteTextView spinnerCategory;
-    private ScrollView       termsScrollView;
-    private View             tvScrollHint;   // now a LinearLayout in XML
-    private MaterialCheckBox checkboxTerms;
-    private MaterialButton   btnSubmit, btnSuccessHome, btnLiveLocation, btnManualLocation;
-    private FrameLayout      successOverlay;
-    private LinearLayout     layoutStatusBadge, layoutLocationDisplay;
-    private TextView         tvSelectedLocationLabel, tvStepIndicator1, tvStepIndicator2, tvStepIndicator3;
+    private TextInputEditText etBusinessName, etOwnerName, etEmail, etPhone, etPincode, etAddress, etExperience, etDescription;
+    private TextInputLayout tilBusinessName, tilPhone, tilPincode, tilAddress, tilExperience, tilDescription;
+    private AutoCompleteTextView actCategory;
+    private NestedScrollView mainScroll;
+    private TextView         tvTermsScrollMsg, tvLocationLabel, tvLoadingMsg, tvIdProofLabel, tvBizImageLabel, tvIdError, tvLocationError;
+    private MaterialCheckBox cbTerms;
+    private MaterialButton   btnSubmit, btnSetBusinessLocation;
+    private FrameLayout      successOverlay, loadingOverlay;
+    private LinearLayout     layoutLocationDisplay, layoutIdProof, layoutBizImage;
+    private ImageView        ivIdProofPreview, ivBizImagePreview;
+    private TextView         tvStepIndicator1, tvStepIndicator2, tvStepIndicator3;
 
     // ── State ─────────────────────────────────────────────────────────────
     private boolean termsScrolledToBottom = false;
@@ -66,6 +61,13 @@ public class ProviderApplicationActivity extends BaseActivity {
 
     private double             selectedLat = Double.NaN;
     private double             selectedLng = Double.NaN;
+    private String             selectedArea = "";
+
+    private Uri idProofUri = null;
+    private Uri businessImgUri = null;
+    private String idProofUrl = "";
+    private String businessImgUrl = "";
+
     private AppLocationManager locationManager;
 
     private static final String[] CATEGORIES = {
@@ -74,7 +76,31 @@ public class ProviderApplicationActivity extends BaseActivity {
             "Appliance Repair", "Security Systems", "Landscaping", "Other"
     };
 
-    // ═══════════════════════════════════════════════════════════════════════
+    // ── File pickers ──────────────────────────────────────────────────────
+    private final ActivityResultLauncher<String[]> idProofPicker =
+            registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+                if (uri != null) {
+                    idProofUri = uri;
+                    ivIdProofPreview.setImageURI(uri);
+                    ivIdProofPreview.setColorFilter(null);
+                    tvIdProofLabel.setText("ID Proof Selected ✅");
+                    tvIdProofLabel.setTextColor(getResources().getColor(R.color.success_green));
+                    checkFormValid();
+                }
+            });
+
+    private final ActivityResultLauncher<String[]> businessImgPicker =
+            registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+                if (uri != null) {
+                    businessImgUri = uri;
+                    ivBizImagePreview.setImageURI(uri);
+                    ivBizImagePreview.setColorFilter(null);
+                    tvBizImageLabel.setText("Business Image Selected ✅");
+                    tvBizImageLabel.setTextColor(getResources().getColor(R.color.success_green));
+                    checkFormValid();
+                }
+            });
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -90,17 +116,24 @@ public class ProviderApplicationActivity extends BaseActivity {
 
         setupToolbar();
         bindViews();
+        autoFetchEmail(user);
         setupCategoryDropdown();
-        prefillFromFirebase(user);
+        prefillFromSupabase(user);
         setupTermsScrollDetection();
         setupFieldWatchers();
+        setupImagePickers();
         setupSubmitButton(user);
-        setupSuccessButton();
-        setupLocationOptions();
+        setupLocationLogic();
         checkExistingApplication(user.getUid());
     }
 
-    // ── Toolbar ───────────────────────────────────────────────────────────
+    private void autoFetchEmail(FirebaseUser user) {
+        if (user != null && user.getEmail() != null) {
+            etEmail.setText(user.getEmail());
+            etEmail.setEnabled(false);
+        }
+    }
+
     private void setupToolbar() {
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -111,399 +144,325 @@ public class ProviderApplicationActivity extends BaseActivity {
         toolbar.setNavigationOnClickListener(v -> finish());
     }
 
-    // ── Bind views ────────────────────────────────────────────────────────
     private void bindViews() {
-        layoutBusinessName = findViewById(R.id.layoutBusinessName);
-        layoutOwnerName    = findViewById(R.id.layoutOwnerName);
-        layoutPhone        = findViewById(R.id.layoutPhone);
-        layoutEmail        = findViewById(R.id.layoutEmail);
-        layoutCategory     = findViewById(R.id.layoutCategory);
-        layoutCity         = findViewById(R.id.layoutCity);
-        layoutExperience   = findViewById(R.id.layoutExperience);
-        layoutDescription  = findViewById(R.id.layoutDescription);
+        etBusinessName  = findViewById(R.id.etBusinessName);
+        etOwnerName     = findViewById(R.id.etOwnerName);
+        etEmail         = findViewById(R.id.etEmail);
+        etPhone         = findViewById(R.id.etPhone);
+        etPincode       = findViewById(R.id.etPincode);
+        etAddress       = findViewById(R.id.etAddress);
+        etExperience    = findViewById(R.id.etExperience);
+        etDescription   = findViewById(R.id.etDescription);
+        actCategory     = findViewById(R.id.actCategory);
 
-        etBusinessName = findViewById(R.id.etBusinessName);
-        etOwnerName    = findViewById(R.id.etOwnerName);
-        etPhone        = findViewById(R.id.etPhone);
-        etEmail        = findViewById(R.id.etEmail);
-        spinnerCategory= findViewById(R.id.spinnerCategory);
-        etCity         = findViewById(R.id.etCity);
-        etExperience   = findViewById(R.id.etExperience);
-        etDescription  = findViewById(R.id.etDescription);
+        tilBusinessName = findViewById(R.id.tilBusinessName);
+        tilPhone        = findViewById(R.id.tilPhone);
+        tilPincode      = findViewById(R.id.tilPincode);
+        tilAddress      = findViewById(R.id.tilAddress);
+        tilExperience   = findViewById(R.id.tilExperience);
+        tilDescription  = findViewById(R.id.tilDescription);
 
-        termsScrollView   = findViewById(R.id.termsScrollView);
-        tvScrollHint      = findViewById(R.id.tvScrollHint);
-        checkboxTerms     = findViewById(R.id.checkboxTerms);
-        btnSubmit         = findViewById(R.id.btnSubmit);
-        successOverlay    = findViewById(R.id.successOverlay);
-        btnSuccessHome    = findViewById(R.id.btnSuccessHome);
-        layoutStatusBadge = findViewById(R.id.layoutStatusBadge);
-
-        btnLiveLocation    = findViewById(R.id.btnLiveLocation);
-        btnManualLocation  = findViewById(R.id.btnManualLocation);
+        mainScroll       = findViewById(R.id.mainScroll);
+        tvTermsScrollMsg = findViewById(R.id.tvTermsScrollMsg);
+        cbTerms          = findViewById(R.id.cbTerms);
+        btnSubmit        = findViewById(R.id.btnSubmit);
+        btnSetBusinessLocation = findViewById(R.id.btnSetBusinessLocation);
+        tvLocationLabel  = findViewById(R.id.tvLocationLabel);
         layoutLocationDisplay = findViewById(R.id.layoutLocationDisplay);
-        tvSelectedLocationLabel = findViewById(R.id.tvSelectedLocationLabel);
+        
+        layoutIdProof    = findViewById(R.id.layoutIdProof);
+        layoutBizImage   = findViewById(R.id.layoutBizImage);
+        ivIdProofPreview = findViewById(R.id.ivIdProofPreview);
+        ivBizImagePreview= findViewById(R.id.ivBizImagePreview);
+        tvIdProofLabel   = findViewById(R.id.tvIdProofLabel);
+        tvBizImageLabel  = findViewById(R.id.tvBizImageLabel);
+        tvIdError        = findViewById(R.id.tvIdError);
+        tvLocationError  = findViewById(R.id.tvLocationError);
 
-        tvStepIndicator1   = findViewById(R.id.tvStepIndicator1);
-        tvStepIndicator2   = findViewById(R.id.tvStepIndicator2);
-        tvStepIndicator3   = findViewById(R.id.tvStepIndicator3);
-    }
-    private void setupLocationOptions() {
-        if (btnLiveLocation == null || btnManualLocation == null) return;
-
-        btnLiveLocation.setOnClickListener(v -> {
-            showLoading(true);
-            locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
-                @Override
-                public void onSuccess(String city, String area, double lat, double lng) {
-                    runOnUiThread(() -> {
-                        showLoading(false);
-                        selectedLat = lat;
-                        selectedLng = lng;
-                        
-                        // Use area as city fallback
-                        String areaName = (area != null && !area.isEmpty()) ? area : city;
-                        etCity.setText(areaName);
-                        
-                        layoutCity.setVisibility(View.GONE);
-                        layoutLocationDisplay.setVisibility(View.VISIBLE);
-                        tvSelectedLocationLabel.setText("Location: " + areaName);
-                        
-                        updateStepIndicators(2);
-                        updateSubmitButtonState();
-                    });
-                }
-
-                @Override
-                public void onFailure(String error) {
-                    runOnUiThread(() -> {
-                        showLoading(false);
-                        showError("Location not available. Please enter manually.");
-                        switchToManualLocation();
-                    });
-                }
-            });
-        });
-
-        btnManualLocation.setOnClickListener(v -> switchToManualLocation());
-    }
-
-    private void switchToManualLocation() {
-        selectedLat = Double.NaN;
-        selectedLng = Double.NaN;
-        layoutCity.setVisibility(View.VISIBLE);
-        layoutLocationDisplay.setVisibility(View.GONE);
-        updateStepIndicators(2);
-        updateSubmitButtonState();
-    }
-
-    private void updateStepIndicators(int step) {
-        if (tvStepIndicator1 == null) return;
-
-        // Step 1: Details
-        // Step 2: Location (Service)
-        // Step 3: Terms
-
-        int activeColor = getResources().getColor(R.color.white);
-        int inactiveColor = getResources().getColor(R.color.on_gradient_muted);
-        int activeBg = R.drawable.bg_step_circle_active;
-        int inactiveBg = R.drawable.bg_step_circle_inactive;
-
-        tvStepIndicator1.setBackgroundResource(step >= 1 ? activeBg : inactiveBg);
-        tvStepIndicator1.setTextColor(step >= 1 ? activeColor : inactiveColor);
-
-        tvStepIndicator2.setBackgroundResource(step >= 2 ? activeBg : inactiveBg);
-        tvStepIndicator2.setTextColor(step >= 2 ? activeColor : inactiveColor);
-
-        tvStepIndicator3.setBackgroundResource(step >= 3 ? activeBg : inactiveBg);
-        tvStepIndicator3.setTextColor(step >= 3 ? activeColor : inactiveColor);
-    }
-    private void setupCategoryDropdown() {
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                this, android.R.layout.simple_dropdown_item_1line, CATEGORIES);
-        spinnerCategory.setAdapter(adapter);
-        spinnerCategory.setOnItemClickListener((parent, view, position, id) ->
-                updateSubmitButtonState());
-    }
-
-    // ── Pre-fill from Firebase ────────────────────────────────────────────
-    private void prefillFromFirebase(FirebaseUser user) {
-        // Email — read-only, from account
-        if (user.getEmail() != null) {
-            etEmail.setText(user.getEmail());
-        }
-        etEmail.setFocusable(false);
-        etEmail.setFocusableInTouchMode(false);
-        etEmail.setClickable(false);
-        etEmail.setCursorVisible(false);
-
-        // Owner name pre-fill if available
-        if (user.getDisplayName() != null && !user.getDisplayName().isEmpty()) {
-            etOwnerName.setText(user.getDisplayName());
-        }
-    }
-
-    // ── Terms scroll detection ────────────────────────────────────────────
-    private void setupTermsScrollDetection() {
-        termsScrollView.getViewTreeObserver().addOnScrollChangedListener(() -> {
-            if (termsScrolledToBottom) return;
-            View child = termsScrollView.getChildAt(0);
-            if (child == null) return;
-            int diff = child.getHeight()
-                    - (termsScrollView.getHeight() + termsScrollView.getScrollY());
-            if (diff <= 8) {
-                termsScrolledToBottom = true;
-                checkboxTerms.setEnabled(true);
-                if (tvScrollHint != null) {
-                    // Change banner to "all read" success style
-                    tvScrollHint.setBackgroundColor(getColor(R.color.success_bg));
-                }
-                updateSubmitButtonState();
-            }
-        });
-    }
-
-    // ── Text watchers ─────────────────────────────────────────────────────
-    private void setupFieldWatchers() {
-        TextWatcher watcher = new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
-            @Override public void onTextChanged(CharSequence s, int st, int b, int c) {}
-            @Override public void afterTextChanged(Editable s) { updateSubmitButtonState(); }
-        };
-        etBusinessName.addTextChangedListener(watcher);
-        etOwnerName.addTextChangedListener(watcher);
-        etPhone.addTextChangedListener(watcher);
-        etCity.addTextChangedListener(watcher);
-        etExperience.addTextChangedListener(watcher);
-        etDescription.addTextChangedListener(watcher);
-        checkboxTerms.setOnCheckedChangeListener((btn, checked) -> updateSubmitButtonState());
-    }
-
-    // ── Real-time submit button enablement ────────────────────────────────
-    private void updateSubmitButtonState() {
-        String phone = str(etPhone);
-        String exp   = str(etExperience);
-        String biz   = str(etBusinessName);
-
-        boolean phoneOk = phone.matches("\\d{10}");
-        boolean expOk   = exp.matches("\\d{1,2}") && !exp.equals("0");
-        boolean bizOk   = biz.matches("[a-zA-Z\\s.&'-]+") && !biz.isEmpty();
-
-        boolean allFilled = bizOk
-                && isNotEmpty(etOwnerName)
-                && phoneOk
-                && isNotEmpty(etEmail)
-                && isNotEmpty(spinnerCategory)
-                && isNotEmpty(etCity)
-                && expOk
-                && isNotEmpty(etDescription);
-
-        boolean ready = allFilled && checkboxTerms.isChecked();
-        btnSubmit.setEnabled(ready);
-        btnSubmit.setAlpha(ready ? 1f : 0.5f);
-    }
-
-    // ── Submit ────────────────────────────────────────────────────────────
-    private void setupSubmitButton(FirebaseUser user) {
-        btnSubmit.setOnClickListener(v -> {
-            if (isSubmitting) return;
-            if (!validateAllFields(true)) return;
-
-            isSubmitting = true;
-            btnSubmit.setEnabled(false);
-            btnSubmit.setText("Submitting…");
-
-            ProviderApplicationRepository.submitApplication(
-                    user.getUid(),
-                    str(etOwnerName),
-                    str(etEmail),
-                    str(etPhone),
-                    str(etBusinessName),
-                    str(spinnerCategory),
-                    str(etDescription),
-                    "",
-                    str(etCity),
-                    str(etExperience),
-                    null,
-                    null,
-                    selectedLat,
-                    selectedLng,
-                    new ProviderApplicationRepository.Callback() {
-                        @Override public void onSuccess() {
-                            isSubmitting = false;
-                            showSuccessOverlay();
-                        }
-                        @Override public void onError(String message) {
-                            isSubmitting = false;
-                            btnSubmit.setEnabled(true);
-                            btnSubmit.setText("Submit Application");
-                            if ("DUPLICATE".equals(message)) {
-                                showError("You already have a pending or approved application.");
-                                showStatusBadge();
-                            } else if ("NETWORK_ERROR".equals(message)) {
-                                showError(getString(R.string.error_network_retry));
-                            } else {
-                                showError("Submission failed: " + message);
-                            }
-                        }
-                    });
-        });
-    }
-
-    // ── Full validation (on submit tap) ───────────────────────────────────
-    private boolean validateAllFields(boolean showErrors) {
-        boolean valid = true;
-
-        // Business Name — letters/spaces/basic punctuation only
-        String biz = str(etBusinessName);
-        if (biz.isEmpty()) {
-            if (showErrors) layoutBusinessName.setError("Business name is required.");
-            valid = false;
-        } else if (!biz.matches("[a-zA-Z\\s.&'-]+")) {
-            if (showErrors) layoutBusinessName.setError("Business name must contain letters only.");
-            valid = false;
-        } else {
-            layoutBusinessName.setError(null);
-        }
-
-        // Owner Name
-        if (str(etOwnerName).isEmpty()) {
-            if (showErrors) layoutOwnerName.setError("Owner name is required.");
-            valid = false;
-        } else {
-            layoutOwnerName.setError(null);
-        }
-
-        // Phone — exactly 10 digits
-        String phone = str(etPhone);
-        if (phone.isEmpty()) {
-            if (showErrors) layoutPhone.setError("Phone number is required.");
-            valid = false;
-        } else if (!phone.matches("\\d{10}")) {
-            if (showErrors) layoutPhone.setError("Enter a valid 10-digit mobile number.");
-            valid = false;
-        } else {
-            layoutPhone.setError(null);
-        }
-
-        // Email (read-only, should always be filled)
-        if (str(etEmail).isEmpty()) {
-            if (showErrors) layoutEmail.setError("Email is required.");
-            valid = false;
-        } else {
-            layoutEmail.setError(null);
-        }
-
-        // Category
-        if (str(spinnerCategory).isEmpty()) {
-            if (showErrors) layoutCategory.setError("Please select a service category.");
-            valid = false;
-        } else {
-            layoutCategory.setError(null);
-        }
-
-        // City
-        if (Double.isNaN(selectedLat) && str(etCity).isEmpty()) {
-            if (showErrors) layoutCity.setError("City or live location is required.");
-            valid = false;
-        } else {
-            layoutCity.setError(null);
-        }
-
-        // Years of Experience — numbers only, 1–99
-        String exp = str(etExperience);
-        if (exp.isEmpty()) {
-            if (showErrors) layoutExperience.setError("Years of experience is required.");
-            valid = false;
-        } else if (!exp.matches("\\d{1,2}") || exp.equals("0")) {
-            if (showErrors) layoutExperience.setError("Enter a valid number (1–99).");
-            valid = false;
-        } else {
-            layoutExperience.setError(null);
-        }
-
-        // Description
-        if (str(etDescription).isEmpty()) {
-            if (showErrors) layoutDescription.setError("Please describe your services.");
-            valid = false;
-        } else {
-            layoutDescription.setError(null);
-        }
-
-        return valid;
-    }
-
-    private boolean validateAllFields() {
-        boolean valid = validateAllFields(true);
-        if (valid && !checkboxTerms.isChecked()) {
-            showError("Please read and accept the Terms & Conditions.");
-            valid = false;
-        }
-        return valid;
-    }
-
-    // ── Existing application check ────────────────────────────────────────
-    private void checkExistingApplication(String uid) {
-        ProviderApplicationRepository.checkApplicationStatus(uid,
-                new ProviderApplicationRepository.StatusCallback() {
-                    @Override public void onFound(String status) {
-                        if ("approved".equals(status)) {
-                            Toast.makeText(ProviderApplicationActivity.this,
-                                    "Your application is already approved!", Toast.LENGTH_LONG).show();
-                            startActivity(new Intent(ProviderApplicationActivity.this,
-                                    ProviderDashboardActivity.class));
-                            finish();
-                        } else if ("pending".equals(status)) {
-                            showStatusBadge();
-                            disableFormForResubmission();
-                        }
-                    }
-                    @Override public void onNotFound() { /* form ready */ }
-                    @Override public void onError(String message) { /* non-fatal */ }
-                });
-    }
-
-    private void showStatusBadge() {
-        if (layoutStatusBadge != null) layoutStatusBadge.setVisibility(View.VISIBLE);
-    }
-
-    private void disableFormForResubmission() {
-        btnSubmit.setEnabled(false);
-        btnSubmit.setText("Application Pending Review");
-        btnSubmit.setAlpha(0.6f);
-    }
-
-    // ── Success overlay ───────────────────────────────────────────────────
-    private void showSuccessOverlay() {
-        successOverlay.setVisibility(View.VISIBLE);
-        successOverlay.setAlpha(0f);
-        successOverlay.animate().alpha(1f).setDuration(350).start();
-    }
-
-    private void setupSuccessButton() {
-        btnSuccessHome.setOnClickListener(v -> {
-            Intent intent = new Intent(this, MainActivity.class);
-            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            startActivity(intent);
+        loadingOverlay   = findViewById(R.id.loadingOverlay);
+        tvLoadingMsg     = findViewById(R.id.tvLoadingMsg);
+        successOverlay   = findViewById(R.id.successOverlay);
+        
+        tvStepIndicator1 = findViewById(R.id.tvStepIndicator1);
+        tvStepIndicator2 = findViewById(R.id.tvStepIndicator2);
+        tvStepIndicator3 = findViewById(R.id.tvStepIndicator3);
+        
+        findViewById(R.id.btnSuccessHome).setOnClickListener(v -> {
+            Intent i = new Intent(this, MainActivity.class);
+            i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            startActivity(i);
             finish();
         });
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────
-    private String str(android.widget.TextView tv) {
-        return (tv != null && tv.getText() != null) ? tv.getText().toString().trim() : "";
+    private void setupCategoryDropdown() {
+        actCategory.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, CATEGORIES));
+        actCategory.setOnItemClickListener((parent, view, position, id) -> {
+            String selected = CATEGORIES[position];
+            updateHeader(selected);
+            checkFormValid();
+        });
     }
 
-    private boolean isNotEmpty(android.widget.TextView tv) {
-        return !str(tv).isEmpty();
+    private void updateHeader(String category) {
+        TextView title = findViewById(R.id.tvHeaderTitle);
+        if (title != null) title.setText("Become a " + category + " Provider");
+        TextView icon = findViewById(R.id.tvHeaderIcon);
+        if (icon != null) {
+            String emoji = "🏪"; 
+            if (category.contains("Plumb"))      emoji = "🪠";
+            else if (category.contains("Elect"))  emoji = "⚡";
+            else if (category.contains("Clean"))  emoji = "🧹";
+            else if (category.contains("Repair")) emoji = "🛠️";
+            else if (category.contains("AC"))      emoji = "❄️";
+            else if (category.contains("Paint"))   emoji = "🎨";
+            else if (category.contains("Carp"))    emoji = "🪚";
+            else if (category.contains("Pest"))    emoji = "🐜";
+            icon.setText(emoji);
+        }
     }
 
-    private void showError(String msg) {
-        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+    private void prefillFromSupabase(FirebaseUser user) {
+        UserRepository.fetchUserByUid(user.getUid(), new UserRepository.UserCallback() {
+            @Override
+            public void onSuccess(UserModel u) {
+                if (u != null && !TextUtils.isEmpty(u.name)) {
+                    etOwnerName.setText(u.name);
+                    updateStepIndicators(1);
+                }
+            }
+            @Override public void onError(String msg) {
+                if (user.getDisplayName() != null) etOwnerName.setText(user.getDisplayName());
+            }
+        });
     }
 
-    private void showLoading(boolean show) {
-        if (show) Toast.makeText(this, "Processing...", Toast.LENGTH_SHORT).show();
+    private void setupLocationLogic() {
+        btnSetBusinessLocation.setOnClickListener(v -> {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 100);
+                return;
+            }
+            fetchLocation();
+        });
+    }
+
+    private void fetchLocation() {
+        showLoading(true, "Fetching GPS location...");
+        locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
+            @Override
+            public void onSuccess(String city, String area, double lat, double lng) {
+                runOnUiThread(() -> {
+                    showLoading(false, "");
+                    selectedLat = lat;
+                    selectedLng = lng;
+                    
+                    // Resolve area name
+                    selectedArea = (area != null && !area.isEmpty()) ? area : city;
+                    if (selectedArea == null || selectedArea.isEmpty()) selectedArea = "Unknown Area";
+                    
+                    layoutLocationDisplay.setVisibility(View.VISIBLE);
+                    tvLocationLabel.setText(selectedArea);
+                    tvLocationError.setVisibility(View.GONE);
+                    
+                    updateStepIndicators(2);
+                    checkFormValid();
+                });
+            }
+            @Override public void onFailure(String error) {
+                runOnUiThread(() -> { 
+                    showLoading(false, ""); 
+                    showError("Location failed: " + error); 
+                });
+            }
+        });
+    }
+
+    private void setupTermsScrollDetection() {
+        mainScroll.setOnScrollChangeListener((NestedScrollView.OnScrollChangeListener) (v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+            if (termsScrolledToBottom) return;
+            // The terms scroll box is a ScrollView inside the main NestedScrollView or something similar.
+            // Wait, looking at the layout, it's a ScrollView with id scrollTerms.
+            View scrollTerms = findViewById(R.id.scrollTerms);
+            if (scrollTerms instanceof android.widget.ScrollView) {
+                android.widget.ScrollView sv = (android.widget.ScrollView) scrollTerms;
+                View child = sv.getChildAt(0);
+                if (child != null) {
+                    int diff = child.getMeasuredHeight() - (sv.getMeasuredHeight() + sv.getScrollY());
+                    if (diff <= 10) { 
+                        termsScrolledToBottom = true;
+                        cbTerms.setEnabled(true);
+                        tvTermsScrollMsg.setText("✅ Terms read. You can now accept.");
+                        tvTermsScrollMsg.setTextColor(getResources().getColor(R.color.success_green));
+                        checkFormValid();
+                    }
+                }
+            }
+        });
+    }
+
+    private void setupFieldWatchers() {
+        TextWatcher watcher = new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
+            @Override public void onTextChanged(CharSequence s, int st, int b, int c) {}
+            @Override public void afterTextChanged(Editable s) { checkFormValid(); }
+        };
+        etBusinessName.addTextChangedListener(watcher);
+        etPhone.addTextChangedListener(watcher);
+        etPincode.addTextChangedListener(watcher);
+        etAddress.addTextChangedListener(watcher);
+        etExperience.addTextChangedListener(watcher);
+        etDescription.addTextChangedListener(watcher);
+        cbTerms.setOnCheckedChangeListener((btn, checked) -> {
+            if (checked) updateStepIndicators(3);
+            checkFormValid();
+        });
+    }
+
+    private void checkFormValid() {
+        String bName = str(etBusinessName);
+        String phone = str(etPhone);
+        String pin   = str(etPincode);
+        String exp   = str(etExperience);
+        String desc  = str(etDescription);
+        String addr  = str(etAddress);
+        String cat   = str(actCategory);
+
+        boolean bNameOk = !bName.isEmpty() && bName.length() >= 3 && bName.length() <= 80;
+        boolean phoneOk = phone.matches("\\d{10}");
+        boolean pinOk   = pin.matches("\\d{6}");
+        boolean expOk   = false;
+        if (!exp.isEmpty()) {
+            try {
+                int years = Integer.parseInt(exp);
+                expOk = years >= 1 && years <= 50;
+            } catch (Exception ignored) {
+                expOk = false;
+            }
+        }
+        boolean descOk  = desc.length() >= 10 && desc.length() <= 300;
+        boolean addrOk  = !addr.isEmpty() && addr.length() >= 10 && addr.length() <= 180;
+        boolean catOk   = !cat.isEmpty();
+        boolean locOk   = !Double.isNaN(selectedLat) && !Double.isNaN(selectedLng) && !TextUtils.isEmpty(selectedCity);
+        boolean idOk    = idProofUri != null;
+        boolean termsOk = cbTerms.isChecked();
+
+        // Real-time error messages
+        if (!phone.isEmpty() && !phoneOk) tilPhone.setError("Enter a valid 10-digit phone number");
+        else tilPhone.setError(null);
+
+        if (!pin.isEmpty() && !pinOk) tilPincode.setError("Enter valid 6-digit pincode");
+        else tilPincode.setError(null);
+
+        if (!desc.isEmpty() && desc.length() < 10) tilDescription.setError("Minimum 10 characters required");
+        else tilDescription.setError(null);
+
+        if (!exp.isEmpty() && !expOk) tilExperience.setError("Experience must be 1-50");
+        else tilExperience.setError(null);
+
+        // Required field indicators for others (optional visual feedback)
+        if (bName.isEmpty()) tilBusinessName.setHelperText("Required *"); else tilBusinessName.setHelperText(null);
+        if (addr.isEmpty()) tilAddress.setHelperText("Required *"); else tilAddress.setHelperText(null);
+
+        // Visibility-based errors
+        tvIdError.setVisibility(idOk ? View.GONE : View.VISIBLE);
+        tvLocationError.setVisibility(locOk ? View.GONE : View.VISIBLE);
+        if (!locOk) tvLocationError.setText("Please set location with GPS to continue");
+        else tvLocationError.setText("");
+
+        boolean isValid = bNameOk && phoneOk && pinOk && expOk && descOk && addrOk && catOk && locOk && idOk && termsOk;
+        
+        btnSubmit.setEnabled(isValid);
+        btnSubmit.setAlpha(isValid ? 1f : 0.5f);
+    }
+
+    private void setupImagePickers() {
+        layoutIdProof.setOnClickListener(v -> idProofPicker.launch(new String[]{"image/*"}));
+        layoutBizImage.setOnClickListener(v -> businessImgPicker.launch(new String[]{"image/*"}));
+    }
+
+    private void setupSubmitButton(FirebaseUser user) {
+        btnSubmit.setOnClickListener(v -> {
+            if (!btnSubmit.isEnabled()) {
+                Toast.makeText(this, "Please complete all required fields", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (!cbTerms.isChecked()) {
+                Toast.makeText(this, "Accept terms to continue", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (isSubmitting) return;
+            isSubmitting = true;
+            showLoading(true, "Uploading ID Proof...");
+            
+            SupabaseStorageHelper.uploadFile(this, idProofUri, SupabaseStorageHelper.SUPABASE_BUCKET_ID_PROOF, user.getUid(), new SupabaseStorageHelper.UploadCallback() {
+                @Override public void onSuccess(String idUrl) {
+                    idProofUrl = idUrl;
+                    if (businessImgUri != null) {
+                        runOnUiThread(() -> tvLoadingMsg.setText("Uploading business image..."));
+                        SupabaseStorageHelper.uploadFile(ProviderApplicationActivity.this, businessImgUri, SupabaseStorageHelper.SUPABASE_BUCKET_BUSINESS_IMG, user.getUid(), new SupabaseStorageHelper.UploadCallback() {
+                            @Override public void onSuccess(String bizUrl) { businessImgUrl = bizUrl; finalSubmit(user); }
+                            @Override public void onError(String msg) { isSubmitting = false; showLoading(false, ""); showError("Image upload failed: " + msg); }
+                        });
+                    } else {
+                        finalSubmit(user);
+                    }
+                }
+                @Override public void onError(String msg) { isSubmitting = false; showLoading(false, ""); showError("ID upload failed: " + msg); }
+            });
+        });
+    }
+
+    private void finalSubmit(FirebaseUser user) {
+        runOnUiThread(() -> tvLoadingMsg.setText("Finalizing application..."));
+        ProviderApplicationRepository.submitApplication(
+                user.getUid(), str(etOwnerName), user.getEmail(), str(etPhone), str(etBusinessName),
+                str(actCategory), str(etDescription), "", "", selectedArea, "",
+                "", str(etExperience), businessImgUrl, idProofUrl, selectedLat, selectedLng,
+                new ProviderApplicationRepository.Callback() {
+                    @Override public void onSuccess() { isSubmitting = false; showLoading(false, ""); successOverlay.setVisibility(View.VISIBLE); }
+                    @Override public void onError(String msg) { isSubmitting = false; showLoading(false, ""); showError("Submission failed: " + msg); }
+                });
+    }
+
+    private void updateStepIndicators(int step) {
+        if (tvStepIndicator1 == null) return;
+        int active = R.drawable.bg_step_circle_active;
+        int inactive = R.drawable.bg_step_circle_inactive;
+        tvStepIndicator1.setBackgroundResource(step >= 1 ? active : inactive);
+        tvStepIndicator2.setBackgroundResource(step >= 2 ? active : inactive);
+        tvStepIndicator3.setBackgroundResource(step >= 3 ? active : inactive);
+    }
+
+    private void checkExistingApplication(String uid) {
+        ProviderApplicationRepository.checkApplicationStatus(uid, new ProviderApplicationRepository.StatusCallback() {
+            @Override public void onFound(String status) {
+                if ("approved".equals(status)) { startActivity(new Intent(ProviderApplicationActivity.this, ProviderDashboardActivity.class)); finish(); }
+                else if ("pending".equals(status)) { findViewById(R.id.layoutStatusBadge).setVisibility(View.VISIBLE); btnSubmit.setEnabled(false); btnSubmit.setText("Pending Review"); }
+            }
+            @Override public void onNotFound() {}
+            @Override public void onError(String m) {}
+        });
+    }
+
+    private String str(android.widget.TextView tv) { return (tv != null && tv.getText() != null) ? tv.getText().toString().trim() : ""; }
+    private String safe(String value) { return value == null ? "" : value.trim(); }
+    private void showError(String msg) { Toast.makeText(this, msg, Toast.LENGTH_LONG).show(); }
+    private void showLoading(boolean show, String msg) { loadingOverlay.setVisibility(show ? View.VISIBLE : View.GONE); tvLoadingMsg.setText(msg); }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 100) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) fetchLocation();
+            else showPermissionDeniedDialog();
+        }
+    }
+    
+    private void showPermissionDeniedDialog() {
+        new AlertDialog.Builder(this).setTitle("Permission Required").setMessage("Location permission is mandatory to set business location.")
+                .setPositiveButton("Grant", (d, w) -> ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 100))
+                .setNegativeButton("Cancel", null).show();
     }
 }
-

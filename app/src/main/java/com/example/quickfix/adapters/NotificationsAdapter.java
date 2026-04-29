@@ -34,6 +34,8 @@ public class NotificationsAdapter extends RecyclerView.Adapter<NotificationsAdap
     public interface NotificationActionListener {
         void onMarkRead(Notification notification);
         void onDelete(Notification notification);
+        void onAcceptEmergency(Notification notification);
+        void onRejectEmergency(Notification notification);
     }
 
     public NotificationsAdapter(Context context, NotificationActionListener listener) {
@@ -64,6 +66,8 @@ public class NotificationsAdapter extends RecyclerView.Adapter<NotificationsAdap
         MaterialCardView card;
         ImageView ivIcon, ivDelete;
         TextView  tvTitle, tvMessage, tvTime, tvUnreadDot;
+        View layoutQuickActions;
+        View btnAccept, btnReject;
 
         VH(@NonNull View v) {
             super(v);
@@ -74,6 +78,9 @@ public class NotificationsAdapter extends RecyclerView.Adapter<NotificationsAdap
             tvMessage   = v.findViewById(R.id.tvMessage);
             tvTime      = v.findViewById(R.id.tvTime);
             tvUnreadDot = v.findViewById(R.id.tvUnreadDot);
+            layoutQuickActions = v.findViewById(R.id.layoutQuickActions);
+            btnAccept   = v.findViewById(R.id.btnAccept);
+            btnReject   = v.findViewById(R.id.btnReject);
         }
 
         void bind(Notification n) {
@@ -87,6 +94,19 @@ public class NotificationsAdapter extends RecyclerView.Adapter<NotificationsAdap
 
             // Icon by type
             ivIcon.setImageResource(iconForType(n.type));
+
+            // Show quick actions for emergency
+            if ("emergency".equalsIgnoreCase(n.type) || "emergency_request".equalsIgnoreCase(n.type)) {
+                if (layoutQuickActions != null) layoutQuickActions.setVisibility(View.VISIBLE);
+                if (btnAccept != null) btnAccept.setOnClickListener(v -> {
+                    if (listener != null) listener.onAcceptEmergency(n);
+                });
+                if (btnReject != null) btnReject.setOnClickListener(v -> {
+                    if (listener != null) listener.onRejectEmergency(n);
+                });
+            } else {
+                if (layoutQuickActions != null) layoutQuickActions.setVisibility(View.GONE);
+            }
 
             // Mark read on click
             card.setOnClickListener(v -> {

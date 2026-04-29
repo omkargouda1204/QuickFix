@@ -100,9 +100,37 @@ public class UserRepository {
         return u;
     }
 
+    public interface UserCallback {
+        void onSuccess(UserModel user);
+        void onError(String msg);
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
-    //  FETCH ALL USERS
+    //  FETCH SINGLE USER BY UID
     // ═══════════════════════════════════════════════════════════════════════
+    public static void fetchUserByUid(String uid, UserCallback cb) {
+        new Thread(() -> {
+            try {
+                String url = BASE + "?firebase_uid=eq." + uid + "&select=*&limit=1";
+                try (Response r = HTTP.newCall(buildGet(url)).execute()) {
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    if (r.code() == 200) {
+                        JSONArray arr = new JSONArray(body);
+                        if (arr.length() > 0) {
+                            UserModel u = parseUser(arr.getJSONObject(0));
+                            MAIN.post(() -> cb.onSuccess(u));
+                        } else {
+                            MAIN.post(() -> cb.onError("User not found"));
+                        }
+                    } else {
+                        MAIN.post(() -> cb.onError("HTTP " + r.code()));
+                    }
+                }
+            } catch (Exception e) {
+                MAIN.post(() -> cb.onError(e.getMessage()));
+            }
+        }).start();
+    }
     public static void fetchAllUsers(UsersCallback cb) {
         new Thread(() -> {
             try {

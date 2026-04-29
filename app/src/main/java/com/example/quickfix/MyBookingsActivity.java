@@ -235,6 +235,9 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
 
         Log.d(TAG, "loadBookingsWithProviderId URL: " + url);
 
+        final List<Booking> allLoadedBookings = new ArrayList<>();
+
+        // Load regular bookings
         Request request = new Request.Builder()
                 .url(url)
                 .get()
@@ -259,30 +262,105 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
                 int code = response.code();
                 response.close();
 
-                Log.d(TAG, "loadBookingsWithProviderId response: HTTP " + code + " | Body: " + body);
+                Log.d(TAG, "loadBookingsWithProviderId response: HTTP " + code);
 
-                mainHandler.post(() -> {
-                    showLoading(false);
-                    if (code == 200) {
-                        parseBookings(body);
-                    } else {
-                        Toast.makeText(MyBookingsActivity.this,
-                                "Error: HTTP " + code + " | " + body,
-                                Toast.LENGTH_SHORT).show();
+                if (code == 200) {
+                    try {
+                        JSONArray arr = new JSONArray(body);
+                        for (int i = 0; i < arr.length(); i++) {
+                            Booking b = Booking.fromJson(arr.getJSONObject(i));
+                            if (b != null) allLoadedBookings.add(b);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "parseBookings: " + e.getMessage());
+                    }
+                }
+
+                // Also load emergency requests assigned to this provider
+                String emergencyFilter;
+                if (providerId != null && !providerId.isEmpty() && !providerId.equals(providerFirebaseUid)) {
+                    emergencyFilter = "or=(assigned_provider_id.eq." + encodedProviderId
+                            + ",assigned_provider_id.eq." + encodedUid + ")";
+                } else {
+                    emergencyFilter = "assigned_provider_id=eq." + encodedUid;
+                }
+
+                String emergencyUrl = SUPABASE_URL + "/rest/v1/emergency_requests"
+                        + "?" + emergencyFilter
+                        + "&select=*&order=created_at.desc";
+                Request emergencyRequest = new Request.Builder()
+                        .url(emergencyUrl)
+                        .get()
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .build();
+
+                httpClient.newCall(emergencyRequest).enqueue(new Callback() {
+                    @Override
+                    public void onFailure(Call call, IOException e) {
+                        Log.w(TAG, "Emergency requests load failed: " + e.getMessage());
+                        finalizeBookingLoad(allLoadedBookings);
+                    }
+
+                    @Override
+                    public void onResponse(Call call, Response response) throws IOException {
+                        String bodyEmerg = response.body() != null ? response.body().string() : "[]";
+                        response.close();
+
+                        try {
+                            JSONArray arrEmerg = new JSONArray(bodyEmerg);
+                            for (int i = 0; i < arrEmerg.length(); i++) {
+                                JSONObject o = arrEmerg.getJSONObject(i);
+                                Booking b = convertEmergencyToBooking(o);
+                                if (b != null) allLoadedBookings.add(b);
+                            }
+                        } catch (Exception e) {
+                            Log.e(TAG, "Emergency parse error: " + e.getMessage());
+                        }
+
+                        finalizeBookingLoad(allLoadedBookings);
                     }
                 });
             }
         });
     }
 
-    // Legacy fallback retained for compatibility; now routed to provider_id query.
-    private void loadBookingsWithProviderName(String providerName) {
-        loadBookingsWithProviderId();
+    private void finalizeBookingLoad(List<Booking> bookings) {
+        mainHandler.post(() -> {
+            showLoading(false);
+            allBookings.clear();
+            allBookings.addAll(bookings);
+            filterBookings();
+        });
     }
 
-    // Legacy fallback retained for compatibility; now routed to provider_id query.
-    private void loadBookingsWithFirebaseUid() {
-        loadBookingsWithProviderId();
+    private Booking convertEmergencyToBooking(JSONObject o) {
+        try {
+            Booking b = new Booking();
+            b.id = safeString(o, "id");
+            b.customerId = safeString(o, "user_firebase_uid");
+            b.customerName = safeString(o, "user_name");
+            b.customerPhone = safeString(o, "phone");
+            b.serviceName = "🚨 " + safeString(o, "category");
+            b.serviceCategory = safeString(o, "category");
+            b.status = safeString(o, "status");
+            b.description = safeString(o, "description");
+            b.location = safeString(o, "location_label");
+            b.address = safeString(o, "address");
+            b.createdAt = safeString(o, "created_at");
+            b.isEmergency = true;
+            b.emergencyRequestId = b.id;
+            return b;
+        } catch (Exception e) {
+            Log.e(TAG, "convertEmergencyToBooking: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private String safeString(JSONObject o, String key) {
+        if (o == null || o.isNull(key)) return "";
+        String v = o.optString(key, "");
+        return "null".equals(v) ? "" : v;
     }
 
     private void parseBookings(String json) {

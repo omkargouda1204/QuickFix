@@ -27,6 +27,11 @@ public class ProviderApplication {
     public String description;
     public String address;
     public String city;
+    public String area;
+    public String pincode;
+    public String fullAddress;
+    public double latitude = Double.NaN;
+    public double longitude = Double.NaN;
     public String experience;
     public String businessImageUrl;
     public String idProofUrl;
@@ -64,6 +69,11 @@ public class ProviderApplication {
         app.description  = s(o, "description");
         app.address      = s(o, "address");
         app.city         = s(o, "city");
+        app.area         = s(o, "area");
+        app.pincode      = s(o, "pincode");
+        app.fullAddress  = s(o, "full_address");
+        app.latitude     = o.optDouble("latitude", o.optDouble("lat", Double.NaN));
+        app.longitude    = o.optDouble("longitude", o.optDouble("lng", Double.NaN));
 
         String experience = s(o, "experience");
         if (experience.isEmpty()) {

@@ -87,7 +87,11 @@
     <string name="featured_card3_title">Plumbing Fix</string>
     <string name="featured_card3_sub">Starting ₹299</string>
     <string name="featured_card3_desc">Fast leak &amp; pipe repair at your doorstep</string>
+    <string name="home_offers_title">Special Offers</string>
     <string name="nav_home">Home</string>
+    <string name="top_rated_providers">Top Rated Providers</string>
+    <string name="top_booked_providers">Top Booked Providers</string>
+    <string name="bookings_count_suffix">%1$d Bookings</string>
     <string name="nav_bookings">Bookings</string>
     <string name="nav_messages">Messages</string>
     <string name="nav_profile">Profile</string>

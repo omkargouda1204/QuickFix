@@ -14,10 +14,12 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.net.URLEncoder;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -521,6 +523,38 @@ public final class FcmNotificationHelper {
                 );
             } catch (Exception e) {
                 Log.w(TAG, "notifyChatMessage failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    public static void saveNotificationToDb(String receiverUid, String title, String message, String requestId, String type) {
+        new Thread(() -> {
+            try {
+                JSONObject body = new JSONObject();
+                body.put("receiver_id", receiverUid); // provider_id
+                body.put("provider_id", receiverUid); // as requested
+                body.put("title", title);
+                body.put("message", message);
+                body.put("request_id", requestId);
+                body.put("type", type != null ? type : "emergency");
+                body.put("created_at", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(new java.util.Date()));
+
+                Request req = new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/notifications")
+                        .post(RequestBody.create(body.toString(), JSON_TYPE))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
+                        .build();
+
+                try (Response r = HTTP.newCall(req).execute()) {
+                    if (!r.isSuccessful()) {
+                        Log.w(TAG, "saveNotificationToDb failed: " + r.code());
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "saveNotificationToDb error: " + e.getMessage());
             }
         }).start();
     }

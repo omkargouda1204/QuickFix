@@ -25,8 +25,10 @@ import org.json.JSONObject;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.MediaType;
@@ -259,6 +261,140 @@ public class NotificationsActivity extends BaseActivity
                 .setPositiveButton("Delete", (d, w) -> deleteNotification(notification))
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    @Override
+    public void onAcceptEmergency(Notification notification) {
+        if (notification.referenceId == null || notification.referenceId.isEmpty()) {
+            Toast.makeText(this, "Request ID missing", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        showLoading(true);
+        new Thread(() -> {
+            try {
+                // 1. Atomically update status and assign provider
+                JSONObject body = new JSONObject();
+                body.put("status", "accepted");
+                body.put("assigned_provider_id", currentUserId);
+
+                String url = BASE_URL + "/rest/v1/emergency_requests?id=eq." + notification.referenceId + "&status=eq.pending";
+                Request req = new Request.Builder()
+                        .url(url)
+                        .patch(RequestBody.create(body.toString(), MediaType.get("application/json")))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=representation")
+                        .build();
+
+                try (Response r = HTTP.newCall(req).execute()) {
+                    String rb = r.body() != null ? r.body().string() : "[]";
+                    if (r.isSuccessful() && !rb.equals("[]")) {
+                        // Success! Assigned to this provider.
+                        // 2. Create the real booking record
+                        mirrorToBookings(notification.referenceId);
+                        
+                        MAIN.post(() -> {
+                            showLoading(false);
+                            Toast.makeText(this, "Emergency Request Accepted!", Toast.LENGTH_LONG).show();
+                            onMarkRead(notification);
+                            loadNotifications(); // Refresh list
+                        });
+                    } else {
+                        MAIN.post(() -> {
+                            showLoading(false);
+                            Toast.makeText(this, "Already accepted by someone else or cancelled.", Toast.LENGTH_LONG).show();
+                        });
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "onAcceptEmergency: " + e.getMessage());
+                MAIN.post(() -> showLoading(false));
+            }
+        }).start();
+    }
+
+    private void mirrorToBookings(String requestId) {
+        new Thread(() -> {
+            try {
+                // Fetch emergency request details
+                String fetchUrl = BASE_URL + "/rest/v1/emergency_requests?id=eq." + requestId + "&select=*&limit=1";
+                Request fetchReq = new Request.Builder().url(fetchUrl)
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .build();
+
+                try (Response fr = HTTP.newCall(fetchReq).execute()) {
+                    String body = fr.body() != null ? fr.body().string() : "[]";
+                    JSONArray arr = new JSONArray(body);
+                    if (arr.length() > 0) {
+                        JSONObject req = arr.getJSONObject(0);
+                        
+                        // Create booking
+                        JSONObject booking = new JSONObject();
+                        booking.put("customer_id", req.optString("user_id"));
+                        booking.put("provider_id", currentUserId);
+                        booking.put("service_name", "Emergency - " + req.optString("category"));
+                        booking.put("status", "accepted");
+                        booking.put("address", req.optString("location_label"));
+                        booking.put("emergency_request_id", requestId);
+                        booking.put("created_at", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(new java.util.Date()));
+
+                        Request insertReq = new Request.Builder()
+                                .url(BASE_URL + "/rest/v1/bookings")
+                                .post(RequestBody.create(booking.toString(), MediaType.get("application/json")))
+                                .addHeader("apikey", ANON_KEY)
+                                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                                .addHeader("Content-Type", "application/json")
+                                .build();
+                        
+                        try (Response ir = HTTP.newCall(insertReq).execute()) {
+                            if (ir.isSuccessful()) {
+                                // Successfully accepted and mirrored!
+                                // Now cleanup other providers' pending bookings for this emergency
+                                cleanupOtherEmergencyBookings(requestId);
+                            } else {
+                                Log.w(TAG, "Booking insertion failed: " + ir.code());
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "mirrorToBookings failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    private void cleanupOtherEmergencyBookings(String emergencyId) {
+        new Thread(() -> {
+            try {
+                String url = BASE_URL + "/rest/v1/bookings"
+                        + "?emergency_request_id=eq." + emergencyId
+                        + "&provider_id=neq." + currentUserId;
+
+                Request request = new Request.Builder()
+                        .url(url)
+                        .delete()
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .build();
+
+                try (Response response = HTTP.newCall(request).execute()) {
+                    if (!response.isSuccessful()) {
+                        Log.w(TAG, "cleanupOtherEmergencyBookings failed: " + response.code());
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "cleanupOtherEmergencyBookings error: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    @Override
+    public void onRejectEmergency(Notification notification) {
+        // Just delete the notification for this provider
+        deleteNotification(notification);
     }
 
     private void deleteNotification(Notification notification) {

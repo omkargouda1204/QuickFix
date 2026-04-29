@@ -339,7 +339,10 @@ public class AdminProviderApprovalActivity extends BaseActivity
         intent.putExtra(ProviderApplicationDetailActivity.EXTRA_PHONE,            safe(app.phone));
         intent.putExtra(ProviderApplicationDetailActivity.EXTRA_CATEGORY,         safe(app.category));
         intent.putExtra(ProviderApplicationDetailActivity.EXTRA_CITY,             safe(app.city));
+        intent.putExtra(ProviderApplicationDetailActivity.EXTRA_AREA,             safe(app.area));
         intent.putExtra(ProviderApplicationDetailActivity.EXTRA_ADDRESS,          safe(app.address));
+        intent.putExtra(ProviderApplicationDetailActivity.EXTRA_LAT,              app.latitude);
+        intent.putExtra(ProviderApplicationDetailActivity.EXTRA_LNG,              app.longitude);
         intent.putExtra(ProviderApplicationDetailActivity.EXTRA_EXPERIENCE,       safe(app.experience));
         intent.putExtra(ProviderApplicationDetailActivity.EXTRA_DESCRIPTION,      safe(app.description));
         intent.putExtra(ProviderApplicationDetailActivity.EXTRA_STATUS,           safe(app.status));

@@ -22,11 +22,18 @@ public class ProviderProfile {
     public boolean isAvailable = true;
     public float   rating;
     public int     reviewCount;
+    public int     totalBookings;
     public String  status;
     public String  createdAt;
 
+    public double  latitude = Double.NaN;
+    public double  longitude = Double.NaN;
+    
+    // Aliases for compatibility
     public double  lat = Double.NaN;
     public double  lng = Double.NaN;
+
+    public String  area;
 
     public ProviderProfile() {}
 }

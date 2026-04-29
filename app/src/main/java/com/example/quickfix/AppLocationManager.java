@@ -31,6 +31,8 @@ public class AppLocationManager {
     public  static final String KEY_CITY     = "selected_city";
     public  static final String KEY_CITY_LEGACY = "city";
     public  static final String KEY_AREA     = "selected_area";
+    public  static final String KEY_ADDRESS  = "selected_address";
+    public  static final String KEY_PINCODE  = "selected_pincode";
     public  static final String KEY_LAT      = "selected_lat";
     public  static final String KEY_LNG      = "selected_lng";
 
@@ -77,9 +79,23 @@ public class AppLocationManager {
         return prefs.getString(KEY_AREA, "");
     }
 
-    /** Returns a UI-ready location label like "City, Area". */
+    public String getSavedAddress() {
+        return prefs.getString(KEY_ADDRESS, "");
+    }
+
+    public String getSavedPincode() {
+        return prefs.getString(KEY_PINCODE, "");
+    }
+
+    /** Returns a UI-ready location label like "City - 560001". */
     public String getSavedLocationLabel() {
+        String label = composeLocationLabel(getSavedCity(), getSavedPincode());
+        if (!label.isEmpty()) return label;
         return composeLocationLabel(getSavedCity(), getSavedArea());
+    }
+
+    public String getSavedDisplayLabel() {
+        return getSavedLocationLabel();
     }
 
     /** Saves city manually. */
@@ -89,6 +105,8 @@ public class AppLocationManager {
                 .putString(KEY_CITY, normalized)
                 .putString(KEY_CITY_LEGACY, normalized)
                 .remove(KEY_AREA)
+                .remove(KEY_ADDRESS)
+                .remove(KEY_PINCODE)
                 .remove(KEY_LAT)
                 .remove(KEY_LNG)
                 .apply();
@@ -101,12 +119,25 @@ public class AppLocationManager {
 
     /** Saves city + area with coordinates. */
     public void saveLocation(String city, String area, double lat, double lng) {
+        saveLocation(city, area, "", "", lat, lng);
+    }
+
+    public void saveLocation(String city,
+                             String area,
+                             String address,
+                             String pincode,
+                             double lat,
+                             double lng) {
         String normalizedCity = normalize(city);
         String normalizedArea = normalize(area);
+        String normalizedAddress = normalize(address);
+        String normalizedPincode = normalize(pincode);
         prefs.edit()
                 .putString(KEY_CITY, normalizedCity)
                 .putString(KEY_CITY_LEGACY, normalizedCity)
                 .putString(KEY_AREA, normalizedArea)
+                .putString(KEY_ADDRESS, normalizedAddress)
+                .putString(KEY_PINCODE, normalizedPincode)
                 .putString(KEY_LAT, String.valueOf(lat))
                 .putString(KEY_LNG, String.valueOf(lng))
                 .apply();
@@ -214,6 +245,8 @@ public class AppLocationManager {
                 .remove(KEY_CITY)
                 .remove(KEY_CITY_LEGACY)
                 .remove(KEY_AREA)
+                .remove(KEY_ADDRESS)
+                .remove(KEY_PINCODE)
                 .remove(KEY_LAT)
                 .remove(KEY_LNG)
                 .apply();
@@ -236,7 +269,7 @@ public class AppLocationManager {
     public static String composeLocationLabel(String city, String area) {
         String c = normalize(city);
         String a = normalize(area);
-        if (!c.isEmpty() && !a.isEmpty()) return c + ", " + a;
+        if (!c.isEmpty() && !a.isEmpty()) return c + " - " + a;
         return c.isEmpty() ? a : c;
     }
 
