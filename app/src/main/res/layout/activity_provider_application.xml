@@ -296,23 +296,25 @@
                     android:orientation="vertical"
                     android:padding="20dp">
 
+                    <!-- Location Selection -->
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Business Location"
+                        android:text="Business Location *"
                         android:textColor="@color/primary"
-                        android:textSize="14sp"
+                        android:textSize="13sp"
                         android:textStyle="bold"
-                        android:layout_marginBottom="16dp" />
+                        android:layout_marginBottom="10dp" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnFetchLocation"
+                        android:id="@+id/btnSetBusinessLocation"
                         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                         android:layout_width="match_parent"
                         android:layout_height="52dp"
-                        android:text="Fetch GPS Location"
-                        app:icon="@drawable/ic_my_location"
+                        android:text="Set Business Location"
+                        app:icon="@drawable/ic_location"
                         app:cornerRadius="12dp"
+                        android:textAllCaps="false"
                         android:layout_marginBottom="12dp" />
 
                     <LinearLayout
@@ -329,13 +331,14 @@
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:src="@drawable/ic_location"
-                            app:tint="@color/primary" />
+                            app:tint="@color/primary"
+                            android:contentDescription="Location Icon" />
                         <TextView
                             android:id="@+id/tvLocationLabel"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="10dp"
-                            android:text="Place name - Pincode"
+                            android:text="Thodar"
                             android:textColor="@color/primary"
                             android:textStyle="bold" />
                     </LinearLayout>
@@ -344,7 +347,7 @@
                         android:id="@+id/tvLocationError"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Please fetch GPS location"
+                        android:text="Please set business location"
                         android:textColor="#D32F2F"
                         android:textSize="12sp"
                         android:layout_marginBottom="8dp"

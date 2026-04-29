@@ -190,8 +190,8 @@ public class UserBookingsActivity extends BaseActivity
 
                 // Load emergency requests and convert to bookings for unified display
                 String emergencyUrl = BASE_URL
-                        + "/rest/v1/emergency_requests?user_firebase_uid=eq." + uid
-                        + "&select=*&order=created_at.desc";
+                    + "/rest/v1/emergency_requests?or=(user_firebase_uid.eq." + uid + ",user_id.eq." + uid + ")"
+                    + "&select=*&order=created_at.desc";
                 try (Response rEmerg = HTTP.newCall(new Request.Builder().url(emergencyUrl)
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
@@ -242,6 +242,8 @@ public class UserBookingsActivity extends BaseActivity
             b.location = o.optString("location_label", "");
             b.description = o.optString("description", "Emergency request");
             b.createdAt = o.optString("created_at", "");
+            b.isEmergency = true;
+            b.emergencyRequestId = b.id;
             return b;
         } catch (Exception e) {
             Log.e(TAG, "convertEmergencyToBooking: " + e.getMessage());

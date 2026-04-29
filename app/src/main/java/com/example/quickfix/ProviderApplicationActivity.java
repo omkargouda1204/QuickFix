@@ -49,7 +49,7 @@ public class ProviderApplicationActivity extends BaseActivity {
     private NestedScrollView mainScroll;
     private TextView         tvTermsScrollMsg, tvLocationLabel, tvLoadingMsg, tvIdProofLabel, tvBizImageLabel, tvIdError, tvLocationError;
     private MaterialCheckBox cbTerms;
-    private MaterialButton   btnSubmit, btnFetchLocation;
+    private MaterialButton   btnSubmit, btnSetBusinessLocation;
     private FrameLayout      successOverlay, loadingOverlay;
     private LinearLayout     layoutLocationDisplay, layoutIdProof, layoutBizImage;
     private ImageView        ivIdProofPreview, ivBizImagePreview;
@@ -61,9 +61,6 @@ public class ProviderApplicationActivity extends BaseActivity {
 
     private double             selectedLat = Double.NaN;
     private double             selectedLng = Double.NaN;
-    private String             selectedCity = "";
-    private String             selectedPincode = "";
-    private String             selectedFullAddress = "";
     private String             selectedArea = "";
 
     private Uri idProofUri = null;
@@ -169,7 +166,7 @@ public class ProviderApplicationActivity extends BaseActivity {
         tvTermsScrollMsg = findViewById(R.id.tvTermsScrollMsg);
         cbTerms          = findViewById(R.id.cbTerms);
         btnSubmit        = findViewById(R.id.btnSubmit);
-        btnFetchLocation = findViewById(R.id.btnFetchLocation);
+        btnSetBusinessLocation = findViewById(R.id.btnSetBusinessLocation);
         tvLocationLabel  = findViewById(R.id.tvLocationLabel);
         layoutLocationDisplay = findViewById(R.id.layoutLocationDisplay);
         
@@ -241,7 +238,7 @@ public class ProviderApplicationActivity extends BaseActivity {
     }
 
     private void setupLocationLogic() {
-        btnFetchLocation.setOnClickListener(v -> {
+        btnSetBusinessLocation.setOnClickListener(v -> {
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 100);
                 return;
@@ -259,62 +256,46 @@ public class ProviderApplicationActivity extends BaseActivity {
                     showLoading(false, "");
                     selectedLat = lat;
                     selectedLng = lng;
-                    selectedCity = city == null ? "" : city.trim();
-                    selectedArea = area == null ? "" : area.trim();
-                    resolveAddress(lat, lng);
+                    
+                    // Resolve area name
+                    selectedArea = (area != null && !area.isEmpty()) ? area : city;
+                    if (selectedArea == null || selectedArea.isEmpty()) selectedArea = "Unknown Area";
+                    
+                    layoutLocationDisplay.setVisibility(View.VISIBLE);
+                    tvLocationLabel.setText(selectedArea);
+                    tvLocationError.setVisibility(View.GONE);
+                    
+                    updateStepIndicators(2);
+                    checkFormValid();
                 });
             }
             @Override public void onFailure(String error) {
-                runOnUiThread(() -> { showLoading(false, ""); showError("Location failed: " + error); });
+                runOnUiThread(() -> { 
+                    showLoading(false, ""); 
+                    showError("Location failed: " + error); 
+                });
             }
         });
-    }
-
-    private void resolveAddress(double lat, double lng) {
-        try {
-            Geocoder geocoder = new Geocoder(this, Locale.getDefault());
-            List<Address> addresses = geocoder.getFromLocation(lat, lng, 1);
-            if (addresses != null && !addresses.isEmpty()) {
-                Address addr = addresses.get(0);
-                    selectedCity = safe(addr.getLocality());
-                    selectedArea = safe(addr.getSubLocality());
-                    selectedPincode = safe(addr.getPostalCode());
-                    selectedFullAddress = safe(addr.getAddressLine(0));
-                    if (TextUtils.isEmpty(selectedFullAddress)) {
-                        selectedFullAddress = safe(addr.getFeatureName());
-                    }
-
-                String display = selectedCity;
-                if (!TextUtils.isEmpty(selectedPincode)) {
-                    display += " - " + selectedPincode;
-                    etPincode.setText(selectedPincode);
-                }
-                layoutLocationDisplay.setVisibility(View.VISIBLE);
-                tvLocationLabel.setText(display);
-                if (TextUtils.isEmpty(str(etAddress))) etAddress.setText(selectedFullAddress);
-                locationManager.saveLocation(selectedCity, selectedArea, selectedFullAddress, selectedPincode, lat, lng);
-                
-                updateStepIndicators(2);
-                checkFormValid();
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Geocode failed", e);
-            showError("Could not resolve area name.");
-        }
     }
 
     private void setupTermsScrollDetection() {
         mainScroll.setOnScrollChangeListener((NestedScrollView.OnScrollChangeListener) (v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
             if (termsScrolledToBottom) return;
-            View child = v.getChildAt(0);
-            if (child != null) {
-                int diff = child.getMeasuredHeight() - (v.getMeasuredHeight() + scrollY);
-                if (diff <= 50) { 
-                    termsScrolledToBottom = true;
-                    cbTerms.setEnabled(true);
-                    tvTermsScrollMsg.setText("✅ Terms read. You can now accept.");
-                    tvTermsScrollMsg.setTextColor(getResources().getColor(R.color.success_green));
-                    checkFormValid();
+            // The terms scroll box is a ScrollView inside the main NestedScrollView or something similar.
+            // Wait, looking at the layout, it's a ScrollView with id scrollTerms.
+            View scrollTerms = findViewById(R.id.scrollTerms);
+            if (scrollTerms instanceof android.widget.ScrollView) {
+                android.widget.ScrollView sv = (android.widget.ScrollView) scrollTerms;
+                View child = sv.getChildAt(0);
+                if (child != null) {
+                    int diff = child.getMeasuredHeight() - (sv.getMeasuredHeight() + sv.getScrollY());
+                    if (diff <= 10) { 
+                        termsScrolledToBottom = true;
+                        cbTerms.setEnabled(true);
+                        tvTermsScrollMsg.setText("✅ Terms read. You can now accept.");
+                        tvTermsScrollMsg.setTextColor(getResources().getColor(R.color.success_green));
+                        checkFormValid();
+                    }
                 }
             }
         });
@@ -437,8 +418,8 @@ public class ProviderApplicationActivity extends BaseActivity {
         runOnUiThread(() -> tvLoadingMsg.setText("Finalizing application..."));
         ProviderApplicationRepository.submitApplication(
                 user.getUid(), str(etOwnerName), user.getEmail(), str(etPhone), str(etBusinessName),
-                str(actCategory), str(etDescription), str(etAddress), selectedCity, selectedArea, str(etPincode),
-                selectedFullAddress, str(etExperience), businessImgUrl, idProofUrl, selectedLat, selectedLng,
+                str(actCategory), str(etDescription), "", "", selectedArea, "",
+                "", str(etExperience), businessImgUrl, idProofUrl, selectedLat, selectedLng,
                 new ProviderApplicationRepository.Callback() {
                     @Override public void onSuccess() { isSubmitting = false; showLoading(false, ""); successOverlay.setVisibility(View.VISIBLE); }
                     @Override public void onError(String msg) { isSubmitting = false; showLoading(false, ""); showError("Submission failed: " + msg); }

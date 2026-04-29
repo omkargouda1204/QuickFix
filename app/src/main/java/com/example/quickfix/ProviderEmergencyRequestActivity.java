@@ -52,6 +52,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
     private String requestId = "";
     private String providerProfileId = "";
+    private String providerFirebaseUid = "";
     private String providerName = "Provider";
     private String providerPhone = "";
     private String providerService = "";
@@ -111,6 +112,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             finish();
             return;
         }
+        providerFirebaseUid = safe(user.getUid());
 
         setLoading(true);
         new Thread(() -> {
@@ -241,7 +243,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     }
 
     private void rejectRequest() {
-        if (TextUtils.isEmpty(providerProfileId)) {
+        if (TextUtils.isEmpty(providerProfileId) && TextUtils.isEmpty(providerFirebaseUid)) {
             showToast("Provider profile is missing.");
             return;
         }
@@ -249,29 +251,8 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         setLoading(true);
         new Thread(() -> {
             try {
-                // Reject logic as requested: update status to rejected if not already assigned
-                JSONObject body = new JSONObject();
-                body.put("status", "rejected");
-                
-                String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests"
-                        + "?id=eq." + urlEncode(requestId)
-                        + "&assigned_provider_id=is.null";
-
-                Request request = new Request.Builder()
-                        .url(url)
-                        .patch(RequestBody.create(body.toString(), JSON))
-                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Content-Type", "application/json")
-                        .build();
-
-                try (Response r = http.newCall(request).execute()) {
-                    Log.d(TAG, "rejectRequest HTTP " + r.code());
-                }
-
-                // Remove the local pending booking for THIS provider
-                deleteMyPendingBooking(requestId);
-                
+                updateMyEmergencyBookingStatus(requestId, "rejected");
+                upsertProviderResponse("rejected");
                 rejectedByCurrentProvider = true;
 
                 runOnUiThread(() -> {
@@ -289,18 +270,23 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         }).start();
     }
 
-    private void deleteMyPendingBooking(String emergencyId) {
+        private void updateMyEmergencyBookingStatus(String emergencyId, String status) {
         try {
+            JSONObject body = new JSONObject();
+            body.put("status", status);
+
+            String providerFilter = buildProviderOrFilter();
             String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
                     + "?emergency_request_id=eq." + urlEncode(emergencyId)
-                    + "&provider_id=eq." + urlEncode(providerProfileId)
+                + "&" + providerFilter
                     + "&status=eq.pending";
 
             Request request = new Request.Builder()
                     .url(url)
-                    .delete()
+                .patch(RequestBody.create(body.toString(), JSON))
                     .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                     .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Content-Type", "application/json")
                     .build();
 
             http.newCall(request).execute().close();
@@ -316,24 +302,29 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         setLoading(true);
         new Thread(() -> {
             try {
-                JSONArray updatedRows = acceptPendingRequestWithSnapshotFallback();
-                if (updatedRows.length() == 0) {
-                    runOnUiThread(() -> {
-                        setLoading(false);
-                        showToast("Already accepted by another provider.");
-                    });
-                    refreshStateAfterConflict();
-                    return;
+                JSONObject updated;
+                boolean rpcAccepted = acceptEmergencyWithRpc();
+                if (rpcAccepted) {
+                    updated = fetchRequestById(requestId);
+                } else {
+                    JSONArray updatedRows = acceptPendingRequestWithSnapshotFallback();
+                    if (updatedRows.length() == 0) {
+                        runOnUiThread(() -> {
+                            setLoading(false);
+                            showToast("Already accepted by another provider.");
+                        });
+                        refreshStateAfterConflict();
+                        return;
+                    }
+
+                    updated = updatedRows.getJSONObject(0);
+                    // Update THIS provider's booking record to 'accepted'
+                    updateMyBookingToAccepted(requestId);
+                    // Auto reject other providers' pending bookings
+                    cleanupOtherEmergencyBookings(requestId);
                 }
 
-                JSONObject updated = updatedRows.getJSONObject(0);
                 rejectedByCurrentProvider = false;
-                
-                // Update THIS provider's booking record to 'accepted'
-                updateMyBookingToAccepted(requestId);
-                
-                // Remove other providers' pending bookings for this emergency
-                cleanupOtherEmergencyBookings(requestId);
                 
                 upsertProviderResponse("accepted");
                 notifyUserAssigned(updated);
@@ -355,16 +346,59 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         }).start();
     }
 
+    private boolean acceptEmergencyWithRpc() {
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("p_request_id", requestId);
+            payload.put("p_provider_id", safe(providerProfileId));
+            payload.put("p_provider_firebase_uid", safe(providerFirebaseUid));
+            payload.put("p_provider_name", fallback(providerName, "Provider"));
+            payload.put("p_provider_phone", fallback(providerPhone, ""));
+            payload.put("p_provider_service", fallback(providerService, ""));
+            payload.put("p_provider_city", fallback(providerCity, ""));
+            payload.put("p_provider_area", fallback(providerArea, ""));
+
+            Request request = new Request.Builder()
+                    .url(BuildConfig.SUPABASE_URL + "/rest/v1/rpc/accept_emergency_request_atomic")
+                    .post(RequestBody.create(payload.toString(), JSON))
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response response = http.newCall(request).execute()) {
+                String body = response.body() != null ? response.body().string() : "[]";
+                if (response.code() != 200) {
+                    Log.w(TAG, "accept_emergency_request_atomic RPC HTTP " + response.code() + " " + body);
+                    return false;
+                }
+
+                JSONArray arr = new JSONArray(body);
+                if (arr.length() == 0) return false;
+                JSONObject first = arr.getJSONObject(0);
+                return first.optBoolean("accepted", false);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "acceptEmergencyWithRpc fallback: " + e.getMessage());
+            return false;
+        }
+    }
+
     private void updateMyBookingToAccepted(String emergencyId) {
         try {
             JSONObject body = new JSONObject();
             body.put("status", "accepted");
             body.put("provider_name", providerName != null ? providerName : "Provider");
             body.put("provider_phone", providerPhone != null ? providerPhone : "");
+            if (!TextUtils.isEmpty(providerProfileId)) {
+                body.put("provider_id", providerProfileId);
+            }
 
+            String providerFilter = buildProviderOrFilter();
             String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
                     + "?emergency_request_id=eq." + urlEncode(emergencyId)
-                    + "&provider_id=eq." + urlEncode(providerProfileId);
+                    + "&" + providerFilter;
 
             Request request = new Request.Builder()
                     .url(url)
@@ -386,15 +420,21 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
     private void cleanupOtherEmergencyBookings(String emergencyId) {
         try {
+            JSONObject body = new JSONObject();
+            body.put("status", "rejected");
+
+            String exclusion = buildProviderAndNotFilter();
             String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
                     + "?emergency_request_id=eq." + urlEncode(emergencyId)
-                    + "&provider_id=neq." + urlEncode(providerProfileId);
+                + "&" + exclusion
+                + "&status=eq.pending";
 
             Request request = new Request.Builder()
                     .url(url)
-                    .delete()
+                .patch(RequestBody.create(body.toString(), JSON))
                     .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                     .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Content-Type", "application/json")
                     .build();
 
             try (Response response = http.newCall(request).execute()) {
@@ -619,6 +659,32 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         } catch (Exception ignored) {
             return value == null ? "" : value;
         }
+    }
+
+    private String buildProviderOrFilter() {
+        String profile = urlEncode(providerProfileId);
+        String firebase = urlEncode(providerFirebaseUid);
+        if (!TextUtils.isEmpty(providerProfileId) && !TextUtils.isEmpty(providerFirebaseUid)
+                && !providerProfileId.equals(providerFirebaseUid)) {
+            return "or=(provider_id.eq." + profile + ",provider_id.eq." + firebase + ")";
+        }
+        if (!TextUtils.isEmpty(providerProfileId)) {
+            return "provider_id=eq." + profile;
+        }
+        return "provider_id=eq." + firebase;
+    }
+
+    private String buildProviderAndNotFilter() {
+        String profile = urlEncode(providerProfileId);
+        String firebase = urlEncode(providerFirebaseUid);
+        if (!TextUtils.isEmpty(providerProfileId) && !TextUtils.isEmpty(providerFirebaseUid)
+                && !providerProfileId.equals(providerFirebaseUid)) {
+            return "and=(provider_id.neq." + profile + ",provider_id.neq." + firebase + ")";
+        }
+        if (!TextUtils.isEmpty(providerProfileId)) {
+            return "provider_id=neq." + profile;
+        }
+        return "provider_id=neq." + firebase;
     }
 
     @Override
