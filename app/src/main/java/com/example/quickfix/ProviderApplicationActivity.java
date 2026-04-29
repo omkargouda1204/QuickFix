@@ -343,7 +343,7 @@ public class ProviderApplicationActivity extends BaseActivity {
         boolean descOk  = desc.length() >= 10 && desc.length() <= 300;
         boolean addrOk  = !addr.isEmpty() && addr.length() >= 10 && addr.length() <= 180;
         boolean catOk   = !cat.isEmpty();
-        boolean locOk   = !Double.isNaN(selectedLat) && !Double.isNaN(selectedLng) && !TextUtils.isEmpty(selectedCity);
+        boolean locOk   = !Double.isNaN(selectedLat) && !Double.isNaN(selectedLng) && !TextUtils.isEmpty(selectedArea);
         boolean idOk    = idProofUri != null;
         boolean termsOk = cbTerms.isChecked();
 

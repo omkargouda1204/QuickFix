@@ -52,6 +52,7 @@ import org.json.JSONObject;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -134,6 +135,8 @@ public class MainActivity extends BaseActivity {
     private WormDotsIndicator  bannerDotsLayout;
     private HomeBannerAdapter  homeBannerAdapter;
     private HomeOfferAdapter   homeOfferAdapter;
+    private BannerApi          bannerApi;
+    private OfferApi           offerApi;
     private final List<Banner> homeBanners = new ArrayList<>();
     private final List<Offer>  homeOffers  = new ArrayList<>();
     private final Handler bannerAutoSlideHandler = new Handler(Looper.getMainLooper());
@@ -152,9 +155,6 @@ public class MainActivity extends BaseActivity {
     private TextView navHomeText, navBookingsText, navMessagesText, navProfileText;
 
     private FirebaseAuth mAuth;
-
-    private BannerApi bannerApi;
-    private OfferApi offerApi;
 
     private LinearLayout catPlumbing_temp, catElectrical_temp, catCleaning_temp, catRepair_temp;
 
@@ -262,6 +262,9 @@ public class MainActivity extends BaseActivity {
             tvOffersErrorMessage = findViewSafe(R.id.tvOffersErrorMessage);
             btnRetryOffersLoad = findViewSafe(R.id.btnRetryOffersLoad);
             btnRetryOffersLoad.setOnClickListener(v -> loadOffers());
+
+            bannerApi = RetrofitProvider.get().create(BannerApi.class);
+            offerApi = RetrofitProvider.get().create(OfferApi.class);
 
             navHome = findViewSafe(R.id.navHome);
             navBookings = findViewSafe(R.id.navBookings);
@@ -557,44 +560,137 @@ public class MainActivity extends BaseActivity {
     }
 
     private void loadBanners() {
-        Log.d(TAG, "Loading banners from Supabase Storage bucket...");
+        Log.d(TAG, "Loading banners from DB and Bucket...");
         beginHomeLoad();
         showBannerLoading(true);
 
-        SupabaseStorageHelper.listFiles("banner-images", new SupabaseStorageHelper.ListFilesCallback() {
+        // Task 1: Fetch from Database
+        bannerApi.getBanners(
+                BuildConfig.SUPABASE_ANON_KEY,
+                "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                "application/json",
+                "*",
+                "eq.true",
+                "gt." + getTodayIsoDate(),
+                "priority.asc"
+        ).enqueue(new retrofit2.Callback<List<Banner>>() {
             @Override
-            public void onSuccess(List<String> fileNames) {
-                if (!fileNames.isEmpty()) {
-                    String firstFile = fileNames.get(0);
-                    String bannerUrl = SupabaseStorageHelper.getPublicObjectUrl("banner-images", firstFile);
-                    
-                    runOnUiThread(() -> {
-                        showBannerLoading(false);
-                        updateHeroBanner(bannerUrl);
-                        showBannerContent(true);
-                        endHomeLoad();
-                    });
-                } else {
-                    Log.d(TAG, "No banners found in bucket.");
-                    runOnUiThread(() -> {
-                        showBannerLoading(false);
-                        if (bannersSection != null) bannersSection.setVisibility(View.GONE);
-                        endHomeLoad();
-                    });
+            public void onResponse(Call<List<Banner>> call, retrofit2.Response<List<Banner>> response) {
+                List<Banner> dbBanners = new ArrayList<>();
+                if (response.isSuccessful() && response.body() != null) {
+                    dbBanners = response.body();
+                    for (Banner b : dbBanners) {
+                        if (b.imageUrl != null && !b.imageUrl.startsWith("http")) {
+                            b.imageUrl = SupabaseStorageHelper.getPublicObjectUrl("banner-images", b.imageUrl);
+                        }
+                    }
                 }
+                fetchBucketBanners(dbBanners);
             }
 
             @Override
-            public void onError(String message) {
-                Log.e(TAG, "Failed to list banners: " + message);
+            public void onFailure(Call<List<Banner>> call, Throwable t) {
+                Log.e(TAG, "Banner DB fetch failed", t);
+                fetchBucketBanners(new ArrayList<>());
+            }
+        });
+    }
+
+    private void fetchBucketBanners(List<Banner> dbBanners) {
+        SupabaseStorageHelper.listFiles("banner-images", new SupabaseStorageHelper.ListFilesCallback() {
+            @Override
+            public void onSuccess(List<String> fileNames) {
+                List<Banner> bucketBanners = new ArrayList<>();
+                if (!fileNames.isEmpty()) {
+                    for (String f : fileNames) {
+                        String lower = f.toLowerCase();
+                        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".webp")) {
+                            Banner b = new Banner();
+                            b.id = "bucket_" + f;
+                            b.title = ""; 
+                            b.imageUrl = SupabaseStorageHelper.getPublicObjectUrl("banner-images", f);
+                            bucketBanners.add(b);
+                        }
+                    }
+                }
+                
+                // Shuffle bucket banners for variety
+                Collections.shuffle(bucketBanners);
+                
+                // Merge lists
+                List<Banner> combined = new ArrayList<>(dbBanners);
+                combined.addAll(bucketBanners);
+
                 runOnUiThread(() -> {
                     showBannerLoading(false);
-                    // Hide if error or no banners
-                    if (bannersSection != null) bannersSection.setVisibility(View.GONE);
+                    if (!combined.isEmpty()) {
+                        updateBannerCarousel(combined);
+                        showBannerContent(true);
+                    } else {
+                        onNoBanners();
+                    }
+                    endHomeLoad();
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                Log.e(TAG, "Bucket list failed: " + error);
+                runOnUiThread(() -> {
+                    showBannerLoading(false);
+                    if (!dbBanners.isEmpty()) {
+                        updateBannerCarousel(dbBanners);
+                        showBannerContent(true);
+                    } else {
+                        onNoBanners();
+                    }
                     endHomeLoad();
                 });
             }
         });
+    }
+
+    private void updateBannerCarousel(List<Banner> banners) {
+        homeBanners.clear();
+        homeBanners.addAll(banners);
+
+        if (homeBannerAdapter == null) {
+            homeBannerAdapter = new HomeBannerAdapter(this, homeBanners, b -> {
+                // Handle banner click
+                if (b.redirectType != null) {
+                    // Logic for redirection
+                    Log.d(TAG, "Banner clicked: " + b.title + " -> " + b.redirectType);
+                }
+            });
+            if (vpBannersCarousel != null) {
+                vpBannersCarousel.setAdapter(homeBannerAdapter);
+                if (bannerDotsLayout != null) {
+                    bannerDotsLayout.attachTo(vpBannersCarousel);
+                }
+            }
+        } else {
+            homeBannerAdapter.notifyDataSetChanged();
+        }
+
+        // Use carousel if more than one, else static
+        if (homeBanners.size() > 1) {
+            if (vpBannersCarousel != null) vpBannersCarousel.setVisibility(View.VISIBLE);
+            if (bannerDotsLayout != null) bannerDotsLayout.setVisibility(View.VISIBLE);
+            if (bannerImg != null) bannerImg.setVisibility(View.GONE);
+            startBannerAutoSlide();
+        } else if (homeBanners.size() == 1) {
+            if (vpBannersCarousel != null) vpBannersCarousel.setVisibility(View.GONE);
+            if (bannerDotsLayout != null) bannerDotsLayout.setVisibility(View.GONE);
+            if (bannerImg != null) {
+                bannerImg.setVisibility(View.VISIBLE);
+                Glide.with(this).load(homeBanners.get(0).imageUrl).centerCrop().into(bannerImg);
+            }
+        }
+    }
+
+    private void onNoBanners() {
+        Log.d(TAG, "No valid banners found.");
+        if (bannersSection != null) bannersSection.setVisibility(View.GONE);
     }
     
     private void loadOffers() {

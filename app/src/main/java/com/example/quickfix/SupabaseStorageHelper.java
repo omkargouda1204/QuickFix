@@ -125,7 +125,10 @@ public class SupabaseStorageHelper {
                         for (int i = 0; i < arr.length(); i++) {
                             JSONObject obj = arr.getJSONObject(i);
                             String name = obj.optString("name", "");
-                            if (!name.isEmpty() && !name.equals(".emptyKeep")) {
+                            // Check if it's a file by checking if metadata is NOT null
+                            // Folders in Supabase storage list API usually have metadata: null
+                            boolean isFile = !obj.isNull("metadata");
+                            if (isFile && !name.isEmpty() && !name.equals(".emptyKeep")) {
                                 names.add(name);
                             }
                         }
