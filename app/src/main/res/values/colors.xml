@@ -40,6 +40,9 @@
     <color name="cat_more">#546E7A</color>
     <color name="emergency_red">#D32F2F</color>
     <!-- Status / Error colors -->
+    <color name="error">#D32F2F</color>
+    <color name="warning">#FFA000</color>
+    <color name="success">#388E3C</color>
     <color name="error_red">#D32F2F</color>
     <color name="success_green">#388E3C</color>
     <!-- Chip background colors -->

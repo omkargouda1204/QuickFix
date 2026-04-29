@@ -10,6 +10,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -833,7 +834,12 @@ public final class FcmNotificationHelper {
     }
 
     private static JSONObject enrichEmergencyPayload(JSONObject data, String requestId) {
-        JSONObject payload = data != null ? new JSONObject(data.toString()) : new JSONObject();
+        JSONObject payload;
+        try {
+            payload = data != null ? new JSONObject(data.toString()) : new JSONObject();
+        } catch (JSONException e) {
+            payload = new JSONObject();
+        }
         try {
             if (!payload.has("request_id")) payload.put("request_id", requestId);
             if (!payload.has("booking_id")) payload.put("booking_id", requestId);
