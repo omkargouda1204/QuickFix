@@ -488,6 +488,8 @@ public class EmergencyHelpActivity extends BaseActivity {
                 + "?select=id,firebase_uid,business_name,category,latitude,longitude,lat,lng,status,is_approved,city,area"
                 + "&limit=" + PROVIDER_PAGE_SIZE;
 
+        Log.d(TAG, "Fallback search: category=" + category + " lat=" + selectedLat + " lng=" + selectedLng + " radius=" + NEARBY_RADIUS_KM + "km");
+
         Request req = new Request.Builder().url(url)
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
@@ -495,33 +497,68 @@ public class EmergencyHelpActivity extends BaseActivity {
                 .build();
 
         try (Response res = http.newCall(req).execute()) {
-            if (!res.isSuccessful()) return new ArrayList<>();
-            JSONArray arr = new JSONArray(res.body() != null ? res.body().string() : "[]");
+            if (!res.isSuccessful()) {
+                Log.e(TAG, "Provider fetch failed: HTTP " + res.code());
+                return new ArrayList<>();
+            }
+            
+            String body = res.body() != null ? res.body().string() : "[]";
+            JSONArray arr = new JSONArray(body);
+            Log.d(TAG, "Fetched " + arr.length() + " total providers from database");
+            
+            int skippedLocation = 0;
+            int skippedCategory = 0;
+            int skippedDistance = 0;
+            int skippedEligibility = 0;
+            
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
                 String providerId = o.optString("id", "").trim();
                 String uid = o.optString("firebase_uid", "").trim();
-                if (providerId.isEmpty()) continue;
+                String name = o.optString("business_name", "Unknown");
+                
+                if (providerId.isEmpty()) {
+                    Log.d(TAG, "Provider at index " + i + " has no ID, skipping");
+                    continue;
+                }
 
                 if (!isProviderEligible(o, category)) {
+                    skippedEligibility++;
                     continue;
                 }
 
                 double pLat = readLatitude(o);
                 double pLng = readLongitude(o);
-                if (Double.isNaN(pLat) || Double.isNaN(pLng)) continue;
+                
+                if (Double.isNaN(pLat) || Double.isNaN(pLng)) {
+                    Log.d(TAG, "Provider " + name + " (" + providerId + ") has no valid location (lat=" + pLat + " lng=" + pLng + ")");
+                    skippedLocation++;
+                    continue;
+                }
 
                 double distKm = haversine(selectedLat, selectedLng, pLat, pLng);
-                if (!Double.isNaN(distKm) && distKm <= NEARBY_RADIUS_KM) {
-                    String key = providerId + "|" + uid;
-                    if (!seen.add(key)) continue;
-                    providers.add(new NearbyProvider(providerId, uid));
-                    Log.d(TAG, "Nearby provider match id=" + providerId +
-                            " uid=" + uid +
-                            " category=" + o.optString("category", "") +
-                            " distanceKm=" + distKm);
+                if (Double.isNaN(distKm) || distKm > NEARBY_RADIUS_KM) {
+                    Log.d(TAG, "Provider " + name + " (" + providerId + ") too far: " + distKm + " km");
+                    skippedDistance++;
+                    continue;
                 }
+
+                String key = providerId + "|" + uid;
+                if (!seen.add(key)) {
+                    Log.d(TAG, "Duplicate provider " + providerId);
+                    continue;
+                }
+                
+                providers.add(new NearbyProvider(providerId, uid));
+                Log.d(TAG, "✓ Added provider: " + name + " (" + providerId + ") - Category: " + o.optString("category", "?") 
+                    + " - Distance: " + String.format("%.1f", distKm) + " km - Status: " + o.optString("status", "?"));
             }
+            
+            Log.d(TAG, "Provider filtering summary - Total:" + arr.length() 
+                + " | Matched:" + providers.size() 
+                + " | Skipped(eligibility):" + skippedEligibility 
+                + " | Skipped(location):" + skippedLocation
+                + " | Skipped(distance):" + skippedDistance);
         }
 
         return providers;
@@ -530,26 +567,31 @@ public class EmergencyHelpActivity extends BaseActivity {
     private boolean isProviderEligible(JSONObject provider, String requestedCategory) {
         if (provider == null) return false;
 
+        String providerId = provider.optString("id", "?");
         String status = provider.optString("status", "").trim().toLowerCase(Locale.US);
         boolean approved = provider.optBoolean("is_approved", false);
+        
+        // Status check - provider must be active or approved
         boolean statusOk = status.isEmpty()
                 || "active".equals(status)
                 || "approved".equals(status)
                 || "available".equals(status)
-                || "online".equals(status);
+                || "online".equals(status)
+                || "verified".equals(status);
 
         if (!statusOk && !approved) {
-            Log.d(TAG, "Skipping provider id=" + provider.optString("id", "") + " status=" + status + " approved=" + approved);
+            Log.d(TAG, "❌ Provider " + providerId + " ineligible - status=" + status + " approved=" + approved);
             return false;
         }
 
+        // Category check
         String providerCategory = provider.optString("category", "");
         if (!matchesCategory(requestedCategory, providerCategory)) {
-            Log.d(TAG, "Skipping provider id=" + provider.optString("id", "") +
-                    " category mismatch request=" + requestedCategory + " provider=" + providerCategory);
+            Log.d(TAG, "❌ Provider " + providerId + " category mismatch - requested=" + requestedCategory + " provider=" + providerCategory);
             return false;
         }
 
+        Log.d(TAG, "✓ Provider " + providerId + " is eligible");
         return true;
     }
 
@@ -710,24 +752,72 @@ public class EmergencyHelpActivity extends BaseActivity {
                 && !Double.isNaN(selectedLng);
     }
 
+    /**
+     * Improved category matching with flexible alias support.
+     * Handles variations like "Electrician" vs "Electrical", "AC Service" vs "AC Repair", etc.
+     */
     private boolean matchesCategory(String requested, String providerCategory) {
-        String a = normalizeCategory(requested);
-        String b = normalizeCategory(providerCategory);
-        if (a.isEmpty() || b.isEmpty()) return true;
-        return a.equals(b) || a.contains(b) || b.contains(a);
+        if (requested == null || requested.trim().isEmpty()) {
+            // No category specified = match all providers
+            return true;
+        }
+        if (providerCategory == null || providerCategory.trim().isEmpty()) {
+            // Provider has no category specified = skip
+            Log.w(TAG, "Provider has no category, skipping");
+            return false;
+        }
+
+        String req = requested.trim().toLowerCase(Locale.US);
+        String prov = providerCategory.trim().toLowerCase(Locale.US);
+
+        // Direct match
+        if (req.equals(prov)) return true;
+
+        // Contains match
+        if (prov.contains(req) || req.contains(prov)) return true;
+
+        // Category group aliases (add common service aliases)
+        if (isCategoryInGroup(req, "electrical") && isCategoryInGroup(prov, "electrical")) return true;
+        if (isCategoryInGroup(req, "plumbing") && isCategoryInGroup(prov, "plumbing")) return true;
+        if (isCategoryInGroup(req, "ac") && isCategoryInGroup(prov, "ac")) return true;
+        if (isCategoryInGroup(req, "cleaning") && isCategoryInGroup(prov, "cleaning")) return true;
+        if (isCategoryInGroup(req, "painting") && isCategoryInGroup(prov, "painting")) return true;
+        if (isCategoryInGroup(req, "carpentry") && isCategoryInGroup(prov, "carpentry")) return true;
+        if (isCategoryInGroup(req, "repair") && isCategoryInGroup(prov, "repair")) return true;
+        if (isCategoryInGroup(req, "home") && isCategoryInGroup(prov, "home")) return true;
+
+        Log.d(TAG, "Category mismatch: requested='" + requested + "' provider='" + providerCategory + "'");
+        return false;
     }
 
-    private String normalizeCategory(String raw) {
-        String value = raw == null ? "" : raw.trim().toLowerCase(Locale.getDefault());
-        if (value.isEmpty()) return "";
-        if (value.contains("electric")) return "electrical";
-        if (value.contains("plumb")) return "plumbing";
-        if (value.contains("ac")) return "ac service";
-        if (value.contains("repair")) return "general repair";
-        if (value.contains("clean")) return "cleaning";
-        if (value.contains("paint")) return "painting";
-        if (value.contains("carpent")) return "carpentry";
-        return value;
+    /**
+     * Check if a category string belongs to a service group
+     */
+    private boolean isCategoryInGroup(String category, String group) {
+        if (category == null || category.isEmpty()) return false;
+        String cat = category.toLowerCase(Locale.US);
+
+        switch (group.toLowerCase(Locale.US)) {
+            case "electrical":
+                return cat.contains("electrician") || cat.contains("electrical") || cat.contains("electric");
+            case "plumbing":
+                return cat.contains("plumber") || cat.contains("plumb");
+            case "ac":
+                return cat.contains("ac") || cat.contains("air") || cat.contains("conditioner") 
+                    || cat.contains("cooling") || cat.contains("hvac");
+            case "cleaning":
+                return cat.contains("clean");
+            case "painting":
+                return cat.contains("paint");
+            case "carpentry":
+                return cat.contains("carpent") || cat.contains("carpenter");
+            case "repair":
+                return cat.contains("repair") || cat.contains("service") || cat.contains("maintenance");
+            case "home":
+                return cat.contains("home") || cat.contains("appliance") || cat.contains("general");
+            default:
+                return false;
+        }
     }
 
     private double haversine(double lat1, double lon1, double lat2, double lon2) {

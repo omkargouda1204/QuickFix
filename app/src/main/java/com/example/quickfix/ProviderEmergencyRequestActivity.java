@@ -358,6 +358,8 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             payload.put("p_provider_city", fallback(providerCity, ""));
             payload.put("p_provider_area", fallback(providerArea, ""));
 
+            Log.d(TAG, "Calling atomic accept RPC with payload: " + payload.toString());
+
             Request request = new Request.Builder()
                     .url(BuildConfig.SUPABASE_URL + "/rest/v1/rpc/accept_emergency_request_atomic")
                     .post(RequestBody.create(payload.toString(), JSON))
@@ -369,18 +371,44 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
             try (Response response = http.newCall(request).execute()) {
                 String body = response.body() != null ? response.body().string() : "[]";
-                if (response.code() != 200) {
-                    Log.w(TAG, "accept_emergency_request_atomic RPC HTTP " + response.code() + " " + body);
+                int httpCode = response.code();
+                
+                Log.d(TAG, "Atomic accept RPC response: HTTP " + httpCode + " | Body: " + body);
+                
+                if (httpCode != 200) {
+                    Log.e(TAG, "RPC failed with HTTP " + httpCode + ": " + body.substring(0, Math.min(200, body.length())));
                     return false;
                 }
 
                 JSONArray arr = new JSONArray(body);
-                if (arr.length() == 0) return false;
-                JSONObject first = arr.getJSONObject(0);
-                return first.optBoolean("accepted", false);
+                if (arr.length() == 0) {
+                    Log.e(TAG, "RPC returned empty array");
+                    return false;
+                }
+                
+                JSONObject result = arr.getJSONObject(0);
+                boolean accepted = result.optBoolean("accepted", false);
+                String status = result.optString("status", "");
+                String errorMessage = result.optString("error_message", "");
+                String assignedProviderId = result.optString("assigned_provider_id", "");
+                
+                Log.d(TAG, "RPC result - accepted: " + accepted + " | status: " + status 
+                    + " | error: " + errorMessage + " | assignedProvider: " + assignedProviderId);
+                
+                if (!accepted) {
+                    if ("already_accepted".equals(status)) {
+                        Log.w(TAG, "Request already accepted by provider: " + assignedProviderId);
+                    } else if ("race_condition".equals(status)) {
+                        Log.w(TAG, "Race condition: another provider accepted first");
+                    } else {
+                        Log.w(TAG, "RPC indicated failure: " + errorMessage);
+                    }
+                }
+                
+                return accepted;
             }
         } catch (Exception e) {
-            Log.w(TAG, "acceptEmergencyWithRpc fallback: " + e.getMessage());
+            Log.e(TAG, "acceptEmergencyWithRpc exception: " + e.getMessage(), e);
             return false;
         }
     }

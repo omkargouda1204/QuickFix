@@ -154,8 +154,12 @@ public class TransactionActivity extends BaseActivity {
                 String uid = userId == null ? "" : userId.trim();
                 String dbId = userDbId == null ? "" : userDbId.trim();
 
+                Log.d(TAG, "Loading transactions for uid=" + uid + " dbId=" + dbId);
+
                 List<Booking> list = new ArrayList<>();
-                list.addAll(fetchTransactionRows(
+                
+                // Load regular bookings
+                List<Booking> bookings = fetchTransactionRows(
                         BASE_URL + "/rest/v1/bookings"
                                 + "?select=*"
                                 + "&or=(customer_id.eq." + android.net.Uri.encode(uid)
@@ -164,17 +168,23 @@ public class TransactionActivity extends BaseActivity {
                                 + ",user_firebase_uid.eq." + android.net.Uri.encode(uid)
                                 + ",user_id.eq." + android.net.Uri.encode(uid) + ")"
                                 + "&order=created_at.desc",
-                        "bookings"));
+                        "bookings");
+                list.addAll(bookings);
+                Log.d(TAG, "Loaded " + bookings.size() + " bookings");
 
-                list.addAll(fetchTransactionRows(
+                // Load emergency requests
+                List<Booking> emergencies = fetchTransactionRows(
                         BASE_URL + "/rest/v1/emergency_requests"
                                 + "?select=*"
                                 + "&or=(user_firebase_uid.eq." + android.net.Uri.encode(uid)
                                 + ",user_id.eq." + android.net.Uri.encode(dbId)
                                 + ",user_id.eq." + android.net.Uri.encode(uid) + ")"
                                 + "&order=created_at.desc",
-                        "emergency_requests"));
+                        "emergency_requests");
+                list.addAll(emergencies);
+                Log.d(TAG, "Loaded " + emergencies.size() + " emergency requests");
 
+                // Filter to transactions only
                 List<Booking> filtered = new ArrayList<>();
                 for (Booking booking : list) {
                     if (booking != null && isTransaction(booking)) {
@@ -182,24 +192,29 @@ public class TransactionActivity extends BaseActivity {
                     }
                 }
 
+                Log.d(TAG, "Final filtered transactions: " + filtered.size() + " (from " + list.size() + " total)");
+
                 MAIN.post(() -> {
                     adapter.setTransactions(filtered);
                     showEmptyState(filtered.isEmpty());
                     showLoading(false);
+                    if (!filtered.isEmpty()) {
+                        Toast.makeText(TransactionActivity.this, "✓ Loaded " + filtered.size() + " transactions", Toast.LENGTH_SHORT).show();
+                    }
                 });
             } catch (Exception e) {
-                Log.e(TAG, "loadTransactions: " + e.getMessage(), e);
+                Log.e(TAG, "loadTransactions error: " + e.getMessage(), e);
                 MAIN.post(() -> {
                     showEmptyState(true, "Failed to load transactions. Pull to retry.");
                     showLoading(false);
-                    Toast.makeText(this, "Unable to load transactions", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(TransactionActivity.this, "Unable to load transactions: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 });
             }
         }).start();
     }
 
     private List<Booking> fetchTransactionRows(String url, String label) throws Exception {
-        Log.d(TAG, "Transaction fetch " + label + " URL: " + url);
+        Log.d(TAG, "Fetching " + label + " from: " + url.substring(0, Math.min(120, url.length())) + "...");
 
         Request req = new Request.Builder().url(url)
                 .get()
@@ -211,16 +226,33 @@ public class TransactionActivity extends BaseActivity {
         List<Booking> list = new ArrayList<>();
         try (Response r = HTTP.newCall(req).execute()) {
             String body = r.body() != null ? r.body().string() : "[]";
-            Log.d(TAG, label + " HTTP " + r.code() + " | Body: " + body);
-            if (!r.isSuccessful() || !body.startsWith("[")) {
+            Log.d(TAG, label + " response: HTTP " + r.code() + " | Body length: " + body.length());
+            
+            if (!r.isSuccessful()) {
+                Log.w(TAG, label + " returned HTTP " + r.code() + ": " + body.substring(0, Math.min(200, body.length())));
+                return list;
+            }
+            
+            if (!body.startsWith("[")) {
+                Log.w(TAG, label + " response is not a JSON array: " + body.substring(0, Math.min(100, body.length())));
                 return list;
             }
 
             JSONArray arr = new JSONArray(body);
+            Log.d(TAG, "Parsed " + arr.length() + " items from " + label);
+            
             for (int i = 0; i < arr.length(); i++) {
-                Booking booking = Booking.fromJson(arr.getJSONObject(i));
-                if (booking != null) list.add(booking);
+                try {
+                    Booking booking = Booking.fromJson(arr.getJSONObject(i));
+                    if (booking != null) {
+                        list.add(booking);
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, label + " item " + i + " parse error: " + e.getMessage());
+                }
             }
+            
+            Log.d(TAG, "Successfully parsed " + list.size() + " items from " + label);
         }
         return list;
     }
@@ -228,19 +260,27 @@ public class TransactionActivity extends BaseActivity {
     /**
      * Define what constitutes a "transaction" in the history.
      * We broaden this to include anything that has been accepted or paid.
+     * Emergency requests in any state are included (they're important to users).
      */
     private boolean isTransaction(Booking booking) {
         if (booking == null) return false;
+        
         String status = normalize(booking.status);
         String payment = normalize(booking.paymentStatus);
         
+        // Emergency requests: always show them
+        if (booking.isEmergency) {
+            return true;
+        }
+        
+        // Regular bookings: show if paid or completed
         return "paid".equals(status)
                 || "completed".equals(status)
                 || "done".equals(status)
                 || "success".equals(status)
                 || "accepted".equals(status)
-            || "processing".equals(status)
-            || "settled".equals(status)
+                || "processing".equals(status)
+                || "settled".equals(status)
                 || "price_set".equals(status)
                 || "paid".equals(payment)
                 || "success".equals(payment);
