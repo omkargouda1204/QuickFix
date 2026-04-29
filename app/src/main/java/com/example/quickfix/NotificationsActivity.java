@@ -270,49 +270,11 @@ public class NotificationsActivity extends BaseActivity
             return;
         }
 
-        showLoading(true);
-        new Thread(() -> {
-            try {
-                // 1. Atomically update status and assign provider
-                JSONObject body = new JSONObject();
-                body.put("status", "accepted");
-                body.put("assigned_provider_id", currentUserId);
-
-                String url = BASE_URL + "/rest/v1/emergency_requests?id=eq." + notification.referenceId + "&status=eq.pending";
-                Request req = new Request.Builder()
-                        .url(url)
-                        .patch(RequestBody.create(body.toString(), MediaType.get("application/json")))
-                        .addHeader("apikey", ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Content-Type", "application/json")
-                        .addHeader("Prefer", "return=representation")
-                        .build();
-
-                try (Response r = HTTP.newCall(req).execute()) {
-                    String rb = r.body() != null ? r.body().string() : "[]";
-                    if (r.isSuccessful() && !rb.equals("[]")) {
-                        // Success! Assigned to this provider.
-                        // 2. Create the real booking record
-                        mirrorToBookings(notification.referenceId);
-                        
-                        MAIN.post(() -> {
-                            showLoading(false);
-                            Toast.makeText(this, "Emergency Request Accepted!", Toast.LENGTH_LONG).show();
-                            onMarkRead(notification);
-                            loadNotifications(); // Refresh list
-                        });
-                    } else {
-                        MAIN.post(() -> {
-                            showLoading(false);
-                            Toast.makeText(this, "Already accepted by someone else or cancelled.", Toast.LENGTH_LONG).show();
-                        });
-                    }
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "onAcceptEmergency: " + e.getMessage());
-                MAIN.post(() -> showLoading(false));
-            }
-        }).start();
+        Intent intent = new Intent(this, ProviderEmergencyRequestActivity.class);
+        intent.putExtra("request_id", notification.referenceId);
+        intent.putExtra("quick_action", "accept");
+        startActivity(intent);
+        onMarkRead(notification);
     }
 
     private void mirrorToBookings(String requestId) {
@@ -393,7 +355,12 @@ public class NotificationsActivity extends BaseActivity
 
     @Override
     public void onRejectEmergency(Notification notification) {
-        // Just delete the notification for this provider
+        if (notification.referenceId != null && !notification.referenceId.trim().isEmpty()) {
+            Intent intent = new Intent(this, ProviderEmergencyRequestActivity.class);
+            intent.putExtra("request_id", notification.referenceId.trim());
+            intent.putExtra("quick_action", "reject");
+            startActivity(intent);
+        }
         deleteNotification(notification);
     }
 

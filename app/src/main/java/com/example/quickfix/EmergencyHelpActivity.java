@@ -103,6 +103,20 @@ public class EmergencyHelpActivity extends BaseActivity {
     private boolean isSubmitting = false;
     private boolean pendingOpenLocationPicker = false;
 
+    private static final class NearbyProvider {
+        final String providerId;
+        final String firebaseUid;
+
+        NearbyProvider(String providerId, String firebaseUid) {
+            this.providerId = providerId == null ? "" : providerId.trim();
+            this.firebaseUid = firebaseUid == null ? "" : firebaseUid.trim();
+        }
+
+        boolean isValid() {
+            return !providerId.isEmpty();
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -294,7 +308,7 @@ public class EmergencyHelpActivity extends BaseActivity {
          new Thread(() -> {
              try {
                  // 1. Fetch nearby providers FIRST
-                 List<String> providers = fetchNearbyProviders(actCategory.getText().toString());
+                 List<NearbyProvider> providers = fetchNearbyProviders(actCategory.getText().toString());
 
                  if (providers.isEmpty()) {
                      runOnUiThread(() -> {
@@ -314,29 +328,40 @@ public class EmergencyHelpActivity extends BaseActivity {
 
                  JSONObject payload = buildEmergencyNotificationPayload(rid);
                  
-                 for (String providerUid : providers) {
+                 LinkedHashSet<String> providerUidsForPush = new LinkedHashSet<>();
+                 for (NearbyProvider provider : providers) {
+                     if (!provider.isValid()) continue;
+
+                     if (!provider.firebaseUid.isEmpty()) {
+                         providerUidsForPush.add(provider.firebaseUid);
+                     }
+
                      // 3. Save to DB for history
-                     FcmNotificationHelper.saveNotificationToDb(
-                             providerUid,
-                             "Emergency Request",
-                             "New emergency request for " + actCategory.getText().toString() + " near " + selectedArea,
-                             rid,
-                             "emergency"
-                     );
+                     if (!provider.firebaseUid.isEmpty()) {
+                         FcmNotificationHelper.saveNotificationToDb(
+                                 provider.firebaseUid,
+                                 "Emergency Request",
+                                 "New emergency request for " + actCategory.getText().toString() + " near " + selectedArea,
+                                 rid,
+                                 "emergency"
+                         );
+                     }
                      
                      // 4. Create pending booking for ALL nearby providers
-                     createPendingEmergencyBookingForProvider(rid, providerUid);
+                     createPendingEmergencyBookingForProvider(rid, provider);
                  }
 
                  // 5. Send FCM push notification to all
-                 FcmNotificationHelper.notifyEmergencyProviders(
-                         providers,
-                         "🚨 Emergency Help Required!",
-                         "New emergency request from " + currentUserName + " at " + selectedArea,
-                         rid,
-                         payload,
-                         null
-                 );
+                 if (!providerUidsForPush.isEmpty()) {
+                     FcmNotificationHelper.notifyEmergencyProviders(
+                             new ArrayList<>(providerUidsForPush),
+                             "🚨 Emergency Help Required!",
+                             "New emergency request from " + currentUserName + " at " + selectedArea,
+                             rid,
+                             payload,
+                             null
+                     );
+                 }
                  
                  runOnUiThread(() -> {
                      setLoading(false);
@@ -358,13 +383,15 @@ public class EmergencyHelpActivity extends BaseActivity {
          }).start();
      }
 
-    private void createPendingEmergencyBookingForProvider(String requestId, String providerUid) {
+    private void createPendingEmergencyBookingForProvider(String requestId, NearbyProvider provider) {
         try {
+            if (provider == null || provider.providerId.isEmpty()) return;
+
             JSONObject booking = new JSONObject();
             booking.put("customer_id", currentUserId);
             booking.put("customer_name", currentUserName);
             booking.put("customer_phone", currentUserPhone);
-            booking.put("provider_id", providerUid);
+            booking.put("provider_id", provider.providerId);
             booking.put("provider_name", "Awaiting Acceptance");
             booking.put("service_name", "Emergency - " + actCategory.getText().toString().trim());
             booking.put("category", actCategory.getText().toString().trim());
@@ -384,19 +411,18 @@ public class EmergencyHelpActivity extends BaseActivity {
         }
     }
 
-    private List<String> fetchNearbyProviders(String category) throws Exception {
-        LinkedHashSet<String> providerUids = new LinkedHashSet<>();
-        providerUids.addAll(fetchNearbyProvidersFromRpc(category));
-        if (!providerUids.isEmpty()) {
-            return new ArrayList<>(providerUids);
+    private List<NearbyProvider> fetchNearbyProviders(String category) throws Exception {
+        List<NearbyProvider> fromRpc = fetchNearbyProvidersFromRpc(category);
+        if (!fromRpc.isEmpty()) {
+            return fromRpc;
         }
 
-        providerUids.addAll(fetchNearbyProvidersClientFallback(category));
-        return new ArrayList<>(providerUids);
+        return fetchNearbyProvidersClientFallback(category);
     }
 
-    private List<String> fetchNearbyProvidersFromRpc(String category) {
-        List<String> uids = new ArrayList<>();
+    private List<NearbyProvider> fetchNearbyProvidersFromRpc(String category) {
+        List<NearbyProvider> providers = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
         try {
             JSONObject body = new JSONObject();
             body.put("p_category", category == null ? "" : category.trim());
@@ -417,29 +443,31 @@ public class EmergencyHelpActivity extends BaseActivity {
                 String raw = res.body() != null ? res.body().string() : "[]";
                 if (res.code() != 200) {
                     Log.w(TAG, "find_emergency_nearby_providers RPC failed HTTP " + res.code());
-                    return uids;
+                    return providers;
                 }
 
                 JSONArray arr = new JSONArray(raw);
                 for (int i = 0; i < arr.length(); i++) {
                     JSONObject row = arr.getJSONObject(i);
+                    String providerId = row.optString("provider_id", "").trim();
                     String uid = row.optString("firebase_uid", "").trim();
-                    if (uid.isEmpty()) {
-                        uid = row.optString("provider_firebase_uid", "").trim();
-                    }
-                    if (!uid.isEmpty()) uids.add(uid);
+                    if (providerId.isEmpty()) continue;
+                    String key = providerId + "|" + uid;
+                    if (!seen.add(key)) continue;
+                    providers.add(new NearbyProvider(providerId, uid));
                 }
             }
         } catch (Exception e) {
             Log.w(TAG, "fetchNearbyProvidersFromRpc fallback: " + e.getMessage());
         }
-        return uids;
+        return providers;
     }
 
-    private List<String> fetchNearbyProvidersClientFallback(String category) throws Exception {
-        LinkedHashSet<String> uids = new LinkedHashSet<>();
+    private List<NearbyProvider> fetchNearbyProvidersClientFallback(String category) throws Exception {
+        List<NearbyProvider> providers = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
         String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles"
-                + "?select=firebase_uid,category,latitude,longitude,lat,lng,status,is_approved"
+                + "?select=id,firebase_uid,category,latitude,longitude,lat,lng,status,is_approved"
                 + "&status=eq.active&is_approved=eq.true"
                 + "&limit=" + PROVIDER_PAGE_SIZE;
 
@@ -454,8 +482,9 @@ public class EmergencyHelpActivity extends BaseActivity {
             JSONArray arr = new JSONArray(res.body() != null ? res.body().string() : "[]");
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
+                String providerId = o.optString("id", "").trim();
                 String uid = o.optString("firebase_uid", "").trim();
-                if (uid.isEmpty()) continue;
+                if (providerId.isEmpty()) continue;
 
                 double pLat = o.has("latitude") && !o.isNull("latitude")
                         ? o.optDouble("latitude", Double.NaN)
@@ -469,12 +498,14 @@ public class EmergencyHelpActivity extends BaseActivity {
 
                 double distKm = haversine(selectedLat, selectedLng, pLat, pLng);
                 if (!Double.isNaN(distKm) && distKm <= NEARBY_RADIUS_KM) {
-                    uids.add(uid);
+                    String key = providerId + "|" + uid;
+                    if (!seen.add(key)) continue;
+                    providers.add(new NearbyProvider(providerId, uid));
                 }
             }
         }
 
-        return new ArrayList<>(uids);
+        return providers;
     }
 
     private String createRequestInDb() throws Exception {
@@ -489,6 +520,8 @@ public class EmergencyHelpActivity extends BaseActivity {
         body.put("longitude", selectedLng);
         body.put("pincode", selectedPincode);
         body.put("city", selectedCity);
+        body.put("area", selectedArea);
+        body.put("address", selectedAddress);
         body.put("location_label", AppLocationManager.composeLocationLabel(selectedCity, selectedPincode));
         body.put("status", "pending");
         body.put("user_id", currentUserId);
@@ -607,8 +640,7 @@ public class EmergencyHelpActivity extends BaseActivity {
 
     private boolean hasValidLocation() {
         return !Double.isNaN(selectedLat)
-                && !Double.isNaN(selectedLng)
-                && !TextUtils.isEmpty(selectedCity);
+                && !Double.isNaN(selectedLng);
     }
 
     private boolean matchesCategory(String requested, String providerCategory) {
@@ -639,7 +671,7 @@ public class EmergencyHelpActivity extends BaseActivity {
     private void updateSubmitButtonState() {
         String cat = actCategory.getText().toString();
         String desc = etDescription.getText() != null ? etDescription.getText().toString().trim() : "";
-        boolean locOk = !Double.isNaN(selectedLat) && !Double.isNaN(selectedLng) && !TextUtils.isEmpty(selectedCity);
+        boolean locOk = !Double.isNaN(selectedLat) && !Double.isNaN(selectedLng);
 
         // Req 6: Validation rules
         boolean catOk = !TextUtils.isEmpty(cat);
