@@ -1062,6 +1062,21 @@ public class UserBookingsActivity extends BaseActivity
     private void cancelBooking(Booking booking) {
         new Thread(() -> {
             try {
+                if (booking != null && booking.isEmergency) {
+                    boolean cancelled = cancelEmergencyRequestAtomic(booking);
+                    MAIN.post(() -> {
+                        if (cancelled) {
+                            booking.status = "cancelled";
+                            adapter.notifyDataSetChanged();
+                            Toast.makeText(this, "Cancelled successfully", Toast.LENGTH_SHORT).show();
+                            loadBookings();
+                        } else {
+                            Toast.makeText(this, "Failed to cancel. Request may already be accepted.", Toast.LENGTH_LONG).show();
+                        }
+                    });
+                    return;
+                }
+
                 JSONObject body = new JSONObject();
                 body.put("status", "cancelled");
                 
@@ -1101,6 +1116,42 @@ public class UserBookingsActivity extends BaseActivity
                 MAIN.post(() -> Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
             }
         }).start();
+    }
+
+    private boolean cancelEmergencyRequestAtomic(Booking booking) {
+        try {
+            String requestId = clean(booking.emergencyRequestId);
+            if (requestId.isEmpty()) {
+                requestId = clean(booking.id);
+            }
+            if (requestId.isEmpty()) return false;
+
+            JSONObject payload = new JSONObject();
+            payload.put("p_request_id", requestId);
+
+            Request rpcRequest = new Request.Builder()
+                    .url(BASE_URL + "/rest/v1/rpc/cancel_emergency_request_atomic")
+                    .post(RequestBody.create(payload.toString(), JSON))
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Accept", "application/json")
+                    .build();
+
+            try (Response rpcResponse = HTTP.newCall(rpcRequest).execute()) {
+                String body = rpcResponse.body() != null ? rpcResponse.body().string() : "[]";
+                if (rpcResponse.code() != 200) {
+                    return false;
+                }
+
+                JSONArray arr = new JSONArray(body);
+                if (arr.length() == 0) return false;
+                return arr.getJSONObject(0).optBoolean("cancelled", false);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "cancelEmergencyRequestAtomic: " + e.getMessage());
+            return false;
+        }
     }
 
     private void cancelRelatedEmergencyBookings(String emergencyRequestId) {

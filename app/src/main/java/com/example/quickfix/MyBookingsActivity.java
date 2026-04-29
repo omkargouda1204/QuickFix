@@ -417,6 +417,16 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
     // BookingActionListener implementations
     @Override
     public void onAccept(Booking booking) {
+        if (booking != null && booking.isEmergency) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Accept Emergency")
+                    .setMessage("Accept this emergency request now?")
+                    .setPositiveButton("Accept", (d, w) -> openEmergencyRequestAction(booking, "accept"))
+                    .setNegativeButton("Cancel", null)
+                    .show();
+            return;
+        }
+
         new AlertDialog.Builder(this)
                 .setTitle("Accept Booking")
                 .setMessage("Accept booking from " + booking.customerName + "?")
@@ -427,6 +437,16 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
 
     @Override
     public void onReject(Booking booking) {
+        if (booking != null && booking.isEmergency) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Reject Emergency")
+                    .setMessage("Reject this emergency request?")
+                    .setPositiveButton("Reject", (d, w) -> openEmergencyRequestAction(booking, "reject"))
+                    .setNegativeButton("Cancel", null)
+                    .show();
+            return;
+        }
+
         new AlertDialog.Builder(this)
                 .setTitle("Reject Booking")
                 .setMessage("Reject booking from " + booking.customerName + "?")
@@ -623,5 +643,23 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         } catch (Exception ignored) {
             return value == null ? "" : value;
         }
+    }
+
+    private void openEmergencyRequestAction(Booking booking, String quickAction) {
+        if (booking == null) return;
+
+        String emergencyRequestId = booking.emergencyRequestId == null ? "" : booking.emergencyRequestId.trim();
+        if (emergencyRequestId.isEmpty()) {
+            emergencyRequestId = booking.id == null ? "" : booking.id.trim();
+        }
+        if (emergencyRequestId.isEmpty()) {
+            Toast.makeText(this, "Emergency request id missing", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Intent intent = new Intent(this, ProviderEmergencyRequestActivity.class);
+        intent.putExtra("request_id", emergencyRequestId);
+        intent.putExtra("quick_action", quickAction == null ? "" : quickAction.trim());
+        startActivity(intent);
     }
 }
