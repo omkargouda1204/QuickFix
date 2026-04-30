@@ -118,12 +118,14 @@ public class TransactionActivity extends BaseActivity {
                 String url = BASE_URL + "/rest/v1/users"
                         + "?firebase_uid=eq." + android.net.Uri.encode(userId)
                         + "&select=id&limit=1";
-                Request req = new Request.Builder().url(url)
-                        .get()
-                        .addHeader("apikey", ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept", "application/json")
-                        .build();
+                String idToken = AuthTokenProvider.getIdTokenBlocking(5);
+                Request.Builder rb = new Request.Builder().url(url)
+                    .get()
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Accept", "application/json");
+                if (idToken != null && !idToken.isEmpty()) rb.addHeader("Authorization", "Bearer " + idToken);
+                else rb.addHeader("Authorization", "Bearer " + ANON_KEY);
+                Request req = rb.build();
 
                 try (Response r = HTTP.newCall(req).execute()) {
                     if (r.isSuccessful() && r.body() != null) {
@@ -236,12 +238,14 @@ public class TransactionActivity extends BaseActivity {
         String url = BASE_URL + "/rest/v1/provider_profiles?select=id,business_name&limit=" + ids.size()
             + "&id=in.(" + joined + ")";
 
-        Request req = new Request.Builder().url(url)
-                .get()
-                .addHeader("apikey", ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .addHeader("Accept", "application/json")
-                .build();
+        String idToken = AuthTokenProvider.getIdTokenBlocking(5);
+        Request.Builder rb = new Request.Builder().url(url)
+            .get()
+            .addHeader("apikey", ANON_KEY)
+            .addHeader("Accept", "application/json");
+        if (idToken != null && !idToken.isEmpty()) rb.addHeader("Authorization", "Bearer " + idToken);
+        else rb.addHeader("Authorization", "Bearer " + ANON_KEY);
+        Request req = rb.build();
 
         try (Response r = HTTP.newCall(req).execute()) {
             if (r.code() != 200) return;
@@ -269,12 +273,14 @@ public class TransactionActivity extends BaseActivity {
     private List<Booking> fetchTransactionRows(String url, String label) throws Exception {
         Log.d(TAG, "Fetching " + label + " from: " + url.substring(0, Math.min(120, url.length())) + "...");
 
-        Request req = new Request.Builder().url(url)
-                .get()
-                .addHeader("apikey", ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .addHeader("Accept", "application/json")
-                .build();
+        String idToken = AuthTokenProvider.getIdTokenBlocking(5);
+        Request.Builder rb = new Request.Builder().url(url)
+            .get()
+            .addHeader("apikey", ANON_KEY)
+            .addHeader("Accept", "application/json");
+        if (idToken != null && !idToken.isEmpty()) rb.addHeader("Authorization", "Bearer " + idToken);
+        else rb.addHeader("Authorization", "Bearer " + ANON_KEY);
+        Request req = rb.build();
 
         List<Booking> list = new ArrayList<>();
         try (Response r = HTTP.newCall(req).execute()) {

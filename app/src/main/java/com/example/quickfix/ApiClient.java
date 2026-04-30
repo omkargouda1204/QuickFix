@@ -101,12 +101,14 @@ public class ApiClient {
     // ── Supabase request builder helper ──────────────────────────────────
 
     private static Request.Builder supabaseBuilder(String path) {
+        String idToken = AuthTokenProvider.getIdTokenBlocking(5);
+        String authValue = (idToken != null && !idToken.isEmpty()) ? idToken : ANON_KEY;
         return new Request.Builder()
-                .url(SUPABASE_URL + path)
-                .addHeader("apikey",        ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .addHeader("Content-Type",  "application/json")
-                .addHeader("Accept",        "application/json");
+            .url(SUPABASE_URL + path)
+            .addHeader("apikey", ANON_KEY)
+            .addHeader("Authorization", "Bearer " + authValue)
+            .addHeader("Content-Type", "application/json")
+            .addHeader("Accept", "application/json");
     }
 
     // ── GET a user row by email ──────────────────────────────────────────

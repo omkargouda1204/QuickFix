@@ -323,11 +323,18 @@ public class EmergencyHelpActivity extends BaseActivity {
                         ? BuildConfig.SUPABASE_CREATE_EMERGENCY_URL
                         : BuildConfig.SUPABASE_URL + "/functions/v1/create-emergency";
 
-                Request req = new Request.Builder()
+                String idToken = AuthTokenProvider.getIdTokenBlocking(5);
+                Request.Builder rb = new Request.Builder()
                         .url(url)
                         .post(RequestBody.create(body.toString(), JSON))
                         .addHeader("Content-Type", "application/json")
-                        .build();
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY);
+                if (idToken != null && !idToken.isEmpty()) {
+                    rb.addHeader("Authorization", "Bearer " + idToken);
+                } else {
+                    rb.addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY);
+                }
+                Request req = rb.build();
 
                 try (Response res = http.newCall(req).execute()) {
                     String raw = res.body() != null ? res.body().string() : "";

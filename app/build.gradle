@@ -35,6 +35,10 @@ def offerValidationFnUrl = supabaseProps.getProperty(
         'SUPABASE_OFFER_VALIDATION_FN_URL',
         (supabaseProps.getProperty('SUPABASE_URL', '') ?: '') + '/functions/v1/offer-validation'
 )
+def createEmergencyFnUrl = supabaseProps.getProperty(
+        'SUPABASE_CREATE_EMERGENCY_URL',
+        (supabaseProps.getProperty('SUPABASE_URL', '') ?: '') + '/functions/v1/create-emergency'
+)
 
 android {
     namespace 'com.example.quickfix'
@@ -64,6 +68,7 @@ android {
         buildConfigField "String", "SUPABASE_CREATE_ORDER_FN_URL","\"${createOrderFnUrl}\""
         buildConfigField "String", "SUPABASE_AI_ASSISTANT_FN_URL","\"${aiAssistantFnUrl}\""
         buildConfigField "String", "SUPABASE_OFFER_VALIDATION_FN_URL","\"${offerValidationFnUrl}\""
+        buildConfigField "String", "SUPABASE_CREATE_EMERGENCY_URL","\"${createEmergencyFnUrl}\""
         buildConfigField "String", "RAZORPAY_KEY_ID",            "\"${razorpayKeyId}\""
     }
 
