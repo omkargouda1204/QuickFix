@@ -3,7 +3,6 @@
 //
 // AUTH DESIGN:
 //   - The Android client sends: Authorization: Bearer <SUPABASE_ANON_KEY>
-//   - This function validates the header is present (not empty).
 //   - All DB operations use SUPABASE_SERVICE_ROLE_KEY internally (bypasses RLS safely).
 //   - The user_id in the payload is trusted (sent by the authenticated client).
 
@@ -19,39 +18,7 @@ function json(data: unknown, status = 200) {
   });
 }
 
-// ── Provider discovery helpers ────────────────────────────────────────────────
-
-async function callRpcFindProviders(
-  supabaseUrl: string,
-  serviceKey: string,
-  payload: { p_lat: number; p_lng: number; p_category: string; p_radius_meters: number }
-): Promise<any[]> {
-  const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/rpc/find_nearby_providers`;
-  try {
-    console.log("Calling RPC find_nearby_providers with payload:", JSON.stringify(payload));
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: serviceKey,
-        authorization: `Bearer ${serviceKey}`,
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      console.warn(`RPC find_nearby_providers failed HTTP ${res.status}: ${text}`);
-      return [];
-    }
-    const result = await res.json();
-    console.log(`RPC returned ${Array.isArray(result) ? result.length : 0} providers`);
-    return Array.isArray(result) ? result : [];
-  } catch (err) {
-    console.warn('RPC call failed, falling back to client-side filter:', err);
-    return [];
-  }
-}
+// ── Haversine distance ────────────────────────────────────────────────────────
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
@@ -64,17 +31,100 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// ── Category matching (case-insensitive + alias groups) ──────────────────────
+// Handles cases like "AC Service" ↔ "ac repair", "Electrician" ↔ "electrical", etc.
+
+const CATEGORY_ALIASES: Record<string, string[]> = {
+  electrician: ['electrician', 'electrical', 'electric', 'wiring', 'power'],
+  plumber: ['plumber', 'plumbing', 'pipe', 'drainage', 'water leak'],
+  'ac service': ['ac', 'air conditioner', 'air conditioning', 'hvac', 'cooling', 'ac service', 'ac repair'],
+  carpentry: ['carpenter', 'carpentry', 'wood', 'furniture'],
+  cleaning: ['cleaning', 'cleaner', 'housekeeping', 'sanitization'],
+  'appliance repair': ['appliance', 'appliance repair', 'washing machine', 'refrigerator', 'fridge', 'dishwasher'],
+  painting: ['painting', 'painter', 'paint', 'color'],
+  'general repair': ['general', 'repair', 'maintenance', 'handyman', 'general repair', 'repair & maintenance'],
+};
+
+function categoryMatches(requested: string, providerCategory: string): boolean {
+  if (!requested || !providerCategory) return false;
+
+  const req = requested.trim().toLowerCase();
+  const prov = providerCategory.trim().toLowerCase();
+
+  // 1. Direct match (case-insensitive)
+  if (req === prov) return true;
+
+  // 2. Substring match (both directions)
+  if (prov.includes(req) || req.includes(prov)) return true;
+
+  // 3. Alias group match — find which group req belongs to, then check prov
+  for (const [_group, aliases] of Object.entries(CATEGORY_ALIASES)) {
+    const reqInGroup = aliases.some((a) => req.includes(a) || a.includes(req));
+    if (!reqInGroup) continue;
+    const provInGroup = aliases.some((a) => prov.includes(a) || a.includes(prov));
+    if (provInGroup) return true;
+  }
+
+  return false;
+}
+
+// ── Provider discovery helpers ────────────────────────────────────────────────
+
+async function callRpcFindProviders(
+  supabaseUrl: string,
+  serviceKey: string,
+  payload: { p_lat: number; p_lng: number; p_category: string; p_radius_meters: number }
+): Promise<any[]> {
+  const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/rpc/find_nearby_providers`;
+  try {
+    console.log('[RPC] Calling find_nearby_providers:', JSON.stringify(payload));
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: serviceKey,
+        authorization: `Bearer ${serviceKey}`,
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn(`[RPC] find_nearby_providers failed HTTP ${res.status}: ${text}`);
+      return [];
+    }
+    const result = await res.json();
+    const count = Array.isArray(result) ? result.length : 0;
+    console.log(`[RPC] Returned ${count} providers`);
+    return Array.isArray(result) ? result : [];
+  } catch (err) {
+    console.warn('[RPC] Call failed, falling back to client-side filter:', err);
+    return [];
+  }
+}
+
+/**
+ * Fetches ALL providers from provider_profiles, then filters by:
+ *  1. Category match (alias-aware, case-insensitive)
+ *  2. Active/approved status
+ *  3. Haversine distance <= radiusKm
+ * Logs each provider's lat/lng and distance for debugging.
+ */
 async function fetchProvidersAndFilter(
   supabaseUrl: string,
   serviceKey: string,
-  lat: number,
-  lng: number,
+  userLat: number,
+  userLng: number,
   category: string,
   radiusKm: number
 ): Promise<any[]> {
   const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/provider_profiles` +
-    `?select=id,firebase_uid,business_name,category,service_category,latitude,longitude,lat,lng,status,is_active,city,area` +
-    `&limit=1000`;
+    `?select=id,firebase_uid,business_name,category,` +
+    `latitude,longitude,lat,lng,status,is_active,is_approved,city,area` +
+    `&limit=2000`;
+
+  console.log(`[Fallback] Fetching providers — userLat=${userLat}, userLng=${userLng}, category="${category}", radius=${radiusKm}km`);
+
   try {
     const res = await fetch(url, {
       method: 'GET',
@@ -85,40 +135,91 @@ async function fetchProvidersAndFilter(
       },
     });
     if (!res.ok) {
-      console.warn(`Provider fetch fallback failed HTTP ${res.status}`);
+      const text = await res.text();
+      console.warn(`[Fallback] Provider fetch failed HTTP ${res.status}: ${text}`);
       return [];
     }
+
     const arr: any[] = await res.json();
-    const out: any[] = [];
-    const lcCategory = (category || '').toLowerCase();
+    console.log(`[Fallback] Total providers in DB: ${arr.length}`);
+
+    const matched: any[] = [];
+    let skippedCategory = 0;
+    let skippedInactive = 0;
+    let skippedNoLocation = 0;
+    let skippedDistance = 0;
 
     for (const p of arr) {
-      // Category match
-      const provCat = ((p.service_category || p.category || '') as string).toLowerCase();
-      if (!provCat.includes(lcCategory) && !lcCategory.includes(provCat)) continue;
+      const provName = p.business_name || p.id || 'unknown';
 
-      // Active check
-      if (p.is_active === false || p.status === 'inactive') continue;
+      // ── Category match ───────────────────────────────────────────────────
+      const provCat = String(p.category || '');
+      if (!categoryMatches(category, provCat)) {
+        skippedCategory++;
+        continue;
+      }
 
-      // Lat/lng
+      // ── Active/approved check ────────────────────────────────────────────
+      // Accept provider if is_active=true OR status is a positive value.
+      // We do NOT require is_approved=true — that flag controls onboarding,
+      // not operational availability.
+      const status = String(p.status || '').toLowerCase();
+      const isExplicitlyInactive =
+        status === 'inactive' ||
+        status === 'rejected' ||
+        status === 'suspended' ||
+        status === 'banned' ||
+        p.is_active === false;    // only skip if EXPLICITLY set to false
+
+      if (isExplicitlyInactive) {
+        skippedInactive++;
+        console.log(`[Fallback] SKIP inactive: ${provName} (status=${status}, is_active=${p.is_active})`);
+        continue;
+      }
+
+      // ── Read lat/lng (try multiple column names) ─────────────────────────
       let pLat: number | null = null;
       let pLng: number | null = null;
-      if (p.latitude != null) pLat = Number(p.latitude);
-      else if (p.lat != null) pLat = Number(p.lat);
-      if (p.longitude != null) pLng = Number(p.longitude);
-      else if (p.lng != null) pLng = Number(p.lng);
-      if (pLat == null || pLng == null || isNaN(pLat) || isNaN(pLng)) continue;
 
-      const dist = haversineKm(lat, lng, pLat, pLng);
-      if (!isNaN(dist) && dist <= radiusKm) {
-        p.distance_km = dist;
-        out.push(p);
+      if (p.latitude != null && p.latitude !== '') pLat = Number(p.latitude);
+      else if (p.lat != null && p.lat !== '') pLat = Number(p.lat);
+
+      if (p.longitude != null && p.longitude !== '') pLng = Number(p.longitude);
+      else if (p.lng != null && p.lng !== '') pLng = Number(p.lng);
+
+      if (pLat == null || pLng == null || isNaN(pLat) || isNaN(pLng) || pLat === 0 || pLng === 0) {
+        skippedNoLocation++;
+        console.log(`[Fallback] SKIP no location: ${provName} (lat=${p.latitude ?? p.lat}, lng=${p.longitude ?? p.lng})`);
+        continue;
       }
+
+      // ── Haversine distance ───────────────────────────────────────────────
+      const dist = haversineKm(userLat, userLng, pLat, pLng);
+      console.log(`[Fallback] Provider: ${provName} | cat="${provCat}" | lat=${pLat}, lng=${pLng} | dist=${dist.toFixed(2)}km | radius=${radiusKm}km`);
+
+      if (isNaN(dist) || dist > radiusKm) {
+        skippedDistance++;
+        continue;
+      }
+
+      p.distance_km = dist;
+      matched.push(p);
     }
-    console.log(`Fallback: fetched ${arr.length} total, matched ${out.length} by category+distance`);
-    return out;
+
+    // Sort by distance ascending
+    matched.sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999));
+
+    console.log(
+      `[Fallback] Results — matched:${matched.length}` +
+      ` | skipped_category:${skippedCategory}` +
+      ` | skipped_inactive:${skippedInactive}` +
+      ` | skipped_no_location:${skippedNoLocation}` +
+      ` | skipped_too_far:${skippedDistance}`
+    );
+
+    return matched;
   } catch (err) {
-    console.warn('Fallback fetch error:', err);
+    console.warn('[Fallback] Fetch error:', err);
     return [];
   }
 }
@@ -138,7 +239,7 @@ async function insertEmergencyRequest(
     status: 'pending',
   };
 
-  console.log('Inserting emergency request:', JSON.stringify(payload));
+  console.log('[DB] Inserting emergency request for user:', payload.user_id);
 
   const res = await fetch(url, {
     method: 'POST',
@@ -160,6 +261,7 @@ async function insertEmergencyRequest(
   if (!arr || arr.length === 0) {
     throw new Error('Insert emergency_request returned empty result');
   }
+  console.log('[DB] Emergency request created:', arr[0].id);
   return arr[0];
 }
 
@@ -177,7 +279,7 @@ async function insertBookings(
     status: r.status || 'pending',
   }));
 
-  console.log(`Inserting ${castRows.length} bookings`);
+  console.log(`[DB] Inserting ${castRows.length} booking(s)`);
 
   const res = await fetch(url, {
     method: 'POST',
@@ -194,7 +296,7 @@ async function insertBookings(
     const text = await res.text();
     throw new Error(`Insert bookings failed HTTP ${res.status}: ${text}`);
   }
-  console.log(`Bookings inserted successfully`);
+  console.log('[DB] Bookings inserted successfully');
 }
 
 async function notifyProviders(
@@ -206,7 +308,10 @@ async function notifyProviders(
 ): Promise<void> {
   for (const provider of providers) {
     const firebaseUid = provider.firebase_uid || provider.provider_firebase_uid;
-    if (!firebaseUid) continue;
+    if (!firebaseUid) {
+      console.warn(`[Notify] Skipping provider ${provider.id} — no firebase_uid`);
+      continue;
+    }
 
     const notificationPayload = {
       user_id: firebaseUid,
@@ -229,12 +334,12 @@ async function notifyProviders(
         body: JSON.stringify(notificationPayload),
       });
       if (!res.ok) {
-        console.warn(`Notification failed for provider ${firebaseUid}: HTTP ${res.status}`);
+        console.warn(`[Notify] Failed for ${firebaseUid}: HTTP ${res.status}`);
       } else {
-        console.log(`Notification sent to provider ${firebaseUid}`);
+        console.log(`[Notify] Sent to provider ${firebaseUid}`);
       }
     } catch (err) {
-      console.warn(`notifyProviders error for ${firebaseUid}:`, err);
+      console.warn(`[Notify] Error for ${firebaseUid}:`, err);
     }
   }
 }
@@ -242,7 +347,6 @@ async function notifyProviders(
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
-  // Handle preflight
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -250,7 +354,6 @@ Deno.serve(async (req) => {
     // ── 1. Read env ──────────────────────────────────────────────────────────
     const env = Deno.env.toObject();
     const SUPABASE_URL = env.SUPABASE_URL || '';
-    // Always prefer service role key for server-side DB writes (bypasses RLS)
     const SERVICE_KEY =
       env.SUPABASE_SERVICE_ROLE_KEY ||
       env.SUPABASE_ANON_KEY ||
@@ -261,23 +364,15 @@ Deno.serve(async (req) => {
       return json({ error: 'Supabase URL or service key not configured' }, 500);
     }
 
-    // ── 2. Validate Authorization header ────────────────────────────────────
-    // The Android client must send: Authorization: Bearer <SUPABASE_ANON_KEY>
-    // We just verify the header is present; internal DB calls use service role key.
+    // ── 2. Validate Authorization header ─────────────────────────────────────
     const authHeader = req.headers.get('authorization') || '';
-    if (!authHeader.toLowerCase().startsWith('bearer ')) {
-      console.error('Missing or invalid Authorization header');
-      return json({
-        error: 'Unauthorized: Authorization header is required. Use Bearer <SUPABASE_ANON_KEY>.',
-      }, 401);
+    if (!authHeader.toLowerCase().startsWith('bearer ') || !authHeader.slice(7).trim()) {
+      console.error('[Auth] Missing or empty Authorization header');
+      return json({ error: 'Unauthorized: Authorization: Bearer <SUPABASE_ANON_KEY> required.' }, 401);
     }
-    const bearerToken = authHeader.slice(7).trim();
-    if (!bearerToken) {
-      return json({ error: 'Unauthorized: Bearer token is empty.' }, 401);
-    }
-    console.log(`Authorization header present (token length=${bearerToken.length})`);
+    console.log(`[Auth] Header OK (token length=${authHeader.slice(7).trim().length})`);
 
-    // ── 3. Parse and validate request body ──────────────────────────────────
+    // ── 3. Parse body ─────────────────────────────────────────────────────────
     let payload: Record<string, unknown>;
     try {
       payload = await req.json();
@@ -285,14 +380,7 @@ Deno.serve(async (req) => {
       return json({ error: 'Invalid JSON body' }, 400);
     }
 
-    console.log('=== create-emergency START ===');
-    console.log('Request body:', JSON.stringify({
-      user_id: payload.user_id,
-      category: payload.category,
-      lat: payload.lat,
-      lng: payload.lng,
-    }));
-
+    // ── 4. Validate required fields ───────────────────────────────────────────
     const required = ['user_id', 'category', 'lat', 'lng'];
     for (const k of required) {
       if (payload[k] === undefined || payload[k] === null || String(payload[k]).trim() === '') {
@@ -306,16 +394,17 @@ Deno.serve(async (req) => {
     const p_radius_meters = Number(payload.radius_meters || 25000);
     const p_radius_km = p_radius_meters / 1000;
 
-    if (isNaN(p_lat) || isNaN(p_lng)) {
-      return json({ error: 'Invalid lat/lng values' }, 400);
+    if (isNaN(p_lat) || isNaN(p_lng) || p_lat === 0 || p_lng === 0) {
+      return json({ error: `Invalid lat/lng: lat=${p_lat}, lng=${p_lng}` }, 400);
     }
 
-    console.log(`User: ${payload.user_id} | Category: ${p_category} | Location: ${p_lat},${p_lng} | Radius: ${p_radius_km}km`);
+    console.log('=== create-emergency START ===');
+    console.log(`[Request] user_id=${payload.user_id} | category="${p_category}" | lat=${p_lat}, lng=${p_lng} | radius=${p_radius_km}km`);
 
-    // ── 4. Find nearby providers ─────────────────────────────────────────────
+    // ── 5. Find nearby providers ──────────────────────────────────────────────
     let providers: any[] = [];
 
-    // Try RPC first (PostGIS ST_DWithin query)
+    // Try PostGIS RPC first
     try {
       providers = await callRpcFindProviders(SUPABASE_URL, SERVICE_KEY, {
         p_lat,
@@ -324,20 +413,29 @@ Deno.serve(async (req) => {
         p_radius_meters,
       });
     } catch (e) {
-      console.warn('RPC error:', e);
+      console.warn('[RPC] Error:', e);
     }
 
-    // Fallback: client-side haversine filter
+    // Fallback: fetch all + client-side haversine filter
     if (!Array.isArray(providers) || providers.length === 0) {
-      console.log('RPC returned no results, using fallback provider fetch...');
+      console.log('[Search] RPC returned 0, switching to fallback haversine filter...');
       providers = await fetchProvidersAndFilter(
         SUPABASE_URL, SERVICE_KEY, p_lat, p_lng, p_category, p_radius_km
       );
     }
 
-    console.log(`Total providers found: ${providers.length}`);
+    console.log(`[Search] Providers within ${p_radius_km}km: ${providers.length}`);
 
-    // ── 5. Insert emergency_requests row (always, regardless of providers) ───
+    // ── 6. Expand radius to 50km if no providers found within 25km ────────────
+    if (providers.length === 0 && p_radius_km <= 25) {
+      console.log('[Search] No providers within 25km, expanding to 50km...');
+      providers = await fetchProvidersAndFilter(
+        SUPABASE_URL, SERVICE_KEY, p_lat, p_lng, p_category, 50
+      );
+      console.log(`[Search] Providers within 50km: ${providers.length}`);
+    }
+
+    // ── 7. Insert emergency_requests row (always) ─────────────────────────────
     const reqBody: Record<string, unknown> = {
       user_id: String(payload.user_id),
       user_firebase_uid: String(payload.user_id),
@@ -355,9 +453,8 @@ Deno.serve(async (req) => {
 
     const created = await insertEmergencyRequest(SUPABASE_URL, SERVICE_KEY, reqBody);
     const requestId = created.id;
-    console.log('Emergency request created with ID:', requestId);
 
-    // ── 6. Create booking rows for matched providers ──────────────────────────
+    // ── 8. Create bookings for matched providers ───────────────────────────────
     const bookingRows: Record<string, unknown>[] = providers.map((prov: any) => ({
       customer_id: String(payload.user_id),
       customer_name: String(payload.user_name || ''),
@@ -383,32 +480,35 @@ Deno.serve(async (req) => {
 
     if (bookingRows.length > 0) {
       await insertBookings(SUPABASE_URL, SERVICE_KEY, bookingRows);
-      console.log(`Inserted ${bookingRows.length} bookings`);
 
-      // Notify providers (non-fatal if this fails)
+      // Notify providers (non-fatal)
       try {
         await notifyProviders(SUPABASE_URL, SERVICE_KEY, requestId, reqBody, providers);
-        console.log(`Notified ${providers.length} providers`);
       } catch (notifyErr) {
-        console.warn('notifyProviders failed (non-fatal):', notifyErr);
+        console.warn('[Notify] Failed (non-fatal):', notifyErr);
       }
     } else {
-      console.log('No providers found — emergency request saved without bookings');
+      console.log('[Search] No providers found even after 50km expansion');
     }
 
     console.log('=== create-emergency END ===');
+
+    const nearestDist = providers.length > 0
+      ? `${(providers[0].distance_km ?? 0).toFixed(1)}km`
+      : null;
 
     return json({
       success: true,
       message: bookingRows.length > 0
         ? `Emergency request created and ${bookingRows.length} provider(s) notified`
-        : 'Emergency request saved. No providers found within 25km.',
+        : 'Emergency request saved. No providers found nearby.',
       request_id: requestId,
       providers_count: bookingRows.length,
+      nearest_provider_distance_km: nearestDist,
     }, 200);
 
   } catch (err) {
-    console.error('create-emergency unhandled error:', err);
+    console.error('[Error] create-emergency unhandled:', err);
     return json({ error: String(err) }, 500);
   }
 });

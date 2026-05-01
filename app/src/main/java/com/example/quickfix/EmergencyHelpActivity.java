@@ -131,6 +131,42 @@ public class EmergencyHelpActivity extends BaseActivity {
         setupFormValidation();
         updateSubmitButtonState();
         refreshLocationState();
+        // Auto-fetch live GPS if we don't have valid coordinates yet
+        fetchLiveLocationIfNeeded();
+    }
+
+    /**
+     * Attempts a live GPS fix if lat/lng are still NaN after reading from SharedPreferences.
+     * This handles cases where the user previously selected a city by name (no coordinates).
+     */
+    private void fetchLiveLocationIfNeeded() {
+        if (hasValidLocation()) {
+            Log.d(TAG, "[Location] Already have valid lat/lng: " + selectedLat + ", " + selectedLng);
+            return;
+        }
+        Log.d(TAG, "[Location] No valid lat/lng saved — attempting live GPS fix...");
+        if (tvLocationHint != null) tvLocationHint.setText("Getting your GPS location...");
+
+        locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
+            @Override
+            public void onSuccess(String city, String area, double lat, double lng) {
+                Log.d(TAG, "[Location] GPS fix — city=" + city + " lat=" + lat + " lng=" + lng);
+                selectedLat = lat;
+                selectedLng = lng;
+                if (city != null && !city.isEmpty()) selectedCity = city;
+                if (area != null && !area.isEmpty()) selectedArea = area;
+                updateLocationUi();
+            }
+
+            @Override
+            public void onFailure(String reason) {
+                Log.w(TAG, "[Location] GPS fix failed: " + reason);
+                // Non-fatal — user can still tap "Select Location"
+                if (tvLocationHint != null) {
+                    tvLocationHint.setText("Could not get GPS location. Tap \"Select Location\" to set manually.");
+                }
+            }
+        });
     }
 
     private void bindViews() {
@@ -330,6 +366,22 @@ public class EmergencyHelpActivity extends BaseActivity {
 
         new Thread(() -> {
             try {
+                // ── Pre-flight location check ────────────────────────────────
+                Log.d(TAG, "[submitEmergency] PRE-FLIGHT CHECK");
+                Log.d(TAG, "[submitEmergency]   user_id   = " + currentUserId);
+                Log.d(TAG, "[submitEmergency]   category  = " + category);
+                Log.d(TAG, "[submitEmergency]   lat       = " + selectedLat);
+                Log.d(TAG, "[submitEmergency]   lng       = " + selectedLng);
+                Log.d(TAG, "[submitEmergency]   city      = " + selectedCity);
+                Log.d(TAG, "[submitEmergency]   area      = " + selectedArea);
+
+                if (Double.isNaN(selectedLat) || Double.isNaN(selectedLng)) {
+                    throw new IllegalStateException("Location not available. Please select your location first.");
+                }
+                if (selectedLat == 0.0 && selectedLng == 0.0) {
+                    throw new IllegalStateException("Location appears to be (0,0) — GPS not ready. Please wait or select location manually.");
+                }
+
                 // Build request payload
                 JSONObject body = new JSONObject();
                 body.put("user_id", currentUserId);
@@ -342,9 +394,10 @@ public class EmergencyHelpActivity extends BaseActivity {
                 body.put("city", selectedCity != null ? selectedCity : "");
                 body.put("area", selectedArea != null ? selectedArea : "");
                 body.put("address", selectedAddress != null ? selectedAddress : "");
+                // Send 25km; the Edge Function will auto-expand to 50km if no providers found
                 body.put("radius_meters", 25000);
 
-                Log.d(TAG, "[submitEmergency] Request body: " + body.toString());
+                Log.d(TAG, "[submitEmergency] Full request body: " + body.toString());
 
                 // IMPORTANT: Supabase Edge Functions require Authorization: Bearer <ANON_KEY>
                 // NOT a Firebase ID token — Firebase tokens are rejected as UNAUTHORIZED_ASYMMETRIC_JWT
@@ -403,18 +456,26 @@ public class EmergencyHelpActivity extends BaseActivity {
                     boolean success = result.optBoolean("success", false);
                     final String requestId = result.optString("request_id", "");
                     final int providersCount = result.optInt("providers_count", 0);
+                    final String nearestDist = result.optString("nearest_provider_distance_km", "");
                     final String message = result.optString("message",
                             success ? "Emergency request sent!" : "Request sent, no providers nearby");
+
+                    Log.d(TAG, "[submitEmergency] Result: success=" + success
+                            + " providers=" + providersCount
+                            + " requestId=" + requestId
+                            + " nearest=" + nearestDist);
 
                     runOnUiThread(() -> {
                         setLoading(false);
                         activeRequestId = requestId;
                         if (providersCount > 0) {
-                            setStatus("✓ Emergency sent! Notified " + providersCount + " provider(s). Waiting...");
+                            String statusMsg = "✓ Emergency sent! " + providersCount + " provider(s) notified.";
+                            if (!nearestDist.isEmpty()) statusMsg += " Nearest: " + nearestDist;
+                            setStatus(statusMsg + " Waiting...");
                             Toast.makeText(this, "Emergency sent! " + providersCount + " provider(s) notified.", Toast.LENGTH_LONG).show();
                         } else {
-                            setStatus("✓ Request saved. " + message);
-                            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                            setStatus("✓ Request saved. No providers found nearby. We'll alert you when one is available.");
+                            Toast.makeText(this, "Emergency saved. No providers found in your area yet.", Toast.LENGTH_LONG).show();
                         }
                     });
 
