@@ -1133,32 +1133,21 @@ public class UserBookingsActivity extends BaseActivity
     }
 
     private void cancelBooking(Booking booking) {
+        if (booking == null) return;
+        if (!"pending".equals(booking.status)) {
+            Toast.makeText(this, "Cannot cancel after accepted", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         new Thread(() -> {
             try {
-                if (booking != null && booking.isEmergency) {
-                    boolean cancelled = cancelEmergencyRequestAtomic(booking);
-                    MAIN.post(() -> {
-                        if (cancelled) {
-                            booking.status = "cancelled";
-                            adapter.notifyDataSetChanged();
-                            Toast.makeText(this, "Cancelled successfully", Toast.LENGTH_SHORT).show();
-                            loadBookings();
-                        } else {
-                            Toast.makeText(this, "Failed to cancel. Request may already be accepted.", Toast.LENGTH_LONG).show();
-                        }
-                    });
-                    return;
-                }
-
                 JSONObject body = new JSONObject();
                 body.put("status", "cancelled");
-                
-                String table = booking.isEmergency ? "emergency_requests" : "bookings";
-                String url = BASE_URL + "/rest/v1/" + table + "?id=eq." + android.net.Uri.encode(booking.id);
-                
-                if (booking.isEmergency) {
-                    url += "&status=eq.pending";
-                }
+
+                // Target bookings table directly for both emergency and normal
+                String url = BASE_URL + "/rest/v1/bookings"
+                        + "?id=eq." + android.net.Uri.encode(clean(booking.id))
+                        + "&status=eq.pending";
 
                 Request req = new Request.Builder().url(url)
                         .patch(RequestBody.create(body.toString(), MediaType.get("application/json")))
@@ -1167,18 +1156,19 @@ public class UserBookingsActivity extends BaseActivity
                         .addHeader("Content-Type", "application/json")
                         .addHeader("Prefer", "return=minimal")
                         .build();
+
                 try (Response r = HTTP.newCall(req).execute()) {
                     MAIN.post(() -> {
-                        if (r.code() == 200 || r.code() == 204) {
+                        if (r.isSuccessful()) {
                             booking.status = "cancelled";
                             adapter.notifyDataSetChanged();
                             Toast.makeText(this, "Cancelled successfully", Toast.LENGTH_SHORT).show();
-                            
-                            if (booking.isEmergency) {
-                                cancelRelatedEmergencyBookings(booking.id);
-                            }
-                            
                             loadBookings();
+
+                            // Notify provider if someone was assigned (even if pending)
+                            if (!clean(booking.providerId).isEmpty()) {
+                                notifyProviderOfCancellation(booking);
+                            }
                         } else {
                             Toast.makeText(this, "Failed to cancel. Request may already be accepted.", Toast.LENGTH_LONG).show();
                         }
@@ -1187,6 +1177,34 @@ public class UserBookingsActivity extends BaseActivity
             } catch (Exception e) {
                 Log.e(TAG, "cancelBooking: " + e.getMessage());
                 MAIN.post(() -> Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    private void notifyProviderOfCancellation(Booking booking) {
+        new Thread(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("user_id", clean(booking.providerId));
+                payload.put("type", "booking_cancelled");
+                payload.put("title", "Booking Cancelled");
+                payload.put("body", "The customer has cancelled their request: " + clean(booking.serviceName));
+                
+                JSONObject data = new JSONObject();
+                data.put("booking_id", clean(booking.id));
+                payload.put("data", data);
+
+                Request req = new Request.Builder()
+                        .url(clean(BASE_URL) + "/functions/v1/send-notification")
+                        .post(RequestBody.create(payload.toString(), JSON))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .build();
+
+                HTTP.newCall(req).execute().close();
+            } catch (Exception e) {
+                Log.w(TAG, "Failed to notify provider of cancellation: " + e.getMessage());
             }
         }).start();
     }

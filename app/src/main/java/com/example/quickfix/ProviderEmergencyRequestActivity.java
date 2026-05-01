@@ -6,6 +6,7 @@ import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
+import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -49,6 +50,8 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     private MaterialButton btnAccept;
     private MaterialButton btnReject;
     private ProgressBar progress;
+    private EditText etVisitingName;
+    private EditText etVisitingPhone;
 
     private String requestId = "";
     private String providerProfileId = "";
@@ -97,6 +100,8 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         btnAccept = findViewById(R.id.btnAcceptEmergency);
         btnReject = findViewById(R.id.btnRejectEmergency);
         progress = findViewById(R.id.progressEmergencyAccept);
+        etVisitingName = findViewById(R.id.etVisitingName);
+        etVisitingPhone = findViewById(R.id.etVisitingPhone);
     }
 
     private void bindButtons() {
@@ -265,6 +270,11 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 if ("accepted".equals(status)) {
                     body.put("provider_id", providerProfileId);
                     body.put("provider_name", fallback(providerName, "Provider"));
+
+                    String vName = etVisitingName != null ? etVisitingName.getText().toString().trim() : "";
+                    String vPhone = etVisitingPhone != null ? etVisitingPhone.getText().toString().trim() : "";
+                    if (!vName.isEmpty()) body.put("technician_name", vName);
+                    if (!vPhone.isEmpty()) body.put("technician_phone", vPhone);
                 }
 
                 String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
