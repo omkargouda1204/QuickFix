@@ -118,13 +118,11 @@ public class TransactionActivity extends BaseActivity {
                 String url = BASE_URL + "/rest/v1/users"
                         + "?firebase_uid=eq." + android.net.Uri.encode(userId)
                         + "&select=id&limit=1";
-                String idToken = AuthTokenProvider.getIdTokenBlocking(5);
                 Request.Builder rb = new Request.Builder().url(url)
                     .get()
                     .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
                     .addHeader("Accept", "application/json");
-                if (idToken != null && !idToken.isEmpty()) rb.addHeader("Authorization", "Bearer " + idToken);
-                else rb.addHeader("Authorization", "Bearer " + ANON_KEY);
                 Request req = rb.build();
 
                 try (Response r = HTTP.newCall(req).execute()) {
@@ -165,10 +163,7 @@ public class TransactionActivity extends BaseActivity {
                         BASE_URL + "/rest/v1/bookings"
                                 + "?select=*"
                                 + "&or=(customer_id.eq." + android.net.Uri.encode(uid)
-                                + ",customer_id.eq." + android.net.Uri.encode(dbId)
-                                + ",customer_firebase_uid.eq." + android.net.Uri.encode(uid)
-                                + ",user_firebase_uid.eq." + android.net.Uri.encode(uid)
-                                + ",user_id.eq." + android.net.Uri.encode(uid) + ")"
+                                + ",customer_id.eq." + android.net.Uri.encode(dbId) + ")"
                                 + "&order=created_at.desc",
                         "bookings");
                 list.addAll(bookings);
@@ -178,9 +173,7 @@ public class TransactionActivity extends BaseActivity {
                 List<Booking> emergencies = fetchTransactionRows(
                         BASE_URL + "/rest/v1/emergency_requests"
                                 + "?select=*"
-                                + "&or=(user_firebase_uid.eq." + android.net.Uri.encode(uid)
-                                + ",user_id.eq." + android.net.Uri.encode(dbId)
-                                + ",user_id.eq." + android.net.Uri.encode(uid) + ")"
+                                + "&user_id=eq." + android.net.Uri.encode(uid)
                                 + "&order=created_at.desc",
                         "emergency_requests");
                 list.addAll(emergencies);
@@ -238,13 +231,11 @@ public class TransactionActivity extends BaseActivity {
         String url = BASE_URL + "/rest/v1/provider_profiles?select=id,business_name&limit=" + ids.size()
             + "&id=in.(" + joined + ")";
 
-        String idToken = AuthTokenProvider.getIdTokenBlocking(5);
         Request.Builder rb = new Request.Builder().url(url)
             .get()
             .addHeader("apikey", ANON_KEY)
+            .addHeader("Authorization", "Bearer " + ANON_KEY)
             .addHeader("Accept", "application/json");
-        if (idToken != null && !idToken.isEmpty()) rb.addHeader("Authorization", "Bearer " + idToken);
-        else rb.addHeader("Authorization", "Bearer " + ANON_KEY);
         Request req = rb.build();
 
         try (Response r = HTTP.newCall(req).execute()) {
@@ -273,13 +264,11 @@ public class TransactionActivity extends BaseActivity {
     private List<Booking> fetchTransactionRows(String url, String label) throws Exception {
         Log.d(TAG, "Fetching " + label + " from: " + url.substring(0, Math.min(120, url.length())) + "...");
 
-        String idToken = AuthTokenProvider.getIdTokenBlocking(5);
         Request.Builder rb = new Request.Builder().url(url)
             .get()
             .addHeader("apikey", ANON_KEY)
+            .addHeader("Authorization", "Bearer " + ANON_KEY)
             .addHeader("Accept", "application/json");
-        if (idToken != null && !idToken.isEmpty()) rb.addHeader("Authorization", "Bearer " + idToken);
-        else rb.addHeader("Authorization", "Bearer " + ANON_KEY);
         Request req = rb.build();
 
         List<Booking> list = new ArrayList<>();

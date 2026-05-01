@@ -172,18 +172,18 @@ public class UserBookingsActivity extends BaseActivity
 
                 // Build an OR query to find bookings by multiple possible ids (db id or firebase uid)
                 String orClause = "or=(customer_id.eq." + android.net.Uri.encode(userDbId)
-                        + ",customer_id.eq." + android.net.Uri.encode(userId)
-                        + ",customer_firebase_uid.eq." + android.net.Uri.encode(userId)
-                        + ",user_firebase_uid.eq." + android.net.Uri.encode(userId)
-                        + ",user_id.eq." + android.net.Uri.encode(userId) + ")";
+                        + ",customer_id.eq." + android.net.Uri.encode(userId) + ")";
 
                 String url = BASE_URL + "/rest/v1/bookings?select=*&" + orClause + "&order=created_at.desc";
-                try (Response r = HTTP.newCall(new Request.Builder().url(url)
+                Request.Builder rb = new Request.Builder().url(url)
+                        .get()
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept", "application/json")
-                        .build()).execute()) {
+                        .addHeader("Accept", "application/json");
+                
+                try (Response r = HTTP.newCall(rb.build()).execute()) {
                     String body = r.body() != null ? r.body().string() : "[]";
+                    Log.d(TAG, "bookings response: HTTP " + r.code() + " | Body length: " + body.length());
                     if (r.code() == 200) {
                         JSONArray arr = new JSONArray(body);
                         for (int i = 0; i < arr.length(); i++) {
@@ -195,14 +195,18 @@ public class UserBookingsActivity extends BaseActivity
 
                 // Load emergency requests and convert to bookings for unified display
                 String emergencyUrl = BASE_URL
-                    + "/rest/v1/emergency_requests?or=(user_firebase_uid.eq." + uid + ",user_id.eq." + uid + ")"
+                    + "/rest/v1/emergency_requests?user_id=eq." + uid
                     + "&select=*&order=created_at.desc";
-                try (Response rEmerg = HTTP.newCall(new Request.Builder().url(emergencyUrl)
+                
+                Request.Builder rbEmerg = new Request.Builder().url(emergencyUrl)
+                        .get()
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept", "application/json")
-                        .build()).execute()) {
+                        .addHeader("Accept", "application/json");
+                
+                try (Response rEmerg = HTTP.newCall(rbEmerg.build()).execute()) {
                     String bodyEmerg = rEmerg.body() != null ? rEmerg.body().string() : "[]";
+                    Log.d(TAG, "emergency_requests response: HTTP " + rEmerg.code() + " | Body length: " + bodyEmerg.length());
                     if (rEmerg.code() == 200) {
                         JSONArray arrEmerg = new JSONArray(bodyEmerg);
                         for (int i = 0; i < arrEmerg.length(); i++) {
@@ -282,15 +286,10 @@ public class UserBookingsActivity extends BaseActivity
             url += "&customer_id=eq." + android.net.Uri.encode(uid);
         }
 
-        String idToken = AuthTokenProvider.getIdTokenBlocking(5);
         Request.Builder rb = new Request.Builder().url(url)
                 .addHeader("apikey", ANON_KEY)
+                .addHeader("Authorization", "Bearer " + ANON_KEY)
                 .addHeader("Accept", "application/json");
-        if (idToken != null && !idToken.isEmpty()) {
-            rb.addHeader("Authorization", "Bearer " + idToken);
-        } else {
-            rb.addHeader("Authorization", "Bearer " + ANON_KEY);
-        }
         Request req = rb.build();
 
         try (Response r = HTTP.newCall(req).execute()) {
@@ -325,13 +324,15 @@ public class UserBookingsActivity extends BaseActivity
                 String url = BASE_URL + "/rest/v1/users"
                         + "?firebase_uid=eq." + android.net.Uri.encode(userId)
                         + "&select=id&limit=1";
-                Request req = new Request.Builder().url(url)
+                Request.Builder rb = new Request.Builder().url(url)
+                        .get()
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept", "application/json")
-                        .build();
-                try (Response r = HTTP.newCall(req).execute()) {
+                        .addHeader("Accept", "application/json");
+                
+                try (Response r = HTTP.newCall(rb.build()).execute()) {
                     String body = r.body() != null ? r.body().string() : "[]";
+                    Log.d(TAG, "resolveUserDbId response: HTTP " + r.code() + " | Body length: " + body.length());
                     if (r.code() == 200) {
                         JSONArray arr = new JSONArray(body);
                         if (arr.length() > 0) {
@@ -413,14 +414,13 @@ public class UserBookingsActivity extends BaseActivity
         String url = BASE_URL + "/rest/v1/provider_profiles?select=id,business_name,firebase_uid&limit=" + ids.size()
             + "&id=in.(" + joined + ")";
 
-        Request req = new Request.Builder().url(url)
+        Request.Builder rb = new Request.Builder().url(url)
                 .get()
                 .addHeader("apikey", ANON_KEY)
                 .addHeader("Authorization", "Bearer " + ANON_KEY)
-                .addHeader("Accept", "application/json")
-                .build();
+                .addHeader("Accept", "application/json");
 
-        try (Response r = HTTP.newCall(req).execute()) {
+        try (Response r = HTTP.newCall(rb.build()).execute()) {
             if (r.code() != 200) return;
             String body = r.body() != null ? r.body().string() : "[]";
             JSONArray arr = new JSONArray(body);
@@ -1245,17 +1245,19 @@ public class UserBookingsActivity extends BaseActivity
     }
 
     private void showBookingDetails(Booking b) {
+        if (b == null) return;
+        
         String reviewLine = (b.reviewRating > 0)
                 ? ("\nReview: " + b.reviewRating + "/5"
-                + (clean(b.reviewComment).isEmpty() ? "" : " - " + b.reviewComment))
+                + (clean(b.reviewComment).isEmpty() ? "" : " - " + clean(b.reviewComment)))
                 : "";
 
-        String msg = "Service: " + (b.serviceName.isEmpty() ? "-" : b.serviceName) + "\n"
-                + "Provider: " + (b.providerName.isEmpty() ? "-" : b.providerName) + "\n"
-                + "Date: " + (b.bookingDate.isEmpty() ? "-" : b.bookingDate) + "\n"
-                + "Time: " + (b.bookingTime.isEmpty() ? "" : " " + b.bookingTime) + "\n"
-                + "Address: " + (b.address.isEmpty() ? "-" : b.address) + "\n"
-                + "Status: " + (b.status == null ? "" : b.status.toUpperCase(Locale.US)) + "\n"
+        String msg = "Service: " + (clean(b.serviceName).isEmpty() ? "-" : b.serviceName) + "\n"
+                + "Provider: " + (clean(b.providerName).isEmpty() ? "-" : b.providerName) + "\n"
+                + "Date: " + (clean(b.bookingDate).isEmpty() ? "-" : b.bookingDate) + "\n"
+                + "Time: " + (clean(b.bookingTime).isEmpty() ? "" : " " + b.bookingTime) + "\n"
+                + "Address: " + (clean(b.address).isEmpty() ? "-" : b.address) + "\n"
+                + "Status: " + (clean(b.status).isEmpty() ? "" : b.status.toUpperCase(Locale.US)) + "\n"
                 + "Price: ₹" + String.format(Locale.US, "%.0f", b.price)
                 + reviewLine;
         new AlertDialog.Builder(this)

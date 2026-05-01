@@ -150,17 +150,12 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 + "?firebase_uid=eq." + urlEncode(firebaseUid)
                 + "&select=id,business_name,phone,category,city,area&limit=1";
 
-        String idToken = AuthTokenProvider.getIdTokenBlocking(5);
         Request.Builder rb = new Request.Builder()
                 .url(url)
                 .get()
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Accept", "application/json");
-        if (idToken != null && !idToken.isEmpty()) {
-            rb.addHeader("Authorization", "Bearer " + idToken);
-        } else {
-            rb.addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY);
-        }
         Request request = rb.build();
 
         try (Response response = http.newCall(request).execute()) {
@@ -180,17 +175,12 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 + "&select=id,status,user_id,user_firebase_uid,user_name,phone,category,description,address,type,assigned_provider_id,accepted_at"
                 + "&limit=1";
 
-        String idToken = AuthTokenProvider.getIdTokenBlocking(5);
         Request.Builder rb = new Request.Builder()
                 .url(url)
                 .get()
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Accept", "application/json");
-        if (idToken != null && !idToken.isEmpty()) {
-            rb.addHeader("Authorization", "Bearer " + idToken);
-        } else {
-            rb.addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY);
-        }
         Request request = rb.build();
 
         try (Response response = http.newCall(request).execute()) {
@@ -291,17 +281,12 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 + "&" + providerFilter
                     + "&status=eq.pending";
 
-            String idToken = AuthTokenProvider.getIdTokenBlocking(5);
             Request.Builder rb = new Request.Builder()
                     .url(url)
                     .patch(RequestBody.create(body.toString(), JSON))
                     .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                     .addHeader("Content-Type", "application/json");
-            if (idToken != null && !idToken.isEmpty()) {
-                rb.addHeader("Authorization", "Bearer " + idToken);
-            } else {
-                rb.addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY);
-            }
             Request request = rb.build();
 
             http.newCall(request).execute().close();
@@ -375,18 +360,13 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
             Log.d(TAG, "Calling atomic accept RPC with payload: " + payload.toString());
 
-            String idToken = AuthTokenProvider.getIdTokenBlocking(5);
             Request.Builder rb = new Request.Builder()
                     .url(BuildConfig.SUPABASE_URL + "/rest/v1/rpc/accept_emergency_request_atomic")
                     .post(RequestBody.create(payload.toString(), JSON))
                     .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Accept", "application/json");
-            if (idToken != null && !idToken.isEmpty()) {
-                rb.addHeader("Authorization", "Bearer " + idToken);
-            } else {
-                rb.addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY);
-            }
             Request request = rb.build();
 
             try (Response response = http.newCall(request).execute()) {
@@ -448,17 +428,12 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                     + "?emergency_request_id=eq." + urlEncode(emergencyId)
                     + "&" + providerFilter;
 
-            String idToken = AuthTokenProvider.getIdTokenBlocking(5);
             Request.Builder rb = new Request.Builder()
                     .url(url)
                     .patch(RequestBody.create(body.toString(), JSON))
                     .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                     .addHeader("Content-Type", "application/json");
-            if (idToken != null && !idToken.isEmpty()) {
-                rb.addHeader("Authorization", "Bearer " + idToken);
-            } else {
-                rb.addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY);
-            }
             Request request = rb.build();
 
             try (Response response = http.newCall(request).execute()) {

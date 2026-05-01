@@ -7,44 +7,44 @@ import org.json.JSONObject;
  * Booking — Model for bookings table
  */
 public class Booking {
-    public String id;
-    public String customerId;
-    public String customerName;
-    public String customerPhone;
-    public String customerEmail;
-    public String providerId;
-    public String providerName;
-    public String serviceId;
-    public String serviceName;
-    public String serviceCategory;
-    public String category;
-    public String bookingDate;
-    public String bookingTime;
-    public String address;
-    public String location;
-    public String city;
+    public String id = "";
+    public String customerId = "";
+    public String customerName = "";
+    public String customerPhone = "";
+    public String customerEmail = "";
+    public String providerId = "";
+    public String providerName = "";
+    public String serviceId = "";
+    public String serviceName = "";
+    public String serviceCategory = "";
+    public String category = "";
+    public String bookingDate = "";
+    public String bookingTime = "";
+    public String address = "";
+    public String location = "";
+    public String city = "";
     public double price;
-    public String status; // pending, accepted, completed, cancelled
-    public String paymentStatus;
-    public String paymentId;
-    public String paymentOrderId;
-    public String paymentMode;
+    public String status = ""; // pending, accepted, completed, cancelled
+    public String paymentStatus = "";
+    public String paymentId = "";
+    public String paymentOrderId = "";
+    public String paymentMode = "";
     public double paymentAmount;
-    public String createdAt;
-    public String completedAt;
-    public String description;
-    public String type;
+    public String createdAt = "";
+    public String completedAt = "";
+    public String description = "";
+    public String type = "";
     public boolean isEmergency;
-    public String emergencyRequestId;
-    public String couponCode;
+    public String emergencyRequestId = "";
+    public String couponCode = "";
     public double couponDiscount;
     public double finalAmount;
 
     // Optional provider review payload (joined or mapped after fetch)
-    public String reviewId;
+    public String reviewId = "";
     public int reviewRating;
-    public String reviewComment;
-    public String reviewUpdatedAt;
+    public String reviewComment = "";
+    public String reviewUpdatedAt = "";
 
     public static Booking fromJson(JSONObject o) {
         if (o == null) return null;

@@ -170,13 +170,11 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
                 + "&select=id,firebase_uid"
                 + "&limit=1";
 
-        String idToken = AuthTokenProvider.getIdTokenBlocking(5);
         Request.Builder rb = new Request.Builder().url(url)
             .get()
             .addHeader("apikey", ANON_KEY)
+            .addHeader("Authorization", "Bearer " + ANON_KEY)
             .addHeader("Accept", "application/json");
-        if (idToken != null && !idToken.isEmpty()) rb.addHeader("Authorization", "Bearer " + idToken);
-        else rb.addHeader("Authorization", "Bearer " + ANON_KEY);
         Request request = rb.build();
 
         httpClient.newCall(request).enqueue(new Callback() {
@@ -239,13 +237,11 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         final List<Booking> allLoadedBookings = new ArrayList<>();
 
         // Load regular bookings
-        String idToken2 = AuthTokenProvider.getIdTokenBlocking(5);
         Request.Builder rb2 = new Request.Builder().url(url)
             .get()
             .addHeader("apikey", ANON_KEY)
+            .addHeader("Authorization", "Bearer " + ANON_KEY)
             .addHeader("Accept", "application/json");
-        if (idToken2 != null && !idToken2.isEmpty()) rb2.addHeader("Authorization", "Bearer " + idToken2);
-        else rb2.addHeader("Authorization", "Bearer " + ANON_KEY);
         Request request = rb2.build();
 
         httpClient.newCall(request).enqueue(new Callback() {
@@ -291,14 +287,12 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
                 String emergencyUrl = SUPABASE_URL + "/rest/v1/emergency_requests"
                         + "?" + emergencyFilter
                         + "&select=*&order=created_at.desc";
-                String idToken3 = AuthTokenProvider.getIdTokenBlocking(5);
                 Request.Builder erb = new Request.Builder()
                     .url(emergencyUrl)
                     .get()
                     .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
                     .addHeader("Accept", "application/json");
-                if (idToken3 != null && !idToken3.isEmpty()) erb.addHeader("Authorization", "Bearer " + idToken3);
-                else erb.addHeader("Authorization", "Bearer " + ANON_KEY);
                 Request emergencyRequest = erb.build();
 
                 httpClient.newCall(emergencyRequest).enqueue(new Callback() {
