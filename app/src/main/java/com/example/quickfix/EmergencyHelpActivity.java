@@ -638,12 +638,18 @@ public class EmergencyHelpActivity extends BaseActivity {
         body.put("user_id", currentUserId);
         body.put("user_firebase_uid", currentUserId);
 
-        Request req = new Request.Builder().url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?select=id")
+        String idToken = AuthTokenProvider.getIdTokenBlocking(5);
+        Request.Builder rb = new Request.Builder().url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?select=id")
                 .post(RequestBody.create(body.toString(), JSON))
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                 .addHeader("Content-Type", "application/json")
-                .addHeader("Prefer", "return=representation").build();
+                .addHeader("Prefer", "return=representation");
+        if (idToken != null && !idToken.isEmpty()) {
+            rb.addHeader("Authorization", "Bearer " + idToken);
+        } else {
+            rb.addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY);
+        }
+        Request req = rb.build();
         try (Response res = http.newCall(req).execute()) {
             String raw = res.body() != null ? res.body().string() : "[]";
             if (!res.isSuccessful()) {
@@ -656,14 +662,19 @@ public class EmergencyHelpActivity extends BaseActivity {
 
     private boolean tryInsertBooking(JSONObject payload) {
         try {
-            Request insert = new Request.Builder()
+            String idToken = AuthTokenProvider.getIdTokenBlocking(5);
+            Request.Builder rb = new Request.Builder()
                     .url(BuildConfig.SUPABASE_URL + "/rest/v1/bookings")
                     .post(RequestBody.create(payload.toString(), JSON))
                     .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                     .addHeader("Content-Type", "application/json")
-                    .addHeader("Prefer", "return=minimal")
-                    .build();
+                    .addHeader("Prefer", "return=minimal");
+            if (idToken != null && !idToken.isEmpty()) {
+                rb.addHeader("Authorization", "Bearer " + idToken);
+            } else {
+                rb.addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY);
+            }
+            Request insert = rb.build();
             try (Response response = http.newCall(insert).execute()) {
                 return response.code() == 200 || response.code() == 201 || response.code() == 204;
             }
@@ -687,7 +698,17 @@ public class EmergencyHelpActivity extends BaseActivity {
         new Thread(() -> {
             try {
                 String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?id=eq." + activeRequestId + "&select=*,assigned_provider:provider_profiles(*)";
-                Request req = new Request.Builder().url(url).addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY).build();
+                String idToken = AuthTokenProvider.getIdTokenBlocking(5);
+                Request.Builder rb = new Request.Builder().url(url)
+                        .get()
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Accept", "application/json");
+                if (idToken != null && !idToken.isEmpty()) {
+                    rb.addHeader("Authorization", "Bearer " + idToken);
+                } else {
+                    rb.addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY);
+                }
+                Request req = rb.build();
                 try (Response res = http.newCall(req).execute()) {
                     JSONArray arr = new JSONArray(res.body().string());
                     if (arr.length() > 0) {
@@ -719,9 +740,17 @@ public class EmergencyHelpActivity extends BaseActivity {
             try {
                 JSONObject body = new JSONObject();
                 body.put("status", status);
-                Request req = new Request.Builder().url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?id=eq." + activeRequestId)
+                String idToken = AuthTokenProvider.getIdTokenBlocking(5);
+                Request.Builder rb = new Request.Builder().url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?id=eq." + activeRequestId)
                         .patch(RequestBody.create(body.toString(), JSON))
-                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY).build();
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Content-Type", "application/json");
+                if (idToken != null && !idToken.isEmpty()) {
+                    rb.addHeader("Authorization", "Bearer " + idToken);
+                } else {
+                    rb.addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY);
+                }
+                Request req = rb.build();
                 http.newCall(req).execute();
                 runOnUiThread(() -> {
                     Toast.makeText(this, "Request " + status, Toast.LENGTH_SHORT).show();

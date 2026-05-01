@@ -90,19 +90,6 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnBookNow"
-            style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="match_parent"
-            android:layout_height="32dp"
-            android:layout_marginTop="10dp"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:text="Book Now"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            app:cornerRadius="8dp" />
-
     </LinearLayout>
 
 </com.google.android.material.card.MaterialCardView>

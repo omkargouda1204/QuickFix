@@ -1,3 +1,39 @@
+async function notifyProviders(supabaseUrl: string, apiKey: string, requestId: string, emergencyData: any, providers: any[]) {
+  try {
+    for (const provider of providers) {
+      const firebaseUid = provider.firebase_uid || provider.provider_firebase_uid;
+      if (!firebaseUid) continue;
+      
+      const notificationPayload = {
+        user_id: firebaseUid,
+        type: 'emergency_request',
+        title: `Emergency: ${emergencyData.category}`,
+        body: `Emergency request from ${emergencyData.user_name}. Tap to view.`,
+        request_id: requestId,
+        quick_action: 'accept',
+      };
+      
+      // Call send-notification edge function
+      const notifyUrl = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/send-notification`;
+      const res = await fetch(notifyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: apiKey,
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(notificationPayload),
+      });
+      
+      if (!res.ok) {
+        console.warn(`Notification send failed for provider ${firebaseUid}: HTTP ${res.status}`);
+      }
+    }
+  } catch (err) {
+    console.warn('notifyProviders error:', err);
+  }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -51,7 +87,7 @@ async function insertEmergencyRequest(supabaseUrl: string, apiKey: string, body:
 
 async function insertBookings(supabaseUrl: string, apiKey: string, rows: any[]) {
   if (!Array.isArray(rows) || rows.length === 0) return [];
-  const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/emergency_request_bookings`;
+  const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/bookings`;
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -127,16 +163,32 @@ Deno.serve(async (req) => {
 
     // 3) Create bookings records for all providers
     const bookingRows = providers.map((prov: any) => ({
-      emergency_request_id: requestId,
+      customer_id: String(payload.user_id),
+      customer_name: String(payload.user_name),
+      customer_phone: String(payload.phone),
       provider_id: prov.id || prov.provider_id || prov.id,
       provider_firebase_uid: prov.firebase_uid || prov.provider_firebase_uid || null,
+      provider_name: "Awaiting Acceptance",
+      service_name: "Emergency - " + p_category,
+      service_category: p_category,
+      category: p_category,
+      address: String(payload.address || ''),
+      description: String(payload.description || ''),
+      city: String(payload.city || ''),
+      area: String(payload.area || ''),
       status: 'pending',
+      type: 'Emergency',
+      is_emergency: true,
+      emergency_request_id: requestId,
       booking_date: new Date().toISOString().slice(0, 10),
       booking_time: new Date().toTimeString().split(' ')[0],
       created_at: new Date().toISOString(),
     }));
 
     await insertBookings(SUPABASE_URL, SUPABASE_API_KEY, bookingRows);
+
+    // 4) Notify all providers
+    await notifyProviders(SUPABASE_URL, SUPABASE_API_KEY, requestId, reqBody, providers);
 
     return json({ success: true, message: 'Emergency request created', request_id: requestId, providers_count: providers.length }, 200);
   } catch (err) {
