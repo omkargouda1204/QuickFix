@@ -170,9 +170,10 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     }
 
     private JSONObject fetchRequestById(String id) throws Exception {
-        String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests"
+        // Query the 'bookings' table instead of 'emergency_requests'
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
                 + "?id=eq." + urlEncode(id)
-                + "&select=id,status,user_id,user_firebase_uid,user_name,phone,category,description,address,type,assigned_provider_id,accepted_at"
+                + "&select=id,status,customer_id,customer_name,customer_phone,category,description,address,type,provider_id,is_emergency"
                 + "&limit=1";
 
         Request.Builder rb = new Request.Builder()
@@ -186,25 +187,25 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         try (Response response = http.newCall(request).execute()) {
             String body = response.body() != null ? response.body().string() : "[]";
             if (response.code() != 200) {
-                throw new IllegalStateException("Request lookup failed HTTP " + response.code());
+                throw new IllegalStateException("Booking lookup failed HTTP " + response.code());
             }
             JSONArray arr = new JSONArray(body);
-            if (arr.length() == 0) throw new IllegalStateException("Emergency request not found");
+            if (arr.length() == 0) throw new IllegalStateException("Emergency booking not found");
             return arr.getJSONObject(0);
         }
     }
 
     private void bindRequest(JSONObject request) {
         if (request == null) return;
-        setText(tvEmergencyUser, "User: " + fallback(request.optString("user_name", ""), "Customer"));
-        setText(tvEmergencyPhone, "Phone: " + fallback(request.optString("phone", ""), "Not available"));
+        setText(tvEmergencyUser, "User: " + fallback(request.optString("customer_name", ""), "Customer"));
+        setText(tvEmergencyPhone, "Phone: " + fallback(request.optString("customer_phone", ""), "Not available"));
         setText(tvEmergencyCategory, "Category: " + fallback(request.optString("category", ""), "General"));
         setText(tvEmergencyAddress, "Location: " + fallback(request.optString("address", ""), "Not available"));
         setText(tvEmergencyDescription, "Problem: " + fallback(request.optString("description", ""), "Not specified"));
 
         String status = safe(request.optString("status", "pending")).toLowerCase(Locale.getDefault());
         String statusLine = "Status: " + (status.isEmpty() ? "pending" : status);
-        String assignedProviderId = safe(request.optString("assigned_provider_id", ""));
+        String assignedProviderId = safe(request.optString("provider_id", ""));
         if ("accepted".equals(status) && !TextUtils.isEmpty(assignedProviderId)) {
             if (assignedProviderId.equals(providerProfileId)) {
                 statusLine += " (You accepted this request)";
@@ -217,7 +218,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
     private void updateAcceptStateFromStatus(JSONObject request) {
         String status = safe(request.optString("status", "pending")).toLowerCase(Locale.getDefault());
-        String assignedProviderId = safe(request.optString("assigned_provider_id", ""));
+        String assignedProviderId = safe(request.optString("provider_id", ""));
         boolean alreadyClosed = !"pending".equals(status);
         boolean acceptedByOther = "accepted".equals(status)
                 && !TextUtils.isEmpty(assignedProviderId)
@@ -275,10 +276,8 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             JSONObject body = new JSONObject();
             body.put("status", status);
 
-            String providerFilter = buildProviderOrFilter();
             String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
-                    + "?emergency_request_id=eq." + urlEncode(emergencyId)
-                + "&" + providerFilter
+                    + "?id=eq." + urlEncode(emergencyId)
                     + "&status=eq.pending";
 
             Request.Builder rb = new Request.Builder()
@@ -492,19 +491,16 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     private JSONArray acceptPendingRequestWithSnapshotFallback() throws Exception {
         JSONObject withSnapshot = new JSONObject();
         withSnapshot.put("status", "accepted");
-        withSnapshot.put("assigned_provider_id", providerProfileId);
-        withSnapshot.put("accepted_at", isoNow());
-        withSnapshot.put("assigned_provider_name", fallback(providerName, "Provider"));
-        withSnapshot.put("assigned_provider_phone", fallback(providerPhone, ""));
-        withSnapshot.put("assigned_provider_service", fallback(providerService, ""));
-        withSnapshot.put("assigned_provider_city", fallback(providerCity, ""));
-        withSnapshot.put("assigned_provider_area", fallback(providerArea, ""));
+        withSnapshot.put("provider_id", providerProfileId);
+        withSnapshot.put("provider_name", fallback(providerName, "Provider"));
+        withSnapshot.put("provider_phone", fallback(providerPhone, ""));
+        withSnapshot.put("provider_firebase_uid", providerFirebaseUid);
 
         try {
             return patchPendingRequest(withSnapshot);
         } catch (IllegalStateException e) {
             String message = safe(e.getMessage()).toLowerCase(Locale.US);
-            boolean snapshotColumnMissing = message.contains("assigned_provider_")
+            boolean snapshotColumnMissing = message.contains("provider_")
                     || message.contains("column")
                     || message.contains("schema cache");
             if (!snapshotColumnMissing) {
@@ -513,14 +509,13 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
             JSONObject legacy = new JSONObject();
             legacy.put("status", "accepted");
-            legacy.put("assigned_provider_id", providerProfileId);
-            legacy.put("accepted_at", isoNow());
+            legacy.put("provider_id", providerProfileId);
             return patchPendingRequest(legacy);
         }
     }
 
     private JSONArray patchPendingRequest(JSONObject body) throws Exception {
-        String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests"
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
                 + "?id=eq." + urlEncode(requestId)
                 + "&status=eq.pending";
 

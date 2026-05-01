@@ -214,9 +214,9 @@ public class ProviderDashboardActivity extends BaseActivity {
         String url;
         if (providerProfileId != null && !providerProfileId.trim().isEmpty()) {
             url = base + "&or=(provider_id.eq." + Uri.encode(providerProfileId.trim())
-                    + ",provider_firebase_uid.eq." + Uri.encode(uid) + ")";
+                    + ",provider_id.eq." + Uri.encode(uid) + ")";
         } else {
-            url = base + "&provider_firebase_uid=eq." + Uri.encode(uid);
+            url = base + "&provider_id=eq." + Uri.encode(uid);
         }
 
         return getJsonArray(url);
