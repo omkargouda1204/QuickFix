@@ -360,7 +360,7 @@ Deno.serve(async (req) => {
 
     // ── 7. Insert SINGLE booking (Emergency) ──────────────────────────────────
     const bookingData: Record<string, unknown> = {
-      user_id: String(payload.user_id),
+      customer_id: String(payload.user_id),
       category: p_category,
       description: String(payload.description || ''),
       status: 'pending',
@@ -374,7 +374,7 @@ Deno.serve(async (req) => {
     // ── 8. Notify all matched providers ───────────────────────────────────────
     if (providers.length > 0) {
       try {
-        await notifyProviders(SUPABASE_URL, SERVICE_KEY, bookingId, bookingData, providers);
+        await notifyProviders(SUPABASE_URL, SERVICE_KEY, bookingId, payload, providers);
       } catch (notifyErr) {
         console.warn('[Notify] Failed (non-fatal):', notifyErr);
       }
