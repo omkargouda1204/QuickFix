@@ -80,11 +80,6 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
             h.tvRating.setVisibility(View.GONE);
         }
 
-        // Book button — open provider detail / booking flow
-        h.btnBook.setOnClickListener(v -> {
-            if (listener != null) listener.onViewProfile(p);
-        });
-
         // Whole card click → view profile
         h.itemView.setOnClickListener(v -> { if (listener != null) listener.onViewProfile(p); });
     }
@@ -101,7 +96,6 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
         TextView       tvBusinessName;
         TextView       tvCategory;
         TextView       tvRating;
-        com.google.android.material.button.MaterialButton btnBook;
 
         VH(View v) {
             super(v);
@@ -109,7 +103,6 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
             tvBusinessName     = v.findViewById(R.id.tvBusinessName);
             tvCategory         = v.findViewById(R.id.tvProviderCategory);
             tvRating           = v.findViewById(R.id.tvProviderRating);
-            btnBook            = v.findViewById(R.id.btnBook);
         }
     }
 }

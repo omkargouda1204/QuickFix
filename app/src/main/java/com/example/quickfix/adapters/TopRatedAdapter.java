@@ -13,7 +13,6 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.example.quickfix.ProviderProfile;
 import com.example.quickfix.R;
-import com.google.android.material.button.MaterialButton;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -102,7 +101,6 @@ public class TopRatedAdapter extends RecyclerView.Adapter<TopRatedAdapter.VH> {
                 .into(h.ivProfile);
 
         h.itemView.setOnClickListener(v -> { if (listener != null) listener.onProviderClick(p); });
-        h.btnBook.setOnClickListener(v -> { if (listener != null) listener.onProviderClick(p); });
     }
 
     @Override
@@ -111,7 +109,6 @@ public class TopRatedAdapter extends RecyclerView.Adapter<TopRatedAdapter.VH> {
     public static class VH extends RecyclerView.ViewHolder {
         ImageView ivProfile;
         TextView tvName, tvCategory, tvRating, tvDistance, tvBookings;
-        MaterialButton btnBook;
 
         VH(View v) {
             super(v);
@@ -121,7 +118,6 @@ public class TopRatedAdapter extends RecyclerView.Adapter<TopRatedAdapter.VH> {
             tvRating = v.findViewById(R.id.tvProviderRating);
             tvDistance = v.findViewById(R.id.tvProviderDistance);
             tvBookings = v.findViewById(R.id.tvProviderBookings);
-            btnBook = v.findViewById(R.id.btnBookNow);
         }
     }
 
