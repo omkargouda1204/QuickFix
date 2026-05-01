@@ -103,13 +103,6 @@ async function callRpcFindProviders(
   }
 }
 
-/**
- * Fetches ALL providers from provider_profiles, then filters by:
- *  1. Category match (alias-aware, case-insensitive)
- *  2. Active/approved status
- *  3. Haversine distance <= radiusKm
- * Logs each provider's lat/lng and distance for debugging.
- */
 async function fetchProvidersAndFilter(
   supabaseUrl: string,
   serviceKey: string,
@@ -123,7 +116,9 @@ async function fetchProvidersAndFilter(
     `latitude,longitude,lat,lng,status,is_active,is_approved,city,area` +
     `&limit=2000`;
 
-  console.log(`[Fallback] Fetching providers — userLat=${userLat}, userLng=${userLng}, category="${category}", radius=${radiusKm}km`);
+  console.log("User Lat:", userLat);
+  console.log("User Lng:", userLng);
+  console.log("Category:", category);
 
   try {
     const res = await fetch(url, {
@@ -135,49 +130,30 @@ async function fetchProvidersAndFilter(
       },
     });
     if (!res.ok) {
-      const text = await res.text();
-      console.warn(`[Fallback] Provider fetch failed HTTP ${res.status}: ${text}`);
+      console.warn(`[Fallback] Provider fetch failed HTTP ${res.status}`);
       return [];
     }
 
     const arr: any[] = await res.json();
-    console.log(`[Fallback] Total providers in DB: ${arr.length}`);
+    console.log("Total providers in DB:", arr.length);
 
     const matched: any[] = [];
-    let skippedCategory = 0;
-    let skippedInactive = 0;
-    let skippedNoLocation = 0;
-    let skippedDistance = 0;
 
     for (const p of arr) {
-      const provName = p.business_name || p.id || 'unknown';
-
-      // ── Category match ───────────────────────────────────────────────────
-      const provCat = String(p.category || '');
-      if (!categoryMatches(category, provCat)) {
-        skippedCategory++;
+      // EXACT Category match (case-insensitive)
+      const provCat = String(p.category || '').trim().toLowerCase();
+      const reqCat = String(category || '').trim().toLowerCase();
+      
+      if (provCat !== reqCat) {
         continue;
       }
 
-      // ── Active/approved check ────────────────────────────────────────────
-      // Accept provider if is_active=true OR status is a positive value.
-      // We do NOT require is_approved=true — that flag controls onboarding,
-      // not operational availability.
-      const status = String(p.status || '').toLowerCase();
-      const isExplicitlyInactive =
-        status === 'inactive' ||
-        status === 'rejected' ||
-        status === 'suspended' ||
-        status === 'banned' ||
-        p.is_active === false;    // only skip if EXPLICITLY set to false
-
-      if (isExplicitlyInactive) {
-        skippedInactive++;
-        console.log(`[Fallback] SKIP inactive: ${provName} (status=${status}, is_active=${p.is_active})`);
+      // Active/approved check (Checking is_approved OR is_active just in case)
+      if (p.is_approved !== true && p.is_active !== true) {
         continue;
       }
 
-      // ── Read lat/lng (try multiple column names) ─────────────────────────
+      // Read lat/lng
       let pLat: number | null = null;
       let pLng: number | null = null;
 
@@ -188,20 +164,11 @@ async function fetchProvidersAndFilter(
       else if (p.lng != null && p.lng !== '') pLng = Number(p.lng);
 
       if (pLat == null || pLng == null || isNaN(pLat) || isNaN(pLng) || pLat === 0 || pLng === 0) {
-        skippedNoLocation++;
-        console.log(`[Fallback] SKIP no location: ${provName} (lat=${p.latitude ?? p.lat}, lng=${p.longitude ?? p.lng})`);
         continue;
       }
 
-      // ── Haversine distance ───────────────────────────────────────────────
+      // Haversine distance
       const dist = haversineKm(userLat, userLng, pLat, pLng);
-      console.log(`[Fallback] Provider: ${provName} | cat="${provCat}" | lat=${pLat}, lng=${pLng} | dist=${dist.toFixed(2)}km | radius=${radiusKm}km`);
-
-      if (isNaN(dist) || dist > radiusKm) {
-        skippedDistance++;
-        continue;
-      }
-
       p.distance_km = dist;
       matched.push(p);
     }
@@ -209,15 +176,22 @@ async function fetchProvidersAndFilter(
     // Sort by distance ascending
     matched.sort((a, b) => (a.distance_km ?? 999) - (b.distance_km ?? 999));
 
-    console.log(
-      `[Fallback] Results — matched:${matched.length}` +
-      ` | skipped_category:${skippedCategory}` +
-      ` | skipped_inactive:${skippedInactive}` +
-      ` | skipped_no_location:${skippedNoLocation}` +
-      ` | skipped_too_far:${skippedDistance}`
-    );
+    console.log("Providers found:", matched.length);
 
-    return matched;
+    // Filter by radius
+    let withinRadius = matched.filter(p => p.distance_km <= radiusKm);
+    
+    // STEP 8: FALLBACK - return nearest 3 if none within radius
+    if (withinRadius.length === 0 && matched.length > 0) {
+      console.log(`No providers within ${radiusKm}km, falling back to nearest 3 providers anyway`);
+      withinRadius = matched.slice(0, 3);
+    }
+
+    if (withinRadius.length === 0) {
+      console.log("NO PROVIDERS FOUND");
+    }
+
+    return withinRadius;
   } catch (err) {
     console.warn('[Fallback] Fetch error:', err);
     return [];
@@ -422,17 +396,6 @@ Deno.serve(async (req) => {
       providers = await fetchProvidersAndFilter(
         SUPABASE_URL, SERVICE_KEY, p_lat, p_lng, p_category, p_radius_km
       );
-    }
-
-    console.log(`[Search] Providers within ${p_radius_km}km: ${providers.length}`);
-
-    // ── 6. Expand radius to 50km if no providers found within 25km ────────────
-    if (providers.length === 0 && p_radius_km <= 25) {
-      console.log('[Search] No providers within 25km, expanding to 50km...');
-      providers = await fetchProvidersAndFilter(
-        SUPABASE_URL, SERVICE_KEY, p_lat, p_lng, p_category, 50
-      );
-      console.log(`[Search] Providers within 50km: ${providers.length}`);
     }
 
     // ── 7. Insert emergency_requests row (always) ─────────────────────────────
