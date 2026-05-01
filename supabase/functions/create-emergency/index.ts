@@ -239,6 +239,8 @@ async function notifyProviders(
   emergencyData: Record<string, unknown>,
   providersWithBookingId: any[]
 ): Promise<void> {
+  const firebaseKey = Deno.env.get('FIREBASE_SERVER_KEY');
+  
   for (const provider of providersWithBookingId) {
     const firebaseUid = provider.firebase_uid || provider.provider_firebase_uid;
     if (!firebaseUid) {
@@ -246,33 +248,65 @@ async function notifyProviders(
       continue;
     }
 
-    const notificationPayload = {
-      user_id: firebaseUid,
-      type: 'emergency',
-      title: `🚨 Emergency Request`,
-      body: `New emergency booking near you`,
-      booking_id: provider.booking_id,
-      quick_action: 'accept',
+    // Fetch FCM token from users table
+    let fcmToken = null;
+    try {
+      const userRes = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${firebaseUid}&select=fcm_token`, {
+        method: 'GET',
+        headers: {
+          apikey: serviceKey,
+          authorization: `Bearer ${serviceKey}`,
+          accept: 'application/json'
+        }
+      });
+      if (userRes.ok) {
+        const users = await userRes.json();
+        if (users.length > 0 && users[0].fcm_token) {
+          fcmToken = users[0].fcm_token;
+        }
+      }
+    } catch (e) {
+      console.warn(`[Notify] Failed to fetch token for ${firebaseUid}`, e);
+    }
+
+    if (!fcmToken) {
+      console.warn(`[Notify] No FCM token found for provider ${firebaseUid}`);
+      continue;
+    }
+
+    if (!firebaseKey) {
+      console.warn(`[Notify] FIREBASE_SERVER_KEY not set. Cannot send push to ${fcmToken}`);
+      continue;
+    }
+
+    const payload = {
+      to: fcmToken,
+      notification: {
+        title: "🚨 Emergency Request",
+        body: "New emergency booking nearby"
+      },
+      data: {
+        booking_id: provider.booking_id,
+        type: "emergency"
+      }
     };
 
     try {
-      const notifyUrl = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/send-notification`;
-      const res = await fetch(notifyUrl, {
+      const res = await fetch('https://fcm.googleapis.com/fcm/send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          apikey: serviceKey,
-          authorization: `Bearer ${serviceKey}`,
+          'Authorization': `key=${firebaseKey}`
         },
-        body: JSON.stringify(notificationPayload),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        console.warn(`[Notify] Failed for ${firebaseUid}: HTTP ${res.status}`);
+        console.warn(`[Notify] FCM failed for ${firebaseUid}: HTTP ${res.status}`);
       } else {
-        console.log(`[Notify] Sent to provider ${firebaseUid}`);
+        console.log(`[Notify] FCM sent to provider ${firebaseUid}`);
       }
     } catch (err) {
-      console.warn(`[Notify] Error for ${firebaseUid}:`, err);
+      console.warn(`[Notify] Error sending FCM for ${firebaseUid}:`, err);
     }
   }
 }
@@ -357,16 +391,22 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ── 7. Insert SINGLE booking (Emergency) ──────────────────────────────────
-    const targetProvider = providers.length > 0 ? providers[0] : null;
+    // ── 7. Check if providers exist ──────────────────────────────────────────
+    if (providers.length === 0) {
+      console.log('[Search] No providers found even after 50km expansion');
+      return json({ error: "No providers available in your area" }, 400);
+    }
+
+    // ── 8. Insert SINGLE booking (Emergency) ──────────────────────────────────
+    const targetProvider = providers[0];
 
     const bookingData: Record<string, unknown> = {
       customer_id: String(payload.user_id),
-      provider_id: targetProvider ? targetProvider.id : null,
-      provider_firebase_uid: targetProvider ? targetProvider.firebase_uid : null,
+      provider_id: targetProvider.id,
+      provider_firebase_uid: targetProvider.firebase_uid,
       customer_name: String(payload.user_name || 'Emergency User'),
       customer_phone: String(payload.phone || ''),
-      provider_name: targetProvider ? (targetProvider.business_name || 'Awaiting Acceptance') : 'Awaiting Acceptance',
+      provider_name: targetProvider.business_name || 'Awaiting Acceptance',
       service_name: 'Emergency - ' + p_category,
       category: p_category,
       address: String(payload.address || ''),
@@ -389,8 +429,8 @@ Deno.serve(async (req) => {
       console.warn(`[DB] Failed to insert emergency booking:`, err);
     }
 
-    // ── 8. Notify all matched providers ───────────────────────────────────────
-    if (providers.length > 0 && bookingId) {
+    // ── 9. Notify all matched providers ───────────────────────────────────────
+    if (bookingId) {
       // Map all matched providers to this single booking ID for notifications
       const notifiedProviders = providers.map(p => ({
         ...p,
@@ -402,8 +442,6 @@ Deno.serve(async (req) => {
       } catch (notifyErr) {
         console.warn('[Notify] Failed (non-fatal):', notifyErr);
       }
-    } else if (providers.length === 0) {
-      console.log('[Search] No providers found even after 50km expansion');
     }
 
     console.log('=== create-emergency END ===');
@@ -414,9 +452,7 @@ Deno.serve(async (req) => {
 
     return json({
       success: true,
-      message: providers.length > 0
-        ? `Emergency request created and ${providers.length} provider(s) notified`
-        : 'Emergency request saved. No providers found nearby.',
+      message: `Emergency request created and ${providers.length} provider(s) notified`,
       request_id: bookingId,
       providers_count: providers.length,
       nearest_provider_distance_km: nearestDist,

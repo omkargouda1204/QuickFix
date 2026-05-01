@@ -275,52 +275,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
                     }
                 }
 
-                // Also load emergency requests assigned to this provider
-                String emergencyFilter;
-                if (providerId != null && !providerId.isEmpty() && !providerId.equals(providerFirebaseUid)) {
-                    emergencyFilter = "or=(assigned_provider_id.eq." + encodedProviderId
-                            + ",assigned_provider_id.eq." + encodedUid + ")";
-                } else {
-                    emergencyFilter = "assigned_provider_id=eq." + encodedUid;
-                }
-
-                String emergencyUrl = SUPABASE_URL + "/rest/v1/emergency_requests"
-                        + "?" + emergencyFilter
-                        + "&select=*&order=created_at.desc";
-                Request.Builder erb = new Request.Builder()
-                    .url(emergencyUrl)
-                    .get()
-                    .addHeader("apikey", ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Accept", "application/json");
-                Request emergencyRequest = erb.build();
-
-                httpClient.newCall(emergencyRequest).enqueue(new Callback() {
-                    @Override
-                    public void onFailure(Call call, IOException e) {
-                        Log.w(TAG, "Emergency requests load failed: " + e.getMessage());
-                        finalizeBookingLoad(allLoadedBookings);
-                    }
-
-                    @Override
-                    public void onResponse(Call call, Response response) throws IOException {
-                        String bodyEmerg = response.body() != null ? response.body().string() : "[]";
-                        response.close();
-
-                        try {
-                            JSONArray arrEmerg = new JSONArray(bodyEmerg);
-                            for (int i = 0; i < arrEmerg.length(); i++) {
-                                JSONObject o = arrEmerg.getJSONObject(i);
-                                Booking b = convertEmergencyToBooking(o);
-                                if (b != null) allLoadedBookings.add(b);
-                            }
-                        } catch (Exception e) {
-                            Log.e(TAG, "Emergency parse error: " + e.getMessage());
-                        }
-
-                        finalizeBookingLoad(allLoadedBookings);
-                    }
-                });
+                finalizeBookingLoad(allLoadedBookings);
             }
         });
     }

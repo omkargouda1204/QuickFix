@@ -244,70 +244,48 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     }
 
     private void rejectRequest() {
-        if (TextUtils.isEmpty(providerProfileId) && TextUtils.isEmpty(providerFirebaseUid)) {
-            showToast("Provider profile is missing.");
-            return;
-        }
-
-        setLoading(true);
-        new Thread(() -> {
-            try {
-                updateMyEmergencyBookingStatus(requestId, "rejected");
-                upsertProviderResponse("rejected");
-                rejectedByCurrentProvider = true;
-
-                runOnUiThread(() -> {
-                    setLoading(false);
-                    showToast("Request rejected.");
-                    finish();
-                });
-            } catch (Exception e) {
-                Log.e(TAG, "rejectRequest failed", e);
-                runOnUiThread(() -> {
-                    setLoading(false);
-                    showToast("Could not reject request.");
-                });
-            }
-        }).start();
-    }
-
-        private void updateMyEmergencyBookingStatus(String emergencyId, String status) {
-        try {
-            JSONObject body = new JSONObject();
-            body.put("status", status);
-
-            String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
-                    + "?id=eq." + urlEncode(emergencyId)
-                    + "&status=eq.pending";
-
-            Request.Builder rb = new Request.Builder()
-                    .url(url)
-                    .patch(RequestBody.create(body.toString(), JSON))
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Content-Type", "application/json");
-            Request request = rb.build();
-
-            http.newCall(request).execute().close();
-        } catch (Exception ignored) {}
+        updateBookingStatus("rejected");
     }
 
     private void acceptRequest() {
-        if (TextUtils.isEmpty(providerProfileId)) {
-            showToast("Provider profile is missing.");
-            return;
-        }
+        updateBookingStatus("accepted");
+    }
+
+    private void updateBookingStatus(String status) {
+        if (TextUtils.isEmpty(requestId)) return;
 
         setLoading(true);
         new Thread(() -> {
             try {
-                JSONObject updated;
-                boolean rpcAccepted = acceptEmergencyWithRpc();
-                if (rpcAccepted) {
-                    updated = fetchRequestById(requestId);
-                } else {
-                    JSONArray updatedRows = acceptPendingRequestWithSnapshotFallback();
-                    if (updatedRows.length() == 0) {
+                JSONObject body = new JSONObject();
+                body.put("status", status);
+                if ("accepted".equals(status)) {
+                    body.put("provider_id", providerProfileId);
+                    body.put("provider_name", fallback(providerName, "Provider"));
+                    body.put("provider_phone", fallback(providerPhone, ""));
+                }
+
+                String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
+                        + "?id=eq." + urlEncode(requestId)
+                        + "&status=eq.pending";
+
+                Request.Builder rb = new Request.Builder()
+                        .url(url)
+                        .patch(RequestBody.create(body.toString(), JSON))
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=representation");
+                Request request = rb.build();
+
+                try (Response response = http.newCall(request).execute()) {
+                    String rawBody = response.body() != null ? response.body().string() : "[]";
+                    if (!response.isSuccessful()) {
+                        throw new Exception("HTTP " + response.code() + " " + rawBody);
+                    }
+
+                    JSONArray updatedRows = new JSONArray(rawBody);
+                    if (updatedRows.length() == 0 && "accepted".equals(status)) {
                         runOnUiThread(() -> {
                             setLoading(false);
                             showToast("Already accepted by another provider.");
@@ -316,161 +294,53 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                         return;
                     }
 
-                    updated = updatedRows.getJSONObject(0);
-                    // Update THIS provider's booking record to 'accepted'
-                    updateMyBookingToAccepted(requestId);
-                    // Auto reject other providers' pending bookings
-                    cleanupOtherEmergencyBookings(requestId);
+                    if ("rejected".equals(status)) {
+                        rejectedByCurrentProvider = true;
+                    } else {
+                        rejectedByCurrentProvider = false;
+                        if (updatedRows.length() > 0) {
+                            notifyUserAssigned(updatedRows.getJSONObject(0));
+                        }
+                    }
+
+                    upsertProviderResponse(status);
+
+                    runOnUiThread(() -> {
+                        setLoading(false);
+                        showToast("Booking " + status);
+                        if ("rejected".equals(status)) {
+                            finish();
+                        } else {
+                            if (updatedRows.length() > 0) {
+                                try {
+                                    bindRequest(updatedRows.getJSONObject(0));
+                                    updateAcceptStateFromStatus(updatedRows.getJSONObject(0));
+                                } catch (Exception ignored) {}
+                            }
+                        }
+                    });
                 }
-
-                rejectedByCurrentProvider = false;
-                
-                upsertProviderResponse("accepted");
-                notifyUserAssigned(updated);
-                // mirrorEmergencyBooking(updated); // Not needed anymore as we create them beforehand
-
-                runOnUiThread(() -> {
-                    setLoading(false);
-                    bindRequest(updated);
-                    updateAcceptStateFromStatus(updated);
-                    showToast("Emergency request accepted!");
-                });
             } catch (Exception e) {
-                Log.e(TAG, "acceptRequest failed", e);
+                Log.e(TAG, "updateBookingStatus failed", e);
                 runOnUiThread(() -> {
                     setLoading(false);
-                    showToast(extractErrorMessage(e, "Could not accept request. Please try again."));
+                    showToast("Could not update booking status.");
                 });
             }
         }).start();
     }
 
-    private boolean acceptEmergencyWithRpc() {
+
+
+    private void refreshStateAfterConflict() {
         try {
-            JSONObject payload = new JSONObject();
-            payload.put("p_request_id", requestId);
-            payload.put("p_provider_id", safe(providerProfileId));
-            payload.put("p_provider_firebase_uid", safe(providerFirebaseUid));
-            payload.put("p_provider_name", fallback(providerName, "Provider"));
-            payload.put("p_provider_phone", fallback(providerPhone, ""));
-            payload.put("p_provider_service", fallback(providerService, ""));
-            payload.put("p_provider_city", fallback(providerCity, ""));
-            payload.put("p_provider_area", fallback(providerArea, ""));
-
-            Log.d(TAG, "Calling atomic accept RPC with payload: " + payload.toString());
-
-            Request.Builder rb = new Request.Builder()
-                    .url(BuildConfig.SUPABASE_URL + "/rest/v1/rpc/accept_emergency_request_atomic")
-                    .post(RequestBody.create(payload.toString(), JSON))
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Accept", "application/json");
-            Request request = rb.build();
-
-            try (Response response = http.newCall(request).execute()) {
-                String body = response.body() != null ? response.body().string() : "[]";
-                int httpCode = response.code();
-                
-                Log.d(TAG, "Atomic accept RPC response: HTTP " + httpCode + " | Body: " + body);
-                
-                if (httpCode != 200) {
-                    Log.e(TAG, "RPC failed with HTTP " + httpCode + ": " + body.substring(0, Math.min(200, body.length())));
-                    return false;
-                }
-
-                JSONArray arr = new JSONArray(body);
-                if (arr.length() == 0) {
-                    Log.e(TAG, "RPC returned empty array");
-                    return false;
-                }
-                
-                JSONObject result = arr.getJSONObject(0);
-                boolean accepted = result.optBoolean("accepted", false);
-                String status = result.optString("status", "");
-                String errorMessage = result.optString("error_message", "");
-                String assignedProviderId = result.optString("assigned_provider_id", "");
-                
-                Log.d(TAG, "RPC result - accepted: " + accepted + " | status: " + status 
-                    + " | error: " + errorMessage + " | assignedProvider: " + assignedProviderId);
-                
-                if (!accepted) {
-                    if ("already_accepted".equals(status)) {
-                        Log.w(TAG, "Request already accepted by provider: " + assignedProviderId);
-                    } else if ("race_condition".equals(status)) {
-                        Log.w(TAG, "Race condition: another provider accepted first");
-                    } else {
-                        Log.w(TAG, "RPC indicated failure: " + errorMessage);
-                    }
-                }
-                
-                return accepted;
-            }
+            JSONObject latest = fetchRequestById(requestId);
+            runOnUiThread(() -> {
+                bindRequest(latest);
+                updateAcceptStateFromStatus(latest);
+            });
         } catch (Exception e) {
-            Log.e(TAG, "acceptEmergencyWithRpc exception: " + e.getMessage(), e);
-            return false;
-        }
-    }
-
-    private void updateMyBookingToAccepted(String emergencyId) {
-        try {
-            JSONObject body = new JSONObject();
-            body.put("status", "accepted");
-            body.put("provider_name", providerName != null ? providerName : "Provider");
-            body.put("provider_phone", providerPhone != null ? providerPhone : "");
-            if (!TextUtils.isEmpty(providerProfileId)) {
-                body.put("provider_id", providerProfileId);
-            }
-
-            String providerFilter = buildProviderOrFilter();
-            String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
-                    + "?emergency_request_id=eq." + urlEncode(emergencyId)
-                    + "&" + providerFilter;
-
-            Request.Builder rb = new Request.Builder()
-                    .url(url)
-                    .patch(RequestBody.create(body.toString(), JSON))
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Content-Type", "application/json");
-            Request request = rb.build();
-
-            try (Response response = http.newCall(request).execute()) {
-                if (!response.isSuccessful()) {
-                    Log.w(TAG, "updateMyBookingToAccepted failed: " + response.code());
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "updateMyBookingToAccepted error: " + e.getMessage());
-        }
-    }
-
-    private void cleanupOtherEmergencyBookings(String emergencyId) {
-        try {
-            JSONObject body = new JSONObject();
-            body.put("status", "rejected");
-
-            String exclusion = buildProviderAndNotFilter();
-            String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
-                    + "?emergency_request_id=eq." + urlEncode(emergencyId)
-                + "&" + exclusion
-                + "&status=eq.pending";
-
-            Request request = new Request.Builder()
-                    .url(url)
-                .patch(RequestBody.create(body.toString(), JSON))
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Content-Type", "application/json")
-                    .build();
-
-            try (Response response = http.newCall(request).execute()) {
-                if (!response.isSuccessful()) {
-                    Log.w(TAG, "cleanupOtherEmergencyBookings failed: " + response.code());
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "cleanupOtherEmergencyBookings error: " + e.getMessage());
+            Log.w(TAG, "refreshStateAfterConflict failed: " + e.getMessage());
         }
     }
 
@@ -485,67 +355,6 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
         if ("decline".equals(quickAction) || "reject".equals(quickAction)) {
             rejectRequest();
-        }
-    }
-
-    private JSONArray acceptPendingRequestWithSnapshotFallback() throws Exception {
-        JSONObject withSnapshot = new JSONObject();
-        withSnapshot.put("status", "accepted");
-        withSnapshot.put("provider_id", providerProfileId);
-        withSnapshot.put("provider_name", fallback(providerName, "Provider"));
-        withSnapshot.put("provider_phone", fallback(providerPhone, ""));
-        withSnapshot.put("provider_firebase_uid", providerFirebaseUid);
-
-        try {
-            return patchPendingRequest(withSnapshot);
-        } catch (IllegalStateException e) {
-            String message = safe(e.getMessage()).toLowerCase(Locale.US);
-            boolean snapshotColumnMissing = message.contains("provider_")
-                    || message.contains("column")
-                    || message.contains("schema cache");
-            if (!snapshotColumnMissing) {
-                throw e;
-            }
-
-            JSONObject legacy = new JSONObject();
-            legacy.put("status", "accepted");
-            legacy.put("provider_id", providerProfileId);
-            return patchPendingRequest(legacy);
-        }
-    }
-
-    private JSONArray patchPendingRequest(JSONObject body) throws Exception {
-        String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
-                + "?id=eq." + urlEncode(requestId)
-                + "&status=eq.pending";
-
-        Request request = new Request.Builder()
-                .url(url)
-                .patch(RequestBody.create(body.toString(), JSON))
-                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Prefer", "return=representation")
-                .build();
-
-        try (Response response = http.newCall(request).execute()) {
-            String responseBody = response.body() != null ? response.body().string() : "[]";
-            if (response.code() != 200) {
-                throw new IllegalStateException("Accept failed HTTP " + response.code() + " " + responseBody);
-            }
-            return new JSONArray(responseBody);
-        }
-    }
-
-    private void refreshStateAfterConflict() {
-        try {
-            JSONObject latest = fetchRequestById(requestId);
-            runOnUiThread(() -> {
-                bindRequest(latest);
-                updateAcceptStateFromStatus(latest);
-            });
-        } catch (Exception e) {
-            Log.w(TAG, "refreshStateAfterConflict failed: " + e.getMessage());
         }
     }
 
