@@ -70,7 +70,10 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         bindViews();
         bindButtons();
 
-        requestId = safe(getIntent() != null ? getIntent().getStringExtra("request_id") : "");
+        requestId = safe(getIntent() != null ? getIntent().getStringExtra("booking_id") : "");
+        if (TextUtils.isEmpty(requestId)) {
+            requestId = safe(getIntent() != null ? getIntent().getStringExtra("request_id") : "");
+        }
         if (TextUtils.isEmpty(requestId)) {
             requestId = safe(getIntent() != null ? getIntent().getStringExtra("reference_id") : "");
         }
@@ -170,11 +173,10 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     }
 
     private JSONObject fetchRequestById(String id) throws Exception {
-        // Query the 'bookings' table instead of 'emergency_requests'
+        // Query the 'bookings' table
         String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
                 + "?id=eq." + urlEncode(id)
-                + "&select=id,status,customer_id,customer_name,customer_phone,category,description,address,type,provider_id,is_emergency"
-                + "&limit=1";
+                + "&select=*";
 
         Request.Builder rb = new Request.Builder()
                 .url(url)
@@ -244,7 +246,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     }
 
     private void rejectRequest() {
-        updateBookingStatus("rejected");
+        updateBookingStatus("cancelled");
     }
 
     private void acceptRequest() {
@@ -294,7 +296,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                         return;
                     }
 
-                    if ("rejected".equals(status)) {
+                    if ("cancelled".equals(status)) {
                         rejectedByCurrentProvider = true;
                     } else {
                         rejectedByCurrentProvider = false;
@@ -308,7 +310,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                     runOnUiThread(() -> {
                         setLoading(false);
                         showToast("Booking " + status);
-                        if ("rejected".equals(status)) {
+                        if ("cancelled".equals(status)) {
                             finish();
                         } else {
                             if (updatedRows.length() > 0) {
@@ -531,7 +533,10 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         if (intent == null) return;
         setIntent(intent);
 
-        String nextRequestId = safe(intent.getStringExtra("request_id"));
+        String nextRequestId = safe(intent.getStringExtra("booking_id"));
+        if (TextUtils.isEmpty(nextRequestId)) {
+            nextRequestId = safe(intent.getStringExtra("request_id"));
+        }
         if (TextUtils.isEmpty(nextRequestId)) {
             nextRequestId = safe(intent.getStringExtra("reference_id"));
         }

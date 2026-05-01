@@ -186,7 +186,7 @@ async function fetchProvidersAndFilter(
       console.log(`No providers within ${radiusKm}km, falling back to nearest 3 providers anyway`);
       withinRadius = matched.slice(0, 3);
     }
-
+ 
     if (withinRadius.length === 0) {
       console.log("NO PROVIDERS FOUND");
     }
@@ -290,6 +290,8 @@ async function notifyProviders(
         type: "emergency"
       }
     };
+
+    console.log("Sending to:", fcmToken);
 
     try {
       const res = await fetch('https://fcm.googleapis.com/fcm/send', {
