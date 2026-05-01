@@ -319,6 +319,11 @@ public class EmergencyHelpActivity extends BaseActivity {
                 body.put("area", selectedArea);
                 body.put("address", selectedAddress);
 
+                String idToken = AuthTokenProvider.getIdTokenBlocking(5);
+                if (idToken == null || idToken.isEmpty()) {
+                    throw new IllegalStateException("Failed to get Firebase ID token");
+                }
+
                 String url = BuildConfig.SUPABASE_CREATE_EMERGENCY_URL != null && !BuildConfig.SUPABASE_CREATE_EMERGENCY_URL.isEmpty()
                         ? BuildConfig.SUPABASE_CREATE_EMERGENCY_URL
                         : BuildConfig.SUPABASE_URL + "/functions/v1/create-emergency";
@@ -328,7 +333,7 @@ public class EmergencyHelpActivity extends BaseActivity {
                         .post(RequestBody.create(body.toString(), JSON))
                         .addHeader("Content-Type", "application/json")
                         .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY);
+                        .addHeader("Authorization", "Bearer " + idToken);
                 Request req = rb.build();
 
                 try (Response res = http.newCall(req).execute()) {
@@ -633,10 +638,15 @@ public class EmergencyHelpActivity extends BaseActivity {
         body.put("user_id", currentUserId);
         body.put("user_firebase_uid", currentUserId);
 
+        String idToken = AuthTokenProvider.getIdTokenBlocking(5);
+        if (idToken == null || idToken.isEmpty()) {
+            throw new IllegalStateException("Failed to get Firebase ID token");
+        }
+
         Request.Builder rb = new Request.Builder().url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?select=id")
                 .post(RequestBody.create(body.toString(), JSON))
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + idToken)
                 .addHeader("Content-Type", "application/json")
                 .addHeader("Prefer", "return=representation");
         Request req = rb.build();
