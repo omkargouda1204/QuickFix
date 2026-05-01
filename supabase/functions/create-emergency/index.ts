@@ -236,11 +236,10 @@ async function insertBooking(
 async function notifyProviders(
   supabaseUrl: string,
   serviceKey: string,
-  requestId: string,
   emergencyData: Record<string, unknown>,
-  providers: any[]
+  providersWithBookingId: any[]
 ): Promise<void> {
-  for (const provider of providers) {
+  for (const provider of providersWithBookingId) {
     const firebaseUid = provider.firebase_uid || provider.provider_firebase_uid;
     if (!firebaseUid) {
       console.warn(`[Notify] Skipping provider ${provider.id} — no firebase_uid`);
@@ -249,10 +248,10 @@ async function notifyProviders(
 
     const notificationPayload = {
       user_id: firebaseUid,
-      type: 'emergency_request',
-      title: `Emergency: ${emergencyData.category}`,
-      body: `Emergency request from ${emergencyData.user_name}. Tap to view.`,
-      request_id: requestId,
+      type: 'emergency',
+      title: `🚨 Emergency Request`,
+      body: `New emergency booking near you`,
+      booking_id: provider.booking_id,
       quick_action: 'accept',
     };
 
@@ -358,28 +357,69 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ── 7. Insert SINGLE booking (Emergency) ──────────────────────────────────
-    const bookingData: Record<string, unknown> = {
-      customer_id: String(payload.user_id),
-      category: p_category,
-      description: String(payload.description || ''),
-      status: 'pending',
-      latitude: p_lat,
-      longitude: p_lng,
-    };
+    // ── 7. Insert bookings for matched providers ──────────────────────────────
+    const notifiedProviders: any[] = [];
 
-    const created = await insertBooking(SUPABASE_URL, SERVICE_KEY, bookingData);
-    const bookingId = created.id;
-
-    // ── 8. Notify all matched providers ───────────────────────────────────────
     if (providers.length > 0) {
+      for (const prov of providers) {
+        const bookingData: Record<string, unknown> = {
+          customer_id: String(payload.user_id),
+          provider_id: prov.id || null, // STEP 1
+          provider_firebase_uid: prov.firebase_uid || null, // STEP 2
+          customer_name: String(payload.user_name || 'Emergency User'),
+          customer_phone: String(payload.phone || ''),
+          provider_name: prov.business_name || 'Awaiting Acceptance',
+          service_name: 'Emergency - ' + p_category,
+          category: p_category,
+          address: String(payload.address || ''),
+          description: String(payload.description || ''),
+          city: prov.city || payload.city || '',
+          area: prov.area || payload.area || '',
+          status: 'pending',
+          is_emergency: true,
+          booking_date: new Date().toISOString().slice(0, 10),
+          booking_time: new Date().toTimeString().split(' ')[0],
+          latitude: p_lat,
+          longitude: p_lng,
+        };
+        try {
+          const created = await insertBooking(SUPABASE_URL, SERVICE_KEY, bookingData);
+          notifiedProviders.push({ ...prov, booking_id: created.id });
+        } catch (err) {
+          console.warn(`[DB] Failed to insert booking for provider ${prov.id}:`, err);
+        }
+      }
+
+      // ── 8. Notify all matched providers ───────────────────────────────────────
       try {
-        await notifyProviders(SUPABASE_URL, SERVICE_KEY, bookingId, payload, providers);
+        await notifyProviders(SUPABASE_URL, SERVICE_KEY, payload, notifiedProviders);
       } catch (notifyErr) {
         console.warn('[Notify] Failed (non-fatal):', notifyErr);
       }
     } else {
       console.log('[Search] No providers found even after 50km expansion');
+      // Insert one empty booking so the user's request is saved
+      const bookingData: Record<string, unknown> = {
+        customer_id: String(payload.user_id),
+        provider_id: null,
+        provider_firebase_uid: null,
+        customer_name: String(payload.user_name || 'Emergency User'),
+        customer_phone: String(payload.phone || ''),
+        provider_name: 'Awaiting Acceptance',
+        service_name: 'Emergency - ' + p_category,
+        category: p_category,
+        address: String(payload.address || ''),
+        description: String(payload.description || ''),
+        city: String(payload.city || ''),
+        area: String(payload.area || ''),
+        status: 'pending',
+        is_emergency: true,
+        booking_date: new Date().toISOString().slice(0, 10),
+        booking_time: new Date().toTimeString().split(' ')[0],
+        latitude: p_lat,
+        longitude: p_lng,
+      };
+      await insertBooking(SUPABASE_URL, SERVICE_KEY, bookingData);
     }
 
     console.log('=== create-emergency END ===');

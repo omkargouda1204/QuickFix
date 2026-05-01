@@ -222,9 +222,9 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         String encodedUid = encodeValue(providerFirebaseUid);
 
         if (providerId != null && !providerId.isEmpty() && !providerId.equals(providerFirebaseUid)) {
-            filter = "or=(provider_id.eq." + encodedProviderId + ",provider_id.eq." + encodedUid + ")";
+            filter = "or=(provider_id.eq." + encodedProviderId + ",provider_firebase_uid.eq." + encodedUid + ")";
         } else {
-            filter = "provider_id=eq." + encodedUid;
+            filter = "provider_firebase_uid=eq." + encodedUid;
         }
 
         String url = SUPABASE_URL + "/rest/v1/bookings"
