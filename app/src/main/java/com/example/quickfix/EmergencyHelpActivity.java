@@ -291,11 +291,34 @@ public class EmergencyHelpActivity extends BaseActivity {
         });
     }
 
-     private void submitEmergencyRequest() {
+    private void submitEmergencyRequest() {
         if (isSubmitting) return;
+
+        // Guard: user must be logged in
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null || currentUserId.isEmpty()) {
+            Toast.makeText(this, "Session expired, please login again.", Toast.LENGTH_LONG).show();
+            startActivity(new Intent(this, LoginActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+            finish();
+            return;
+        }
+
         if (!hasValidLocation()) {
             setStatus("Please enable location to continue.");
             openLocationPicker();
+            return;
+        }
+
+        String category = actCategory.getText().toString().trim();
+        String description = etDescription.getText() != null ? etDescription.getText().toString().trim() : "";
+
+        if (category.isEmpty()) {
+            tilCategory.setError("Please select a service category");
+            return;
+        }
+        if (description.length() < 10) {
+            tilDescription.setError("Please describe the problem (min 10 characters)");
             return;
         }
 
@@ -307,90 +330,121 @@ public class EmergencyHelpActivity extends BaseActivity {
 
         new Thread(() -> {
             try {
+                // Build request payload
                 JSONObject body = new JSONObject();
                 body.put("user_id", currentUserId);
                 body.put("user_name", currentUserName);
                 body.put("phone", currentUserPhone);
-                body.put("category", actCategory.getText().toString());
-                body.put("description", etDescription.getText() != null ? etDescription.getText().toString().trim() : "");
+                body.put("category", category);
+                body.put("description", description);
                 body.put("lat", selectedLat);
                 body.put("lng", selectedLng);
-                body.put("city", selectedCity);
-                body.put("area", selectedArea);
-                body.put("address", selectedAddress);
+                body.put("city", selectedCity != null ? selectedCity : "");
+                body.put("area", selectedArea != null ? selectedArea : "");
+                body.put("address", selectedAddress != null ? selectedAddress : "");
+                body.put("radius_meters", 25000);
 
-                // Obtain a fresh Firebase ID token (force-refreshed to avoid 401 from stale tokens)
-                String idToken = AuthTokenProvider.getIdTokenBlocking(10);
-                if (idToken == null || idToken.isEmpty()) {
-                    throw new IllegalStateException("Not authenticated — please log out and log in again.");
+                Log.d(TAG, "[submitEmergency] Request body: " + body.toString());
+
+                // IMPORTANT: Supabase Edge Functions require Authorization: Bearer <ANON_KEY>
+                // NOT a Firebase ID token — Firebase tokens are rejected as UNAUTHORIZED_ASYMMETRIC_JWT
+                // The Edge Function uses the service role key internally for DB writes.
+                String anonKey = BuildConfig.SUPABASE_ANON_KEY;
+                if (anonKey == null || anonKey.isEmpty()) {
+                    throw new IllegalStateException("Supabase ANON key is not configured.");
                 }
-                Log.d(TAG, "[submitEmergency] idToken obtained: len=" + idToken.length());
 
-                String url = BuildConfig.SUPABASE_CREATE_EMERGENCY_URL != null && !BuildConfig.SUPABASE_CREATE_EMERGENCY_URL.isEmpty()
+                String url = (BuildConfig.SUPABASE_CREATE_EMERGENCY_URL != null
+                        && !BuildConfig.SUPABASE_CREATE_EMERGENCY_URL.isEmpty())
                         ? BuildConfig.SUPABASE_CREATE_EMERGENCY_URL
                         : BuildConfig.SUPABASE_URL + "/functions/v1/create-emergency";
 
-                Request.Builder rb = new Request.Builder()
+                Log.d(TAG, "[submitEmergency] Calling URL: " + url);
+
+                Request req = new Request.Builder()
                         .url(url)
                         .post(RequestBody.create(body.toString(), JSON))
                         .addHeader("Content-Type", "application/json")
-                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + idToken);
-                Request req = rb.build();
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer " + anonKey)
+                        .build();
 
                 try (Response res = http.newCall(req).execute()) {
                     String raw = res.body() != null ? res.body().string() : "";
-                    if (res.code() != 200) {
-                        final String msg = "Request failed: HTTP " + res.code() + " " + raw;
+                    Log.d(TAG, "[submitEmergency] HTTP " + res.code() + " response: " + raw);
+
+                    if (res.code() == 401) {
                         runOnUiThread(() -> {
                             setLoading(false);
                             isSubmitting = false;
                             btnSubmit.setEnabled(true);
                             btnSubmit.setAlpha(1f);
-                            setStatus("✗ " + msg);
-                            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+                            setStatus("✗ Session expired, please login again.");
+                            Toast.makeText(this, "Session expired, please login again.", Toast.LENGTH_LONG).show();
+                        });
+                        return;
+                    }
+
+                    if (!res.isSuccessful()) {
+                        final String errMsg = parseErrorMessage(raw, res.code());
+                        Log.e(TAG, "[submitEmergency] Failed: HTTP " + res.code() + " " + raw);
+                        runOnUiThread(() -> {
+                            setLoading(false);
+                            isSubmitting = false;
+                            btnSubmit.setEnabled(true);
+                            btnSubmit.setAlpha(1f);
+                            setStatus("✗ Failed to send emergency request");
+                            Toast.makeText(this, errMsg, Toast.LENGTH_LONG).show();
                         });
                         return;
                     }
 
                     JSONObject result = new JSONObject(raw);
                     boolean success = result.optBoolean("success", false);
-                    if (!success) {
-                        final String message = result.optString("message", "No providers available within 25km");
-                        runOnUiThread(() -> {
-                            setLoading(false);
-                            isSubmitting = false;
-                            btnSubmit.setEnabled(true);
-                            btnSubmit.setAlpha(1f);
-                            setStatus("✗ " + message);
-                            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-                        });
-                        return;
-                    }
-
                     final String requestId = result.optString("request_id", "");
+                    final int providersCount = result.optInt("providers_count", 0);
+                    final String message = result.optString("message",
+                            success ? "Emergency request sent!" : "Request sent, no providers nearby");
+
                     runOnUiThread(() -> {
                         setLoading(false);
                         activeRequestId = requestId;
-                        setStatus("✓ Emergency sent. Waiting for provider...");
-                        Toast.makeText(this, "Emergency sent successfully!", Toast.LENGTH_LONG).show();
+                        if (providersCount > 0) {
+                            setStatus("✓ Emergency sent! Notified " + providersCount + " provider(s). Waiting...");
+                            Toast.makeText(this, "Emergency sent! " + providersCount + " provider(s) notified.", Toast.LENGTH_LONG).show();
+                        } else {
+                            setStatus("✓ Request saved. " + message);
+                            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                        }
                     });
 
-                    startStatusPolling();
+                    if (!requestId.isEmpty()) {
+                        startStatusPolling();
+                    }
                 }
             } catch (Exception e) {
-                Log.e(TAG, "submitEmergencyRequest edge call failed", e);
+                Log.e(TAG, "[submitEmergency] Exception:", e);
                 runOnUiThread(() -> {
                     setLoading(false);
                     isSubmitting = false;
                     btnSubmit.setEnabled(true);
                     btnSubmit.setAlpha(1f);
-                    setStatus("✗ Request failed: " + e.getMessage());
-                    Toast.makeText(this, "Request failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    setStatus("✗ Failed to send emergency request");
+                    Toast.makeText(this, "Failed to send emergency request: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
         }).start();
-     }
+    }
+
+    /** Extracts a user-friendly error message from a JSON error response body. */
+    private String parseErrorMessage(String raw, int httpCode) {
+        try {
+            JSONObject err = new JSONObject(raw);
+            String msg = err.optString("error", err.optString("message", ""));
+            if (!msg.isEmpty()) return msg;
+        } catch (Exception ignored) {}
+        return "Failed to send emergency request (HTTP " + httpCode + ")";
+    }
 
     private void createPendingEmergencyBookingForProvider(String requestId, NearbyProvider provider) {
         try {
@@ -673,20 +727,23 @@ public class EmergencyHelpActivity extends BaseActivity {
 
     private boolean tryInsertBooking(JSONObject payload) {
         try {
-            String bookingToken = AuthTokenProvider.getIdTokenBlocking(10);
-            String bookingAuth = (bookingToken != null && !bookingToken.isEmpty())
-                    ? "Bearer " + bookingToken
-                    : "Bearer " + BuildConfig.SUPABASE_ANON_KEY;
+            // Direct PostgREST insert: send anon key as bearer; RLS INSERT policy
+            // must allow this user (auth.uid()::text = customer_id).
+            // The emergency flow delegates booking creation to the Edge Function
+            // (which uses service role key), so this method is only a fallback.
             Request.Builder rb = new Request.Builder()
                     .url(BuildConfig.SUPABASE_URL + "/rest/v1/bookings")
                     .post(RequestBody.create(payload.toString(), JSON))
                     .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", bookingAuth)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Prefer", "return=minimal");
             Request insert = rb.build();
             try (Response response = http.newCall(insert).execute()) {
-                return response.code() == 200 || response.code() == 201 || response.code() == 204;
+                int code = response.code();
+                String body = response.body() != null ? response.body().string() : "";
+                Log.d(TAG, "tryInsertBooking HTTP " + code + " " + body);
+                return code == 200 || code == 201 || code == 204;
             }
         } catch (Exception e) {
             Log.w(TAG, "tryInsertBooking failed: " + e.getMessage());
