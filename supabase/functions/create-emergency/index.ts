@@ -200,20 +200,14 @@ async function fetchProvidersAndFilter(
 
 // ── DB write helpers (all use service role key — bypass RLS) ──────────────────
 
-async function insertEmergencyRequest(
+async function insertBooking(
   supabaseUrl: string,
   serviceKey: string,
-  body: Record<string, unknown>
+  bookingData: Record<string, unknown>
 ): Promise<{ id: string }> {
-  const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/emergency_requests?select=id`;
-  const payload = {
-    ...body,
-    user_id: String(body.user_id || ''),
-    user_firebase_uid: String(body.user_id || ''),
-    status: 'pending',
-  };
+  const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/bookings?select=id`;
 
-  console.log('[DB] Inserting emergency request for user:', payload.user_id);
+  console.log("Insert Data:", bookingData);
 
   const res = await fetch(url, {
     method: 'POST',
@@ -223,54 +217,20 @@ async function insertEmergencyRequest(
       authorization: `Bearer ${serviceKey}`,
       Prefer: 'return=representation',
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(bookingData),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Insert emergency_request failed HTTP ${res.status}: ${text}`);
+    throw new Error(`Insert booking failed HTTP ${res.status}: ${text}`);
   }
 
   const arr: any[] = await res.json();
   if (!arr || arr.length === 0) {
-    throw new Error('Insert emergency_request returned empty result');
+    throw new Error('Insert booking returned empty result');
   }
-  console.log('[DB] Emergency request created:', arr[0].id);
+  console.log('[DB] Booking inserted successfully with ID:', arr[0].id);
   return arr[0];
-}
-
-async function insertBookings(
-  supabaseUrl: string,
-  serviceKey: string,
-  rows: Record<string, unknown>[]
-): Promise<void> {
-  if (!Array.isArray(rows) || rows.length === 0) return;
-
-  const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/bookings`;
-  const castRows = rows.map((r) => ({
-    ...r,
-    customer_id: String(r.customer_id || ''),
-    status: r.status || 'pending',
-  }));
-
-  console.log(`[DB] Inserting ${castRows.length} booking(s)`);
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: serviceKey,
-      authorization: `Bearer ${serviceKey}`,
-      Prefer: 'return=minimal',
-    },
-    body: JSON.stringify(castRows),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Insert bookings failed HTTP ${res.status}: ${text}`);
-  }
-  console.log('[DB] Bookings inserted successfully');
 }
 
 async function notifyProviders(
@@ -398,55 +358,23 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ── 7. Insert emergency_requests row (always) ─────────────────────────────
-    const reqBody: Record<string, unknown> = {
+    // ── 7. Insert SINGLE booking (Emergency) ──────────────────────────────────
+    const bookingData: Record<string, unknown> = {
       user_id: String(payload.user_id),
-      user_firebase_uid: String(payload.user_id),
-      user_name: String(payload.user_name || 'Unknown'),
-      phone: String(payload.phone || ''),
       category: p_category,
       description: String(payload.description || ''),
-      lat: p_lat,
-      lng: p_lng,
-      city: String(payload.city || ''),
-      area: String(payload.area || ''),
-      address: String(payload.address || ''),
       status: 'pending',
+      latitude: p_lat,
+      longitude: p_lng,
     };
 
-    const created = await insertEmergencyRequest(SUPABASE_URL, SERVICE_KEY, reqBody);
-    const requestId = created.id;
+    const created = await insertBooking(SUPABASE_URL, SERVICE_KEY, bookingData);
+    const bookingId = created.id;
 
-    // ── 8. Create bookings for matched providers ───────────────────────────────
-    const bookingRows: Record<string, unknown>[] = providers.map((prov: any) => ({
-      customer_id: String(payload.user_id),
-      customer_name: String(payload.user_name || ''),
-      customer_phone: String(payload.phone || ''),
-      provider_id: prov.id || prov.provider_id,
-      provider_firebase_uid: prov.firebase_uid || prov.provider_firebase_uid || null,
-      provider_name: prov.business_name || 'Awaiting Acceptance',
-      service_name: 'Emergency - ' + p_category,
-      service_category: p_category,
-      category: p_category,
-      address: String(payload.address || ''),
-      description: String(payload.description || ''),
-      city: prov.city || payload.city || '',
-      area: prov.area || payload.area || '',
-      status: 'pending',
-      type: 'Emergency',
-      is_emergency: true,
-      emergency_request_id: requestId,
-      booking_date: new Date().toISOString().slice(0, 10),
-      booking_time: new Date().toTimeString().split(' ')[0],
-      created_at: new Date().toISOString(),
-    }));
-
-    if (bookingRows.length > 0) {
-      await insertBookings(SUPABASE_URL, SERVICE_KEY, bookingRows);
-
-      // Notify providers (non-fatal)
+    // ── 8. Notify all matched providers ───────────────────────────────────────
+    if (providers.length > 0) {
       try {
-        await notifyProviders(SUPABASE_URL, SERVICE_KEY, requestId, reqBody, providers);
+        await notifyProviders(SUPABASE_URL, SERVICE_KEY, bookingId, bookingData, providers);
       } catch (notifyErr) {
         console.warn('[Notify] Failed (non-fatal):', notifyErr);
       }
@@ -462,11 +390,11 @@ Deno.serve(async (req) => {
 
     return json({
       success: true,
-      message: bookingRows.length > 0
-        ? `Emergency request created and ${bookingRows.length} provider(s) notified`
+      message: providers.length > 0
+        ? `Emergency request created and ${providers.length} provider(s) notified`
         : 'Emergency request saved. No providers found nearby.',
-      request_id: requestId,
-      providers_count: bookingRows.length,
+      request_id: bookingId,
+      providers_count: providers.length,
       nearest_provider_distance_km: nearestDist,
     }, 200);
 

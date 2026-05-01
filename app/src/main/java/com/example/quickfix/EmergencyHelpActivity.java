@@ -367,9 +367,10 @@ public class EmergencyHelpActivity extends BaseActivity {
         new Thread(() -> {
             try {
                 // ── Pre-flight location check ────────────────────────────────
-                Log.d("EMERGENCY", "Lat: " + selectedLat);
-                Log.d("EMERGENCY", "Lng: " + selectedLng);
-                Log.d("EMERGENCY", "Category: " + category);
+                Log.d("BOOKING", "User ID: " + currentUserId);
+                Log.d("BOOKING", "Lat: " + selectedLat);
+                Log.d("BOOKING", "Lng: " + selectedLng);
+                Log.d("BOOKING", "Category: " + category);
 
                 if (Double.isNaN(selectedLat) || Double.isNaN(selectedLng)) {
                     throw new IllegalStateException("Location not available. Please select your location first.");
