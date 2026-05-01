@@ -145,8 +145,13 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
 
             // Show/hide action buttons based on status
             if ("pending".equals(status)) {
-                btnAccept.setVisibility(View.VISIBLE);
-                btnReject.setVisibility(View.VISIBLE);
+                if (booking.isEmergency) {
+                    btnAccept.setVisibility(View.GONE);
+                    btnReject.setVisibility(View.GONE);
+                } else {
+                    btnAccept.setVisibility(View.VISIBLE);
+                    btnReject.setVisibility(View.VISIBLE);
+                }
                 btnMarkCompleted.setVisibility(View.GONE);
                 layoutPriceSetter.setVisibility(View.GONE);
                 tvWaitingForPayment.setVisibility(View.GONE);
@@ -230,6 +235,14 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
 
             btnMessage.setOnClickListener(v -> {
                 if (listener != null && btnMessage.isEnabled()) listener.onMessageBooking(booking);
+            });
+
+            cardBooking.setOnClickListener(v -> {
+                if (booking.isEmergency) {
+                    Intent intent = new Intent(context, ProviderEmergencyRequestActivity.class);
+                    intent.putExtra("booking_id", booking.id);
+                    context.startActivity(intent);
+                }
             });
         }
 

@@ -233,15 +233,16 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             showToast("Already assigned to another provider.");
         }
 
-        if (btnAccept != null) {
-            btnAccept.setEnabled(enableAccept);
-            btnAccept.setText(alreadyClosed ? "Already Assigned" : (rejectedByCurrentProvider ? "Rejected" : "Accept"));
-            btnAccept.setAlpha(enableAccept ? 1f : 0.65f);
-        }
-        if (btnReject != null) {
-            btnReject.setEnabled(enableReject);
-            btnReject.setText(rejectedByCurrentProvider ? "Rejected" : "Reject");
-            btnReject.setAlpha(enableReject ? 1f : 0.65f);
+        if (btnAccept != null && btnReject != null) {
+            if ("pending".equals(status)) {
+                btnAccept.setVisibility(View.VISIBLE);
+                btnReject.setVisibility(View.VISIBLE);
+                btnAccept.setEnabled(enableAccept);
+                btnReject.setEnabled(enableReject);
+            } else {
+                btnAccept.setVisibility(View.GONE);
+                btnReject.setVisibility(View.GONE);
+            }
         }
     }
 
@@ -264,7 +265,6 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 if ("accepted".equals(status)) {
                     body.put("provider_id", providerProfileId);
                     body.put("provider_name", fallback(providerName, "Provider"));
-                    body.put("provider_phone", fallback(providerPhone, ""));
                 }
 
                 String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
@@ -300,9 +300,11 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                         rejectedByCurrentProvider = true;
                     } else {
                         rejectedByCurrentProvider = false;
-                        if (updatedRows.length() > 0) {
-                            notifyUserAssigned(updatedRows.getJSONObject(0));
-                        }
+                    }
+
+                    if (updatedRows.length() > 0) {
+                        String customerId = updatedRows.getJSONObject(0).optString("customer_id", "");
+                        notifyUser(customerId, status);
                     }
 
                     upsertProviderResponse(status);
@@ -419,34 +421,31 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         }
     }
 
-    private void notifyUserAssigned(JSONObject request) {
-        String userRef = safe(request.optString("user_firebase_uid", ""));
-        if (TextUtils.isEmpty(userRef)) {
-            userRef = safe(request.optString("user_id", ""));
-        }
-        if (TextUtils.isEmpty(userRef)) return;
+    private void notifyUser(String customerId, String status) {
+        if (TextUtils.isEmpty(customerId)) return;
 
-        try {
-            JSONObject data = new JSONObject();
-            data.put("request_id", requestId);
-            data.put("provider_name", fallback(providerName, "Provider"));
-            data.put("provider_phone", fallback(providerPhone, ""));
-            data.put("provider_service", fallback(providerService, ""));
-            data.put("provider_city", fallback(providerCity, ""));
-            data.put("provider_area", fallback(providerArea, ""));
-            data.put("phone", fallback(providerPhone, ""));
-            data.put("eta", "Arriving in 10 mins");
+        new Thread(() -> {
+            try {
+                JSONObject body = new JSONObject();
+                body.put("user_id", customerId);
+                body.put("type", "booking_update");
+                body.put("title", "Booking Update");
+                body.put("body", "Your emergency request has been " + status.toUpperCase(Locale.US));
 
-            FcmNotificationHelper.notifyEmergencyUserAssigned(
-                    userRef,
-                    "Provider Assigned",
-                    fallback(providerName, "Provider") + " is on the way.",
-                    requestId,
-                    data
-            );
-        } catch (Exception e) {
-            Log.w(TAG, "notifyUserAssigned failed: " + e.getMessage());
-        }
+                String url = BuildConfig.SUPABASE_URL + "/functions/v1/send-notification";
+                Request request = new Request.Builder()
+                        .url(url)
+                        .post(RequestBody.create(body.toString(), JSON))
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .build();
+
+                http.newCall(request).execute().close();
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to notify user: " + e.getMessage());
+            }
+        }).start();
     }
 
     private String extractErrorMessage(Throwable throwable, String fallback) {
