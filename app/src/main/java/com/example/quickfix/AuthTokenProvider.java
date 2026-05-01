@@ -23,10 +23,19 @@ public class AuthTokenProvider {
         final String[] tokenHolder = new String[1];
         final CountDownLatch latch = new CountDownLatch(1);
 
-        user.getIdToken(false).addOnCompleteListener(task -> {
+        // forceRefresh=true ensures we never send an expired token to Supabase.
+        // Firebase caches tokens internally (valid 1 hr), so this is cheap when
+        // the token is fresh and automatically re-fetches when it has expired.
+        user.getIdToken(true).addOnCompleteListener(task -> {
             try {
                 if (task.isSuccessful() && task.getResult() != null) {
-                    tokenHolder[0] = task.getResult().getToken();
+                    String token = task.getResult().getToken();
+                    android.util.Log.d("AuthTokenProvider",
+                            "ID token obtained: " + (token != null ? "OK (len=" + token.length() + ")" : "NULL"));
+                    tokenHolder[0] = token;
+                } else {
+                    android.util.Log.e("AuthTokenProvider",
+                            "getIdToken failed: " + (task.getException() != null ? task.getException().getMessage() : "unknown"));
                 }
             } catch (Exception ignored) {}
             latch.countDown();

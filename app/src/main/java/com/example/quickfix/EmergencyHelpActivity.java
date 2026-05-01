@@ -319,10 +319,12 @@ public class EmergencyHelpActivity extends BaseActivity {
                 body.put("area", selectedArea);
                 body.put("address", selectedAddress);
 
-                String idToken = AuthTokenProvider.getIdTokenBlocking(5);
+                // Obtain a fresh Firebase ID token (force-refreshed to avoid 401 from stale tokens)
+                String idToken = AuthTokenProvider.getIdTokenBlocking(10);
                 if (idToken == null || idToken.isEmpty()) {
-                    throw new IllegalStateException("Failed to get Firebase ID token");
+                    throw new IllegalStateException("Not authenticated — please log out and log in again.");
                 }
+                Log.d(TAG, "[submitEmergency] idToken obtained: len=" + idToken.length());
 
                 String url = BuildConfig.SUPABASE_CREATE_EMERGENCY_URL != null && !BuildConfig.SUPABASE_CREATE_EMERGENCY_URL.isEmpty()
                         ? BuildConfig.SUPABASE_CREATE_EMERGENCY_URL
@@ -450,11 +452,16 @@ public class EmergencyHelpActivity extends BaseActivity {
             body.put("p_lng", selectedLng);
             body.put("p_radius_km", NEARBY_RADIUS_KM);
 
+            // Use a fresh Firebase ID token for authenticated RPC calls
+            String rpcToken = AuthTokenProvider.getIdTokenBlocking(10);
+            String rpcAuth = (rpcToken != null && !rpcToken.isEmpty())
+                    ? "Bearer " + rpcToken
+                    : "Bearer " + BuildConfig.SUPABASE_ANON_KEY;
             Request req = new Request.Builder()
                     .url(BuildConfig.SUPABASE_URL + "/rest/v1/rpc/find_emergency_nearby_providers")
                     .post(RequestBody.create(body.toString(), JSON))
                     .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", rpcAuth)
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Accept", "application/json")
                     .build();
@@ -492,9 +499,13 @@ public class EmergencyHelpActivity extends BaseActivity {
 
         Log.d(TAG, "Fallback search: category=" + category + " lat=" + selectedLat + " lng=" + selectedLng + " radius=" + NEARBY_RADIUS_KM + "km");
 
+        String fallbackToken = AuthTokenProvider.getIdTokenBlocking(10);
+        String fallbackAuth = (fallbackToken != null && !fallbackToken.isEmpty())
+                ? "Bearer " + fallbackToken
+                : "Bearer " + BuildConfig.SUPABASE_ANON_KEY;
         Request req = new Request.Builder().url(url)
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", fallbackAuth)
                 .addHeader("Accept", "application/json")
                 .build();
 
@@ -662,11 +673,15 @@ public class EmergencyHelpActivity extends BaseActivity {
 
     private boolean tryInsertBooking(JSONObject payload) {
         try {
+            String bookingToken = AuthTokenProvider.getIdTokenBlocking(10);
+            String bookingAuth = (bookingToken != null && !bookingToken.isEmpty())
+                    ? "Bearer " + bookingToken
+                    : "Bearer " + BuildConfig.SUPABASE_ANON_KEY;
             Request.Builder rb = new Request.Builder()
                     .url(BuildConfig.SUPABASE_URL + "/rest/v1/bookings")
                     .post(RequestBody.create(payload.toString(), JSON))
                     .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", bookingAuth)
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Prefer", "return=minimal");
             Request insert = rb.build();
@@ -693,10 +708,14 @@ public class EmergencyHelpActivity extends BaseActivity {
         new Thread(() -> {
             try {
                 String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?id=eq." + activeRequestId + "&select=*,assigned_provider:provider_profiles(*)";
+                String pollToken = AuthTokenProvider.getIdTokenBlocking(10);
+                String pollAuth = (pollToken != null && !pollToken.isEmpty())
+                        ? "Bearer " + pollToken
+                        : "Bearer " + BuildConfig.SUPABASE_ANON_KEY;
                 Request.Builder rb = new Request.Builder().url(url)
                         .get()
                         .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", pollAuth)
                         .addHeader("Accept", "application/json");
                 Request req = rb.build();
                 try (Response res = http.newCall(req).execute()) {
@@ -730,10 +749,14 @@ public class EmergencyHelpActivity extends BaseActivity {
             try {
                 JSONObject body = new JSONObject();
                 body.put("status", status);
+                String updateToken = AuthTokenProvider.getIdTokenBlocking(10);
+                String updateAuth = (updateToken != null && !updateToken.isEmpty())
+                        ? "Bearer " + updateToken
+                        : "Bearer " + BuildConfig.SUPABASE_ANON_KEY;
                 Request.Builder rb = new Request.Builder().url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?id=eq." + activeRequestId)
                         .patch(RequestBody.create(body.toString(), JSON))
                         .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", updateAuth)
                         .addHeader("Content-Type", "application/json");
                 Request req = rb.build();
                 http.newCall(req).execute();
