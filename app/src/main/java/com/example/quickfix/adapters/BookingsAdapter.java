@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.quickfix.Booking;
+import com.example.quickfix.ProviderEmergencyRequestActivity;
 import com.example.quickfix.R;
 import com.google.android.material.button.MaterialButton;
 
