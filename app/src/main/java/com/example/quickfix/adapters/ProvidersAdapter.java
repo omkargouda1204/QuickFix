@@ -88,7 +88,8 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
 
     private String cleanLocation(String text) {
         if (text == null) return "";
-        return text.replaceAll("[A-Z0-9+]{6,}", "").replace("-", "").trim();
+        String cleaned = text.replaceAll("[A-Z0-9+]{6,}", "").replace("-", "").trim();
+        return cleaned.replaceAll("\\s*\\d{5,6}$", "").trim();
     }
 
     @Override

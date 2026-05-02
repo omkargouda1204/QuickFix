@@ -307,11 +307,11 @@
                         android:layout_marginBottom="10dp" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnSetBusinessLocation"
+                        android:id="@+id/btnUseCurrentLocation"
                         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                         android:layout_width="match_parent"
                         android:layout_height="52dp"
-                        android:text="Set Business Location"
+                        android:text="Use Current Location"
                         app:icon="@drawable/ic_location"
                         app:cornerRadius="12dp"
                         android:textAllCaps="false"

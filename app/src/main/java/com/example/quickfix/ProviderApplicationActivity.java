@@ -49,7 +49,7 @@ public class ProviderApplicationActivity extends BaseActivity {
     private NestedScrollView mainScroll;
     private TextView         tvTermsScrollMsg, tvLocationLabel, tvLoadingMsg, tvIdProofLabel, tvBizImageLabel, tvIdError, tvLocationError;
     private MaterialCheckBox cbTerms;
-    private MaterialButton   btnSubmit, btnSetBusinessLocation;
+    private MaterialButton   btnSubmit, btnUseCurrentLocation;
     private FrameLayout      successOverlay, loadingOverlay;
     private LinearLayout     layoutLocationDisplay, layoutIdProof, layoutBizImage;
     private ImageView        ivIdProofPreview, ivBizImagePreview;
@@ -166,7 +166,7 @@ public class ProviderApplicationActivity extends BaseActivity {
         tvTermsScrollMsg = findViewById(R.id.tvTermsScrollMsg);
         cbTerms          = findViewById(R.id.cbTerms);
         btnSubmit        = findViewById(R.id.btnSubmit);
-        btnSetBusinessLocation = findViewById(R.id.btnSetBusinessLocation);
+        btnUseCurrentLocation = findViewById(R.id.btnUseCurrentLocation);
         tvLocationLabel  = findViewById(R.id.tvLocationLabel);
         layoutLocationDisplay = findViewById(R.id.layoutLocationDisplay);
         
@@ -247,7 +247,7 @@ public class ProviderApplicationActivity extends BaseActivity {
     }
 
     private void setupLocationLogic() {
-        btnSetBusinessLocation.setOnClickListener(v -> {
+        btnUseCurrentLocation.setOnClickListener(v -> {
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 100);
                 return;
@@ -258,33 +258,66 @@ public class ProviderApplicationActivity extends BaseActivity {
 
     private void fetchLocation() {
         showLoading(true, "Fetching GPS location...");
-        locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
-            @Override
-            public void onSuccess(String city, String area, double lat, double lng) {
+        com.google.android.gms.location.FusedLocationProviderClient fusedClient =
+                com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this);
+
+        try {
+            fusedClient.getLastLocation().addOnSuccessListener(location -> {
                 runOnUiThread(() -> {
                     showLoading(false, "");
-                    selectedLat = lat;
-                    selectedLng = lng;
-                    
-                    // Resolve area name
-                    selectedArea = (area != null && !area.isEmpty()) ? area : city;
-                    if (selectedArea == null || selectedArea.isEmpty()) selectedArea = "Unknown Area";
-                    
-                    layoutLocationDisplay.setVisibility(View.VISIBLE);
-                    tvLocationLabel.setText(selectedArea);
-                    tvLocationError.setVisibility(View.GONE);
-                    
-                    updateStepIndicators(2);
-                    checkFormValid();
+                    if (location != null) {
+                        selectedLat = location.getLatitude();
+                        selectedLng = location.getLongitude();
+                        
+                        try {
+                            Geocoder geocoder = new Geocoder(this, Locale.getDefault());
+                            List<Address> addresses = geocoder.getFromLocation(selectedLat, selectedLng, 1);
+                            
+                            if (addresses != null && !addresses.isEmpty()) {
+                                Address addr = addresses.get(0);
+                                String city = addr.getLocality();
+                                String area = addr.getSubLocality();
+                                
+                                if (city == null) city = addr.getSubAdminArea();
+                                if (area == null) area = addr.getThoroughfare();
+                                if (area == null) area = city;
+                                
+                                selectedArea = area != null ? area : "Unknown Location";
+                                
+                                String fullAddress = (area != null && city != null && !area.equals(city)) ? (area + ", " + city) : selectedArea;
+                                if (addr.getPostalCode() != null && etPincode != null) {
+                                    etPincode.setText(addr.getPostalCode());
+                                }
+                                if (etAddress != null) {
+                                    etAddress.setText(fullAddress);
+                                }
+                                
+                                layoutLocationDisplay.setVisibility(View.VISIBLE);
+                                tvLocationLabel.setText(selectedArea);
+                                tvLocationError.setVisibility(View.GONE);
+                                
+                                updateStepIndicators(2);
+                                checkFormValid();
+                            } else {
+                                showError("Location found but address not resolvable");
+                            }
+                        } catch (Exception e) {
+                            showError("Geocoder error: " + e.getMessage());
+                        }
+                    } else {
+                        showError("Could not get last location. Try turning on GPS.");
+                    }
                 });
-            }
-            @Override public void onFailure(String error) {
-                runOnUiThread(() -> { 
-                    showLoading(false, ""); 
-                    showError("Location failed: " + error); 
+            }).addOnFailureListener(e -> {
+                runOnUiThread(() -> {
+                    showLoading(false, "");
+                    showError("Location failed: " + e.getMessage());
                 });
-            }
-        });
+            });
+        } catch (SecurityException e) {
+            showLoading(false, "");
+            showError("Location permission required");
+        }
     }
 
     private void setupTermsScrollDetection() {

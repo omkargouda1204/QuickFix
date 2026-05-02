@@ -16,15 +16,14 @@
         android:orientation="vertical"
         android:padding="12dp">
 
-        <com.google.android.material.imageview.ShapeableImageView
+        <ImageView
             android:id="@+id/ivProviderProfile"
-            android:layout_width="60dp"
-            android:layout_height="60dp"
+            android:layout_width="70dp"
+            android:layout_height="70dp"
             android:layout_gravity="center_horizontal"
             android:scaleType="centerCrop"
             android:src="@drawable/ic_person"
-            app:shapeAppearanceOverlay="@style/CircleAppearanceOverlay"
-            android:background="@color/divider" />
+            android:background="@drawable/circle_bg" />
 
         <TextView
             android:id="@+id/tvProviderName"

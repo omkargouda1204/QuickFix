@@ -96,8 +96,9 @@ public class TopRatedAdapter extends RecyclerView.Adapter<TopRatedAdapter.VH> {
             }
         }
 
+        String imgUrl = (p.profileImageUrl != null && !p.profileImageUrl.isEmpty()) ? p.profileImageUrl : p.businessImageUrl;
         Glide.with(ctx)
-                .load(p.businessImageUrl)
+                .load(imgUrl)
                 .placeholder(R.drawable.ic_person)
                 .error(R.drawable.ic_person)
                 .circleCrop()
