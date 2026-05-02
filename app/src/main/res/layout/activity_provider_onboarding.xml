@@ -86,43 +86,25 @@
 
                     <LinearLayout
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
+                        android:layout_height="49dp"
+                        android:layout_marginBottom="14dp"
                         android:gravity="center_vertical"
-                        android:layout_marginBottom="14dp">
+                        android:orientation="horizontal">
+
                         <FrameLayout
                             android:layout_width="48dp"
                             android:layout_height="48dp"
-                            android:background="#33FFFFFF"
-                            android:layout_marginEnd="14dp">
+                            android:layout_marginEnd="14dp"
+                            android:background="#33FFFFFF">
+
                             <ImageView
                                 android:layout_width="26dp"
                                 android:layout_height="26dp"
                                 android:layout_gravity="center"
+                                android:contentDescription="Business"
                                 android:src="@drawable/ic_business"
-                                app:tint="@color/white"
-                                android:contentDescription="Business" />
+                                app:tint="@color/white" />
                         </FrameLayout>
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Grow with QuickFix"
-                                android:textColor="@color/white"
-                                android:textSize="18sp"
-                                android:textStyle="bold" />
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Free · Fast · Trusted"
-                                android:textColor="#BBDEFB"
-                                android:textSize="12sp"
-                                android:layout_marginTop="2dp" />
-                        </LinearLayout>
                     </LinearLayout>
 
                     <View android:layout_width="match_parent" android:layout_height="1dp"
@@ -407,6 +389,49 @@
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>
 
+                    <!-- ── Location Button ── -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnUseCurrentLocation"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="54dp"
+                        android:text="Use Current Location"
+                        android:textAllCaps="false"
+                        android:layout_marginBottom="12dp"
+                        app:icon="@drawable/ic_location"
+                        app:iconGravity="textStart"
+                        app:cornerRadius="12dp"
+                        app:strokeColor="@color/primary"
+                        app:iconTint="@color/primary"
+                        android:textColor="@color/primary" />
+
+                    <LinearLayout
+                        android:id="@+id/layoutLocationDisplay"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:background="@drawable/bg_upload_success"
+                        android:padding="12dp"
+                        android:layout_marginBottom="14dp"
+                        android:visibility="gone">
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_location"
+                            app:tint="@color/accent_green"
+                            android:contentDescription="Location icon" />
+                        <TextView
+                            android:id="@+id/tvLocationLabel"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:text="Location detected"
+                            android:textColor="@color/text_primary"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
                     <!-- ── City (FULL WIDTH) ── -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilCity"
@@ -424,6 +449,28 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textCapWords"
+                            android:textColor="@color/input_text"
+                            android:textSize="15sp" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <!-- ── Pincode ── -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilPincode"
+                        style="@style/Widget.QuickFix.TextInputLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp"
+                        android:hint="Pincode (6 digits) *"
+                        app:startIconDrawable="@drawable/ic_approval"
+                        app:startIconTint="@color/primary"
+                        app:boxCornerRadiusTopStart="12dp" app:boxCornerRadiusTopEnd="12dp"
+                        app:boxCornerRadiusBottomStart="12dp" app:boxCornerRadiusBottomEnd="12dp">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etPincode"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="number"
+                            android:maxLength="6"
                             android:textColor="@color/input_text"
                             android:textSize="15sp" />
                     </com.google.android.material.textfield.TextInputLayout>

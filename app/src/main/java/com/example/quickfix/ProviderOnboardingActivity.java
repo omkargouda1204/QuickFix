@@ -1,5 +1,9 @@
 package com.example.quickfix;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.location.Address;
+import android.location.Geocoder;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.animation.ObjectAnimator;
@@ -26,7 +30,9 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ActivityCompat;
 import androidx.core.widget.NestedScrollView;
 
 import com.google.android.material.button.MaterialButton;
@@ -37,6 +43,8 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
 import java.io.InputStream;
+import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.MediaType;
@@ -56,10 +64,18 @@ public class ProviderOnboardingActivity extends BaseActivity {
 
     // ── Form fields ───────────────────────────────────────────────────────
     private TextInputLayout tilBusinessName, tilOwnerName, tilPhone, tilEmail,
-            tilServiceCategory, tilAddress, tilExperience, tilCity;
+            tilServiceCategory, tilAddress, tilExperience, tilCity, tilPincode;
     private TextInputEditText etBusinessName, etOwnerName, etPhone, etEmail,
-            etAddress, etExperience, etCity, etDescription;
+            etAddress, etExperience, etCity, etDescription, etPincode;
     private AutoCompleteTextView actvServiceCategory;
+
+    // ── Location ──────────────────────────────────────────────────────────
+    private MaterialButton btnUseCurrentLocation;
+    private LinearLayout layoutLocationDisplay;
+    private TextView tvLocationLabel;
+    private double selectedLat = Double.NaN;
+    private double selectedLng = Double.NaN;
+    private AppLocationManager locationManager;
 
     // ── Upload — ID proof ─────────────────────────────────────────────────
     private LinearLayout idUploadZone, idUploadSuccess;
@@ -140,6 +156,7 @@ public class ProviderOnboardingActivity extends BaseActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_provider_onboarding);
+        locationManager = new AppLocationManager(this);
         setupToolbar();
         initViews();
         setupCategoryDropdown();
@@ -148,6 +165,7 @@ public class ProviderOnboardingActivity extends BaseActivity {
         setupTermsScroll();
         setupTermsCheckbox();
         setupSubmitButton();
+        setupLocationLogic();
         prefillEmail();
         animateScreenIn();
         // Check if user already has an active provider profile or pending application
@@ -210,6 +228,7 @@ public class ProviderOnboardingActivity extends BaseActivity {
         tilAddress         = findViewById(R.id.tilAddress);
         tilExperience      = findViewById(R.id.tilExperience);
         tilCity            = findViewById(R.id.tilCity);
+        tilPincode         = findViewById(R.id.tilPincode);
 
         etBusinessName     = findViewById(R.id.etBusinessName);
         etOwnerName        = findViewById(R.id.etOwnerName);
@@ -218,8 +237,13 @@ public class ProviderOnboardingActivity extends BaseActivity {
         etAddress          = findViewById(R.id.etAddress);
         etExperience       = findViewById(R.id.etExperience);
         etCity             = findViewById(R.id.etCity);
+        etPincode          = findViewById(R.id.etPincode);
         etDescription      = findViewById(R.id.etDescription);
         actvServiceCategory = findViewById(R.id.actvServiceCategory);
+
+        btnUseCurrentLocation = findViewById(R.id.btnUseCurrentLocation);
+        layoutLocationDisplay = findViewById(R.id.layoutLocationDisplay);
+        tvLocationLabel       = findViewById(R.id.tvLocationLabel);
 
         idUploadZone       = findViewById(R.id.idUploadZone);
         idUploadSuccess    = findViewById(R.id.idUploadSuccess);
@@ -382,23 +406,169 @@ public class ProviderOnboardingActivity extends BaseActivity {
         });
     }
 
+    private void setupLocationLogic() {
+        if (btnUseCurrentLocation != null) {
+            btnUseCurrentLocation.setOnClickListener(v -> {
+                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 100);
+                    return;
+                }
+                fetchLocation();
+            });
+        }
+    }
+
+    private void fetchLocation() {
+        showLoading(true);
+        locationManager.fetchLiveLocation(new AppLocationManager.LiveLocationCallback() {
+            @Override
+            public void onSuccess(String city, String area, double lat, double lng) {
+                runOnUiThread(() -> {
+                    showLoading(false);
+                    selectedLat = lat;
+                    selectedLng = lng;
+
+                    // Fetch detailed address components manually for better control
+                    try {
+                        Geocoder geocoder = new Geocoder(ProviderOnboardingActivity.this, Locale.getDefault());
+                        List<Address> addresses = geocoder.getFromLocation(lat, lng, 1);
+                        if (addresses != null && !addresses.isEmpty()) {
+                            Address addr = addresses.get(0);
+
+                            // 1. Auto-fill Pincode
+                            String pincode = addr.getPostalCode();
+                            if (pincode != null && pincode.length() == 6) {
+                                etPincode.setText(pincode);
+                                tilPincode.setError(null);
+                            }
+
+                            // 2. Auto-fill City
+                            if (city != null && !city.isEmpty()) {
+                                etCity.setText(city);
+                                tilCity.setError(null);
+                            }
+
+                            // 3. Auto-fill Business Address (Clean)
+                            // We construct a clean address without Plus Codes (alphanumeric mixed codes like 7JFC+VX)
+                            StringBuilder cleanAddress = new StringBuilder();
+                            
+                            // Get individual address lines instead of using addr.getFeatureName() which often contains the Plus Code
+                            int maxLines = addr.getMaxAddressLineIndex();
+                            for (int i = 0; i <= maxLines; i++) {
+                                String line = addr.getAddressLine(i);
+                                if (line == null) continue;
+                                
+                                // Regex to detect Plus Codes: e.g., 7JFC+VX Bangalore, Karnataka
+                                // Plus codes usually have a '+' at the 4th or 8th position and contain mixed alphanumeric
+                                if (line.contains("+") && line.split(" ").length > 0) {
+                                    // Try to strip the plus code part if it's at the start
+                                    String firstPart = line.split(" ")[0];
+                                    if (firstPart.contains("+") && firstPart.length() >= 7) {
+                                        line = line.substring(firstPart.length()).trim();
+                                    }
+                                }
+                                
+                                // Skip if the line still looks like a standalone plus code
+                                if (line.matches("^[A-Z0-9]{4}\\+[A-Z0-9]{2,}.*") || line.matches("^[A-Z0-9]{8}\\+.*")) {
+                                    continue; 
+                                }
+
+                                if (line.length() > 0) {
+                                    if (cleanAddress.length() > 0) cleanAddress.append(", ");
+                                    cleanAddress.append(line);
+                                }
+                            }
+
+                            String finalAddress = cleanAddress.toString();
+                            
+                            // Final safety check: remove any leading/trailing commas or leftover fragments
+                            finalAddress = finalAddress.replaceAll("^[ ,]+|[ ,]+$", "");
+                            
+                            if (finalAddress.isEmpty()) finalAddress = (area != null && !area.isEmpty()) ? area : city;
+
+                            etAddress.setText(finalAddress);
+                            tilAddress.setError(null);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Reverse geocode failed", e);
+                        if (!city.isEmpty()) etCity.setText(city);
+                        if (!area.isEmpty()) etAddress.setText(area);
+                    }
+
+                    if (layoutLocationDisplay != null) {
+                        layoutLocationDisplay.setVisibility(View.VISIBLE);
+                        // Display ONLY the place name (Area if available, otherwise City)
+                        String placeName = (area != null && !area.isEmpty()) ? area : city;
+                        tvLocationLabel.setText("Detected: " + (placeName.isEmpty() ? "Location" : placeName));
+                        animateFadeIn(layoutLocationDisplay);
+                    }
+                    Toast.makeText(ProviderOnboardingActivity.this, "Location detected!", Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            @Override
+            public void onFailure(String reason) {
+                runOnUiThread(() -> {
+                    showLoading(false);
+                    Toast.makeText(ProviderOnboardingActivity.this, "Location failed: " + reason, Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 100 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            fetchLocation();
+        }
+    }
+
     private void prefillEmail() {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user != null) {
-            if (user.getEmail() != null) etEmail.setText(user.getEmail());
-            // Pre-fill owner name: UserSession first, then Firebase fallback
-            String prefillName = !UserSession.name.isEmpty() ? UserSession.name
-                    : (user.getDisplayName() != null && !user.getDisplayName().isEmpty()
-                            ? user.getDisplayName() : "");
-            if (!prefillName.isEmpty())
-                etOwnerName.setText(prefillName);
-        }
-        // Email must be read-only — always pre-filled from account
+        if (user == null) return;
+
+        // 1. Email is always from Firebase and read-only
+        if (user.getEmail() != null) etEmail.setText(user.getEmail());
         etEmail.setFocusable(false);
         etEmail.setFocusableInTouchMode(false);
         etEmail.setClickable(false);
         etEmail.setCursorVisible(false);
         if (tilEmail != null) tilEmail.setFocusable(false);
+
+        // 2. Fetch Name from 'users' table in Supabase (Priority)
+        String uid = user.getUid();
+        SupabaseClient.fetchUserProfile(uid, new SupabaseClient.UserProfileCallback() {
+            @Override
+            public void onSuccess() {
+                runOnUiThread(() -> {
+                    // UserSession is updated by SupabaseClient.fetchUserProfile
+                    String dbName = UserSession.name;
+                    if (dbName != null && !dbName.trim().isEmpty()) {
+                        etOwnerName.setText(dbName);
+                        Log.d(TAG, "Prefilled name from Supabase: " + dbName);
+                    } else {
+                        fallbackFirebaseName(user);
+                    }
+                });
+            }
+
+            @Override
+            public void onError(String msg) {
+                Log.w(TAG, "Failed to fetch name from Supabase: " + msg);
+                runOnUiThread(() -> fallbackFirebaseName(user));
+            }
+        });
+    }
+
+    private void fallbackFirebaseName(FirebaseUser user) {
+        if (etOwnerName.getText().toString().isEmpty()) {
+            String fbName = user.getDisplayName();
+            if (fbName != null && !fbName.isEmpty()) {
+                etOwnerName.setText(fbName);
+                Log.d(TAG, "Prefilled name from Firebase fallback: " + fbName);
+            }
+        }
     }
 
     // ── Validation ────────────────────────────────────────────────────────
@@ -413,6 +583,7 @@ public class ProviderOnboardingActivity extends BaseActivity {
         String experience   = text(etExperience);
         String address      = text(etAddress);
         String city         = text(etCity);
+        String pincode      = text(etPincode);
 
         if (TextUtils.isEmpty(businessName) || businessName.length() < 2) {
             tilBusinessName.setError(TextUtils.isEmpty(businessName)
@@ -461,6 +632,10 @@ public class ProviderOnboardingActivity extends BaseActivity {
         if (TextUtils.isEmpty(city)) {
             tilCity.setError("City is required"); valid = false;
         } else tilCity.setError(null);
+
+        if (TextUtils.isEmpty(pincode) || pincode.length() < 6) {
+            tilPincode.setError("Enter 6 digit pincode"); valid = false;
+        } else tilPincode.setError(null);
 
         if (idProofUri == null) {
             tvIdError.setVisibility(View.VISIBLE);
@@ -619,6 +794,7 @@ public class ProviderOnboardingActivity extends BaseActivity {
         String category     = text(actvServiceCategory);
         String phone        = text(etPhone);
         String city         = text(etCity);
+        String pincode      = text(etPincode);
         String address      = text(etAddress);
         String description  = text(etDescription);
 
@@ -679,6 +855,13 @@ public class ProviderOnboardingActivity extends BaseActivity {
             return;
         } else { tilCity.setError(null); }
 
+        if (TextUtils.isEmpty(pincode) || pincode.length() < 6) {
+            showLoading(false);
+            tilPincode.setError("Pincode is required");
+            tilPincode.requestFocus();
+            return;
+        } else { tilPincode.setError(null); }
+
         if (TextUtils.isEmpty(address)) {
             showLoading(false);
             tilAddress.setError("Business address is required");
@@ -709,14 +892,14 @@ public class ProviderOnboardingActivity extends BaseActivity {
                 description,
                 address,
                 city,
-                "", // area not collected
-                "", // pincode not collected
-                address, // fullAddress (fallback to address)
+                "", // area
+                pincode,
+                address, // fullAddress
                 String.valueOf(experienceYrs),
                 bizImgUrl,
                 idProofUrl,
-                null, // latitude
-                null, // longitude
+                selectedLat,
+                selectedLng,
                 new ProviderApplicationRepository.Callback() {
                     @Override
                     public void onSuccess() {
