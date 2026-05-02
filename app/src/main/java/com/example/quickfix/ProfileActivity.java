@@ -91,7 +91,7 @@ public class ProfileActivity extends BaseActivity {
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result != null && result.getResultCode() == RESULT_OK) {
                     FirebaseUser user = mAuth != null ? mAuth.getCurrentUser() : null;
-                    if (user != null) loadUserDataFromSupabase(user);
+                    if (user != null) loadUserProfile(user);
                 }
             });
 
@@ -107,10 +107,21 @@ public class ProfileActivity extends BaseActivity {
 
         bindViews();
         applyLanguageFromPrefs();
-        prefillFromFirebase(user);
         setupTogglesFromPrefs();
         setupClickListeners();
-        loadUserDataFromSupabase(user);
+
+        // Prefill instantly from UserSession cache
+        applyUserSessionToUI();
+
+        // Authoritative load from DB, then refresh UI
+        loadUserProfile(user);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Refresh from latest UserSession (updated by ProfileDetailsActivity)
+        applyUserSessionToUI();
     }
 
     // ── Bind ──────────────────────────────────────────────────────────────
@@ -143,43 +154,89 @@ public class ProfileActivity extends BaseActivity {
         profileLoadingOverlay = findViewById(R.id.profileLoadingOverlay);
     }
 
-    // ── Pre-fill from Firebase (instant, no network) ──────────────────────
-    private void prefillFromFirebase(FirebaseUser user) {
-        String name  = user.getDisplayName();
-        String email = user.getEmail();
-        if (email != null) tvUserEmail.setText(email);
-        if (name != null && !name.isEmpty()) {
+    // ── Pre-fill from UserSession (instant, no network) ───────────────────
+    private void applyUserSessionToUI() {
+        // Name
+        String name = UserSession.name.isEmpty() ? "" : UserSession.name;
+        if (!name.isEmpty()) {
             tvUserName.setText(name);
             tvAvatarInitial.setText(String.valueOf(name.charAt(0)).toUpperCase());
         } else {
             tvUserName.setText(R.string.app_name);
             tvAvatarInitial.setText("U");
         }
-        applyRoleBadge("User");
-        applyAvatar(name, email, null);
+
+        // Email
+        if (!UserSession.email.isEmpty()) tvUserEmail.setText(UserSession.email);
+
+        // Image
+        cachedProfileImage = UserSession.image;
+        cachedProfileName  = name;
+        cachedProfileEmail = UserSession.email;
+        cachedProfilePhone = UserSession.phone;
+        applyAvatar(name, UserSession.email, UserSession.image);
+
+        // Role badge
+        String role = UserSession.role;
+        isAdmin    = "admin".equalsIgnoreCase(role);
+        isProvider = "provider".equalsIgnoreCase(role);
+        applyRoleBadge(isAdmin ? "Admin" : isProvider ? "Provider" : "User");
+        applyRoleVisibility();
     }
 
-    // ── Load user data from Supabase ──────────────────────────────────────
-    private void loadUserDataFromSupabase(FirebaseUser user) {
+    // ── Load authoritative data from DB via SupabaseClient ────────────────
+    private void loadUserProfile(FirebaseUser user) {
         showLoading(true);
-        final String uid   = user.getUid();
-        final String email = user.getEmail() != null ? user.getEmail() : "";
-
-        new Thread(() -> {
-            UserModel model = fetchUserRow(uid, email);
-            
-            // Check if user exists in provider_profiles
-            boolean hasProfile = checkProviderProfileExists(uid);
-            
-            MAIN.post(() -> { 
-                showLoading(false); 
-                if (model != null) {
-                    model.isServiceProvider = hasProfile;
-                    applyUserModel(model); 
+        SupabaseClient.fetchUserProfile(user.getUid(), new SupabaseClient.UserProfileCallback() {
+            @Override
+            public void onSuccess() {
+                showLoading(false);
+                applyUserSessionToUI();
+                // Check/update dark mode from user prefs
+                UserPreferenceManager.applyFromServer(
+                        ProfileActivity.this, user.getUid(),
+                        UserPreferenceManager.isDarkMode(ProfileActivity.this),
+                        UserPreferenceManager.getLanguageCode(ProfileActivity.this)
+                );
+                if (switchDarkMode != null) {
+                    switchDarkMode.setChecked(UserPreferenceManager.isDarkMode(ProfileActivity.this));
                 }
-            });
-            checkProviderApplication(uid);
-        }).start();
+                if (tvCurrentLanguage != null) {
+                    tvCurrentLanguage.setText(LocaleHelper.codeToDisplayName(
+                            UserPreferenceManager.getLanguageCode(ProfileActivity.this)));
+                }
+                // Check provider application status in background
+                new Thread(() -> checkProviderApplication(user.getUid())).start();
+            }
+
+            @Override
+            public void onError(String message) {
+                showLoading(false);
+                android.util.Log.d(TAG, "loadUserProfile fallback: " + message);
+            }
+        });
+    }
+
+    private void applyRoleVisibility() {
+        if (isAdmin) {
+            menuAdminDashboard.setVisibility(View.VISIBLE);
+            menuProviderDashboard.setVisibility(View.GONE);
+            menuListBusiness.setVisibility(View.GONE);
+            cardRoleDashboard.setVisibility(View.VISIBLE);
+        } else if (isProvider) {
+            menuAdminDashboard.setVisibility(View.GONE);
+            menuProviderDashboard.setVisibility(View.VISIBLE);
+            menuListBusiness.setVisibility(View.GONE);
+            cardRoleDashboard.setVisibility(View.VISIBLE);
+        } else {
+            menuAdminDashboard.setVisibility(View.GONE);
+            menuProviderDashboard.setVisibility(View.GONE);
+            menuListBusiness.setVisibility(View.VISIBLE);
+            cardRoleDashboard.setVisibility(View.GONE);
+        }
+        if (cardRoleDashboard.getVisibility() == View.VISIBLE) {
+            cardRoleDashboard.animate().alpha(1f).setDuration(300).start();
+        }
     }
 
     private boolean checkProviderProfileExists(String uid) {

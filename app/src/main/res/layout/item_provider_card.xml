@@ -23,13 +23,11 @@
         android:padding="10dp">
 
         <ImageView
-            android:id="@+id/ivBusinessImage"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:background="@drawable/bg_profile_header_gradient"
-            android:contentDescription="@string/cd_profile_photo"
+            android:id="@+id/imgProvider"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
             android:scaleType="centerCrop"
-            android:src="@drawable/bg_profile_header_gradient" />
+            android:background="@drawable/circle_bg"/>
 
         <LinearLayout
             android:layout_width="0dp"
@@ -58,6 +56,16 @@
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp"
                 tools:text="Plumbing" />
+
+            <TextView
+                android:id="@+id/tvLocation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                tools:text="Location" />
         </LinearLayout>
 
         <TextView
@@ -69,6 +77,13 @@
             android:textSize="13sp"
             android:visibility="gone"
             tools:text="⭐ 4.5" />
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_arrow_right"
+            android:layout_alignParentEnd="true"
+            app:tint="@color/text_secondary" />
 
     </LinearLayout>
 

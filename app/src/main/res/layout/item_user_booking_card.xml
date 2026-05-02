@@ -84,10 +84,11 @@
             android:id="@+id/tvTechnicianDetails"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
             android:layout_marginBottom="12dp"
             android:background="@drawable/bg_dashboard_card"
             android:padding="8dp"
-            android:text="Technician: -\nPhone: -"
+            android:text="Technician: -\nMobile: -"
             android:textColor="@color/text_primary"
             android:textSize="13sp"
             android:visibility="gone" />

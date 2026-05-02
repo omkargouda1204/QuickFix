@@ -259,23 +259,17 @@ public class ProviderDetailActivity extends BaseActivity {
         }
 
         if (ratingRow != null) {
-            ratingRow.setOnClickListener(v -> {
-                selectSection(SECTION_REVIEWS);
-                View reviewsCard = findViewById(R.id.cardRecentReviews);
-                NestedScrollView scroll = findViewById(R.id.providerDetailScroll);
-                if (scroll != null && reviewsCard != null) {
-                    scroll.post(() -> scroll.smoothScrollTo(0, reviewsCard.getTop()));
-                }
-            });
+            // Requirement 6: Clicking rating count should NOT open reviews page.
+            ratingRow.setOnClickListener(null);
         }
 
         // Phone
         LinearLayout rowPhone = findViewById(R.id.rowPhone);
-        if (phone != null && !phone.isEmpty()) {
-            rowPhone.setVisibility(View.VISIBLE);
-            setText(R.id.tvDetailPhone, phone);
+        if (rowPhone != null) rowPhone.setVisibility(View.VISIBLE);
+        if (phone == null || phone.isEmpty() || phone.equalsIgnoreCase("null") || phone.trim().isEmpty()) {
+            setText(R.id.tvDetailPhone, "Not available");
         } else {
-            rowPhone.setVisibility(View.GONE);
+            setText(R.id.tvDetailPhone, phone);
         }
 
         // Email
@@ -313,6 +307,11 @@ public class ProviderDetailActivity extends BaseActivity {
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
         if (currentUser == null) {
             Toast.makeText(this, getString(R.string.provider_detail_login_to_chat), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (isSelfBookingByUid(currentUser.getUid())) {
+            Toast.makeText(this, "You cannot message yourself.", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -375,10 +374,14 @@ public class ProviderDetailActivity extends BaseActivity {
         });
         etBookTime.setFocusable(false);
 
-        // Pre-fill address with provider city if available
-        if (providerCity != null && !providerCity.isEmpty()) {
-            etBookAddress.setText(providerCity);
+        // Pre-fill address from UserSession or saved location — strip any Plus Codes
+        String rawAddr = UserSession.address;
+        if (rawAddr == null || rawAddr.isEmpty()) {
+            AppLocationManager loc = new AppLocationManager(this);
+            rawAddr = loc.getSavedAddress();
         }
+        String userAddr = cleanLocationStr(rawAddr);
+        etBookAddress.setText(userAddr != null ? userAddr : "");
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(getString(R.string.provider_detail_dialog_title))
@@ -481,9 +484,14 @@ public class ProviderDetailActivity extends BaseActivity {
                 JSONObject bookingBody = new JSONObject();
                 bookingBody.put("customer_id", customerIdForInsert);
                 bookingBody.put("provider_id", providerIdForInsert);
-                bookingBody.put("customer_name", (customerMeta == null || customerMeta.name == null || customerMeta.name.isEmpty())
-                        ? getString(R.string.provider_detail_booking_customer_fallback) : customerMeta.name);
-                bookingBody.put("customer_phone", (customerMeta == null || customerMeta.phone == null) ? "" : customerMeta.phone);
+                // Use UserSession as single source of truth for customer name
+                String customerName = !UserSession.name.isEmpty() ? UserSession.name
+                        : (customerMeta != null && customerMeta.name != null && !customerMeta.name.isEmpty()
+                                ? customerMeta.name
+                                : getString(R.string.provider_detail_booking_customer_fallback));
+                bookingBody.put("customer_name", customerName);
+                bookingBody.put("customer_phone", !UserSession.phone.isEmpty() ? UserSession.phone
+                        : (customerMeta == null || customerMeta.phone == null ? "" : customerMeta.phone));
                 bookingBody.put("provider_name", providerName != null ? providerName : "");
                 String serviceId = normalizeUuidOrEmpty(serviceIdForBooking);
                 if (serviceId.isEmpty()) {
@@ -499,7 +507,12 @@ public class ProviderDetailActivity extends BaseActivity {
                 bookingBody.put("booking_date", date);
                 bookingBody.put("booking_time", normalizeBookingTime(time));
                 bookingBody.put("address", address);
-                bookingBody.put("city", providerCity != null ? providerCity : "");
+                String city = UserSession.city;
+                if (city == null || city.isEmpty()) {
+                    AppLocationManager loc = new AppLocationManager(ProviderDetailActivity.this);
+                    city = loc.getSavedCity();
+                }
+                bookingBody.put("city", city);
                 bookingBody.put("price", 0.0);
                 bookingBody.put("description", description != null ? description : "");
                 bookingBody.put("status", "pending");
@@ -578,10 +591,7 @@ public class ProviderDetailActivity extends BaseActivity {
                         + "?select=customer_name,rating,comment,created_at"
                         + "&order=created_at.desc&limit=5";
 
-                if (!providerId.isEmpty() && !firebaseUid.isEmpty() && !providerId.equals(firebaseUid)) {
-                    url += "&or=(provider_id.eq." + Uri.encode(providerId)
-                            + ",provider_id.eq." + Uri.encode(firebaseUid) + ")";
-                } else if (!providerId.isEmpty()) {
+                if (providerId != null && !providerId.trim().isEmpty()) {
                     url += "&provider_id=eq." + Uri.encode(providerId);
                 } else {
                     url += "&provider_id=eq." + Uri.encode(firebaseUid);
@@ -701,13 +711,10 @@ public class ProviderDetailActivity extends BaseActivity {
                         + "&order=display_order.asc,created_at.desc"
                         + "&limit=" + MAX_SHOWCASE_ITEMS;
 
-                if (!providerProfileId.isEmpty() && !providerUid.isEmpty() && !providerProfileId.equals(providerUid)) {
-                    url += "&or=(provider_id.eq." + Uri.encode(providerProfileId)
-                            + ",provider_id.eq." + Uri.encode(providerUid) + ")";
-                } else if (!providerUid.isEmpty()) {
-                    url += "&provider_id=eq." + Uri.encode(providerUid);
-                } else {
+                if (providerProfileId != null && !providerProfileId.trim().isEmpty()) {
                     url += "&provider_id=eq." + Uri.encode(providerProfileId);
+                } else {
+                    url += "&provider_id=eq." + Uri.encode(providerUid);
                 }
 
                 Request req = new Request.Builder().url(url)
@@ -1049,6 +1056,11 @@ public class ProviderDetailActivity extends BaseActivity {
 
     private String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private static String cleanLocationStr(String location) {
+        if (location == null) return "";
+        return location.replaceAll("[A-Z0-9+]{6,}", "").replace("-", "").trim();
     }
 
     private String normalizeBookingTime(String input) {

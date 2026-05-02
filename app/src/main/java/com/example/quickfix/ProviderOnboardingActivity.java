@@ -386,8 +386,12 @@ public class ProviderOnboardingActivity extends BaseActivity {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user != null) {
             if (user.getEmail() != null) etEmail.setText(user.getEmail());
-            if (user.getDisplayName() != null && !user.getDisplayName().isEmpty())
-                etOwnerName.setText(user.getDisplayName());
+            // Pre-fill owner name: UserSession first, then Firebase fallback
+            String prefillName = !UserSession.name.isEmpty() ? UserSession.name
+                    : (user.getDisplayName() != null && !user.getDisplayName().isEmpty()
+                            ? user.getDisplayName() : "");
+            if (!prefillName.isEmpty())
+                etOwnerName.setText(prefillName);
         }
         // Email must be read-only — always pre-filled from account
         etEmail.setFocusable(false);

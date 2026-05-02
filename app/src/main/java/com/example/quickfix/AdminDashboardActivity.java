@@ -555,17 +555,20 @@ public class AdminDashboardActivity extends BaseActivity {
     private void setupHeaderFromIntent() {
         FirebaseUser user = mAuth.getCurrentUser();
 
-        // Prefer displayName from Firebase (set during signup)
-        if (user != null) {
+        // Prefer UserSession (single source of truth)
+        if (!UserSession.name.isEmpty()) {
+            adminName = UserSession.name;
+        } else if (user != null) {
+            // Fallback chain: Firebase displayName → email prefix
             if (user.getDisplayName() != null && !user.getDisplayName().isEmpty()) {
                 adminName = user.getDisplayName();
             } else if (user.getEmail() != null) {
                 adminEmail = user.getEmail();
-                adminName  = user.getEmail().split("@")[0]; // fallback: part before @
+                adminName  = user.getEmail().split("@")[0];
             }
         }
 
-        // Allow override via Intent extra (e.g. passed from LoginActivity)
+        // Allow override via Intent extra
         String intentName = getIntent().getStringExtra("admin_name");
         if (intentName != null && !intentName.isEmpty()) {
             adminName = intentName;
@@ -709,38 +712,28 @@ public class AdminDashboardActivity extends BaseActivity {
         FirebaseUser user = mAuth.getCurrentUser();
         if (user == null) return;
 
-        String uid   = user.getUid();
-        String email = user.getEmail() != null ? user.getEmail() : "";
+        // If UserSession is already populated (from LoginActivity), use it directly
+        if (!UserSession.name.isEmpty()) {
+            adminName = UserSession.name;
+            applyAdminName(adminName);
+            return;
+        }
 
-        SupabaseClient.getUserRoleWithEmail(uid, email,
-                new SupabaseClient.RoleInfoCallback() {
-                    @Override
-                    public void onSuccess(SupabaseClient.RoleInfo info) {
-                        // Role info loaded — now fetch name via ApiClient
-                        ApiClient.getUserByEmail(email, new ApiClient.ApiCallback() {
-                            @Override
-                            public void onSuccess(org.json.JSONObject response) {
-                                String name = response.optString("full_name", "").trim();
-                                if (name.isEmpty()) name = response.optString("name", "").trim();
-
-                                if (!name.isEmpty()) {
-                                    adminName = name;
-                                    applyAdminName(adminName);
-                                    Log.d(TAG, "Admin name loaded: " + adminName);
-                                }
-                            }
-                            @Override
-                            public void onError(String errorMessage) {
-                                Log.w(TAG, "Could not load admin name: " + errorMessage);
-                                // Keep the name set from Firebase / Intent
-                            }
-                        });
-                    }
-                    @Override
-                    public void onError(String message) {
-                        Log.w(TAG, "Role check: " + message);
-                    }
-                });
+        // Otherwise fetch from DB and populate UserSession
+        SupabaseClient.fetchUserProfile(user.getUid(), new SupabaseClient.UserProfileCallback() {
+            @Override
+            public void onSuccess() {
+                if (!UserSession.name.isEmpty()) {
+                    adminName = UserSession.name;
+                    applyAdminName(adminName);
+                    Log.d(TAG, "Admin name loaded from user_profiles: " + adminName);
+                }
+            }
+            @Override
+            public void onError(String message) {
+                Log.w(TAG, "Could not load admin name: " + message);
+            }
+        });
     }
 
     // ── Load quick stats from Supabase ────────────────────────────────────

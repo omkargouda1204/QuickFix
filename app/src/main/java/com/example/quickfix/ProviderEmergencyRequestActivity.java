@@ -117,14 +117,14 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         if (isFinishing() || isDestroyed()) return;
 
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_technician_details, null);
-        EditText etDialogName = dialogView.findViewById(R.id.etDialogTechnicianName);
-        EditText etDialogPhone = dialogView.findViewById(R.id.etDialogTechnicianPhone);
+        EditText etDialogName = dialogView.findViewById(R.id.etDialogServicePersonName);
+        EditText etDialogPhone = dialogView.findViewById(R.id.etDialogServicePersonPhone);
 
         // Removed pre-fill since EditTexts are gone
 
         new AlertDialog.Builder(this)
-                .setTitle("Technician Details")
-                .setMessage("Please enter the details of the technician visiting the user.")
+                .setTitle("Service Person Details")
+                .setMessage("Please enter the details of the service person visiting the user.")
                 .setView(dialogView)
                 .setCancelable(false)
                 .setPositiveButton("Accept Request", (dialog, which) -> {
@@ -132,11 +132,11 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                     String tPhone = etDialogPhone.getText().toString().trim();
 
                     if (tName.isEmpty()) {
-                        showToast("Enter technician name");
+                        showToast("Enter service person name");
                         return;
                     }
-                    if (tPhone.isEmpty()) {
-                        showToast("Enter technician phone");
+                    if (!tPhone.matches("^[0-9]{10}$")) {
+                        showToast("Enter valid 10-digit mobile number");
                         return;
                     }
 
@@ -240,7 +240,8 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         setText(tvEmergencyUser, "User: " + fallback(request.optString("customer_name", ""), "Customer"));
         setText(tvEmergencyPhone, "Phone: " + fallback(request.optString("customer_phone", ""), "Not available"));
         setText(tvEmergencyCategory, "Category: " + fallback(request.optString("category", ""), "General"));
-        setText(tvEmergencyAddress, "Location: " + fallback(request.optString("address", ""), "Not available"));
+        String rawAddress = fallback(request.optString("address", ""), "Not available");
+        setText(tvEmergencyAddress, "Location: " + rawAddress.replaceAll("[A-Z0-9\\+]{6,}", "").trim());
         setText(tvEmergencyDescription, "Problem: " + fallback(request.optString("description", ""), "Not specified"));
 
         String status = safe(request.optString("status", "pending")).toLowerCase(Locale.getDefault());
@@ -258,7 +259,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 String tPhone = request.optString("technician_phone", "");
                 if (!tName.isEmpty() || !tPhone.isEmpty()) {
                     tvTechnicianDetails.setVisibility(View.VISIBLE);
-                    tvTechnicianDetails.setText("Technician: " + (tName.isEmpty() ? "-" : tName) + "\nPhone: " + (tPhone.isEmpty() ? "-" : tPhone));
+                    tvTechnicianDetails.setText("Technician: " + (tName.isEmpty() ? "-" : tName) + "\nMobile: " + (tPhone.isEmpty() ? "-" : tPhone));
                 }
             }
         } else {
@@ -313,17 +314,19 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             try {
                 JSONObject body = new JSONObject();
                 body.put("status", status);
+
                 if ("accepted".equals(status)) {
-                    body.put("provider_id", providerProfileId);
-                    body.put("provider_name", fallback(providerName, "Provider"));
-                    if (technicianName != null && !technicianName.isEmpty()) {
-                        body.put("technician_name", technicianName);
-                    }
-                    if (technicianPhone != null && !technicianPhone.isEmpty()) {
+                    // ✅ Only include columns that exist in the bookings table
+                    body.put("provider_id",     providerProfileId);
+                    body.put("provider_name",   fallback(providerName, "Provider"));
+                    if (technicianName  != null && !technicianName.isEmpty())
+                        body.put("technician_name",  technicianName);
+                    if (technicianPhone != null && !technicianPhone.isEmpty())
                         body.put("technician_phone", technicianPhone);
-                    }
+                    // ❌ DO NOT send: provider_phone, user_id, latitude, area
                 }
 
+                // PATCH only the pending row to prevent race conditions
                 String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
                         + "?id=eq." + urlEncode(requestId)
                         + "&status=eq.pending";
@@ -331,19 +334,26 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 Request.Builder rb = new Request.Builder()
                         .url(url)
                         .patch(RequestBody.create(body.toString(), JSON))
-                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Content-Type", "application/json")
-                        .addHeader("Prefer", "return=representation");
+                        .addHeader("Content-Type",  "application/json")
+                        .addHeader("Prefer",        "return=representation");
                 Request request = rb.build();
 
                 try (Response response = http.newCall(request).execute()) {
                     String rawBody = response.body() != null ? response.body().string() : "[]";
                     if (!response.isSuccessful()) {
-                        throw new Exception("HTTP " + response.code() + " " + rawBody);
+                        Log.e(TAG, "PATCH failed HTTP " + response.code() + " body=" + rawBody);
+                        runOnUiThread(() -> {
+                            setLoading(false);
+                            showToast("Error " + response.code() + ": " + rawBody);
+                        });
+                        return;
                     }
 
                     JSONArray updatedRows = new JSONArray(rawBody);
+
+                    // Race condition: another provider already accepted
                     if (updatedRows.length() == 0 && "accepted".equals(status)) {
                         runOnUiThread(() -> {
                             setLoading(false);
@@ -359,24 +369,46 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                         rejectedByCurrentProvider = false;
                     }
 
+                    // Send FCM notifications
                     if (updatedRows.length() > 0) {
-                        String customerId = updatedRows.getJSONObject(0).optString("customer_id", "");
-                        notifyUser(customerId, status);
+                        JSONObject updatedBooking = updatedRows.getJSONObject(0);
+                        String customerId   = updatedBooking.optString("customer_id", "");
+                        String category     = updatedBooking.optString("category", "");
+                        String customerName = updatedBooking.optString("customer_name", "Customer");
+
+                        if ("accepted".equals(status)) {
+                            // Notify the USER their emergency was accepted
+                            notifyUserBookingUpdate(
+                                    customerId,
+                                    "🔧 Provider On the Way!",
+                                    "Your emergency request for " + fallback(category, "service") +
+                                    " has been accepted. Technician: " + fallback(technicianName, providerName),
+                                    requestId
+                            );
+                        } else if ("cancelled".equals(status)) {
+                            // Notify the USER their request was rejected (provider declined)
+                            notifyUserBookingUpdate(
+                                    customerId,
+                                    "Request Declined",
+                                    "A provider declined your emergency request. We are looking for another...",
+                                    requestId
+                            );
+                        }
                     }
 
                     upsertProviderResponse(status);
 
                     runOnUiThread(() -> {
                         setLoading(false);
-                        showToast("Booking " + status);
+                        showToast("accepted".equals(status) ? "Request Accepted!" : "Request Declined");
                         if ("cancelled".equals(status)) {
                             finish();
-                        } else {
-                            if (updatedRows.length() > 0) {
-                                try {
-                                    bindRequest(updatedRows.getJSONObject(0));
-                                    updateAcceptStateFromStatus(updatedRows.getJSONObject(0));
-                                } catch (Exception ignored) {}
+                        } else if (updatedRows.length() > 0) {
+                            try {
+                                bindRequest(updatedRows.getJSONObject(0));
+                                updateAcceptStateFromStatus(updatedRows.getJSONObject(0));
+                            } catch (Exception e) {
+                                Log.e(TAG, "Error binding updated request", e);
                             }
                         }
                     });
@@ -385,7 +417,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 Log.e(TAG, "updateBookingStatus failed", e);
                 runOnUiThread(() -> {
                     setLoading(false);
-                    showToast("Could not update booking status.");
+                    showToast("Could not update booking status: " + e.getMessage());
                 });
             }
         }).start();
@@ -478,29 +510,41 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         }
     }
 
-    private void notifyUser(String customerId, String status) {
-        if (TextUtils.isEmpty(customerId)) return;
+    /**
+     * Notify user (customer) of booking status change via Supabase Edge Function.
+     * Uses the user's Supabase ID (customer_id column in bookings).
+     */
+    private void notifyUserBookingUpdate(String customerId, String title, String messageBody, String bookingId) {
+        if (TextUtils.isEmpty(customerId)) {
+            Log.w(TAG, "notifyUserBookingUpdate: customerId is empty, skipping");
+            return;
+        }
 
         new Thread(() -> {
             try {
-                JSONObject body = new JSONObject();
-                body.put("user_id", customerId);
-                body.put("type", "booking_update");
-                body.put("title", "Booking Update");
-                body.put("body", "Your emergency request has been " + status.toUpperCase(Locale.US));
+                JSONObject payload = new JSONObject();
+                payload.put("user_id",    customerId);       // resolved against users.id
+                payload.put("type",       "booking_update");
+                payload.put("title",      title);
+                payload.put("body",       messageBody);
+                payload.put("booking_id", bookingId);
+                payload.put("reference_id", bookingId);
 
                 String url = BuildConfig.SUPABASE_URL + "/functions/v1/send-notification";
                 Request request = new Request.Builder()
                         .url(url)
-                        .post(RequestBody.create(body.toString(), JSON))
-                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .post(RequestBody.create(payload.toString(), JSON))
+                        .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Content-Type",  "application/json")
                         .build();
 
-                http.newCall(request).execute().close();
+                try (Response r = http.newCall(request).execute()) {
+                    String rb = r.body() != null ? r.body().string() : "";
+                    Log.d(TAG, "notifyUserBookingUpdate HTTP " + r.code() + " " + rb);
+                }
             } catch (Exception e) {
-                Log.e(TAG, "Failed to notify user: " + e.getMessage());
+                Log.e(TAG, "notifyUserBookingUpdate failed: " + e.getMessage());
             }
         }).start();
     }
@@ -554,10 +598,6 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     private String buildProviderOrFilter() {
         String profile = urlEncode(providerProfileId);
         String firebase = urlEncode(providerFirebaseUid);
-        if (!TextUtils.isEmpty(providerProfileId) && !TextUtils.isEmpty(providerFirebaseUid)
-                && !providerProfileId.equals(providerFirebaseUid)) {
-            return "or=(provider_id.eq." + profile + ",provider_id.eq." + firebase + ")";
-        }
         if (!TextUtils.isEmpty(providerProfileId)) {
             return "provider_id=eq." + profile;
         }
@@ -567,10 +607,6 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     private String buildProviderAndNotFilter() {
         String profile = urlEncode(providerProfileId);
         String firebase = urlEncode(providerFirebaseUid);
-        if (!TextUtils.isEmpty(providerProfileId) && !TextUtils.isEmpty(providerFirebaseUid)
-                && !providerProfileId.equals(providerFirebaseUid)) {
-            return "and=(provider_id.neq." + profile + ",provider_id.neq." + firebase + ")";
-        }
         if (!TextUtils.isEmpty(providerProfileId)) {
             return "provider_id=neq." + profile;
         }

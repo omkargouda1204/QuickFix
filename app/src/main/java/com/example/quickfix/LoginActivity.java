@@ -505,21 +505,11 @@ public class LoginActivity extends BaseActivity {
                         // Always refresh FCM token on login and upsert latest token to DB.
                         syncFcmTokenOnLogin(firebaseUid);
 
-                        // ── Priority routing ──────────────────────────────────
-                        final Intent target;
-                        if (info.isAdmin) {
-                            Log.d(TAG, "→ AdminDashboardActivity");
-                            target = new Intent(LoginActivity.this, AdminDashboardActivity.class);
-                        } else if (info.isServiceProvider) {
-                            Log.d(TAG, "→ ProviderDashboardActivity");
-                            target = new Intent(LoginActivity.this, ProviderDashboardActivity.class);
-                        } else {
-                            Log.d(TAG, "→ MainActivity");
-                            target = new Intent(LoginActivity.this, MainActivity.class);
-                        }
-                        target.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                        startActivity(target);
-                        finish();
+                        // Fetch user profile into UserSession before navigating
+                        SupabaseClient.fetchUserProfile(firebaseUid, new SupabaseClient.UserProfileCallback() {
+                            @Override public void onSuccess() { navigateByRole(info, firebaseUid); }
+                            @Override public void onError(String msg) { navigateByRole(info, firebaseUid); }
+                        });
                     }
 
                     @Override
@@ -578,6 +568,24 @@ public class LoginActivity extends BaseActivity {
         } catch (Exception e) {
             Log.w(TAG, "syncFcmTokenOnLogin exception: " + e.getMessage());
         }
+    }
+
+    private void navigateByRole(SupabaseClient.RoleInfo info, String firebaseUid) {
+        if (isFinishing()) return;
+        final Intent target;
+        if (info.isAdmin) {
+            Log.d(TAG, "→ AdminDashboardActivity");
+            target = new Intent(LoginActivity.this, AdminDashboardActivity.class);
+        } else if (info.isServiceProvider) {
+            Log.d(TAG, "→ ProviderDashboardActivity");
+            target = new Intent(LoginActivity.this, ProviderDashboardActivity.class);
+        } else {
+            Log.d(TAG, "→ MainActivity");
+            target = new Intent(LoginActivity.this, MainActivity.class);
+        }
+        target.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(target);
+        finish();
     }
 
     // ══════════════════════════════════════════════════════════════════════

@@ -7,7 +7,8 @@ public class UserSession {
     public static String role = "user";
     public static String email = "";
     public static String phone = "";
-
+    public static String address = "";
+    public static String city = "";
     public static void clear() {
         id = "";
         name = "";
@@ -15,5 +16,7 @@ public class UserSession {
         role = "user";
         email = "";
         phone = "";
+        address = "";
+        city = "";
     }
 }

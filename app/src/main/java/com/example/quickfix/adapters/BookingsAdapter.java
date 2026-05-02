@@ -71,7 +71,7 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
     }
 
     class BookingViewHolder extends RecyclerView.ViewHolder {
-        TextView tvCustomerName, tvServiceName, tvDateTime, tvAddress, tvPrice, tvStatus;
+        TextView tvCustomerName, tvServiceName, tvDateTime, tvAddress, tvPrice, tvStatus, tvTechnicianDetails;
         MaterialButton btnAccept, btnReject, btnMarkCompleted, btnCall, btnMessage;
         MaterialButton btnSetPrice;
         EditText etSetAmount;
@@ -88,6 +88,7 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
             tvAddress = itemView.findViewById(R.id.tvAddress);
             tvPrice = itemView.findViewById(R.id.tvPrice);
             tvStatus = itemView.findViewById(R.id.tvStatus);
+            tvTechnicianDetails = itemView.findViewById(R.id.tvTechnicianDetails);
             btnAccept = itemView.findViewById(R.id.btnAccept);
             btnReject = itemView.findViewById(R.id.btnReject);
             btnMarkCompleted = itemView.findViewById(R.id.btnMarkCompleted);
@@ -107,11 +108,24 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
             }
             tvServiceName.setText(serviceTitle);
             tvDateTime.setText(booking.bookingDate + " • " + booking.bookingTime);
-            tvAddress.setText(booking.address.isEmpty() ? "No address" : booking.address);
+            tvAddress.setText(booking.address.isEmpty() ? "No address" : cleanLocation(booking.address));
             double shownAmount = booking.paymentAmount > 0 ? booking.paymentAmount : booking.price;
             tvPrice.setText("Amount: ₹" + String.format(Locale.US, "%.0f", shownAmount));
             String status = booking.status == null ? "" : booking.status.trim().toLowerCase(Locale.US);
             tvStatus.setText(formatStatus(status));
+
+            // Service Person Details
+            if (("accepted".equals(status) || "price_set".equals(status) || "paid".equals(status) || "completed".equals(status)) 
+                    && (booking.technicianName != null && !booking.technicianName.isEmpty() || booking.technicianPhone != null && !booking.technicianPhone.isEmpty())) {
+                if (tvTechnicianDetails != null) {
+                    tvTechnicianDetails.setVisibility(View.VISIBLE);
+                    String tName = (booking.technicianName == null || booking.technicianName.isEmpty()) ? "-" : booking.technicianName;
+                    String tPhone = (booking.technicianPhone == null || booking.technicianPhone.isEmpty()) ? "-" : booking.technicianPhone;
+                    tvTechnicianDetails.setText("Technician: " + tName + "\nMobile: " + tPhone);
+                }
+            } else {
+                if (tvTechnicianDetails != null) tvTechnicianDetails.setVisibility(View.GONE);
+            }
 
             // Status badge color
             switch (status) {
@@ -245,6 +259,11 @@ public class BookingsAdapter extends RecyclerView.Adapter<BookingsAdapter.Bookin
                     context.startActivity(intent);
                 }
             });
+        }
+
+        private String cleanLocation(String address) {
+            if (address == null) return "";
+            return address.replaceAll("[A-Z0-9\\+]{6,}", "").trim();
         }
 
         private String formatStatus(String status) {

@@ -299,32 +299,43 @@ public class EmergencyHelpActivity extends BaseActivity {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) { finish(); return; }
         currentUserId = user.getUid();
-        currentUserName = user.getDisplayName() == null ? "" : user.getDisplayName().trim();
-        currentUserPhone = user.getPhoneNumber() == null ? "" : user.getPhoneNumber().trim();
+
+        // Use UserSession as single source of truth
+        currentUserName  = !UserSession.name.isEmpty()  ? UserSession.name  : "";
+        currentUserPhone = !UserSession.phone.isEmpty() ? UserSession.phone : "";
+
+        // Fallback to Firebase if UserSession not yet populated
+        if (currentUserName.isEmpty()) {
+            currentUserName = user.getDisplayName() == null ? "" : user.getDisplayName().trim();
+        }
+        if (currentUserPhone.isEmpty()) {
+            currentUserPhone = user.getPhoneNumber() == null ? "" : user.getPhoneNumber().trim();
+        }
         if (currentUserName.isEmpty()) currentUserName = "Member";
 
         tvName.setText("User: " + currentUserName);
         tvPhone.setText("Phone: " + (currentUserPhone.isEmpty() ? "Loading..." : currentUserPhone));
 
-        UserRepository.fetchUserByUid(user.getUid(), new UserRepository.UserCallback() {
-            @Override
-            public void onSuccess(UserModel userModel) {
-                if (userModel == null) return;
-                if (!TextUtils.isEmpty(userModel.name)) {
-                    currentUserName = userModel.name.trim();
-                    tvName.setText("User: " + currentUserName);
+        // If UserSession is empty, fetch from DB
+        if (UserSession.name.isEmpty()) {
+            SupabaseClient.fetchUserProfile(user.getUid(), new SupabaseClient.UserProfileCallback() {
+                @Override
+                public void onSuccess() {
+                    if (!UserSession.name.isEmpty()) {
+                        currentUserName = UserSession.name;
+                        tvName.setText("User: " + currentUserName);
+                    }
+                    if (!UserSession.phone.isEmpty()) {
+                        currentUserPhone = UserSession.phone;
+                        tvPhone.setText("Phone: " + currentUserPhone);
+                    }
                 }
-                if (!TextUtils.isEmpty(userModel.phone)) {
-                    currentUserPhone = userModel.phone.trim();
-                    tvPhone.setText("Phone: " + currentUserPhone);
+                @Override
+                public void onError(String msg) {
+                    Log.d(TAG, "EmergencyHelp profile fallback: " + msg);
                 }
-            }
-
-            @Override
-            public void onError(String msg) {
-                Log.d(TAG, "Using Firebase auth profile fallback: " + msg);
-            }
-        });
+            });
+        }
     }
 
     private void submitEmergencyRequest() {
@@ -377,6 +388,20 @@ public class EmergencyHelpActivity extends BaseActivity {
                 }
                 if (selectedLat == 0.0 && selectedLng == 0.0) {
                     throw new IllegalStateException("Location appears to be (0,0) — GPS not ready. Please wait or select location manually.");
+                }
+
+                // Requirement 8: Do NOT create emergency booking if no provider exists.
+                List<NearbyProvider> nearbyProviders = fetchNearbyProviders(category);
+                if (nearbyProviders == null || nearbyProviders.isEmpty()) {
+                    runOnUiThread(() -> {
+                        setLoading(false);
+                        isSubmitting = false;
+                        btnSubmit.setEnabled(true);
+                        btnSubmit.setAlpha(1f);
+                        setStatus("✗ No provider available");
+                        Toast.makeText(this, "No provider available in your area for this service.", Toast.LENGTH_LONG).show();
+                    });
+                    return;
                 }
 
                 // Build request payload

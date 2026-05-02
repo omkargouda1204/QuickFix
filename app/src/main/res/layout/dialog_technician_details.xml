@@ -8,11 +8,11 @@
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Technician Name"
+        android:hint="Service Person Name"
         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
         <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/etDialogTechnicianName"
+            android:id="@+id/etDialogServicePersonName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="textPersonName" />
@@ -22,11 +22,11 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:hint="Technician Phone"
+        android:hint="Service Person Mobile"
         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
         <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/etDialogTechnicianPhone"
+            android:id="@+id/etDialogServicePersonPhone"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="phone" />

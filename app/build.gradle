@@ -144,7 +144,7 @@ dependencies {
     implementation 'com.tbuonomo:dotsindicator:5.1.0'
 
     // ML Kit Image Labeling for on-device image analysis
-    implementation 'com.google.mlkit:image-labeling:17.0.8'
+    implementation 'com.google.mlkit:image-labeling:17.0.9'
 
     implementation libs.appcompat
     implementation libs.material

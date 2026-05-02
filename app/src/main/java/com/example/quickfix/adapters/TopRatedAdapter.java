@@ -69,13 +69,14 @@ public class TopRatedAdapter extends RecyclerView.Adapter<TopRatedAdapter.VH> {
         // - Default: show rating and bookings where available
         if ("TopRated".equalsIgnoreCase(displayMode)) {
             if (h.tvBookings != null) h.tvBookings.setVisibility(View.GONE);
+            h.ratingContainer.setVisibility(View.VISIBLE);
             h.tvRating.setVisibility(View.VISIBLE);
             h.tvRating.setText(String.format(java.util.Locale.US, "%.1f", p.rating));
             h.tvDistance.setVisibility(View.GONE);
         } else if ("TopBooked".equalsIgnoreCase(displayMode)) {
-            // Minimal profile card — hide rating, bookings and distance
+            // Minimal profile card — hide rating (with star) and bookings
             if (h.tvBookings != null) h.tvBookings.setVisibility(View.GONE);
-            h.tvRating.setVisibility(View.GONE);
+            h.ratingContainer.setVisibility(View.GONE);
             h.tvDistance.setVisibility(View.GONE);
         } else {
             // Default behavior
@@ -83,6 +84,8 @@ public class TopRatedAdapter extends RecyclerView.Adapter<TopRatedAdapter.VH> {
                 h.tvBookings.setText(ctx.getString(R.string.bookings_count_suffix, p.totalBookings));
                 h.tvBookings.setVisibility(View.VISIBLE);
             }
+            h.ratingContainer.setVisibility(View.VISIBLE);
+            h.tvRating.setVisibility(View.VISIBLE);
             h.tvRating.setText(String.format(java.util.Locale.US, "%.1f", p.rating));
             if (!Double.isNaN(userLat) && !Double.isNaN(userLng) && !Double.isNaN(p.latitude) && !Double.isNaN(p.longitude)) {
                 double dist = calculateDistance(userLat, userLng, p.latitude, p.longitude);
@@ -109,6 +112,7 @@ public class TopRatedAdapter extends RecyclerView.Adapter<TopRatedAdapter.VH> {
     public static class VH extends RecyclerView.ViewHolder {
         ImageView ivProfile;
         TextView tvName, tvCategory, tvRating, tvDistance, tvBookings;
+        View ratingContainer;
 
         VH(View v) {
             super(v);
@@ -118,6 +122,7 @@ public class TopRatedAdapter extends RecyclerView.Adapter<TopRatedAdapter.VH> {
             tvRating = v.findViewById(R.id.tvProviderRating);
             tvDistance = v.findViewById(R.id.tvProviderDistance);
             tvBookings = v.findViewById(R.id.tvProviderBookings);
+            ratingContainer = v.findViewById(R.id.ratingContainer);
         }
     }
 

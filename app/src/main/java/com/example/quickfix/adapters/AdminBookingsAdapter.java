@@ -70,7 +70,7 @@ public class AdminBookingsAdapter
             if (!tName.isEmpty() || !tPhone.isEmpty()) {
                 h.tvTechnicianDetails.setVisibility(View.VISIBLE);
                 h.tvTechnicianDetails.setText("👷 Technician: " + (tName.isEmpty() ? "-" : tName) 
-                        + "\n📞 Phone: " + (tPhone.isEmpty() ? "-" : tPhone));
+                        + "\n📞 Mobile: " + (tPhone.isEmpty() ? "-" : tPhone));
             } else {
                 h.tvTechnicianDetails.setVisibility(View.GONE);
             }
@@ -86,7 +86,8 @@ public class AdminBookingsAdapter
                 ? String.format(Locale.getDefault(), "₹%.0f", b.price) : "—");
 
         // Address
-        h.tvAddress.setText(nonEmpty(b.address, nonEmpty(b.city, "No address")));
+        String rawAddress = nonEmpty(b.address, nonEmpty(b.city, "No address"));
+        h.tvAddress.setText(rawAddress.replaceAll("[A-Z0-9\\+]{6,}", "").trim());
         h.tvCity.setText("City: " + nonEmpty(b.city, "-"));
         h.tvRating.setText(b.reviewRating > 0
                 ? String.format(Locale.US, "Rating: %.1f / 5", (double) b.reviewRating)

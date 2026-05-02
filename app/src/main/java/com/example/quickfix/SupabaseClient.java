@@ -274,46 +274,132 @@ public class SupabaseClient {
     // ══════════════════════════════════════════════════════════════════════
     //  FETCH USER PROFILE (GLOBAL STATE)
     // ══════════════════════════════════════════════════════════════════════
-    public static void fetchUserProfile(String userId, UserProfileCallback callback) {
-        if (userId == null || userId.trim().isEmpty()) {
+    public static void fetchUserProfile(String firebaseUid, UserProfileCallback callback) {
+        if (firebaseUid == null || firebaseUid.trim().isEmpty()) {
             if (callback != null) MAIN.post(() -> callback.onError("User ID is empty"));
             return;
         }
 
         new Thread(() -> {
             try {
-                String encodedId = java.net.URLEncoder.encode(userId.trim(), "UTF-8");
-                String url = SUPABASE_URL + "/rest/v1/user_profiles?id=eq." + encodedId + "&limit=1";
-                
-                Request request = new Request.Builder()
-                        .url(url).get()
+                String encodedUid = java.net.URLEncoder.encode(firebaseUid.trim(), "UTF-8");
+
+                // Step 1: Try user_profiles directly by id (works if user_profiles.id == firebase_uid or UUID)
+                // First try querying users table to get the row with full_name/role
+                String usersUrl = SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + encodedUid
+                        + "&select=id,full_name,name,email,phone,profile_image,role,is_admin,is_service_provider&limit=1";
+
+                Request usersReq = new Request.Builder()
+                        .url(usersUrl).get()
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)
                         .addHeader("Accept", "application/json")
                         .build();
 
-                try (Response r = HTTP.newCall(request).execute()) {
+                try (Response r = HTTP.newCall(usersReq).execute()) {
                     String body = r.body() != null ? r.body().string() : "[]";
                     if (r.code() == 200) {
                         org.json.JSONArray arr = new org.json.JSONArray(body);
                         if (arr.length() > 0) {
                             JSONObject o = arr.getJSONObject(0);
-                            UserSession.id = o.optString("id", "");
+                            UserSession.id = o.optString("id", firebaseUid);
+                            String fullName = o.optString("full_name", "");
+                            if (fullName.isEmpty()) fullName = o.optString("name", "");
+                            UserSession.name = fullName;
+                            UserSession.email = o.optString("email", "");
+                            UserSession.phone = o.optString("phone", "");
+                            UserSession.image = o.optString("profile_image", "");
+                            String role = o.optString("role", "");
+                            if (role.isEmpty()) {
+                                if (o.optBoolean("is_admin", false)) role = "admin";
+                                else if (o.optBoolean("is_service_provider", false)) role = "provider";
+                                else role = "user";
+                            }
+                            UserSession.role = role;
+                            if (callback != null) MAIN.post(callback::onSuccess);
+                            return;
+                        }
+                    }
+                }
+
+                // Step 2: If not found in users, try user_profiles by id=firebaseUid
+                String profileUrl = SUPABASE_URL + "/rest/v1/user_profiles?id=eq." + encodedUid + "&limit=1";
+                Request profileReq = new Request.Builder()
+                        .url(profileUrl).get()
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
+                try (Response r = HTTP.newCall(profileReq).execute()) {
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    if (r.code() == 200) {
+                        org.json.JSONArray arr = new org.json.JSONArray(body);
+                        if (arr.length() > 0) {
+                            JSONObject o = arr.getJSONObject(0);
+                            UserSession.id = o.optString("id", firebaseUid);
                             UserSession.name = o.optString("full_name", "");
                             UserSession.email = o.optString("email", "");
                             UserSession.phone = o.optString("phone", "");
                             UserSession.image = o.optString("profile_image", "");
                             UserSession.role = o.optString("role", "user");
                             if (callback != null) MAIN.post(callback::onSuccess);
-                        } else {
-                            if (callback != null) MAIN.post(() -> callback.onError("Profile not found"));
+                            return;
                         }
-                    } else {
-                        if (callback != null) MAIN.post(() -> callback.onError("HTTP " + r.code()));
                     }
                 }
+
+                if (callback != null) MAIN.post(() -> callback.onError("Profile not found"));
             } catch (Exception e) {
+                Log.e(TAG, "fetchUserProfile exception: " + e.getMessage());
                 if (callback != null) MAIN.post(() -> callback.onError("Error: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    /**
+     * Save profile image URL to both users and user_profiles tables.
+     */
+    public static void updateProfileImage(String firebaseUid, String imageUrl, Callback2 callback) {
+        new Thread(() -> {
+            try {
+                JSONObject patch = new JSONObject();
+                patch.put("profile_image", imageUrl);
+
+                String encodedUid = java.net.URLEncoder.encode(firebaseUid.trim(), "UTF-8");
+
+                // Update users table
+                Request req1 = new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + encodedUid)
+                        .patch(RequestBody.create(patch.toString(), JSON_TYPE))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
+                        .build();
+                try (Response r = HTTP.newCall(req1).execute()) {
+                    Log.d(TAG, "updateProfileImage users HTTP " + r.code());
+                }
+
+                // Also update user_profiles table
+                String userId = UserSession.id.isEmpty() ? firebaseUid : UserSession.id;
+                Request req2 = new Request.Builder()
+                        .url(SUPABASE_URL + "/rest/v1/user_profiles?id=eq." + java.net.URLEncoder.encode(userId, "UTF-8"))
+                        .patch(RequestBody.create(patch.toString(), JSON_TYPE))
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
+                        .build();
+                try (Response r = HTTP.newCall(req2).execute()) {
+                    Log.d(TAG, "updateProfileImage user_profiles HTTP " + r.code());
+                }
+
+                UserSession.image = imageUrl;
+                if (callback != null) MAIN.post(callback::onSuccess);
+            } catch (Exception e) {
+                Log.w(TAG, "updateProfileImage exception: " + e.getMessage());
+                if (callback != null) MAIN.post(() -> callback.onError(e.getMessage()));
             }
         }).start();
     }
@@ -654,6 +740,7 @@ public class SupabaseClient {
                 upsertFcmTokenRow(firebaseUid, fcmToken);
                 mirrorFcmTokenToUsers(firebaseUid, fcmToken);
                 mirrorFcmTokenToProviderProfiles(firebaseUid, fcmToken);
+                mirrorFcmTokenToUserProfiles(firebaseUid, fcmToken); // ✅ ensures Edge Function can find token
             } catch (Exception e) {
                 Log.w(TAG, "saveFcmToken (non-fatal): " + e.getMessage());
             }
@@ -724,6 +811,58 @@ public class SupabaseClient {
             }
         } catch (Exception e) {
             Log.w(TAG, "mirrorFcmTokenToProviderProfiles failed (non-fatal): " + e.getMessage());
+        }
+    }
+
+    /**
+     * Mirror the FCM token to user_profiles so the Edge Function can find it
+     * by looking up users.id (Supabase UUID) → user_profiles.id.
+     */
+    private static void mirrorFcmTokenToUserProfiles(String firebaseUid, String fcmToken) {
+        try {
+            // First resolve Supabase UUID from firebase_uid
+            String url = SUPABASE_URL + "/rest/v1/users"
+                    + "?firebase_uid=eq." + firebaseUid
+                    + "&select=id&limit=1";
+            Request resolveReq = new Request.Builder()
+                    .url(url)
+                    .get()
+                    .addHeader("apikey",        ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Accept",        "application/json")
+                    .build();
+
+            String supabaseUuid = "";
+            try (Response r = HTTP.newCall(resolveReq).execute()) {
+                String body = r.body() != null ? r.body().string() : "[]";
+                if (r.code() == 200) {
+                    org.json.JSONArray arr = new org.json.JSONArray(body);
+                    if (arr.length() > 0) supabaseUuid = arr.getJSONObject(0).optString("id", "");
+                }
+            }
+
+            if (supabaseUuid.isEmpty()) {
+                Log.d(TAG, "mirrorFcmTokenToUserProfiles: supabase UUID not found for " + firebaseUid);
+                return;
+            }
+
+            JSONObject patch = new JSONObject();
+            patch.put("fcm_token", fcmToken);
+
+            Request patchReq = new Request.Builder()
+                    .url(SUPABASE_URL + "/rest/v1/user_profiles?id=eq." + supabaseUuid)
+                    .patch(RequestBody.create(patch.toString(), JSON_TYPE))
+                    .addHeader("apikey",        ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type",  "application/json")
+                    .addHeader("Prefer",        "return=minimal")
+                    .build();
+
+            try (Response r = HTTP.newCall(patchReq).execute()) {
+                Log.d(TAG, "mirrorFcmTokenToUserProfiles HTTP " + r.code() + " uuid=" + supabaseUuid);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "mirrorFcmTokenToUserProfiles failed (non-fatal): " + e.getMessage());
         }
     }
 

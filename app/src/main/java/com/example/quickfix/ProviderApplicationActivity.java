@@ -223,16 +223,25 @@ public class ProviderApplicationActivity extends BaseActivity {
     }
 
     private void prefillFromSupabase(FirebaseUser user) {
-        UserRepository.fetchUserByUid(user.getUid(), new UserRepository.UserCallback() {
+        // Prefer UserSession (single source of truth)
+        if (!UserSession.name.isEmpty()) {
+            etOwnerName.setText(UserSession.name);
+            updateStepIndicators(1);
+            return;
+        }
+        // Fallback: fetch from users table, then Firebase displayName
+        SupabaseClient.fetchUserProfile(user.getUid(), new SupabaseClient.UserProfileCallback() {
             @Override
-            public void onSuccess(UserModel u) {
-                if (u != null && !TextUtils.isEmpty(u.name)) {
-                    etOwnerName.setText(u.name);
+            public void onSuccess() {
+                if (!UserSession.name.isEmpty()) {
+                    etOwnerName.setText(UserSession.name);
                     updateStepIndicators(1);
                 }
             }
-            @Override public void onError(String msg) {
-                if (user.getDisplayName() != null) etOwnerName.setText(user.getDisplayName());
+            @Override
+            public void onError(String msg) {
+                if (user.getDisplayName() != null && !user.getDisplayName().isEmpty())
+                    etOwnerName.setText(user.getDisplayName());
             }
         });
     }

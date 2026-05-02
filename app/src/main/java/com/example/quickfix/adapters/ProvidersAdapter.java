@@ -54,23 +54,21 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
     public void onBindViewHolder(@NonNull VH h, int pos) {
         ProviderProfile p = items.get(pos);
 
-        // Business image — Glide with fallback gradient
-        if (p.businessImageUrl != null && !p.businessImageUrl.isEmpty()) {
-            Glide.with(ctx)
-                .load(p.businessImageUrl)
-                .transition(DrawableTransitionOptions.withCrossFade())
-                .placeholder(R.drawable.bg_profile_header_gradient)
-                .error(R.drawable.bg_profile_header_gradient)
-                .centerCrop()
-                .into(h.ivBusinessImage);
-        } else {
-            // Set a colored background based on category
-            h.ivBusinessImage.setImageResource(R.drawable.bg_profile_header_gradient);
-        }
+        // Profile image — Glide with circleCrop
+        String img = (p.profileImageUrl != null && !p.profileImageUrl.isEmpty()) ? p.profileImageUrl : p.businessImageUrl;
+        Glide.with(ctx)
+            .load(img)
+            .placeholder(R.drawable.ic_person)
+            .error(R.drawable.ic_person)
+            .circleCrop()
+            .into(h.imgProvider);
 
-        // Names
+        // Names & Category
         h.tvBusinessName.setText(notEmpty(p.businessName, "Business"));
         h.tvCategory.setText(notEmpty(p.category, "General"));
+        
+        // Location
+        h.tvLocation.setText(cleanLocation(p.city));
 
         // Rating: only visible in TopRated mode and when rating > 0
         if ("TopRated".equalsIgnoreCase(displayMode) && p.rating > 0) {
@@ -88,20 +86,27 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
         return (val != null && !val.trim().isEmpty()) ? val.trim() : fallback;
     }
 
+    private String cleanLocation(String text) {
+        if (text == null) return "";
+        return text.replaceAll("[A-Z0-9+]{6,}", "").replace("-", "").trim();
+    }
+
     @Override
     public int getItemCount() { return items.size(); }
 
     static class VH extends RecyclerView.ViewHolder {
-        ImageView      ivBusinessImage;
+        ImageView      imgProvider;
         TextView       tvBusinessName;
         TextView       tvCategory;
+        TextView       tvLocation;
         TextView       tvRating;
 
         VH(View v) {
             super(v);
-            ivBusinessImage    = v.findViewById(R.id.ivBusinessImage);
+            imgProvider        = v.findViewById(R.id.imgProvider);
             tvBusinessName     = v.findViewById(R.id.tvBusinessName);
             tvCategory         = v.findViewById(R.id.tvProviderCategory);
+            tvLocation         = v.findViewById(R.id.tvLocation);
             tvRating           = v.findViewById(R.id.tvProviderRating);
         }
     }

@@ -189,12 +189,17 @@ public class MessagesActivity extends BaseActivity {
                 if (current == null) {
                     current = new Participant();
                     current.id = currentFirebaseUid;
-                    current.name = safe(firebaseUser.getDisplayName());
+                    // Use UserSession as single source of truth
+                    current.name = !UserSession.name.isEmpty() ? UserSession.name
+                            : safe(firebaseUser.getDisplayName());
                     current.role = "user";
                 }
                 currentUserId = safe(current.id).isEmpty() ? currentFirebaseUid : safe(current.id);
                 currentUserRole = safe(current.role).isEmpty() ? "user" : safe(current.role).toLowerCase(Locale.US);
-                currentUserName = safe(current.name).isEmpty() ? "You" : safe(current.name);
+                // Prefer UserSession name if available
+                String sessionName = UserSession.name;
+                currentUserName = !sessionName.isEmpty() ? sessionName
+                        : (safe(current.name).isEmpty() ? "You" : safe(current.name));
 
                 Booking booking = resolveBooking(current);
                 if (booking != null) {

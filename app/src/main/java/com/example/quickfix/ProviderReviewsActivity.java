@@ -132,11 +132,8 @@ public class ProviderReviewsActivity extends BaseActivity {
                         + "?select=id,customer_name,rating,comment,created_at"
                         + "&order=created_at.desc";
 
-                if (providerUid != null && !providerUid.trim().isEmpty()
-                        && providerProfileId != null && !providerProfileId.trim().isEmpty()
-                        && !providerProfileId.trim().equals(providerUid.trim())) {
-                    url += "&or=(provider_id.eq." + Uri.encode(providerProfileId.trim())
-                            + ",provider_id.eq." + Uri.encode(providerUid.trim()) + ")";
+                if (providerProfileId != null && !providerProfileId.trim().isEmpty()) {
+                    url += "&provider_id=eq." + Uri.encode(providerProfileId.trim());
                 } else {
                     url += "&provider_id=eq." + Uri.encode(providerId);
                 }

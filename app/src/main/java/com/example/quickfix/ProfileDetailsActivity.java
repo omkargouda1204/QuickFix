@@ -181,13 +181,21 @@ public class ProfileDetailsActivity extends BaseActivity {
         String extraPhone = getIntent().getStringExtra(EXTRA_PHONE);
         String extraImage = getIntent().getStringExtra(EXTRA_IMAGE);
 
-        // ── Step 2: fill any gaps from Firebase metadata ─────────────────
-        if (TextUtils.isEmpty(extraName)  && user.getDisplayName() != null)
-            extraName  = user.getDisplayName().trim();
+        // ── Step 2: fill any gaps from UserSession (single source of truth) ─
+        if (TextUtils.isEmpty(extraName) && !UserSession.name.isEmpty())
+            extraName  = UserSession.name;
+        if (TextUtils.isEmpty(extraName) && user.getDisplayName() != null)
+            extraName  = user.getDisplayName().trim(); // last resort fallback
+        if (TextUtils.isEmpty(extraEmail) && !UserSession.email.isEmpty())
+            extraEmail = UserSession.email;
         if (TextUtils.isEmpty(extraEmail) && user.getEmail() != null)
             extraEmail = user.getEmail().trim();
+        if (TextUtils.isEmpty(extraPhone) && !UserSession.phone.isEmpty())
+            extraPhone = UserSession.phone;
         if (TextUtils.isEmpty(extraPhone) && user.getPhoneNumber() != null)
             extraPhone = user.getPhoneNumber().trim();
+        if (TextUtils.isEmpty(extraImage) && !UserSession.image.isEmpty())
+            extraImage = UserSession.image;
 
         if (!TextUtils.isEmpty(extraName) || !TextUtils.isEmpty(extraEmail)) {
             applyProfile(safeStr(extraName), safeStr(extraEmail),
@@ -428,11 +436,16 @@ public class ProfileDetailsActivity extends BaseActivity {
                                 return;
                             }
                         }
+                        // ── Sync global UserSession ──────────────────────────
+                        UserSession.name  = name;
+                        UserSession.phone = phone;
+                        if (!uploadedImagePath.isEmpty()) UserSession.image = uploadedImagePath;
                         final String finalImg = uploadedImagePath;
                         MAIN.post(() -> {
                             applyProfile(name, cachedEmail, phone, city, addr, finalImg);
                             pendingAvatarUri = null;
                             showEditMode(false);
+                            setResult(RESULT_OK);
                             showSnack(getString(avatarUpdated ? R.string.pd_saved_with_photo_ok
                                     : R.string.pd_saved_ok));
                         });

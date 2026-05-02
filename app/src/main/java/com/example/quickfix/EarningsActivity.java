@@ -179,7 +179,7 @@ public class EarningsActivity extends BaseActivity {
 
         if (providerProfileId != null && !providerProfileId.isEmpty()) {
             String encodedProfileId = encodeValue(providerProfileId);
-            url += "&or=(provider_id.eq." + encodedProfileId + ",provider_id.eq." + encodedUid + ")";
+            url += "&provider_id=eq." + encodedProfileId;
         } else {
             url += "&provider_id=eq." + encodedUid;
         }

@@ -107,19 +107,19 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             String dateTime = (b.bookingDate == null || b.bookingDate.isEmpty() ? "-" : b.bookingDate)
                     + (b.bookingTime == null || b.bookingTime.isEmpty() ? "" : " • " + b.bookingTime);
             tvDateTime.setText(dateTime);
-            tvAddress.setText(b.address == null || b.address.isEmpty() ? "-" : b.address);
+            tvAddress.setText(b.address == null || b.address.isEmpty() ? "-" : cleanLocation(b.address));
 
             // Status badge
             String status = b.status == null ? "" : b.status.toLowerCase(Locale.US);
             tvStatus.setText(formatStatus(status));
             
-            // Technician Details
+            // Service Person Details
             if (("accepted".equals(status) || "price_set".equals(status) || "paid".equals(status) || "completed".equals(status)) 
                     && (b.technicianName != null && !b.technicianName.isEmpty() || b.technicianPhone != null && !b.technicianPhone.isEmpty())) {
                 tvTechnicianDetails.setVisibility(View.VISIBLE);
                 String tName = (b.technicianName == null || b.technicianName.isEmpty()) ? "-" : b.technicianName;
                 String tPhone = (b.technicianPhone == null || b.technicianPhone.isEmpty()) ? "-" : b.technicianPhone;
-                tvTechnicianDetails.setText("Technician: " + tName + "\nPhone: " + tPhone);
+                tvTechnicianDetails.setText("Technician: " + tName + "\nMobile: " + tPhone);
             } else {
                 tvTechnicianDetails.setVisibility(View.GONE);
             }
@@ -162,6 +162,11 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             btnReview.setOnClickListener(v -> { if (listener != null) listener.onWriteReview(b); });
             btnPayNow.setOnClickListener(v -> { if (listener != null) listener.onPayNow(b); });
             btnMessage.setOnClickListener(v -> { if (listener != null && btnMessage.isEnabled()) listener.onMessageBooking(b); });
+        }
+
+        private String cleanLocation(String address) {
+            if (address == null) return "";
+            return address.replaceAll("[A-Z0-9\\+]{6,}", "").trim();
         }
 
         private void applyStatusStyle(String status) {

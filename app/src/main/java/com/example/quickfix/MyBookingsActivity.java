@@ -217,15 +217,8 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
     }
 
     private void loadBookingsWithProviderId() {
-        String filter;
         String encodedProviderId = encodeValue(providerId);
-        String encodedUid = encodeValue(providerFirebaseUid);
-
-        if (providerId != null && !providerId.isEmpty() && !providerId.equals(providerFirebaseUid)) {
-            filter = "or=(provider_id.eq." + encodedProviderId + ",provider_id.eq." + encodedUid + ")";
-        } else {
-            filter = "provider_id=eq." + encodedUid;
-        }
+        String filter = "provider_id=eq." + encodedProviderId;
 
         String url = SUPABASE_URL + "/rest/v1/bookings"
                 + "?" + filter
@@ -382,10 +375,36 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
             return;
         }
 
-        new AlertDialog.Builder(this)
-                .setTitle("Accept Booking")
-                .setMessage("Accept booking from " + booking.customerName + "?")
-                .setPositiveButton("Accept", (d, w) -> updateBookingStatus(booking, "accepted"))
+        showTechnicianDialog(booking);
+    }
+
+    private void showTechnicianDialog(Booking booking) {
+        if (isFinishing() || isDestroyed()) return;
+
+        android.view.View dialogView = android.view.LayoutInflater.from(this).inflate(R.layout.dialog_technician_details, null);
+        android.widget.EditText etDialogName = dialogView.findViewById(R.id.etDialogServicePersonName);
+        android.widget.EditText etDialogPhone = dialogView.findViewById(R.id.etDialogServicePersonPhone);
+
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Service Person Details")
+                .setMessage("Please enter the details of the service person visiting the user.")
+                .setView(dialogView)
+                .setCancelable(false)
+                .setPositiveButton("Accept Request", (dialog, which) -> {
+                    String tName = etDialogName.getText().toString().trim();
+                    String tPhone = etDialogPhone.getText().toString().trim();
+
+                    if (tName.isEmpty()) {
+                        Toast.makeText(this, "Enter service person name", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (!tPhone.matches("^[0-9]{10}$")) {
+                        Toast.makeText(this, "Enter valid 10-digit mobile number", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    updateBookingStatus(booking, "accepted", tName, tPhone);
+                })
                 .setNegativeButton("Cancel", null)
                 .show();
     }
@@ -405,7 +424,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         new AlertDialog.Builder(this)
                 .setTitle("Reject Booking")
                 .setMessage("Reject booking from " + booking.customerName + "?")
-                .setPositiveButton("Reject", (d, w) -> updateBookingStatus(booking, "cancelled"))
+                .setPositiveButton("Reject", (d, w) -> updateBookingStatus(booking, "cancelled", null, null))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
@@ -415,7 +434,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         new AlertDialog.Builder(this)
                 .setTitle("Mark as Completed")
                 .setMessage("Mark this job as completed?")
-                .setPositiveButton("Complete", (d, w) -> updateBookingStatus(booking, "completed"))
+                .setPositiveButton("Complete", (d, w) -> updateBookingStatus(booking, "completed", null, null))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
@@ -452,7 +471,7 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
         startActivity(i);
     }
 
-    private void updateBookingStatus(Booking booking, String newStatus) {
+    private void updateBookingStatus(Booking booking, String newStatus, String technicianName, String technicianPhone) {
         try {
             String bookingId = booking == null ? "" : (booking.id == null ? "" : booking.id.trim());
             if (bookingId == null || bookingId.trim().isEmpty()) {
@@ -473,6 +492,12 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
                     body.put("provider_id", providerId.trim());
                 } else if (providerFirebaseUid != null && !providerFirebaseUid.trim().isEmpty()) {
                     body.put("provider_id", providerFirebaseUid.trim());
+                }
+                if (technicianName != null && !technicianName.isEmpty()) {
+                    body.put("technician_name", technicianName);
+                }
+                if (technicianPhone != null && !technicianPhone.isEmpty()) {
+                    body.put("technician_phone", technicianPhone);
                 }
             }
 

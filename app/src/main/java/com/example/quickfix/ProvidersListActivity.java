@@ -310,6 +310,7 @@ public class ProvidersListActivity extends BaseActivity
             p.description = o.optString("description");
             p.experienceYrs = o.optString("experience_yrs");
             p.businessImageUrl = o.optString("business_image_url");
+            p.profileImageUrl = o.optString("profile_image_url", o.optString("profile_image", ""));
             p.status = o.optString("status");
             p.latitude = o.optDouble("latitude", o.optDouble("lat", Double.NaN));
             p.longitude = o.optDouble("longitude", o.optDouble("lng", Double.NaN));
