@@ -10,6 +10,8 @@ import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.appcompat.app.AlertDialog;
+import android.view.LayoutInflater;
 
 import com.example.quickfix.BuildConfig;
 import com.google.android.material.button.MaterialButton;
@@ -50,8 +52,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     private MaterialButton btnAccept;
     private MaterialButton btnReject;
     private ProgressBar progress;
-    private EditText etVisitingName;
-    private EditText etVisitingPhone;
+    private TextView tvTechnicianDetails;
 
     private String requestId = "";
     private String providerProfileId = "";
@@ -100,8 +101,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         btnAccept = findViewById(R.id.btnAcceptEmergency);
         btnReject = findViewById(R.id.btnRejectEmergency);
         progress = findViewById(R.id.progressEmergencyAccept);
-        etVisitingName = findViewById(R.id.etVisitingName);
-        etVisitingPhone = findViewById(R.id.etVisitingPhone);
+        tvTechnicianDetails = findViewById(R.id.tvTechnicianDetails);
     }
 
     private void bindButtons() {
@@ -109,8 +109,41 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             btnReject.setOnClickListener(v -> rejectRequest());
         }
         if (btnAccept != null) {
-            btnAccept.setOnClickListener(v -> acceptRequest());
+            btnAccept.setOnClickListener(v -> showTechnicianDialog());
         }
+    }
+
+    private void showTechnicianDialog() {
+        if (isFinishing() || isDestroyed()) return;
+
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_technician_details, null);
+        EditText etDialogName = dialogView.findViewById(R.id.etDialogTechnicianName);
+        EditText etDialogPhone = dialogView.findViewById(R.id.etDialogTechnicianPhone);
+
+        // Removed pre-fill since EditTexts are gone
+
+        new AlertDialog.Builder(this)
+                .setTitle("Technician Details")
+                .setMessage("Please enter the details of the technician visiting the user.")
+                .setView(dialogView)
+                .setCancelable(false)
+                .setPositiveButton("Accept Request", (dialog, which) -> {
+                    String tName = etDialogName.getText().toString().trim();
+                    String tPhone = etDialogPhone.getText().toString().trim();
+
+                    if (tName.isEmpty()) {
+                        showToast("Enter technician name");
+                        return;
+                    }
+                    if (tPhone.isEmpty()) {
+                        showToast("Enter technician phone");
+                        return;
+                    }
+
+                    acceptRequest(tName, tPhone);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void fetchProviderProfileAndRequest() {
@@ -219,6 +252,19 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             } else {
                 statusLine += " (Already assigned)";
             }
+            
+            if (tvTechnicianDetails != null) {
+                String tName = request.optString("technician_name", "");
+                String tPhone = request.optString("technician_phone", "");
+                if (!tName.isEmpty() || !tPhone.isEmpty()) {
+                    tvTechnicianDetails.setVisibility(View.VISIBLE);
+                    tvTechnicianDetails.setText("Technician: " + (tName.isEmpty() ? "-" : tName) + "\nPhone: " + (tPhone.isEmpty() ? "-" : tPhone));
+                }
+            }
+        } else {
+            if (tvTechnicianDetails != null) {
+                tvTechnicianDetails.setVisibility(View.GONE);
+            }
         }
         setText(tvEmergencyStatus, statusLine);
     }
@@ -252,14 +298,14 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     }
 
     private void rejectRequest() {
-        updateBookingStatus("cancelled");
+        updateBookingStatus("cancelled", null, null);
     }
 
-    private void acceptRequest() {
-        updateBookingStatus("accepted");
+    private void acceptRequest(String technicianName, String technicianPhone) {
+        updateBookingStatus("accepted", technicianName, technicianPhone);
     }
 
-    private void updateBookingStatus(String status) {
+    private void updateBookingStatus(String status, String technicianName, String technicianPhone) {
         if (TextUtils.isEmpty(requestId)) return;
 
         setLoading(true);
@@ -270,11 +316,12 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 if ("accepted".equals(status)) {
                     body.put("provider_id", providerProfileId);
                     body.put("provider_name", fallback(providerName, "Provider"));
-
-                    String vName = etVisitingName != null ? etVisitingName.getText().toString().trim() : "";
-                    String vPhone = etVisitingPhone != null ? etVisitingPhone.getText().toString().trim() : "";
-                    if (!vName.isEmpty()) body.put("technician_name", vName);
-                    if (!vPhone.isEmpty()) body.put("technician_phone", vPhone);
+                    if (technicianName != null && !technicianName.isEmpty()) {
+                        body.put("technician_name", technicianName);
+                    }
+                    if (technicianPhone != null && !technicianPhone.isEmpty()) {
+                        body.put("technician_phone", technicianPhone);
+                    }
                 }
 
                 String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
@@ -363,7 +410,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         quickActionConsumed = true;
 
         if ("accept".equals(quickAction)) {
-            acceptRequest();
+            showTechnicianDialog();
             return;
         }
 

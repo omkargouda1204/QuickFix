@@ -144,6 +144,11 @@ public class SupabaseClient {
         void onError(String message);
     }
 
+    public interface UserProfileCallback {
+        void onSuccess();
+        void onError(String message);
+    }
+
     public static class UserAccountStatus {
         public boolean exists;
         public String firebaseUid = "";
@@ -264,6 +269,53 @@ public class SupabaseClient {
         } catch (Exception e) {
             Log.w(TAG, "patchUserProfile exception (non-fatal): " + e.getMessage());
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  FETCH USER PROFILE (GLOBAL STATE)
+    // ══════════════════════════════════════════════════════════════════════
+    public static void fetchUserProfile(String userId, UserProfileCallback callback) {
+        if (userId == null || userId.trim().isEmpty()) {
+            if (callback != null) MAIN.post(() -> callback.onError("User ID is empty"));
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                String encodedId = java.net.URLEncoder.encode(userId.trim(), "UTF-8");
+                String url = SUPABASE_URL + "/rest/v1/user_profiles?id=eq." + encodedId + "&limit=1";
+                
+                Request request = new Request.Builder()
+                        .url(url).get()
+                        .addHeader("apikey", ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .build();
+
+                try (Response r = HTTP.newCall(request).execute()) {
+                    String body = r.body() != null ? r.body().string() : "[]";
+                    if (r.code() == 200) {
+                        org.json.JSONArray arr = new org.json.JSONArray(body);
+                        if (arr.length() > 0) {
+                            JSONObject o = arr.getJSONObject(0);
+                            UserSession.id = o.optString("id", "");
+                            UserSession.name = o.optString("full_name", "");
+                            UserSession.email = o.optString("email", "");
+                            UserSession.phone = o.optString("phone", "");
+                            UserSession.image = o.optString("profile_image", "");
+                            UserSession.role = o.optString("role", "user");
+                            if (callback != null) MAIN.post(callback::onSuccess);
+                        } else {
+                            if (callback != null) MAIN.post(() -> callback.onError("Profile not found"));
+                        }
+                    } else {
+                        if (callback != null) MAIN.post(() -> callback.onError("HTTP " + r.code()));
+                    }
+                }
+            } catch (Exception e) {
+                if (callback != null) MAIN.post(() -> callback.onError("Error: " + e.getMessage()));
+            }
+        }).start();
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -601,6 +653,7 @@ public class SupabaseClient {
             try {
                 upsertFcmTokenRow(firebaseUid, fcmToken);
                 mirrorFcmTokenToUsers(firebaseUid, fcmToken);
+                mirrorFcmTokenToProviderProfiles(firebaseUid, fcmToken);
             } catch (Exception e) {
                 Log.w(TAG, "saveFcmToken (non-fatal): " + e.getMessage());
             }
@@ -649,6 +702,28 @@ public class SupabaseClient {
             }
         } catch (Exception e) {
             Log.w(TAG, "mirrorFcmTokenToUsers failed (non-fatal): " + e.getMessage());
+        }
+    }
+
+    private static void mirrorFcmTokenToProviderProfiles(String firebaseUid, String fcmToken) {
+        try {
+            JSONObject patch = new JSONObject();
+            patch.put("fcm_token", fcmToken);
+
+            Request request = new Request.Builder()
+                    .url(SUPABASE_URL + "/rest/v1/provider_profiles?firebase_uid=eq." + firebaseUid)
+                    .patch(RequestBody.create(patch.toString(), JSON_TYPE))
+                    .addHeader("apikey",        ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + ANON_KEY)
+                    .addHeader("Content-Type",  "application/json")
+                    .addHeader("Prefer",        "return=minimal")
+                    .build();
+
+            try (Response r = HTTP.newCall(request).execute()) {
+                Log.d(TAG, "mirrorFcmTokenToProviderProfiles HTTP " + r.code() + " uid=" + firebaseUid);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "mirrorFcmTokenToProviderProfiles failed (non-fatal): " + e.getMessage());
         }
     }
 

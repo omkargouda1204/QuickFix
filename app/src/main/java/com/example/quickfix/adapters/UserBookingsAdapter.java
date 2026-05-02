@@ -67,7 +67,7 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
 
     public class VH extends RecyclerView.ViewHolder {
         MaterialCardView card;
-        TextView tvServiceName, tvProviderName, tvDateTime, tvAddress, tvStatus, tvPrice, tvReviewSummary;
+        TextView tvServiceName, tvProviderName, tvDateTime, tvAddress, tvStatus, tvPrice, tvReviewSummary, tvTechnicianDetails;
         MaterialButton btnViewDetails, btnCancel, btnReview, btnPayNow, btnMessage;
 
         public VH(@NonNull View v) {
@@ -80,6 +80,7 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             tvStatus = v.findViewById(R.id.tvStatus);
             tvPrice = v.findViewById(R.id.tvPrice);
             tvReviewSummary = v.findViewById(R.id.tvReviewSummary);
+            tvTechnicianDetails = v.findViewById(R.id.tvTechnicianDetails);
             btnViewDetails = v.findViewById(R.id.btnViewDetails);
             btnCancel = v.findViewById(R.id.btnCancel);
             btnReview = v.findViewById(R.id.btnReview);
@@ -111,6 +112,17 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             // Status badge
             String status = b.status == null ? "" : b.status.toLowerCase(Locale.US);
             tvStatus.setText(formatStatus(status));
+            
+            // Technician Details
+            if (("accepted".equals(status) || "price_set".equals(status) || "paid".equals(status) || "completed".equals(status)) 
+                    && (b.technicianName != null && !b.technicianName.isEmpty() || b.technicianPhone != null && !b.technicianPhone.isEmpty())) {
+                tvTechnicianDetails.setVisibility(View.VISIBLE);
+                String tName = (b.technicianName == null || b.technicianName.isEmpty()) ? "-" : b.technicianName;
+                String tPhone = (b.technicianPhone == null || b.technicianPhone.isEmpty()) ? "-" : b.technicianPhone;
+                tvTechnicianDetails.setText("Technician: " + tName + "\nPhone: " + tPhone);
+            } else {
+                tvTechnicianDetails.setVisibility(View.GONE);
+            }
             
             double shownAmount = b.paymentAmount > 0 ? b.paymentAmount : b.price;
             tvPrice.setText("₹" + String.format(Locale.US, "%.0f", shownAmount));

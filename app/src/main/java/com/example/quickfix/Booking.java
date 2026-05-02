@@ -14,6 +14,8 @@ public class Booking {
     public String customerEmail = "";
     public String providerId = "";
     public String providerName = "";
+    public String technicianName = "";
+    public String technicianPhone = "";
     public String serviceId = "";
     public String serviceName = "";
     public String serviceCategory = "";
@@ -75,6 +77,10 @@ public class Booking {
         }
         b.providerName = s(o, "provider_name");
         if (b.providerName.isEmpty()) b.providerName = s(o, "assigned_provider_name");
+        
+        b.technicianName = s(o, "technician_name");
+        b.technicianPhone = s(o, "technician_phone");
+
         b.serviceId = s(o, "service_id");
         b.serviceName = s(o, "service_name");
         

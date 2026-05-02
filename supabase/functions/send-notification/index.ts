@@ -24,8 +24,9 @@ serve(async (req) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     const firebaseKey = Deno.env.get('FIREBASE_SERVER_KEY') ?? ''
 
-    // 1. Fetch FCM token
-    // We check the 'users' table which is used in create-emergency
+    // 1. Fetch FCM token from users
+    let fcmToken = null;
+
     const userRes = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${user_id}&select=fcm_token`, {
       method: 'GET',
       headers: {
@@ -35,17 +36,26 @@ serve(async (req) => {
       }
     })
 
-    if (!userRes.ok) {
-      const err = await userRes.text()
-      console.error('Failed to fetch user token:', err)
-      return new Response(JSON.stringify({ error: 'Failed to fetch user token' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    if (userRes.ok) {
+      const users = await userRes.json()
+      if (users.length > 0) fcmToken = users[0].fcm_token;
     }
 
-    const users = await userRes.json()
-    const fcmToken = users[0]?.fcm_token
+    // 2. Fallback to provider_profiles if not found in users
+    if (!fcmToken) {
+      const provRes = await fetch(`${supabaseUrl}/rest/v1/provider_profiles?firebase_uid=eq.${user_id}&select=fcm_token`, {
+        method: 'GET',
+        headers: {
+          apikey: serviceKey,
+          authorization: `Bearer ${serviceKey}`,
+          accept: 'application/json'
+        }
+      })
+      if (provRes.ok) {
+        const provs = await provRes.json()
+        if (provs.length > 0) fcmToken = provs[0].fcm_token;
+      }
+    }
 
     if (!fcmToken) {
       console.warn(`No FCM token found for user ${user_id}`)

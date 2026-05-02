@@ -265,6 +265,23 @@ async function notifyProviders(
           fcmToken = users[0].fcm_token;
         }
       }
+
+      if (!fcmToken) {
+        const provRes = await fetch(`${supabaseUrl}/rest/v1/provider_profiles?firebase_uid=eq.${firebaseUid}&select=fcm_token`, {
+          method: 'GET',
+          headers: {
+            apikey: serviceKey,
+            authorization: `Bearer ${serviceKey}`,
+            accept: 'application/json'
+          }
+        });
+        if (provRes.ok) {
+          const provs = await provRes.json();
+          if (provs.length > 0 && provs[0].fcm_token) {
+            fcmToken = provs[0].fcm_token;
+          }
+        }
+      }
     } catch (e) {
       console.warn(`[Notify] Failed to fetch token for ${firebaseUid}`, e);
     }
@@ -399,16 +416,12 @@ Deno.serve(async (req) => {
       return json({ error: "No providers available in your area" }, 400);
     }
 
-    // ── 8. Insert SINGLE booking (Emergency) ──────────────────────────────────
-    const targetProvider = providers[0];
-
-    const bookingData: Record<string, unknown> = {
+    // ── 8 & 9. Insert Booking for EACH provider and Notify ──────────────────────────────────
+    const notifiedProviders = [];
+    const baseBookingData: Record<string, unknown> = {
       customer_id: String(payload.user_id),
-      provider_id: targetProvider.id,
-      provider_firebase_uid: targetProvider.firebase_uid,
       customer_name: String(payload.user_name || 'Emergency User'),
       customer_phone: String(payload.phone || ''),
-      provider_name: targetProvider.business_name || 'Awaiting Acceptance',
       service_name: 'Emergency - ' + p_category,
       category: p_category,
       address: String(payload.address || ''),
@@ -423,22 +436,30 @@ Deno.serve(async (req) => {
       longitude: p_lng,
     };
 
-    let bookingId = '';
-    try {
-      const created = await insertBooking(SUPABASE_URL, SERVICE_KEY, bookingData);
-      bookingId = created.id;
-    } catch (err) {
-      console.warn(`[DB] Failed to insert emergency booking:`, err);
+    let firstBookingId = '';
+
+    for (const p of providers) {
+      const providerBookingData = {
+        ...baseBookingData,
+        provider_id: p.id,
+        provider_firebase_uid: p.firebase_uid,
+        provider_name: p.business_name || 'Awaiting Acceptance'
+      };
+
+      try {
+        const created = await insertBooking(SUPABASE_URL, SERVICE_KEY, providerBookingData);
+        if (!firstBookingId) firstBookingId = created.id;
+        
+        notifiedProviders.push({
+          ...p,
+          booking_id: created.id
+        });
+      } catch (err) {
+        console.warn(`[DB] Failed to insert emergency booking for provider ${p.id}:`, err);
+      }
     }
 
-    // ── 9. Notify all matched providers ───────────────────────────────────────
-    if (bookingId) {
-      // Map all matched providers to this single booking ID for notifications
-      const notifiedProviders = providers.map(p => ({
-        ...p,
-        booking_id: bookingId
-      }));
-
+    if (notifiedProviders.length > 0) {
       try {
         await notifyProviders(SUPABASE_URL, SERVICE_KEY, payload, notifiedProviders);
       } catch (notifyErr) {
@@ -455,7 +476,7 @@ Deno.serve(async (req) => {
     return json({
       success: true,
       message: `Emergency request created and ${providers.length} provider(s) notified`,
-      request_id: bookingId,
+      request_id: firstBookingId,
       providers_count: providers.length,
       nearest_provider_distance_km: nearestDist,
     }, 200);

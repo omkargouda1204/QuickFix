@@ -64,6 +64,18 @@ public class AdminBookingsAdapter
         h.tvCustomerEmail.setText("Email: " + nonEmpty(b.customerEmail, "-"));
         h.tvProviderName.setText("Provider: " + nonEmpty(b.providerName, "Provider"));
 
+        if (h.tvTechnicianDetails != null) {
+            String tName = nonEmpty(b.technicianName, "");
+            String tPhone = nonEmpty(b.technicianPhone, "");
+            if (!tName.isEmpty() || !tPhone.isEmpty()) {
+                h.tvTechnicianDetails.setVisibility(View.VISIBLE);
+                h.tvTechnicianDetails.setText("👷 Technician: " + (tName.isEmpty() ? "-" : tName) 
+                        + "\n📞 Phone: " + (tPhone.isEmpty() ? "-" : tPhone));
+            } else {
+                h.tvTechnicianDetails.setVisibility(View.GONE);
+            }
+        }
+
         // Date + time
         String dateTime = nonEmpty(b.bookingDate, "");
         if (!b.bookingTime.isEmpty()) dateTime += "  •  " + b.bookingTime;
@@ -129,7 +141,7 @@ public class AdminBookingsAdapter
     static class VH extends RecyclerView.ViewHolder {
         TextView tvServiceName, tvCustomerName, tvProviderName,
                  tvDateTime, tvPrice, tvAddress, tvStatus, tvCategory,
-                 tvCustomerPhone, tvCustomerEmail, tvCity, tvRating;
+                 tvCustomerPhone, tvCustomerEmail, tvCity, tvRating, tvTechnicianDetails;
 
         VH(View v) {
             super(v);
@@ -138,6 +150,7 @@ public class AdminBookingsAdapter
             tvProviderName = v.findViewById(R.id.tvProviderName);
             tvCustomerPhone = v.findViewById(R.id.tvCustomerPhone);
             tvCustomerEmail = v.findViewById(R.id.tvCustomerEmail);
+            tvTechnicianDetails = v.findViewById(R.id.tvTechnicianDetails);
             tvDateTime     = v.findViewById(R.id.tvDateTime);
             tvPrice        = v.findViewById(R.id.tvPrice);
             tvAddress      = v.findViewById(R.id.tvAddress);

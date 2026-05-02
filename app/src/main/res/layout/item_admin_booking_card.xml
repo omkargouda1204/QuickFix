@@ -105,7 +105,17 @@
             android:text="🔧 Provider Name"
             android:textColor="#374151"
             android:textSize="13sp"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tvTechnicianDetails"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="👷 Technician: -\n📞 Phone: -"
+            android:textColor="#4B5563"
+            android:textSize="12sp"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone" />
 
         <!-- Divider -->
         <View
