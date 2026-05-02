@@ -441,7 +441,7 @@ public class MainActivity extends BaseActivity {
             startActivity(new Intent(this, UserBookingsActivity.class));
         });
         if (navMessages != null) navMessages.setOnClickListener(v -> {
-            startActivity(new Intent(this, ChatThreadsActivity.class));
+            startActivity(new Intent(this, ChatListActivity.class));
         });
         if (navProfile != null) navProfile.setOnClickListener(v -> {
             startActivity(new Intent(this, ProfileActivity.class));
