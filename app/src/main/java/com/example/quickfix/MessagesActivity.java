@@ -616,7 +616,9 @@ public class MessagesActivity extends BaseActivity {
             if (row == null) return null;
             Participant p = new Participant();
             p.id = safe(row.optString("id", ""));
-            p.name = safe(row.optString("name", "User"));
+            String n = safe(row.optString("full_name", ""));
+            if (n.isEmpty()) n = safe(row.optString("name", "User"));
+            p.name = n;
             p.role = "user";
             return p;
         } catch (Exception ignored) {

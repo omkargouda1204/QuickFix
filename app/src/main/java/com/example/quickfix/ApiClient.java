@@ -42,7 +42,7 @@ public class ApiClient {
     private static final String ANON_KEY      = BuildConfig.SUPABASE_ANON_KEY;
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
-    private static final String USER_SELECT = "firebase_uid,name,email,phone,is_user,is_service_provider,is_admin";
+    private static final String USER_SELECT = "firebase_uid,full_name,name,email,phone,role,is_user,is_service_provider,is_admin";
 
     // Use centralized HTTP client for optimized connection pooling
     private static final OkHttpClient client = HttpClientProvider.getInstance();

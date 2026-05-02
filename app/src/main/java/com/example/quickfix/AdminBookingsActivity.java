@@ -257,7 +257,7 @@ public class AdminBookingsActivity extends BaseActivity {
 
             String in = String.join(",", ids);
             String url = BuildConfig.SUPABASE_URL + "/rest/v1/users"
-                    + "?select=id,firebase_uid,email,phone,name"
+                    + "?select=id,firebase_uid,email,phone,full_name,name"
                     + "&or=(id.in.(" + in + "),firebase_uid.in.(" + in + "))";
 
             Request req = new Request.Builder().url(url).get()
@@ -284,7 +284,11 @@ public class AdminBookingsActivity extends BaseActivity {
                     if (u == null) continue;
                     if (isEmpty(b.customerEmail)) b.customerEmail = u.optString("email", "").trim();
                     if (isEmpty(b.customerPhone)) b.customerPhone = u.optString("phone", "").trim();
-                    if (isEmpty(b.customerName)) b.customerName = u.optString("name", "").trim();
+                    if (isEmpty(b.customerName)) {
+                        String name = u.optString("full_name", "").trim();
+                        if (name.isEmpty()) name = u.optString("name", "").trim();
+                        b.customerName = name;
+                    }
                 }
             }
         } catch (Exception e) {

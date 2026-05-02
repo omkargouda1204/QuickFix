@@ -395,7 +395,8 @@ public class ProfileDetailsActivity extends BaseActivity {
         new Thread(() -> {
             try {
                 JSONObject body = new JSONObject();
-                body.put("name", name);
+                body.put("full_name", name);
+                body.put("name", name); // Sync with legacy field
                 body.put("phone", phone);
                 body.put("city", city);
                 body.put("address", addr);
@@ -468,13 +469,14 @@ public class ProfileDetailsActivity extends BaseActivity {
         try {
             JSONObject upsertBody = new JSONObject();
             upsertBody.put("firebase_uid", firebaseUid);
+            upsertBody.put("full_name", safeStr(name));
             upsertBody.put("name", safeStr(name));
             upsertBody.put("email", safeStr(cachedEmail));
             upsertBody.put("phone", safeStr(phone));
             upsertBody.put("city", safeStr(city));
             upsertBody.put("address", safeStr(addr));
             upsertBody.put("profile_image", safeStr(uploadedImagePath));
-            upsertBody.put("is_user", true);
+            upsertBody.put("role", "user");
 
             Request req = new Request.Builder()
                     .url(BuildConfig.SUPABASE_URL + "/rest/v1/users")
@@ -527,10 +529,10 @@ public class ProfileDetailsActivity extends BaseActivity {
         showLoading(true);
         new Thread(() -> {
             try {
-                ProfileFetchResult fetch = fetchProfileByUid("name,email,phone,city,address,profile_image", false);
+                ProfileFetchResult fetch = fetchProfileByUid("full_name,name,email,phone,city,address,profile_image,role", false);
                 if (fetch.httpCode == 400) {
                     // Backward compatibility when DB still has legacy profile_image_url column.
-                    fetch = fetchProfileByUid("name,email,phone,city,address,profile_image_url", true);
+                    fetch = fetchProfileByUid("full_name,name,email,phone,city,address,profile_image_url,role", true);
                 }
 
                 Log.d(TAG, "loadProfile HTTP " + fetch.httpCode + " | " + fetch.body);
@@ -539,7 +541,8 @@ public class ProfileDetailsActivity extends BaseActivity {
 
                 if (responseCode == 200 && fetch.row != null) {
                     JSONObject o   = fetch.row;
-                    String name    = nullSafe(o, "name");
+                    String name    = nullSafe(o, "full_name");
+                    if (TextUtils.isEmpty(name)) name = nullSafe(o, "name");
                     String email   = nullSafe(o, "email");
                     String phone   = nullSafe(o, "phone");
                     String city    = nullSafe(o, "city");
@@ -612,15 +615,14 @@ public class ProfileDetailsActivity extends BaseActivity {
         try {
             JSONObject body = new JSONObject();
             body.put("firebase_uid",        firebaseUid);
+            body.put("full_name",           TextUtils.isEmpty(name)    ? "" : name.trim());
             body.put("name",                TextUtils.isEmpty(name)    ? "" : name.trim());
             body.put("email",               TextUtils.isEmpty(email)   ? "" : email.trim());
             body.put("phone",               TextUtils.isEmpty(phone)   ? "" : phone.trim());
             body.put("city",                TextUtils.isEmpty(city)    ? "" : city.trim());
             body.put("address",             TextUtils.isEmpty(address) ? "" : address.trim());
             body.put("profile_image",       TextUtils.isEmpty(profileImagePath) ? "" : profileImagePath.trim());
-            body.put("is_user",             true);
-            body.put("is_service_provider", false);
-            body.put("is_admin",            false);
+            body.put("role",                "user");
 
             Request req = new Request.Builder()
                     .url(BuildConfig.SUPABASE_URL + "/rest/v1/users")

@@ -111,10 +111,23 @@ public class SupabaseClient {
         public boolean isUser;
         public boolean isServiceProvider;
         public boolean isAdmin;
+        public String role = "user";
+
         public RoleInfo(boolean isUser, boolean isServiceProvider, boolean isAdmin) {
             this.isUser = isUser;
             this.isServiceProvider = isServiceProvider;
             this.isAdmin = isAdmin;
+            // Infer role string if not provided
+            if (isAdmin) this.role = "admin";
+            else if (isServiceProvider) this.role = "provider";
+            else this.role = "user";
+        }
+
+        public RoleInfo(String role) {
+            this.role = (role != null) ? role : "user";
+            this.isAdmin = "admin".equalsIgnoreCase(this.role);
+            this.isServiceProvider = "provider".equalsIgnoreCase(this.role);
+            this.isUser = "user".equalsIgnoreCase(this.role);
         }
     }
 
@@ -180,12 +193,14 @@ public class SupabaseClient {
             try {
                 JSONObject body = new JSONObject();
                 body.put("firebase_uid",         firebaseUid);
-                body.put("name",                 name  != null ? name.trim()  : "");
+                body.put("full_name",            name  != null ? name.trim()  : "");
                 body.put("email",                email != null ? email.trim() : "");
                 body.put("phone",                phone != null ? phone.trim() : "");
-                body.put("is_user",              isUser);
-                body.put("is_service_provider",  isServiceProvider);
-                body.put("is_admin",             isAdmin);
+                
+                String role = "user";
+                if (isAdmin) role = "admin";
+                else if (isServiceProvider) role = "provider";
+                body.put("role", role);
 
                 // ── INSERT — ignore if already exists (preserve existing role) ──
                 Request insertReq = new Request.Builder()
@@ -227,7 +242,10 @@ public class SupabaseClient {
     private static void patchUserProfileSync(String firebaseUid, String name, String phone) {
         try {
             JSONObject patch = new JSONObject();
-            if (name  != null && !name.trim().isEmpty())  patch.put("name",  name.trim());
+            if (name  != null && !name.trim().isEmpty()) {
+                patch.put("full_name", name.trim());
+                patch.put("name", name.trim()); // Keep legacy 'name' in sync
+            }
             if (phone != null && !phone.trim().isEmpty()) patch.put("phone", phone.trim());
             if (patch.length() == 0) return;
 
@@ -328,7 +346,7 @@ public class SupabaseClient {
             String encoded = java.net.URLEncoder.encode(email, "UTF-8");
             String url = SUPABASE_URL + "/rest/v1/users"
                     + "?email=eq." + encoded
-                    + "&select=is_user,is_service_provider,is_admin,firebase_uid"
+                    + "&select=role,is_user,is_service_provider,is_admin,firebase_uid"
                     + "&limit=1";
             Request req = new Request.Builder()
                     .url(url).get()
@@ -343,6 +361,9 @@ public class SupabaseClient {
                     org.json.JSONArray arr = new org.json.JSONArray(body);
                     if (arr.length() > 0) {
                         JSONObject o = arr.getJSONObject(0);
+                        if (o.has("role") && !o.isNull("role")) {
+                            return new RoleInfo(o.optString("role", "user"));
+                        }
                         return new RoleInfo(
                                 o.optBoolean("is_user",             true),
                                 o.optBoolean("is_service_provider", false),
@@ -368,7 +389,7 @@ public class SupabaseClient {
             }
             String url = SUPABASE_URL + "/rest/v1/users"
                     + "?" + filter
-                    + "&select=is_user,is_service_provider,is_admin"
+                    + "&select=role,is_user,is_service_provider,is_admin"
                     + "&limit=1";
             Request req = new Request.Builder()
                     .url(url).get()
@@ -383,6 +404,9 @@ public class SupabaseClient {
                     org.json.JSONArray arr = new org.json.JSONArray(body);
                     if (arr.length() > 0) {
                         JSONObject o = arr.getJSONObject(0);
+                        if (o.has("role") && !o.isNull("role")) {
+                            return new RoleInfo(o.optString("role", "user"));
+                        }
                         return new RoleInfo(
                                 o.optBoolean("is_user",             true),
                                 o.optBoolean("is_service_provider", false),
@@ -764,12 +788,11 @@ public class SupabaseClient {
                 String normalizedUid = authUid.trim();
                 JSONObject modern = new JSONObject();
                 modern.put("firebase_uid", normalizedUid);
+                modern.put("full_name", fullName != null ? fullName.trim() : "");
                 modern.put("name", fullName != null ? fullName.trim() : "");
                 modern.put("email", email != null ? email.trim() : "");
                 modern.put("phone", phone != null ? phone.trim() : "");
-                modern.put("is_user", true);
-                modern.put("is_service_provider", false);
-                modern.put("is_admin", false);
+                modern.put("role", "user");
 
                 Response modernResp = postUsersInsert(modern);
                 int modernCode = modernResp.code();
@@ -839,12 +862,11 @@ public class SupabaseClient {
 
                 JSONObject modern = new JSONObject();
                 modern.put("firebase_uid", firebaseUid);
+                modern.put("full_name", name != null ? name.trim() : "");
                 modern.put("name", name != null ? name.trim() : "");
                 modern.put("phone", phone != null ? phone.trim() : "");
                 modern.put("deleted_at", JSONObject.NULL);
-                modern.put("is_user", true);
-                modern.put("is_service_provider", false);
-                modern.put("is_admin", false);
+                modern.put("role", "user");
 
                 Request modernReq = new Request.Builder()
                         .url(SUPABASE_URL + "/rest/v1/users?email=eq." + encoded)
@@ -1132,8 +1154,8 @@ public class SupabaseClient {
 
     private static JSONObject fetchAccountRow(String filterQuery) throws Exception {
         String[] selects = new String[] {
-                "firebase_uid,name,email,created_at,deleted_at,profile_image,profile_image_url",
-                "id,full_name,email,created_at,deleted_at,profile_image,profile_image_url",
+                "firebase_uid,full_name,name,email,created_at,deleted_at,profile_image,profile_image_url,role",
+                "id,full_name,email,created_at,deleted_at,profile_image,profile_image_url,role",
                 "*"
         };
 
@@ -1172,8 +1194,8 @@ public class SupabaseClient {
         if (uid == null || uid.trim().isEmpty()) uid = row.optString("id", "");
         status.firebaseUid = uid != null ? uid : "";
 
-        String name = row.optString("name", "");
-        if (name == null || name.trim().isEmpty()) name = row.optString("full_name", "");
+        String name = row.optString("full_name", "");
+        if (name == null || name.trim().isEmpty()) name = row.optString("name", "");
         status.name = name != null ? name : "";
 
         status.email = row.optString("email", "");

@@ -208,7 +208,7 @@ public class ProfileActivity extends BaseActivity {
             String encodedUid = android.net.Uri.encode(uid);
             String url = BuildConfig.SUPABASE_URL
                     + "/rest/v1/users?firebase_uid=eq." + encodedUid
-                    + "&select=id,firebase_uid,name,email,phone,profile_image,is_user,is_service_provider,is_admin,dark_mode,language,city,pincode,address&limit=1";
+                    + "&select=id,firebase_uid,full_name,name,email,phone,profile_image,role,is_user,is_service_provider,is_admin,dark_mode,language,city,pincode,address&limit=1";
             try (Response r = HTTP.newCall(buildGet(url)).execute()) {
                 String body = r.body() != null ? r.body().string() : "[]";
                 if (r.code() == 200) {
@@ -238,7 +238,7 @@ public class ProfileActivity extends BaseActivity {
                 String enc = android.net.Uri.encode(email);
                 String urlE = BuildConfig.SUPABASE_URL
                         + "/rest/v1/users?email=eq." + enc
-                        + "&select=id,firebase_uid,name,email,phone,profile_image,is_user,is_service_provider,is_admin,dark_mode,language,city,pincode,address&limit=1";
+                        + "&select=id,firebase_uid,full_name,name,email,phone,profile_image,role,is_user,is_service_provider,is_admin,dark_mode,language,city,pincode,address&limit=1";
                 try (Response r2 = HTTP.newCall(buildGet(urlE)).execute()) {
                     String body2 = r2.body() != null ? r2.body().string() : "[]";
                     if (r2.code() == 200) {
@@ -255,13 +255,19 @@ public class ProfileActivity extends BaseActivity {
         UserModel m = new UserModel();
         m.id                = o.optString("id", "");
         m.firebaseUid       = o.optString("firebase_uid", "");
-        m.name              = o.optString("name", "");
+        
+        String name = o.optString("full_name", "");
+        if (name == null || name.trim().isEmpty()) name = o.optString("name", "");
+        m.name              = name != null ? name : "";
+        
         m.email             = o.optString("email", "");
         m.phone             = o.optString("phone", "");
         m.profileImage      = o.optString("profile_image", "");
-        m.isAdmin           = o.optBoolean("is_admin", false);
-        m.isServiceProvider = o.optBoolean("is_service_provider", false);
-        m.isUser            = o.optBoolean("is_user", true);
+        
+        String role = o.optString("role", "user");
+        m.isAdmin           = "admin".equalsIgnoreCase(role) || o.optBoolean("is_admin", false);
+        m.isServiceProvider = "provider".equalsIgnoreCase(role) || o.optBoolean("is_service_provider", false);
+        m.isUser            = "user".equalsIgnoreCase(role) || o.optBoolean("is_user", true);
         m.darkMode          = o.optBoolean("dark_mode", false);
         m.language          = o.optString("language", "en");
         m.city              = o.optString("city", "");

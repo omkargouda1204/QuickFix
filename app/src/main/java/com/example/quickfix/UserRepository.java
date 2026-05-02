@@ -87,7 +87,9 @@ public class UserRepository {
         UserModel u        = new UserModel();
         u.id               = o.optString("id",                "");
         u.firebaseUid      = o.optString("firebase_uid",      "");
-        u.name             = o.optString("name",              "Unknown");
+        String name = o.optString("full_name", "");
+        if (name.isEmpty()) name = o.optString("name", "Unknown");
+        u.name             = name;
         u.email            = o.optString("email",             "");
         u.phone            = o.optString("phone",             "");
         u.isUser           = o.optBoolean("is_user",            true);

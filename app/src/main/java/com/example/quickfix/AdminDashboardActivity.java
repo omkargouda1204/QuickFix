@@ -720,7 +720,9 @@ public class AdminDashboardActivity extends BaseActivity {
                         ApiClient.getUserByEmail(email, new ApiClient.ApiCallback() {
                             @Override
                             public void onSuccess(org.json.JSONObject response) {
-                                String name = response.optString("name", "").trim();
+                                String name = response.optString("full_name", "").trim();
+                                if (name.isEmpty()) name = response.optString("name", "").trim();
+
                                 if (!name.isEmpty()) {
                                     adminName = name;
                                     applyAdminName(adminName);

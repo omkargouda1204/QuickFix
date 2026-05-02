@@ -61,6 +61,7 @@ public class Booking {
             b.customerId = s(o, "user_id");
         }
         b.customerName = s(o, "customer_name");
+        if (b.customerName.isEmpty()) b.customerName = s(o, "full_name");
         if (b.customerName.isEmpty()) b.customerName = s(o, "user_name");
         b.customerPhone = s(o, "customer_phone");
         b.customerEmail = s(o, "customer_email");

@@ -271,10 +271,12 @@ public class ChatThreadsActivity extends BaseActivity implements ChatThreadsAdap
     private String fetchUserNameById(String id) {
         try {
             String url = SUPABASE_URL + "/rest/v1/users?id=eq." + encode(id)
-                    + "&select=name&limit=1";
+                    + "&select=full_name,name&limit=1";
             JSONObject row = fetchFirst(url);
             if (row == null) return "";
-            return safe(row.optString("name", ""));
+            String n = safe(row.optString("full_name", ""));
+            if (n.isEmpty()) n = safe(row.optString("name", ""));
+            return n;
         } catch (Exception ignored) {
             return "";
         }
