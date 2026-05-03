@@ -27,7 +27,8 @@ public class RoleManager {
 
     private static final String TAG = "RoleManager";
 
-    private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
+    private static final String SUPABASE_URL = (BuildConfig.SUPABASE_URL == null || BuildConfig.SUPABASE_URL.isEmpty())
+            ? "https://example.supabase.co" : BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY     = BuildConfig.SUPABASE_ANON_KEY;
 
     private static final OkHttpClient HTTP = new OkHttpClient.Builder()

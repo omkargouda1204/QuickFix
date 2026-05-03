@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorBackground">
+    android:background="#F4F6F9">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -29,8 +29,7 @@
             android:layout_marginTop="10dp"
             android:layout_marginEnd="12dp"
             app:cardCornerRadius="16dp"
-            app:cardElevation="4dp"
-            app:cardBackgroundColor="?attr/colorSurface">
+            app:cardElevation="4dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -43,7 +42,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Chat"
-                    android:textColor="?attr/colorOnBackground"
+                    android:textColor="@color/text_primary"
                     android:textSize="19sp"
                     android:textStyle="bold" />
 
@@ -53,7 +52,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="Accepted booking conversation"
-                    android:textColor="?attr/colorOnBackgroundSecondary"
+                    android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
 
                 <TextView
@@ -62,7 +61,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
                     android:text="Loading..."
-                    android:textColor="?attr/colorOnBackgroundSecondary"
+                    android:textColor="@color/text_secondary"
                     android:textSize="12sp"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -103,7 +102,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="No messages yet"
-                        android:textColor="?attr/colorOnBackgroundSecondary"
+                        android:textColor="@color/text_secondary"
                         android:textSize="14sp" />
                 </LinearLayout>
             </FrameLayout>
@@ -119,14 +118,14 @@
             android:paddingTop="8dp"
             android:paddingEnd="12dp"
             android:paddingBottom="12dp"
-            android:background="?attr/colorSurface"
+            android:background="@color/white"
             android:elevation="8dp">
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                app:boxBackgroundColor="?attr/colorBackground"
+                app:boxBackgroundColor="#F1F3F7"
                 app:boxBackgroundMode="filled"
                 app:boxCornerRadiusBottomEnd="22dp"
                 app:boxCornerRadiusBottomStart="22dp"
@@ -143,8 +142,8 @@
                     android:minLines="1"
                     android:paddingStart="10dp"
                     android:paddingEnd="10dp"
-                    android:textColor="?attr/colorOnBackground"
-                    android:textColorHint="?attr/colorOnBackgroundSecondary" />
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_secondary" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.button.MaterialButton

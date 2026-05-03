@@ -96,19 +96,34 @@
                     android:layout_height="0dp"
                     android:layout_weight="1" />
 
-                <!-- Notification icon (no profile avatar) -->
-                <ImageView
-                    android:id="@+id/notificationIcon"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:layout_marginStart="12dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:padding="8dp"
-                    android:src="@drawable/ic_notification"
-                    app:tint="#FFFFFF"
-                    android:contentDescription="Notifications" />
+                <FrameLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp">
+
+                    <ImageView
+                        android:id="@+id/notificationIcon"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:padding="8dp"
+                        android:src="@drawable/ic_notification"
+                        app:tint="#FFFFFF"
+                        android:contentDescription="Notifications" />
+
+                    <View
+                        android:id="@+id/notificationBadge"
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:layout_gravity="top|end"
+                        android:layout_marginTop="6dp"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/bg_red_dot"
+                        android:elevation="4dp"
+                        android:visibility="gone" />
+                </FrameLayout>
             </LinearLayout>
 
             <!-- Row 2: Greeting -->

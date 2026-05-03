@@ -249,6 +249,8 @@ public class AdminDashboardActivity extends BaseActivity {
         setAdminBannersLoading(true);
 
         bannerApi.getAllBanners(
+                BuildConfig.SUPABASE_ANON_KEY,
+                "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                 "*",
                 "created_at.desc"
         ).enqueue(new Callback<List<Banner>>() {
@@ -286,6 +288,8 @@ public class AdminDashboardActivity extends BaseActivity {
         setAdminOffersLoading(true);
 
         offerApi.getAllOffers(
+                BuildConfig.SUPABASE_ANON_KEY,
+                "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                 "*",
                 "created_at.desc"
         ).enqueue(new Callback<List<Offer>>() {
@@ -620,7 +624,6 @@ public class AdminDashboardActivity extends BaseActivity {
 
     private void setupBottomNavigation() {
         if (bottomNav == null) return;
-        
         bottomNav.setSelectedItemId(R.id.nav_dashboard);
         bottomNav.setOnItemSelectedListener(item -> {
             int id = item.getItemId();

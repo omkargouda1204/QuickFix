@@ -18,7 +18,6 @@ import com.google.firebase.auth.FirebaseUser;
 public class AdminSettingsActivity extends BaseActivity {
 
     private SwitchMaterial switchPush, switchEmail, switchAdminAlerts;
-    private SwitchMaterial switchDarkMode;
     private SwitchMaterial switchAutoApprove, switchEmailDigest;
     private SwitchMaterial switchMaintenance;
     private LinearLayout layoutMaintenanceSettings;
@@ -65,7 +64,7 @@ public class AdminSettingsActivity extends BaseActivity {
         switchPush = findViewById(R.id.switchAdminPushNotifications);
         switchEmail = findViewById(R.id.switchAdminEmailNotifications);
         switchAdminAlerts = findViewById(R.id.switchAdminAlerts);
-        switchDarkMode = findViewById(R.id.switchAdminDarkMode);
+        // dark mode toggle removed - app follows system theme
         switchAutoApprove = findViewById(R.id.switchAutoApprove);
         switchEmailDigest = findViewById(R.id.switchEmailDigest);
         switchMaintenance = findViewById(R.id.switchMaintenanceMode);
@@ -106,7 +105,6 @@ public class AdminSettingsActivity extends BaseActivity {
         setChecked(switchPush, s.pushNotifications);
         setChecked(switchEmail, s.emailNotifications);
         setChecked(switchAdminAlerts, s.adminAlerts);
-        setChecked(switchDarkMode, s.darkMode);
         setChecked(switchAutoApprove, s.autoApproveProviders);
         setChecked(switchEmailDigest, s.dailyEmailDigest);
         setChecked(switchMaintenance, s.maintenanceMode);
@@ -122,7 +120,6 @@ public class AdminSettingsActivity extends BaseActivity {
         if (switchPush != null) switchPush.setEnabled(enabled);
         if (switchEmail != null) switchEmail.setEnabled(enabled);
         if (switchAdminAlerts != null) switchAdminAlerts.setEnabled(enabled);
-        if (switchDarkMode != null) switchDarkMode.setEnabled(enabled);
         if (switchAutoApprove != null) switchAutoApprove.setEnabled(enabled);
         if (switchEmailDigest != null) switchEmailDigest.setEnabled(enabled);
         if (switchMaintenance != null) switchMaintenance.setEnabled(enabled);
@@ -167,12 +164,7 @@ public class AdminSettingsActivity extends BaseActivity {
             });
         }
 
-        if (switchDarkMode != null) {
-            switchDarkMode.setOnCheckedChangeListener((v, on) -> {
-                if (isApplyingUiState) return;
-                updateBooleanSetting("dark_mode", on, switchDarkMode);
-            });
-        }
+        // Dark mode toggle removed: App follows system theme automatically.
 
         if (switchAutoApprove != null) {
             switchAutoApprove.setOnCheckedChangeListener((v, on) -> {

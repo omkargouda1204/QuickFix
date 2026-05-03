@@ -45,7 +45,8 @@ public class SupabaseClient {
     private static final String TAG = "SupabaseClient";
 
     // Keys are injected at build time from supabase.properties — never hardcoded
-    private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
+    private static final String SUPABASE_URL = (BuildConfig.SUPABASE_URL == null || BuildConfig.SUPABASE_URL.isEmpty())
+            ? "https://example.supabase.co" : BuildConfig.SUPABASE_URL;
     private static final String ANON_KEY     = BuildConfig.SUPABASE_ANON_KEY;
 
     private static final MediaType JSON_TYPE =
