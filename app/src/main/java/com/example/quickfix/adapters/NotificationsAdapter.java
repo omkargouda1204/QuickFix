@@ -7,6 +7,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
+import androidx.core.content.ContextCompat;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -88,9 +89,12 @@ public class NotificationsAdapter extends RecyclerView.Adapter<NotificationsAdap
             tvMessage.setText(n.body == null || n.body.isEmpty() ? "" : n.body);
             tvTime.setText(formatTime(n.createdAt));
 
-            // Unread indicator
+            // Unread indicator (green dot) and subtle background
             tvUnreadDot.setVisibility(n.isRead ? View.GONE : View.VISIBLE);
-            card.setCardBackgroundColor(n.isRead ? 0xFFFFFFFF : 0xFFEEF5FF);
+            int bgColor = ContextCompat.getColor(context, n.isRead ? R.color.card_bg : R.color.surface_variant_alt);
+            card.setCardBackgroundColor(bgColor);
+            // tint unread dot to success green when visible
+            if (!n.isRead) tvUnreadDot.setTextColor(ContextCompat.getColor(context, R.color.success_green));
 
             // Icon by type
             ivIcon.setImageResource(iconForType(n.type));

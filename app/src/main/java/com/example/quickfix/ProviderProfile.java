@@ -25,6 +25,7 @@ public class ProviderProfile {
     public int     totalBookings;
     public String  status;
     public String  createdAt;
+    public boolean is_top; // "Top Provider" premium badge
 
     public double  latitude = Double.NaN;
     public double  longitude = Double.NaN;

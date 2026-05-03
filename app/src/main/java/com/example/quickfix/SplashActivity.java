@@ -99,13 +99,68 @@ public class SplashActivity extends BaseActivity {
     }
 
     private void routeAfterSplash() {
+        FirebaseUser current = FirebaseAuth.getInstance().getCurrentUser();
+        boolean isAdminEmail = current != null && current.getEmail() != null && current.getEmail().equals("admin@gmail.com");
         boolean fromAdmin = getIntent().getBooleanExtra("from_admin", false);
-        if (!fromAdmin && AppSettings.isMaintenanceMode(this)) {
-            startAndFinish(new Intent(this, MaintenanceActivity.class));
+
+        if (isAdminEmail || fromAdmin) {
+            proceedWithUser(current);
             return;
         }
 
-        FirebaseUser current = FirebaseAuth.getInstance().getCurrentUser();
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/app_settings?select=maintenance_mode,maintenance_message&limit=1";
+        okhttp3.Request req = new okhttp3.Request.Builder()
+                .url(url)
+                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .get()
+                .build();
+
+        new okhttp3.OkHttpClient().newCall(req).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(@androidx.annotation.NonNull okhttp3.Call call, @androidx.annotation.NonNull java.io.IOException e) {
+                runOnUiThread(() -> {
+                    if (AppSettings.isMaintenanceMode(SplashActivity.this)) {
+                        startAndFinish(new Intent(SplashActivity.this, MaintenanceActivity.class));
+                    } else {
+                        proceedWithUser(current);
+                    }
+                });
+            }
+
+            @Override
+            public void onResponse(@androidx.annotation.NonNull okhttp3.Call call, @androidx.annotation.NonNull okhttp3.Response response) throws java.io.IOException {
+                boolean isMaintenance = false;
+                String msg = "";
+                try {
+                    String body = response.body().string();
+                    org.json.JSONArray arr = new org.json.JSONArray(body);
+                    if (arr.length() > 0) {
+                        org.json.JSONObject obj = arr.getJSONObject(0);
+                        isMaintenance = obj.optBoolean("maintenance_mode", false);
+                        msg = obj.optString("maintenance_message", "");
+
+                        AppSettings.set(SplashActivity.this, AppSettings.KEY_MAINTENANCE_MODE, isMaintenance);
+                        AppSettings.setString(SplashActivity.this, AppSettings.KEY_MAINTENANCE_MSG, msg);
+                    }
+                } catch (Exception ignored) {}
+
+                final boolean fMaintenance = isMaintenance;
+                final String fMsg = msg;
+                runOnUiThread(() -> {
+                    if (fMaintenance) {
+                        Intent intent = new Intent(SplashActivity.this, MaintenanceActivity.class);
+                        intent.putExtra("message", fMsg);
+                        startAndFinish(intent);
+                    } else {
+                        proceedWithUser(current);
+                    }
+                });
+            }
+        });
+    }
+
+    private void proceedWithUser(FirebaseUser current) {
         if (current == null) {
             startAndFinish(new Intent(this, LoginActivity.class));
             return;

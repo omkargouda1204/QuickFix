@@ -80,6 +80,8 @@ public class ProviderDashboardActivity extends BaseActivity {
         loadDashboardStats();
     }
 
+    // Notification icon removed from Provider Dashboard — badge logic moved to NotificationsActivity.
+
     private void setupToolbar() {
         Toolbar toolbar = findViewById(R.id.providerToolbar);
         if (toolbar != null) {

@@ -56,12 +56,17 @@ public class ProvidersAdapter extends RecyclerView.Adapter<ProvidersAdapter.VH> 
 
         // Profile image — Glide with circleCrop
         String img = (p.profileImageUrl != null && !p.profileImageUrl.isEmpty()) ? p.profileImageUrl : p.businessImageUrl;
-        Glide.with(ctx)
-            .load(img)
-            .placeholder(R.drawable.ic_person)
-            .error(R.drawable.ic_person)
-            .circleCrop()
-            .into(h.imgProvider);
+        
+        if (img == null || img.trim().isEmpty()) {
+            h.imgProvider.setImageResource(R.drawable.ic_person);
+        } else {
+            Glide.with(ctx)
+                .load(img)
+                .placeholder(R.drawable.ic_person)
+                .error(R.drawable.ic_person)
+                .circleCrop()
+                .into(h.imgProvider);
+        }
 
         // Names & Category
         h.tvBusinessName.setText(notEmpty(p.businessName, "Business"));

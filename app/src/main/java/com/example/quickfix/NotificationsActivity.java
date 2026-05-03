@@ -210,6 +210,9 @@ public class NotificationsActivity extends BaseActivity
                     showLoading(false);
                     adapter.setNotifications(finalList);
                     updateUnreadCount();
+                    if (!finalList.isEmpty()) {
+                        markAllReadOnOpen();
+                    }
                     emptyState.setVisibility(finalList.isEmpty() ? View.VISIBLE : View.GONE);
                     recyclerView.setVisibility(finalList.isEmpty() ? View.GONE : View.VISIBLE);
                 });
@@ -392,6 +395,14 @@ public class NotificationsActivity extends BaseActivity
     }
 
     private void markAllRead() {
+        markAllReadWithFeedback(true);
+    }
+
+    private void markAllReadOnOpen() {
+        markAllReadWithFeedback(false);
+    }
+
+    private void markAllReadWithFeedback(boolean showToast) {
         new Thread(() -> {
             try {
                 String resolvedUserId = (currentUserId == null || currentUserId.trim().isEmpty())
@@ -399,11 +410,18 @@ public class NotificationsActivity extends BaseActivity
                         : currentUserId.trim();
                 JSONObject body = new JSONObject();
                 body.put("is_read", true);
+                String roleFilter = (currentUserRole == null || currentUserRole.trim().isEmpty())
+                        ? "user"
+                        : currentUserRole.trim().toLowerCase();
                 String encodedUserId = URLEncoder.encode(resolvedUserId, StandardCharsets.UTF_8.name());
+                String encodedRole = URLEncoder.encode(roleFilter, StandardCharsets.UTF_8.name());
+                
                 String url = BASE_URL + "/rest/v1/notifications?or=(receiver_id.eq."
                         + encodedUserId
                         + ",user_id.eq."
                         + encodedUserId
+                        + ",receiver_role.eq."
+                        + encodedRole
                         + ")&is_read=eq.false";
                 Request req = new Request.Builder().url(url)
                         .patch(RequestBody.create(body.toString(), MediaType.get("application/json")))
@@ -420,12 +438,14 @@ public class NotificationsActivity extends BaseActivity
                             }
                             adapter.notifyDataSetChanged();
                             updateUnreadCount();
-                            Toast.makeText(this, "All marked as read", Toast.LENGTH_SHORT).show();
+                            if (showToast) {
+                                Toast.makeText(this, "All marked as read", Toast.LENGTH_SHORT).show();
+                            }
                         }
                     });
                 }
             } catch (Exception e) {
-                Log.e(TAG, "markAllRead: " + e.getMessage());
+                Log.e(TAG, "markAllRead failed: " + e.getMessage());
             }
         }).start();
     }

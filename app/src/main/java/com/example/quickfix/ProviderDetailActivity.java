@@ -216,7 +216,12 @@ public class ProviderDetailActivity extends BaseActivity {
          // Business/profile image
         ImageView ivImage = findViewById(R.id.ivDetailBusinessImage);
         String resolvedImageUrl = resolveProviderImageUrl(imageUrl);
-        if (resolvedImageUrl != null && !resolvedImageUrl.isEmpty()) {
+        
+        if (resolvedImageUrl == null || resolvedImageUrl.trim().isEmpty()) {
+            if (ivImage != null) {
+                ivImage.setImageResource(R.drawable.bg_profile_header_gradient);
+            }
+        } else {
             Glide.with(this)
                 .load(resolvedImageUrl)
                 .transition(DrawableTransitionOptions.withCrossFade())
@@ -224,8 +229,6 @@ public class ProviderDetailActivity extends BaseActivity {
                 .error(R.drawable.bg_profile_header_gradient)
                 .centerCrop()
                 .into(ivImage);
-        } else if (ivImage != null) {
-            ivImage.setImageResource(R.drawable.bg_profile_header_gradient);
         }
 
         // Text fields
@@ -1126,9 +1129,23 @@ public class ProviderDetailActivity extends BaseActivity {
     private void styleSectionButton(MaterialButton button, boolean selected) {
         if (button == null) return;
 
-        int background = ContextCompat.getColor(this, selected ? R.color.primary_light : R.color.white);
-        int text = ContextCompat.getColor(this, selected ? R.color.primary_dark : R.color.text_primary);
-        int stroke = ContextCompat.getColor(this, selected ? R.color.primary : R.color.divider);
+        int background;
+        int text;
+        int stroke;
+
+        if (selected) {
+            background = ContextCompat.getColor(this, R.color.primary_light);
+            text = ContextCompat.getColor(this, R.color.primary_dark);
+            stroke = ContextCompat.getColor(this, R.color.primary);
+        } else {
+            // Use theme-aware surface color instead of hardcoded white
+            android.util.TypedValue typedValue = new android.util.TypedValue();
+            getTheme().resolveAttribute(com.google.android.material.R.attr.colorSurface, typedValue, true);
+            background = typedValue.data;
+
+            text = ContextCompat.getColor(this, R.color.text_primary);
+            stroke = ContextCompat.getColor(this, R.color.divider);
+        }
 
         button.setBackgroundTintList(ColorStateList.valueOf(background));
         button.setTextColor(text);

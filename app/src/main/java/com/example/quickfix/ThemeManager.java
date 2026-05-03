@@ -121,14 +121,12 @@ public class ThemeManager {
      * In Application.onCreate() this sets the mode for the entire session.
      */
     public static void applyFromPrefs(Context ctx) {
-        if (ctx == null) return;
-        apply(isDarkMode(ctx));
+        applySystemTheme();
     }
 
     /** Apply the theme for an explicit role without relying on cached role state. */
     public static void applyFromPrefs(Context ctx, boolean isAdmin) {
-        if (ctx == null) return;
-        apply(isDarkMode(ctx, isAdmin));
+        applySystemTheme();
     }
 
     /** Apply a specific mode immediately (no restart needed with AppCompatDelegate). */
@@ -137,6 +135,11 @@ public class ThemeManager {
                 darkMode
                         ? AppCompatDelegate.MODE_NIGHT_YES
                         : AppCompatDelegate.MODE_NIGHT_NO);
+    }
+
+    /** Set the app to follow the system theme. */
+    public static void applySystemTheme() {
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
     }
 
     public static void applyUserMode(Context ctx) {

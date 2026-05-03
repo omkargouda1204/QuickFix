@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/screen_background">
+    android:background="?attr/colorBackground">
 
     <!-- Header gradient -->
     <LinearLayout
@@ -226,7 +226,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="No Bookings Found"
-                    android:textColor="@color/text_secondary"
+                    android:textColor="?attr/colorOnBackground"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:layout_marginTop="16dp" />
@@ -235,7 +235,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="No bookings match your current filters."
-                    android:textColor="@color/text_secondary"
+                    android:textColor="?attr/colorOnBackgroundSecondary"
                     android:textSize="13sp"
                     android:gravity="center"
                     android:layout_marginTop="8dp" />

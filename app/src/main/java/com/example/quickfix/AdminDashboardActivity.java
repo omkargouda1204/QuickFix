@@ -79,12 +79,11 @@ public class AdminDashboardActivity extends BaseActivity {
 
     // ── Feature card buttons ──────────────────────────────────────────────
     private MaterialButton btnBusinessApprovals, btnUserManagement,
-                           btnServiceManagement, btnContentManagement,
-                           btnViewReports;
+                           btnServiceManagement, btnContentManagement;
 
     // ── Clickable card wrappers ───────────────────────────────────────────
     private View cardOpenUserView, cardBusinessApprovals, cardUserManagement,
-                 cardServiceManagement, cardContentManagement, cardReports;
+                 cardServiceManagement, cardContentManagement;
 
     // ── Bottom nav ────────────────────────────────────────────────────────
     private BottomNavigationView bottomNav;
@@ -185,18 +184,16 @@ public class AdminDashboardActivity extends BaseActivity {
         cardUserManagement     = findViewById(R.id.cardUserManagement);
         cardServiceManagement  = findViewById(R.id.cardServiceManagement);
         cardContentManagement  = findViewById(R.id.cardContentManagement);
-        cardReports            = findViewById(R.id.cardReports);
 
         btnBusinessApprovals   = findViewById(R.id.btnBusinessApprovals);
         btnUserManagement      = findViewById(R.id.btnUserManagement);
         btnServiceManagement   = findViewById(R.id.btnServiceManagement);
         btnContentManagement   = findViewById(R.id.btnContentManagement);
-        btnViewReports         = findViewById(R.id.btnViewReports);
 
         bottomNav = findViewById(R.id.adminBottomNav);
 
-        adminLocationSelector = findViewById(R.id.adminLocationSelector);
-        tvAdminSelectedLocation = findViewById(R.id.tvAdminSelectedLocation);
+        // Location selector removed from Admin Dashboard layout
+        // adminLocationSelector and tvAdminSelectedLocation no longer exist
 
         vpAdminBanners = findViewById(R.id.vpAdminBanners);
         adminBannerDots = findViewById(R.id.adminBannerDots);
@@ -252,8 +249,6 @@ public class AdminDashboardActivity extends BaseActivity {
         setAdminBannersLoading(true);
 
         bannerApi.getAllBanners(
-                BuildConfig.SUPABASE_ANON_KEY,
-                "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                 "*",
                 "created_at.desc"
         ).enqueue(new Callback<List<Banner>>() {
@@ -291,8 +286,6 @@ public class AdminDashboardActivity extends BaseActivity {
         setAdminOffersLoading(true);
 
         offerApi.getAllOffers(
-                BuildConfig.SUPABASE_ANON_KEY,
-                "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
                 "*",
                 "created_at.desc"
         ).enqueue(new Callback<List<Offer>>() {
@@ -611,8 +604,6 @@ public class AdminDashboardActivity extends BaseActivity {
             cardServiceManagement.setOnClickListener(v -> goTo(ServiceManagementActivity.class));
         if (cardContentManagement != null)
             cardContentManagement.setOnClickListener(v -> goTo(ContentManagementActivity.class));
-        if (cardReports != null)
-            cardReports.setOnClickListener(v -> goTo(ReportsAnalyticsActivity.class));
 
         // Feature card buttons (individual buttons also work)
         if (btnBusinessApprovals != null)
@@ -623,14 +614,13 @@ public class AdminDashboardActivity extends BaseActivity {
             btnServiceManagement.setOnClickListener(v -> goTo(ServiceManagementActivity.class));
         if (btnContentManagement != null)
             btnContentManagement.setOnClickListener(v -> goTo(ContentManagementActivity.class));
-        if (btnViewReports != null)
-            btnViewReports.setOnClickListener(v -> goTo(ReportsAnalyticsActivity.class));
     }
 
     // ── Bottom Navigation ─────────────────────────────────────────────────
 
     private void setupBottomNavigation() {
         if (bottomNav == null) return;
+        
         bottomNav.setSelectedItemId(R.id.nav_dashboard);
         bottomNav.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
@@ -642,12 +632,6 @@ public class AdminDashboardActivity extends BaseActivity {
                 return true;
             } else if (id == R.id.nav_providers) {
                 goTo(AdminProviderManagementActivity.class);
-                return true;
-            } else if (id == R.id.nav_messages) {
-                Toast.makeText(this, "Messages — coming soon", Toast.LENGTH_SHORT).show();
-                return true;
-            } else if (id == R.id.nav_profile) {
-                showProfileBottomSheet();
                 return true;
             }
             return false;
@@ -743,8 +727,8 @@ public class AdminDashboardActivity extends BaseActivity {
         loadStatCount("/rest/v1/users?select=id&is_user=eq.true",
                 statTotalUsers);
 
-        // Provider count from provider_profiles table.
-        loadStatCount("/rest/v1/provider_profiles?select=id",
+        // Provider count from providers table.
+        loadStatCount("/rest/v1/providers?select=id",
                 statTotalProviders);
 
         // Load pending approvals count — from provider_applications

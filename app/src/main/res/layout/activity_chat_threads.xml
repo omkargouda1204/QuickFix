@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#F4F6F9">
+    android:background="?attr/colorBackground">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbarThreads"
@@ -42,7 +42,7 @@
             android:gravity="center"
             android:padding="24dp"
             android:text="No chats yet"
-            android:textColor="@color/text_secondary"
+            android:textColor="?attr/colorOnBackgroundSecondary"
             android:visibility="gone" />
     </FrameLayout>
 
