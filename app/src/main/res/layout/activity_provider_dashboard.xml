@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/screen_background">
+    android:background="@color/bg">
 
     <!-- Toolbar -->
     <com.google.android.material.appbar.AppBarLayout
@@ -42,6 +42,8 @@
                     android:textSize="12sp" />
 
             </LinearLayout>
+
+
 
         </androidx.appcompat.widget.Toolbar>
 
@@ -134,6 +136,7 @@
                     android:layout_height="80dp"
                     android:layout_marginEnd="6dp"
                     android:layout_weight="1"
+                    app:cardBackgroundColor="@color/card"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="3dp">
                     <LinearLayout
@@ -164,6 +167,7 @@
                     android:layout_height="80dp"
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
+                    app:cardBackgroundColor="@color/card"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="3dp">
                     <LinearLayout
@@ -206,6 +210,7 @@
                     android:layout_weight="1"
                     android:clickable="true"
                     android:focusable="true"
+                    app:cardBackgroundColor="@color/card"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="3dp">
                     <LinearLayout
@@ -236,6 +241,7 @@
                     android:layout_height="80dp"
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
+                    app:cardBackgroundColor="@color/card"
                     app:cardCornerRadius="12dp"
                     app:cardElevation="3dp">
                     <LinearLayout
@@ -279,6 +285,7 @@
                 android:layout_marginBottom="12dp"
                 android:clickable="true"
                 android:focusable="true"
+                app:cardBackgroundColor="@color/card"
                 app:cardCornerRadius="14dp"
                 app:cardElevation="3dp">
 
@@ -342,6 +349,7 @@
                 android:layout_marginBottom="12dp"
                 android:clickable="true"
                 android:focusable="true"
+                app:cardBackgroundColor="@color/card"
                 app:cardCornerRadius="14dp"
                 app:cardElevation="3dp">
 
@@ -405,6 +413,7 @@
                 android:layout_marginBottom="12dp"
                 android:clickable="true"
                 android:focusable="true"
+                app:cardBackgroundColor="@color/card"
                 app:cardCornerRadius="14dp"
                 app:cardElevation="3dp">
 
@@ -468,6 +477,7 @@
                 android:layout_marginBottom="12dp"
                 android:clickable="true"
                 android:focusable="true"
+                app:cardBackgroundColor="@color/card"
                 app:cardCornerRadius="14dp"
                 app:cardElevation="3dp">
 

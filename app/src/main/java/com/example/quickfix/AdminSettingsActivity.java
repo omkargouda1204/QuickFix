@@ -17,14 +17,9 @@ import com.google.firebase.auth.FirebaseUser;
 
 public class AdminSettingsActivity extends BaseActivity {
 
-    private SwitchMaterial switchPush, switchEmail, switchAdminAlerts;
-    private SwitchMaterial switchDarkMode;
-    private SwitchMaterial switchAutoApprove, switchEmailDigest;
+    private SwitchMaterial switchAutoApprove;
     private SwitchMaterial switchMaintenance;
     private LinearLayout layoutMaintenanceSettings;
-
-    private View notificationsSectionTitle;
-    private View notificationsSectionCard;
 
     private LinearLayout settingsChangePassword, settingsViewProfile, settingsLogout;
     private TextView tvAdminEmail, tvAdminRole, tvAppVersion;
@@ -59,15 +54,7 @@ public class AdminSettingsActivity extends BaseActivity {
     }
 
     private void bindViews() {
-        notificationsSectionTitle = findViewById(R.id.tvNotificationsSection);
-        notificationsSectionCard = findViewById(R.id.cardNotificationsSection);
-
-        switchPush = findViewById(R.id.switchAdminPushNotifications);
-        switchEmail = findViewById(R.id.switchAdminEmailNotifications);
-        switchAdminAlerts = findViewById(R.id.switchAdminAlerts);
-        switchDarkMode = findViewById(R.id.switchAdminDarkMode);
         switchAutoApprove = findViewById(R.id.switchAutoApprove);
-        switchEmailDigest = findViewById(R.id.switchEmailDigest);
         switchMaintenance = findViewById(R.id.switchMaintenanceMode);
         layoutMaintenanceSettings = findViewById(R.id.layoutMaintenanceSettings);
 
@@ -103,12 +90,7 @@ public class AdminSettingsActivity extends BaseActivity {
     private void applySnapshotToUi(AppSettings.Snapshot s) {
         if (s == null) return;
         isApplyingUiState = true;
-        setChecked(switchPush, s.pushNotifications);
-        setChecked(switchEmail, s.emailNotifications);
-        setChecked(switchAdminAlerts, s.adminAlerts);
-        setChecked(switchDarkMode, s.darkMode);
         setChecked(switchAutoApprove, s.autoApproveProviders);
-        setChecked(switchEmailDigest, s.dailyEmailDigest);
         setChecked(switchMaintenance, s.maintenanceMode);
         updateMaintenanceSettingsVisibility(s.maintenanceMode);
         isApplyingUiState = false;
@@ -119,12 +101,7 @@ public class AdminSettingsActivity extends BaseActivity {
     }
 
     private void setSwitchesEnabled(boolean enabled) {
-        if (switchPush != null) switchPush.setEnabled(enabled);
-        if (switchEmail != null) switchEmail.setEnabled(enabled);
-        if (switchAdminAlerts != null) switchAdminAlerts.setEnabled(enabled);
-        if (switchDarkMode != null) switchDarkMode.setEnabled(enabled);
         if (switchAutoApprove != null) switchAutoApprove.setEnabled(enabled);
-        if (switchEmailDigest != null) switchEmailDigest.setEnabled(enabled);
         if (switchMaintenance != null) switchMaintenance.setEnabled(enabled);
     }
 
@@ -146,34 +123,6 @@ public class AdminSettingsActivity extends BaseActivity {
     }
 
     private void setupListeners() {
-        if (switchPush != null) {
-            switchPush.setOnCheckedChangeListener((v, on) -> {
-                if (isApplyingUiState) return;
-                updateBooleanSetting("push_notifications", on, switchPush);
-            });
-        }
-
-        if (switchEmail != null) {
-            switchEmail.setOnCheckedChangeListener((v, on) -> {
-                if (isApplyingUiState) return;
-                updateBooleanSetting("email_notifications", on, switchEmail);
-            });
-        }
-
-        if (switchAdminAlerts != null) {
-            switchAdminAlerts.setOnCheckedChangeListener((v, on) -> {
-                if (isApplyingUiState) return;
-                updateBooleanSetting("admin_alerts", on, switchAdminAlerts);
-            });
-        }
-
-        if (switchDarkMode != null) {
-            switchDarkMode.setOnCheckedChangeListener((v, on) -> {
-                if (isApplyingUiState) return;
-                updateBooleanSetting("dark_mode", on, switchDarkMode);
-            });
-        }
-
         if (switchAutoApprove != null) {
             switchAutoApprove.setOnCheckedChangeListener((v, on) -> {
                 if (isApplyingUiState) return;
@@ -189,13 +138,6 @@ public class AdminSettingsActivity extends BaseActivity {
                 } else {
                     updateBooleanSetting("auto_approve_providers", false, switchAutoApprove);
                 }
-            });
-        }
-
-        if (switchEmailDigest != null) {
-            switchEmailDigest.setOnCheckedChangeListener((v, on) -> {
-                if (isApplyingUiState) return;
-                updateBooleanSetting("daily_email_digest", on, switchEmailDigest);
             });
         }
 
@@ -345,17 +287,11 @@ public class AdminSettingsActivity extends BaseActivity {
     }
 
     private void applyRequestedVisibilityScope() {
-        if (notificationsSectionTitle != null) notificationsSectionTitle.setVisibility(View.GONE);
-        if (notificationsSectionCard != null) notificationsSectionCard.setVisibility(View.GONE);
-
-        if (switchEmailDigest != null) {
-            View row = (View) switchEmailDigest.getParent();
-            if (row != null) row.setVisibility(View.GONE);
-        }
         if (layoutMaintenanceSettings != null) layoutMaintenanceSettings.setVisibility(View.GONE);
 
-        if (settingsChangePassword != null) settingsChangePassword.setVisibility(View.GONE);
-        if (settingsViewProfile != null) settingsViewProfile.setVisibility(View.GONE);
+        // All settings options should be visible for the admin
+        if (settingsChangePassword != null) settingsChangePassword.setVisibility(View.VISIBLE);
+        if (settingsViewProfile != null) settingsViewProfile.setVisibility(View.VISIBLE);
     }
 
     @Override

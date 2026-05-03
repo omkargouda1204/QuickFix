@@ -191,8 +191,6 @@ public final class AdminSettingsRepository {
     private static JSONArray fetchRows() throws Exception {
         try {
             Call<List<AdminSettingsDto>> call = getApi().fetchSingleRow(
-                    ANON_KEY,
-                    "Bearer " + ANON_KEY,
                     "application/json",
                     "*",
                     1
@@ -300,10 +298,8 @@ public final class AdminSettingsRepository {
                                                                    JSONObject patchBody) throws Exception {
         try {
             Map<String, Object> patchMap = jsonToMap(patchBody);
+
             Call<List<AdminSettingsDto>> call = getApi().updateById(
-                    ANON_KEY,
-                    "Bearer " + ANON_KEY,
-                    "application/json",
                     "return=representation",
                     "eq." + rowId,
                     patchMap
@@ -329,10 +325,13 @@ public final class AdminSettingsRepository {
 
     private static AppSettings.Snapshot fetchSingleRowById(String rowId) throws Exception {
         String url = SUPABASE_URL + "/rest/v1/admin_settings?select=*&id=eq." + rowId + "&limit=1";
+        String token = AuthTokenProvider.getIdTokenBlocking(10);
+        String authHeader = "Bearer " + (token != null ? token : ANON_KEY);
+
         Request req = new Request.Builder()
                 .url(url).get()
                 .addHeader("apikey",        ANON_KEY)
-                .addHeader("Authorization", "Bearer " + ANON_KEY)
+                .addHeader("Authorization", authHeader)
                 .addHeader("Accept",        "application/json")
                 .build();
         try (Response r = HTTP.newCall(req).execute()) {

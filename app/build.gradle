@@ -22,6 +22,7 @@ if (localPropsFile.exists()) {
     localPropsFile.withInputStream { localProps.load(it) }
 }
 
+def firebaseServerKey = localProps.getProperty('FIREBASE_SERVER_KEY', supabaseProps.getProperty('FIREBASE_SERVER_KEY', ''))
 def razorpayKeyId = localProps.getProperty('RAZORPAY_KEY_ID', supabaseProps.getProperty('RAZORPAY_KEY_ID', ''))
 def createOrderFnUrl = supabaseProps.getProperty(
         'SUPABASE_CREATE_ORDER_FN_URL',
@@ -70,6 +71,7 @@ android {
         buildConfigField "String", "SUPABASE_OFFER_VALIDATION_FN_URL","\"${offerValidationFnUrl}\""
         buildConfigField "String", "SUPABASE_CREATE_EMERGENCY_URL","\"${createEmergencyFnUrl}\""
         buildConfigField "String", "RAZORPAY_KEY_ID",            "\"${razorpayKeyId}\""
+        buildConfigField "String", "FIREBASE_SERVER_KEY",       "\"${firebaseServerKey}\""
     }
 
     buildFeatures {
