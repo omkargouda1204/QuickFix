@@ -135,7 +135,7 @@ async function fetchProvidersAndFilter(
     }
 
     const arr: any[] = await res.json();
-    console.log("Total providers in DB:", arr.length);
+    console.log(`Total providers in DB before filtering: ${arr.length}`);
 
     const matched: any[] = [];
 
@@ -145,6 +145,7 @@ async function fetchProvidersAndFilter(
       const reqCat = String(category || '').trim().toLowerCase();
       
       if (provCat !== reqCat) {
+        // console.log(`[Eval] Category mismatch for ${p.id}: prov="${provCat}" vs req="${reqCat}"`);
         continue;
       }
 
@@ -170,6 +171,9 @@ async function fetchProvidersAndFilter(
       // Haversine distance
       const dist = haversineKm(userLat, userLng, pLat, pLng);
       p.distance_km = dist;
+      
+      console.log(`[Eval] Provider ${p.id} (${p.business_name}) | user(${userLat}, ${userLng}) | prov(${pLat}, ${pLng}) | dist=${dist.toFixed(2)}km`);
+      
       matched.push(p);
     }
 
@@ -181,9 +185,15 @@ async function fetchProvidersAndFilter(
     // Filter by radius
     let withinRadius = matched.filter(p => p.distance_km <= radiusKm);
     
-    // STEP 8: FALLBACK - return nearest 3 if none within radius
+    // Fallback: Expand to 50km if none within radius
     if (withinRadius.length === 0 && matched.length > 0) {
-      console.log(`No providers within ${radiusKm}km, falling back to nearest 3 providers anyway`);
+      console.log(`No providers within ${radiusKm}km, expanding to 50km...`);
+      withinRadius = matched.filter(p => p.distance_km <= 50);
+    }
+    
+    // STEP 8: FALLBACK - return nearest 3 if none within 50km
+    if (withinRadius.length === 0 && matched.length > 0) {
+      console.log(`No providers within 50km, falling back to nearest 3 providers anyway`);
       withinRadius = matched.slice(0, 3);
     }
  

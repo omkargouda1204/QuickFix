@@ -390,19 +390,8 @@ public class EmergencyHelpActivity extends BaseActivity {
                     throw new IllegalStateException("Location appears to be (0,0) — GPS not ready. Please wait or select location manually.");
                 }
 
-                // Requirement 8: Do NOT create emergency booking if no provider exists.
-                List<NearbyProvider> nearbyProviders = fetchNearbyProviders(category);
-                if (nearbyProviders == null || nearbyProviders.isEmpty()) {
-                    runOnUiThread(() -> {
-                        setLoading(false);
-                        isSubmitting = false;
-                        btnSubmit.setEnabled(true);
-                        btnSubmit.setAlpha(1f);
-                        setStatus("✗ No provider available");
-                        Toast.makeText(this, "No provider available in your area for this service.", Toast.LENGTH_LONG).show();
-                    });
-                    return;
-                }
+                // Edge Function will handle finding providers, fallback (50km/nearest), and validation.
+                Log.d(TAG, "[submitEmergency] Preparing to call edge function with lat=" + selectedLat + " lng=" + selectedLng + " category=" + category);
 
                 // Build request payload
                 JSONObject body = new JSONObject();
