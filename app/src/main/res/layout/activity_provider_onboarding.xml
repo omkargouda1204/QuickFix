@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorBackground">
+    android:background="?android:attr/colorBackground">
 
     <!-- ══ GRADIENT APP BAR ══ -->
     <com.google.android.material.appbar.AppBarLayout
@@ -243,7 +243,7 @@
                                 android:textColor="?attr/colorOnBackground" android:textSize="18sp" android:textStyle="bold" />
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                 android:text="Fill in your business information"
-                                android:textColor="?attr/colorOnBackgroundSecondary" android:textSize="12sp" android:layout_marginTop="2dp" />
+                                android:textColor="@color/text_secondary" android:textSize="12sp" android:layout_marginTop="2dp" />
                         </LinearLayout>
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:background="@drawable/bg_category_blue"
@@ -559,7 +559,7 @@
                                 android:textColor="?attr/colorOnBackground" android:textSize="18sp" android:textStyle="bold" />
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                 android:text="Upload your proof and business photo"
-                                android:textColor="?attr/colorOnBackgroundSecondary" android:textSize="12sp" android:layout_marginTop="2dp" />
+                                android:textColor="@color/text_secondary" android:textSize="12sp" android:layout_marginTop="2dp" />
                         </LinearLayout>
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:background="@drawable/bg_category_teal"
@@ -761,7 +761,7 @@
                                 android:textColor="?attr/colorOnBackground" android:textSize="18sp" android:textStyle="bold" />
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                 android:text="Scroll to bottom to unlock checkbox"
-                                android:textColor="?attr/colorOnBackgroundSecondary" android:textSize="12sp" android:layout_marginTop="2dp" />
+                                android:textColor="@color/text_secondary" android:textSize="12sp" android:layout_marginTop="2dp" />
                         </LinearLayout>
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                             android:background="@drawable/bg_category_purple"

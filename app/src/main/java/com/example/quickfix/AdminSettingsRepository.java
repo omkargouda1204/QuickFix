@@ -190,7 +190,11 @@ public final class AdminSettingsRepository {
     /** Always fetch the canonical singleton row. */
     private static JSONArray fetchRows() throws Exception {
         try {
+            String token = AuthTokenProvider.getIdTokenBlocking(10);
+            String authHeader = "Bearer " + (token != null ? token : ANON_KEY);
             Call<List<AdminSettingsDto>> call = getApi().fetchSingleRow(
+                    ANON_KEY,
+                    authHeader,
                     "application/json",
                     "*",
                     1
@@ -298,8 +302,13 @@ public final class AdminSettingsRepository {
                                                                    JSONObject patchBody) throws Exception {
         try {
             Map<String, Object> patchMap = jsonToMap(patchBody);
+            String token = AuthTokenProvider.getIdTokenBlocking(10);
+            String authHeader = "Bearer " + (token != null ? token : ANON_KEY);
 
             Call<List<AdminSettingsDto>> call = getApi().updateById(
+                    ANON_KEY,
+                    authHeader,
+                    "application/json",
                     "return=representation",
                     "eq." + rowId,
                     patchMap
