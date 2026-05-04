@@ -1,5 +1,6 @@
 package com.example.quickfix;
 
+import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -47,6 +48,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     private TextView tvEmergencyPhone;
     private TextView tvEmergencyCategory;
     private TextView tvEmergencyAddress;
+    private TextView tvEmergencyDistance;
     private TextView tvEmergencyDescription;
     private TextView tvEmergencyStatus;
     private MaterialButton btnAccept;
@@ -62,6 +64,10 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     private String providerService = "";
     private String providerCity = "";
     private String providerArea = "";
+    private double providerLatitude = Double.NaN;
+    private double providerLongitude = Double.NaN;
+    private double requestLatitude = Double.NaN;
+    private double requestLongitude = Double.NaN;
     private String quickAction = "";
     private boolean quickActionConsumed = false;
     private boolean rejectedByCurrentProvider = false;
@@ -96,6 +102,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         tvEmergencyPhone = findViewById(R.id.tvEmergencyPhone);
         tvEmergencyCategory = findViewById(R.id.tvEmergencyCategory);
         tvEmergencyAddress = findViewById(R.id.tvEmergencyAddress);
+        tvEmergencyDistance = findViewById(R.id.tvEmergencyDistance);
         tvEmergencyDescription = findViewById(R.id.tvEmergencyDescription);
         tvEmergencyStatus = findViewById(R.id.tvEmergencyStatus);
         btnAccept = findViewById(R.id.btnAcceptEmergency);
@@ -165,6 +172,8 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 providerService = safe(provider.optString("category", ""));
                 providerCity = safe(provider.optString("city", ""));
                 providerArea = safe(provider.optString("area", ""));
+                providerLatitude = readLatitude(provider);
+                providerLongitude = readLongitude(provider);
 
                 JSONObject request = fetchRequestById(requestId);
 
@@ -189,7 +198,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     private JSONObject fetchProviderByFirebaseUid(String firebaseUid) throws Exception {
         String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles"
                 + "?firebase_uid=eq." + urlEncode(firebaseUid)
-                + "&select=id,business_name,phone,category,city,area&limit=1";
+                + "&select=id,business_name,phone,category,city,area,latitude,longitude,lat,lng&limit=1";
 
         Request.Builder rb = new Request.Builder()
                 .url(url)
@@ -240,8 +249,11 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         setText(tvEmergencyUser, "User: " + fallback(request.optString("customer_name", ""), "Customer"));
         setText(tvEmergencyPhone, "Phone: " + fallback(request.optString("customer_phone", ""), "Not available"));
         setText(tvEmergencyCategory, "Category: " + fallback(request.optString("category", ""), "General"));
-        String rawAddress = fallback(request.optString("address", ""), "Not available");
-        setText(tvEmergencyAddress, "Location: " + rawAddress.replaceAll("[A-Z0-9\\+]{6,}", "").trim());
+        requestLatitude = readLatitude(request);
+        requestLongitude = readLongitude(request);
+        String rawAddress = fallback(request.optString("address", ""), fallback(request.optString("location_label", ""), "Not available"));
+        setText(tvEmergencyAddress, "Location: " + rawAddress);
+        updateDistanceLabel();
         setText(tvEmergencyDescription, "Problem: " + fallback(request.optString("description", ""), "Not specified"));
 
         String status = safe(request.optString("status", "pending")).toLowerCase(Locale.getDefault());
@@ -268,6 +280,23 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
             }
         }
         setText(tvEmergencyStatus, statusLine);
+    }
+
+    private void updateDistanceLabel() {
+        if (tvEmergencyDistance == null) return;
+
+        if (Double.isNaN(providerLatitude) || Double.isNaN(providerLongitude)
+                || Double.isNaN(requestLatitude) || Double.isNaN(requestLongitude)) {
+            tvEmergencyDistance.setVisibility(View.GONE);
+            return;
+        }
+
+        float[] results = new float[1];
+        Location.distanceBetween(requestLatitude, requestLongitude, providerLatitude, providerLongitude, results);
+        float distanceKm = results[0] / 1000f;
+
+        tvEmergencyDistance.setVisibility(View.VISIBLE);
+        tvEmergencyDistance.setText(String.format(Locale.getDefault(), "Distance: %.1f km away", distanceKm));
     }
 
     private void updateAcceptStateFromStatus(JSONObject request) {
@@ -579,6 +608,20 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
     private String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private double readLatitude(JSONObject o) {
+        if (o == null) return Double.NaN;
+        if (o.has("latitude") && !o.isNull("latitude")) return o.optDouble("latitude", Double.NaN);
+        if (o.has("lat") && !o.isNull("lat")) return o.optDouble("lat", Double.NaN);
+        return Double.NaN;
+    }
+
+    private double readLongitude(JSONObject o) {
+        if (o == null) return Double.NaN;
+        if (o.has("longitude") && !o.isNull("longitude")) return o.optDouble("longitude", Double.NaN);
+        if (o.has("lng") && !o.isNull("lng")) return o.optDouble("lng", Double.NaN);
+        return Double.NaN;
     }
 
 

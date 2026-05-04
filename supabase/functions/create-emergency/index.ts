@@ -208,6 +208,45 @@ async function fetchProvidersAndFilter(
   }
 }
 
+async function canCreateEmergency(
+  supabaseUrl: string,
+  serviceKey: string,
+  uid: string
+): Promise<boolean> {
+  const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/rpc/can_create_emergency`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: serviceKey,
+      authorization: `Bearer ${serviceKey}`,
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ uid }),
+  });
+
+  const raw = (await res.text()).trim();
+  if (!res.ok) {
+    throw new Error(`can_create_emergency failed HTTP ${res.status}: ${raw}`);
+  }
+
+  if (raw.toLowerCase() === 'true') return true;
+  if (raw.toLowerCase() === 'false') return false;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === 'boolean') return parsed;
+    if (parsed && typeof parsed === 'object') {
+      if ('result' in parsed) return Boolean((parsed as any).result);
+      if ('can_create_emergency' in parsed) return Boolean((parsed as any).can_create_emergency);
+    }
+  } catch {
+    // fall through to false
+  }
+
+  return false;
+}
+
 // ── DB write helpers (all use service role key — bypass RLS) ──────────────────
 
 async function insertBooking(
@@ -396,6 +435,11 @@ Deno.serve(async (req) => {
 
     console.log('=== create-emergency START ===');
     console.log(`[Request] user_id=${payload.user_id} | category="${p_category}" | lat=${p_lat}, lng=${p_lng} | radius=${p_radius_km}km`);
+
+    const emergencyAllowed = await canCreateEmergency(SUPABASE_URL, SERVICE_KEY, String(payload.user_id));
+    if (!emergencyAllowed) {
+      return json({ error: 'Only 2 emergency requests allowed per month' }, 429);
+    }
 
     // ── 5. Find nearby providers ──────────────────────────────────────────────
     let providers: any[] = [];

@@ -18,8 +18,10 @@ public interface ProviderApi {
     Call<List<Provider>> getProviders(
             @Header("apikey") String apiKey,
             @Header("Authorization") String bearer,
+            @Header("Prefer") String prefer,
             @Query("select") String select,
-            @Query("approved") String approved,
+            // column name is `is_approved` in the DB schema
+            @Query("is_approved") String isApproved,
             @Query("limit") Integer limit
     );
 }

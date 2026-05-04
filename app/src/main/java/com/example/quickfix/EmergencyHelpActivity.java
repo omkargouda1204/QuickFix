@@ -390,6 +390,10 @@ public class EmergencyHelpActivity extends BaseActivity {
                     throw new IllegalStateException("Location appears to be (0,0) — GPS not ready. Please wait or select location manually.");
                 }
 
+                if (!canCreateEmergency(currentUserId)) {
+                    throw new IllegalStateException("Only 2 emergency requests allowed per month");
+                }
+
                 // Edge Function will handle finding providers, fallback (50km/nearest), and validation.
                 Log.d(TAG, "[submitEmergency] Preparing to call edge function with lat=" + selectedLat + " lng=" + selectedLng + " category=" + category);
 
@@ -516,6 +520,39 @@ public class EmergencyHelpActivity extends BaseActivity {
             if (!msg.isEmpty()) return msg;
         } catch (Exception ignored) {}
         return "Failed to send emergency request (HTTP " + httpCode + ")";
+    }
+
+    private boolean canCreateEmergency(String uid) throws Exception {
+        if (TextUtils.isEmpty(uid)) return false;
+
+        JSONObject body = new JSONObject();
+        body.put("uid", uid);
+
+        Request request = new Request.Builder()
+                .url(BuildConfig.SUPABASE_URL + "/rest/v1/rpc/can_create_emergency")
+                .post(RequestBody.create(body.toString(), JSON))
+                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Accept", "application/json")
+                .build();
+
+        try (Response response = http.newCall(request).execute()) {
+            String raw = response.body() != null ? response.body().string().trim() : "false";
+            if (!response.isSuccessful()) {
+                throw new IllegalStateException(parseErrorMessage(raw, response.code()));
+            }
+            if ("true".equalsIgnoreCase(raw)) return true;
+            if ("false".equalsIgnoreCase(raw)) return false;
+
+            try {
+                JSONObject parsed = new JSONObject(raw);
+                if (parsed.has("result")) return parsed.optBoolean("result", false);
+                if (parsed.has("can_create_emergency")) return parsed.optBoolean("can_create_emergency", false);
+            } catch (Exception ignored) {
+            }
+            return false;
+        }
     }
 
     private void createPendingEmergencyBookingForProvider(String requestId, NearbyProvider provider) {

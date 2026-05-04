@@ -51,6 +51,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -87,6 +89,8 @@ public class MainActivity extends BaseActivity {
     private AppLocationManager  locationManager;
 
     private ImageView notificationIcon;
+    private View      notificationBadge;
+    private String    currentFirebaseUid = "";
 
     private EditText     etSearch;
     private ImageView    micBtn;
@@ -156,6 +160,10 @@ public class MainActivity extends BaseActivity {
     private TextView navHomeText, navBookingsText, navMessagesText, navProfileText;
 
     private FirebaseAuth mAuth;
+    private final OkHttpClient http = new OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build();
 
     private LinearLayout catPlumbing_temp, catElectrical_temp, catCleaning_temp, catRepair_temp;
 
@@ -167,6 +175,7 @@ public class MainActivity extends BaseActivity {
         mAuth = FirebaseAuth.getInstance();
         FirebaseUser user = mAuth.getCurrentUser();
         if (user == null) { redirectToLogin(); return; }
+        currentFirebaseUid = user.getUid();
 
         bannerApi = RetrofitProvider.get().create(BannerApi.class);
         offerApi = RetrofitProvider.get().create(OfferApi.class);
@@ -182,6 +191,7 @@ public class MainActivity extends BaseActivity {
         setupPullToRefresh();
         setupListBusinessCard(user);
         loadUserData(user);
+        loadUnreadNotificationBadge();
         requestNotificationPermission();
         
         // Make banner and offers sections visible during loading
@@ -205,6 +215,7 @@ public class MainActivity extends BaseActivity {
             ivLocationPulse = findViewSafe(R.id.ivLocationPulse);
             locationAccuracyDot = findViewSafe(R.id.locationAccuracyDot);
             notificationIcon = findViewSafe(R.id.notificationIcon);
+            notificationBadge = findViewSafe(R.id.notificationBadge);
             notificationIcon.setOnClickListener(v -> {
                 startActivity(new Intent(this, NotificationsActivity.class));
             });
@@ -266,6 +277,10 @@ public class MainActivity extends BaseActivity {
 
             if (micBtn != null) {
                 micBtn.setOnClickListener(v -> launchVoiceSearch());
+            }
+
+            if (notificationBadge != null) {
+                notificationBadge.setVisibility(View.GONE);
             }
 
             bannerApi = RetrofitProvider.get().create(BannerApi.class);
@@ -499,6 +514,55 @@ public class MainActivity extends BaseActivity {
             userEmail.setText("Find trusted services near you");
             userEmail.setVisibility(View.VISIBLE);
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadUnreadNotificationBadge();
+    }
+
+    private void loadUnreadNotificationBadge() {
+        if (notificationBadge == null || currentFirebaseUid == null || currentFirebaseUid.trim().isEmpty()) {
+            if (notificationBadge != null) notificationBadge.setVisibility(View.GONE);
+            return;
+        }
+
+        new Thread(() -> {
+            int count = 0;
+            try {
+                String encodedUid = URLEncoder.encode(currentFirebaseUid.trim(), StandardCharsets.UTF_8.name());
+                String url = BuildConfig.SUPABASE_URL
+                        + "/rest/v1/notifications?select=id&user_id=eq." + encodedUid
+                        + "&is_read=eq.false&limit=1";
+
+                Request request = new Request.Builder()
+                        .url(url)
+                        .get()
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Accept", "application/json")
+                        .addHeader("Prefer", "count=exact")
+                        .build();
+
+                try (Response response = http.newCall(request).execute()) {
+                    String range = response.header("Content-Range", "");
+                    if (range != null && range.contains("/")) {
+                        String countStr = range.substring(range.lastIndexOf('/') + 1).trim();
+                        count = Integer.parseInt(countStr);
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "loadUnreadNotificationBadge failed", e);
+            }
+
+            final int finalCount = Math.max(0, count);
+            runOnUiThread(() -> {
+                if (notificationBadge != null) {
+                    notificationBadge.setVisibility(finalCount > 0 ? View.VISIBLE : View.GONE);
+                }
+            });
+        }).start();
     }
 
     private void requestNotificationPermission() {

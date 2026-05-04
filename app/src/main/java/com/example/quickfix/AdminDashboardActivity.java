@@ -734,8 +734,8 @@ public class AdminDashboardActivity extends BaseActivity {
         loadStatCount("/rest/v1/users?select=id",
                 statTotalUsers);
 
-        // Provider count from providers table.
-        loadProviderCount(null, statTotalProviders);
+        // Provider count from providers table (approved only).
+        loadProviderCount("eq.true", statTotalProviders);
 
         // Load pending approvals count — from providers table
         loadProviderCount("eq.false", statPendingApprovals);
@@ -889,31 +889,79 @@ public class AdminDashboardActivity extends BaseActivity {
     }
 
     private void loadProviderCount(String approvedFilter, TextView targetView) {
-        if (providerApi == null || targetView == null) return;
+        if (targetView == null) return;
 
         String url = BuildConfig.SUPABASE_URL + "/rest/v1/providers?select=id"
-                + (approvedFilter != null ? "&approved=" + approvedFilter : "");
+                + (approvedFilter != null ? "&is_approved=" + approvedFilter : "")
+                + "&limit=1";
         Log.d(TAG, "API_URL=" + url);
 
-        providerApi.getProviders(
+        okhttp3.Request request = new okhttp3.Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Accept", "application/json")
+                .addHeader("Prefer", "count=exact")
+                .build();
+
+        http.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(okhttp3.Call call, java.io.IOException e) {
+                Log.w(TAG, "loadProviderCount failed: " + e.getMessage());
+                runOnUiThread(() -> targetView.setText("0"));
+            }
+
+            @Override
+            public void onResponse(okhttp3.Call call, okhttp3.Response response) {
+                int count = extractCountFromResponse(response);
+                Log.d(TAG, "RESPONSE providers count=" + count);
+                runOnUiThread(() -> targetView.setText(String.valueOf(Math.max(0, count))));
+            }
+        });
+    }
+
+    /**
+     * Retrofit-based provider count loader. Uses ProviderApi and reads the Content-Range header
+     * so the server's exact count (Prefer: count=exact) is used when available.
+     */
+    private void loadProviderCountWithRetrofit(String approvedFilter, TextView targetView) {
+        if (targetView == null || providerApi == null) return;
+
+        String isApproved = approvedFilter != null ? approvedFilter : null;
+        // Request only the id column and limit=1 to get headers populated
+        Call<List<Provider>> call = providerApi.getProviders(
                 BuildConfig.SUPABASE_ANON_KEY,
                 "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                "count=exact",
                 "id",
-                approvedFilter,
-                1000
-        ).enqueue(new retrofit2.Callback<List<Provider>>() {
+                isApproved,
+                1
+        );
+
+        call.enqueue(new Callback<List<Provider>>() {
             @Override
             public void onResponse(Call<List<Provider>> call, Response<List<Provider>> response) {
-                int count = (response.isSuccessful() && response.body() != null)
-                        ? response.body().size()
-                        : 0;
-                Log.d(TAG, "RESPONSE providers count=" + count);
-                runOnUiThread(() -> targetView.setText(String.valueOf(count)));
+                try {
+                    String range = response.headers().get("Content-Range");
+                    int total = 0;
+                    if (range != null && range.contains("/")) {
+                        String totalStr = range.substring(range.lastIndexOf('/') + 1).trim();
+                        try { total = Integer.parseInt(totalStr); } catch (NumberFormatException ignore) { total = 0; }
+                    } else if (response.body() != null) {
+                        total = response.body().size();
+                    }
+                    final int finalCount = Math.max(0, total);
+                    runOnUiThread(() -> targetView.setText(String.valueOf(finalCount)));
+                } catch (Exception e) {
+                    Log.w(TAG, "loadProviderCountWithRetrofit parse failed", e);
+                    runOnUiThread(() -> targetView.setText("0"));
+                }
             }
 
             @Override
             public void onFailure(Call<List<Provider>> call, Throwable t) {
-                Log.w(TAG, "loadProviderCount failed: " + t.getMessage());
+                Log.w(TAG, "loadProviderCountWithRetrofit failed", t);
                 runOnUiThread(() -> targetView.setText("0"));
             }
         });

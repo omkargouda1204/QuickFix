@@ -176,28 +176,14 @@ public class ProviderDashboardActivity extends BaseActivity {
 
                 providerProfileIdForDashboard = providerProfileId;
 
-                JSONArray bookingArr = getProviderBookings(providerProfileId, uid);
-                // If total_bookings column in profile is 0, fallback to current active bookings count
-                if (totalBookingsCount <= 0) {
-                    totalBookingsCount = bookingArr.length();
-                }
-                
-                for (int i = 0; i < bookingArr.length(); i++) {
-                    JSONObject b = bookingArr.getJSONObject(i);
-                    String status = b.optString("status", "").trim().toLowerCase(Locale.US);
-                    
-                    if (b.optBoolean("is_emergency", false) || "Emergency".equalsIgnoreCase(b.optString("type"))) {
-                        emergencyCount++;
-                    }
+                // Load total bookings count using Prefer: count=exact
+                totalBookingsCount = loadBookingsCount(uid);
 
-                    if ("paid".equals(status) || "completed".equals(status)) {
-                        double amount = parseDoubleSafe(b.opt("price"));
-                        if (amount <= 0d) {
-                            amount = parseDoubleSafe(b.opt("payment_amount"));
-                        }
-                        totalEarnings += amount;
-                    }
-                }
+                // Load earnings from completed bookings
+                totalEarnings = loadEarnings(uid);
+
+                // Load emergency count using Prefer: count=exact
+                emergencyCount = loadEmergencyCount(uid);
 
                 if (ratingValue <= 0f) {
                     ratingValue = loadRatingFallback(providerProfileId, uid);
@@ -247,14 +233,90 @@ public class ProviderDashboardActivity extends BaseActivity {
         }).start();
     }
 
+    /**
+     * Get total bookings count for provider using Prefer: count=exact
+     */
+    private int loadBookingsCount(String providerUid) {
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings?select=id&provider_uid=eq." + Uri.encode(providerUid) + "&limit=1";
+        try {
+            okhttp3.Request request = new okhttp3.Request.Builder()
+                    .url(url)
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .addHeader("Prefer", "count=exact")
+                    .build();
+
+            try (okhttp3.Response r = http.newCall(request).execute()) {
+                if (!r.isSuccessful()) return 0;
+                String range = r.header("Content-Range", "");
+                if (range != null && range.contains("/")) {
+                    String countStr = range.substring(range.lastIndexOf('/') + 1).trim();
+                    return Integer.parseInt(countStr);
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.e("ProviderDashboard", "Error loading bookings count", e);
+        }
+        return 0;
+    }
+
+    /**
+     * Get emergency count for provider using Prefer: count=exact
+     */
+    private int loadEmergencyCount(String providerUid) {
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?select=id&provider_uid=eq." + Uri.encode(providerUid) + "&limit=1";
+        try {
+            okhttp3.Request request = new okhttp3.Request.Builder()
+                    .url(url)
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Accept", "application/json")
+                    .addHeader("Prefer", "count=exact")
+                    .build();
+
+            try (okhttp3.Response r = http.newCall(request).execute()) {
+                if (!r.isSuccessful()) return 0;
+                String range = r.header("Content-Range", "");
+                if (range != null && range.contains("/")) {
+                    String countStr = range.substring(range.lastIndexOf('/') + 1).trim();
+                    return Integer.parseInt(countStr);
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.e("ProviderDashboard", "Error loading emergency count", e);
+        }
+        return 0;
+    }
+
+    /**
+     * Calculate total earnings from completed bookings
+     */
+    private double loadEarnings(String providerUid) {
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings?select=price&provider_uid=eq." + Uri.encode(providerUid) + "&status=eq.completed";
+        try {
+            JSONArray bookings = getJsonArray(url);
+            double total = 0d;
+            for (int i = 0; i < bookings.length(); i++) {
+                JSONObject b = bookings.getJSONObject(i);
+                double price = parseDoubleSafe(b.opt("price"));
+                total += price;
+            }
+            return total;
+        } catch (Exception e) {
+            android.util.Log.e("ProviderDashboard", "Error loading earnings", e);
+        }
+        return 0d;
+    }
+
     private JSONArray getProviderBookings(String providerProfileId, String uid) {
         String base = BuildConfig.SUPABASE_URL + "/rest/v1/bookings?select=status,price,payment_amount,is_emergency,type";
 
         String url;
         if (providerProfileId != null && !providerProfileId.trim().isEmpty()) {
-            url = base + "&provider_id=eq." + Uri.encode(providerProfileId.trim());
+            url = base + "&provider_uid=eq." + Uri.encode(providerProfileId.trim());
         } else {
-            url = base + "&provider_id=eq." + Uri.encode(uid);
+            url = base + "&provider_uid=eq." + Uri.encode(uid);
         }
 
         return getJsonArray(url);
