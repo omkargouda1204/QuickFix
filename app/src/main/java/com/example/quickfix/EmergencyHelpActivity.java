@@ -391,9 +391,9 @@ public class EmergencyHelpActivity extends BaseActivity {
                 }
 
                 // NOTE: Emergency limit is enforced server-side by the DB trigger
-                // (trg_emergency_limit BEFORE INSERT on emergency_requests).
+                // (trg_limit BEFORE INSERT on emergency_requests).
                 // The Edge Function also does a pre-check via can_create_emergency RPC.
-                // No client-side count needed here — the server will reject with LIMIT_REACHED.
+                // No client-side count needed here — the server will reject with LIMIT_EXCEEDED.
 
                 // Edge Function will handle finding providers, fallback (50km/nearest), and validation.
                 Log.d(TAG, "[submitEmergency] Preparing to call edge function with lat=" + selectedLat + " lng=" + selectedLng + " category=" + category);
@@ -456,7 +456,7 @@ public class EmergencyHelpActivity extends BaseActivity {
 
                     if (!res.isSuccessful()) {
                         final String errMsg;
-                        if (raw.contains("EMERGENCY_LIMIT_REACHED") || raw.contains("2 emergency requests")) {
+                        if (raw.contains("LIMIT_EXCEEDED") || raw.contains("EMERGENCY_LIMIT_EXCEEDED") || raw.contains("LIMIT_REACHED") || raw.contains("2 emergency requests")) {
                             errMsg = "⚠️ Monthly limit reached. You can only make 2 emergency requests per month.";
                         } else {
                             errMsg = parseErrorMessage(raw, res.code());
@@ -507,7 +507,7 @@ public class EmergencyHelpActivity extends BaseActivity {
             } catch (Exception e) {
                 Log.e(TAG, "[submitEmergency] Exception:", e);
                 final String userMsg;
-                if (e.getMessage() != null && e.getMessage().contains("EMERGENCY_LIMIT_REACHED")) {
+                if (e.getMessage() != null && (e.getMessage().contains("LIMIT_EXCEEDED") || e.getMessage().contains("EMERGENCY_LIMIT_EXCEEDED") || e.getMessage().contains("LIMIT_REACHED"))) {
                     userMsg = "⚠️ Monthly limit reached. You can only make 2 emergency requests per month.";
                 } else if (e.getMessage() != null && e.getMessage().contains("Only 2 emergency")) {
                     userMsg = "⚠️ Monthly limit reached. You can only make 2 emergency requests per month.";

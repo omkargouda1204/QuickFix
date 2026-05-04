@@ -462,7 +462,7 @@ Deno.serve(async (req) => {
 
     const emergencyAllowed = await canCreateEmergency(SUPABASE_URL, SERVICE_KEY, String(payload.user_id));
     if (!emergencyAllowed) {
-      return json({ error: 'LIMIT_REACHED: You can only make 2 emergency requests per month.' }, 429);
+      return json({ error: 'LIMIT_EXCEEDED: You can only make 2 emergency requests per month.' }, 429);
     }
 
     // ── 5. Find nearby providers ──────────────────────────────────────────────
@@ -516,6 +516,37 @@ Deno.serve(async (req) => {
 
     let firstBookingId = '';
 
+    // Insert the single source emergency request once. This is the row that
+    // enforces the monthly cap and drives the DB notification trigger.
+    const primaryProvider = providers[0];
+    try {
+      await insertEmergencyRequest(SUPABASE_URL, SERVICE_KEY, {
+        user_id: String(payload.user_id),
+        user_firebase_uid: String(payload.user_id),
+        user_name: String(payload.user_name || ''),
+        provider_uid: primaryProvider.firebase_uid,
+        category: p_category,
+        description: String(payload.description || ''),
+        city: String(payload.city || ''),
+        area: String(payload.area || ''),
+        lat: p_lat,
+        lng: p_lng,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      const errText = String(err ?? '');
+      console.warn('[DB] Failed to insert primary emergency request:', errText);
+      if (
+        errText.includes('LIMIT_EXCEEDED') ||
+        errText.includes('EMERGENCY_LIMIT_EXCEEDED') ||
+        errText.includes('LIMIT_REACHED')
+      ) {
+        return json({ error: 'LIMIT_EXCEEDED: You can only make 2 emergency requests per month.' }, 429);
+      }
+      throw err;
+    }
+
     for (const p of providers) {
       const providerBookingData = {
         ...baseBookingData,
@@ -528,31 +559,24 @@ Deno.serve(async (req) => {
       try {
         const created = await insertBooking(SUPABASE_URL, SERVICE_KEY, providerBookingData);
         if (!firstBookingId) firstBookingId = created.id;
-        
-        // Insert into emergency_requests — required for DB triggers:
-        //   BEFORE INSERT: check_emergency_limit uses user_firebase_uid (NOT NULL column)
-        //   AFTER INSERT:  create_emergency_notification inserts notification row
-        await insertEmergencyRequest(SUPABASE_URL, SERVICE_KEY, {
-          user_firebase_uid: String(payload.user_id), // maps firebase UID to NOT NULL column
-          user_name: String(payload.user_name || ''),
-          provider_uid: p.firebase_uid,
-          booking_id: created.id,
-          category: p_category,
-          description: String(payload.description || ''),
-          city: String(payload.city || ''),
-          area: String(payload.area || ''),
-          lat: p_lat,
-          lng: p_lng,
-          status: 'pending',
-          created_at: new Date().toISOString(),
-        });
 
         notifiedProviders.push({
           ...p,
           booking_id: created.id
         });
       } catch (err) {
-        console.warn(`[DB] Failed to insert emergency booking for provider ${p.id}:`, err);
+        const errText = String(err ?? '');
+        console.warn(`[DB] Failed to insert emergency booking for provider ${p.id}:`, errText);
+
+        if (
+          errText.includes('LIMIT_EXCEEDED') ||
+          errText.includes('EMERGENCY_LIMIT_EXCEEDED') ||
+          errText.includes('LIMIT_REACHED')
+        ) {
+          return json({ error: 'LIMIT_EXCEEDED: You can only make 2 emergency requests per month.' }, 429);
+        }
+
+        throw err;
       }
     }
 

@@ -429,13 +429,25 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
                     runOnUiThread(() -> {
                         setLoading(false);
-                        showToast("accepted".equals(status) ? "Request Accepted!" : "Request Declined");
-                        if ("cancelled".equals(status)) {
+                        if ("accepted".equals(status)) {
+                            showToast("✅ Request Accepted!");
+                            // Permanently disable the Accept button — this request is yours
+                            if (btnAccept != null) {
+                                btnAccept.setEnabled(false);
+                                btnAccept.setText("✓ Accepted");
+                                btnAccept.setAlpha(0.7f);
+                            }
+                            if (btnReject != null) btnReject.setVisibility(View.GONE);
+                        } else {
+                            showToast("Request Declined");
                             finish();
-                        } else if (updatedRows.length() > 0) {
+                        }
+                        if (updatedRows.length() > 0) {
                             try {
                                 bindRequest(updatedRows.getJSONObject(0));
-                                updateAcceptStateFromStatus(updatedRows.getJSONObject(0));
+                                if (!"accepted".equals(status)) {
+                                    updateAcceptStateFromStatus(updatedRows.getJSONObject(0));
+                                }
                             } catch (Exception e) {
                                 Log.e(TAG, "Error binding updated request", e);
                             }
@@ -444,9 +456,20 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                 }
             } catch (Exception e) {
                 Log.e(TAG, "updateBookingStatus failed", e);
+                final String msg = e.getMessage() != null ? e.getMessage() : "";
+                final String userMsg;
+                if (msg.contains("ALREADY_ACCEPTED")) {
+                    userMsg = "This request was already accepted by another provider.";
+                    // Refresh UI so button is hidden and status updated
+                    new Thread(() -> refreshStateAfterConflict()).start();
+                } else if (msg.contains("LIMIT_EXCEEDED") || msg.contains("EMERGENCY_LIMIT_EXCEEDED") || msg.contains("LIMIT_REACHED")) {
+                    userMsg = "Emergency request limit reached. Try next month.";
+                } else {
+                    userMsg = "Could not update status: " + msg;
+                }
                 runOnUiThread(() -> {
                     setLoading(false);
-                    showToast("Could not update booking status: " + e.getMessage());
+                    showToast(userMsg);
                 });
             }
         }).start();

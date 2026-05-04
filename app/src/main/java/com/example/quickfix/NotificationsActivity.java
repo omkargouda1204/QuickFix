@@ -1,5 +1,6 @@
 package com.example.quickfix;
 
+import android.net.Uri;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
@@ -17,15 +18,12 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.quickfix.adapters.NotificationsAdapter;
-import com.google.android.material.button.MaterialButton;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -98,7 +96,7 @@ public class NotificationsActivity extends BaseActivity
 
         try {
             String url = BASE_URL + "/rest/v1/users?firebase_uid=eq."
-                    + URLEncoder.encode(uid, StandardCharsets.UTF_8.name())
+                    + Uri.encode(uid)
                     + "&select=id,role,is_admin,is_service_provider,is_user&limit=1";
             Request req = new Request.Builder().url(url)
                     .addHeader("apikey", ANON_KEY)
@@ -185,17 +183,19 @@ public class NotificationsActivity extends BaseActivity
                 //   user_id = resolvedUserId ← Supabase UUID fallback
                 //   receiver_id = resolvedUserId ← explicit receiver field
                 //   receiver_role = roleFilter ← broadcast to all providers / users
-                String encodedFbUid = URLEncoder.encode(firebaseUid, StandardCharsets.UTF_8.name());
-                String encodedDbId  = URLEncoder.encode(resolvedUserId, StandardCharsets.UTF_8.name());
-                String encodedRole  = URLEncoder.encode(roleFilter, StandardCharsets.UTF_8.name());
+                String encodedFbUid = Uri.encode(firebaseUid);
+                String encodedDbId  = Uri.encode(resolvedUserId);
+                String encodedRole  = Uri.encode(roleFilter);
                 String orFilter = "or=(user_id.eq." + encodedFbUid
                         + ",user_id.eq." + encodedDbId
                         + ",receiver_id.eq." + encodedFbUid
                         + ",receiver_id.eq." + encodedDbId
                         + ",receiver_role.eq." + encodedRole + ")";
+                String unreadFilter = "provider".equals(roleFilter) ? "&is_read=eq.false" : "";
                 String url = BASE_URL
                         + "/rest/v1/notifications?select=*"
                         + "&" + orFilter
+                        + unreadFilter
                         + "&order=created_at.desc";
                 Request req = new Request.Builder().url(url)
                         .addHeader("apikey", ANON_KEY)
@@ -410,7 +410,7 @@ public class NotificationsActivity extends BaseActivity
                         : currentUserId.trim();
                 JSONObject body = new JSONObject();
                 body.put("is_read", true);
-                String encodedUserId = URLEncoder.encode(resolvedUserId, StandardCharsets.UTF_8.name());
+                String encodedUserId = Uri.encode(resolvedUserId);
                 String url = BASE_URL + "/rest/v1/notifications?or=(receiver_id.eq."
                         + encodedUserId
                         + ",user_id.eq."
