@@ -734,11 +734,12 @@ public class AdminDashboardActivity extends BaseActivity {
         loadStatCount("/rest/v1/users?select=id",
                 statTotalUsers);
 
-        // Provider count from providers table (approved only).
+        // Provider count from provider_profiles table (approved only).
         loadProviderCount("eq.true", statTotalProviders);
 
-        // Load pending approvals count — from providers table
-        loadProviderCount("eq.false", statPendingApprovals);
+        // Provider pending applications count (status = pending)
+        loadStatCount("/rest/v1/provider_applications?select=id&status=eq.pending",
+                statPendingApprovals);
 
         // Active bookings count
         loadStatCount("/rest/v1/bookings?select=id",
@@ -891,7 +892,7 @@ public class AdminDashboardActivity extends BaseActivity {
     private void loadProviderCount(String approvedFilter, TextView targetView) {
         if (targetView == null) return;
 
-        String url = BuildConfig.SUPABASE_URL + "/rest/v1/providers?select=id"
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles?select=id"
                 + (approvedFilter != null ? "&is_approved=" + approvedFilter : "")
                 + "&limit=1";
         Log.d(TAG, "API_URL=" + url);

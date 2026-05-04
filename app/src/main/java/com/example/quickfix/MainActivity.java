@@ -440,11 +440,9 @@ public class MainActivity extends BaseActivity {
             rvTopBooked.setAdapter(topBookedAdapter);
         }
 
-        if (btnSeeAllTopRated != null) btnSeeAllTopRated.setOnClickListener(v -> openProvidersList(""));
-        if (btnSeeAllTopBooked != null) btnSeeAllTopBooked.setOnClickListener(v -> {
-            startActivity(new Intent(this, CategoriesActivity.class));
-        });
-        
+        if (btnSeeAllTopRated != null) btnSeeAllTopRated.setOnClickListener(v -> openProvidersList("", "TopRated"));
+        if (btnSeeAllTopBooked != null) btnSeeAllTopBooked.setOnClickListener(v -> openProvidersList("", "TopBooked"));
+
         if (cardImageDetection != null) cardImageDetection.setOnClickListener(v -> openImageDetection());
     }
 
@@ -594,11 +592,18 @@ public class MainActivity extends BaseActivity {
     }
 
     private void openProvidersList(String category) {
+        openProvidersList(category, null);
+    }
+
+    private void openProvidersList(String category, String mode) {
         try {
             Intent intent = new Intent(this, ProvidersListActivity.class);
             if (category != null && !category.trim().isEmpty()) {
                 intent.putExtra("category", category);
                 intent.putExtra("query", category);
+            }
+            if (mode != null && !mode.trim().isEmpty()) {
+                intent.putExtra(ProvidersListActivity.EXTRA_MODE, mode.trim());
             }
             startActivity(intent);
         } catch (Exception e) {

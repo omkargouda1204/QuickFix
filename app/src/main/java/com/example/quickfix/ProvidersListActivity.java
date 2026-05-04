@@ -59,6 +59,7 @@ public class ProvidersListActivity extends BaseActivity
     public static final String EXTRA_CATEGORY = "category";
     public static final String EXTRA_CITY = "city";
     public static final String EXTRA_QUERY = "query";
+    public static final String EXTRA_MODE = "mode";
 
     private static final String TAG = "ProvidersListActivity";
     private static final int LOCATION_PERMISSION_REQ = 4301;
@@ -107,6 +108,11 @@ public class ProvidersListActivity extends BaseActivity
         category = getIntent().getStringExtra(EXTRA_CATEGORY);
         if (category == null) category = "";
         category = category.trim();
+
+        String mode = getIntent().getStringExtra(EXTRA_MODE);
+        if (mode != null && !mode.trim().isEmpty()) {
+            currentChip = mode.trim();
+        }
 
         locationManager = new AppLocationManager(this);
         SharedPreferences prefs = getSharedPreferences(AppLocationManager.PREFS_NAME, MODE_PRIVATE);
@@ -186,8 +192,19 @@ public class ProvidersListActivity extends BaseActivity
             if      (id == R.id.chipAll)      currentChip = "All";
             else if (id == R.id.chipVerified) currentChip = "Verified";
             else if (id == R.id.chipTopRated) currentChip = "TopRated";
+            else if (id == R.id.chipTopBooked) currentChip = "TopBooked";
             applyFilterAndSearch();
         });
+
+        if ("TopRated".equalsIgnoreCase(currentChip)) {
+            chipGroupSort.check(R.id.chipTopRated);
+        } else if ("TopBooked".equalsIgnoreCase(currentChip)) {
+            chipGroupSort.check(R.id.chipTopBooked);
+        } else if ("Verified".equalsIgnoreCase(currentChip)) {
+            chipGroupSort.check(R.id.chipVerified);
+        } else {
+            chipGroupSort.check(R.id.chipAll);
+        }
     }
 
     private void setupSwipeRefresh() {
@@ -253,7 +270,18 @@ public class ProvidersListActivity extends BaseActivity
     }
 
     private void updateHeader() {
-        String title = category.isEmpty() ? "Service Providers" : category + " Providers";
+        String title;
+        if (category.isEmpty()) {
+            if ("TopRated".equalsIgnoreCase(currentChip)) {
+                title = "Top Rated Providers";
+            } else if ("TopBooked".equalsIgnoreCase(currentChip)) {
+                title = "Top Booked Providers";
+            } else {
+                title = "Service Providers";
+            }
+        } else {
+            title = category + " Providers";
+        }
         if (tvCategoryTitle != null) tvCategoryTitle.setText(title);
         if (tvResultSubtitle != null) {
             String label = AppLocationManager.composeLocationLabel(cityFilter, areaFilter);
@@ -315,6 +343,7 @@ public class ProvidersListActivity extends BaseActivity
             p.latitude = o.optDouble("latitude", o.optDouble("lat", Double.NaN));
             p.longitude = o.optDouble("longitude", o.optDouble("lng", Double.NaN));
             p.rating = (float) o.optDouble("rating", 0.0);
+            p.totalBookings = o.optInt("total_bookings", 0);
             p.isVerified = o.optBoolean("is_verified", false);
             return p;
         } catch (Exception e) { return null; }
@@ -328,8 +357,8 @@ public class ProvidersListActivity extends BaseActivity
             if (!CategoryMatcher.matches(category, p.category)) continue;
 
             if ("Verified".equals(currentChip) && !p.isVerified) continue;
-            
-            boolean matchesSearch = query.isEmpty() 
+
+            boolean matchesSearch = query.isEmpty()
                     || (p.businessName != null && p.businessName.toLowerCase(Locale.US).contains(query))
                     || (p.category != null && p.category.toLowerCase(Locale.US).contains(query));
             if (!matchesSearch) continue;
@@ -352,6 +381,12 @@ public class ProvidersListActivity extends BaseActivity
 
         if ("TopRated".equals(currentChip)) {
             filtered.sort((a, b) -> Float.compare(b.rating, a.rating));
+        } else if ("TopBooked".equals(currentChip)) {
+            filtered.sort((a, b) -> {
+                int byBookings = Integer.compare(b.totalBookings, a.totalBookings);
+                if (byBookings != 0) return byBookings;
+                return Float.compare(b.rating, a.rating);
+            });
         }
 
         latestFilteredProviders = filtered;
