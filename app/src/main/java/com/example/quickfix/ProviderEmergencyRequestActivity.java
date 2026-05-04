@@ -348,17 +348,18 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
                     // ✅ Only include columns that exist in the bookings table
                     body.put("provider_id",     providerProfileId);
                     body.put("provider_name",   fallback(providerName, "Provider"));
+                    body.put("accepted_provider_id", providerProfileId);
                     if (technicianName  != null && !technicianName.isEmpty())
                         body.put("technician_name",  technicianName);
                     if (technicianPhone != null && !technicianPhone.isEmpty())
                         body.put("technician_phone", technicianPhone);
-                    // ❌ DO NOT send: provider_phone, user_id, latitude, area
                 }
 
                 // PATCH only the pending row to prevent race conditions
                 String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
                         + "?id=eq." + urlEncode(requestId)
-                        + "&status=eq.pending";
+                        + "&status=eq.pending"
+                        + "&accepted_provider_id=is.null";
 
                 Request.Builder rb = new Request.Builder()
                         .url(url)

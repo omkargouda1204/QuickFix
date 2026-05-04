@@ -102,6 +102,7 @@ public class EmergencyHelpActivity extends BaseActivity {
     private String activeRequestId = "";
     private boolean isSubmitting = false;
     private boolean pendingOpenLocationPicker = false;
+    private int emergencyCount = 0;
 
     private static final class NearbyProvider {
         final String providerId;
@@ -133,6 +134,7 @@ public class EmergencyHelpActivity extends BaseActivity {
         refreshLocationState();
         // Auto-fetch live GPS if we don't have valid coordinates yet
         fetchLiveLocationIfNeeded();
+        checkEmergencyLimit();
     }
 
     /**
@@ -233,6 +235,36 @@ public class EmergencyHelpActivity extends BaseActivity {
             selectedPincode = locationManager.getSavedPincode();
         }
         updateLocationUi();
+    }
+
+    private void checkEmergencyLimit() {
+        if (currentUserId.isEmpty()) return;
+
+        new Thread(() -> {
+            try {
+                // RPC check for limit
+                JSONObject body = new JSONObject();
+                body.put("p_user_id", currentUserId);
+
+                Request request = new Request.Builder()
+                        .url(BuildConfig.SUPABASE_URL + "/rest/v1/rpc/get_monthly_emergency_count")
+                        .post(RequestBody.create(body.toString(), JSON))
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .build();
+
+                try (Response response = http.newCall(request).execute()) {
+                    if (response.isSuccessful()) {
+                        String raw = response.body() != null ? response.body().string().trim() : "0";
+                        emergencyCount = Integer.parseInt(raw);
+                        runOnUiThread(this::updateSubmitButtonState);
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "checkEmergencyLimit failed", e);
+            }
+        }).start();
     }
 
     private void updateLocationUi() {
@@ -1058,6 +1090,13 @@ public class EmergencyHelpActivity extends BaseActivity {
     }
 
     private void updateSubmitButtonState() {
+        if (emergencyCount >= 2) {
+            btnSubmit.setEnabled(false);
+            btnSubmit.setAlpha(0.6f);
+            btnSubmit.setText("Limit reached (Try next month)");
+            return;
+        }
+
         String cat = actCategory.getText().toString();
         String desc = etDescription.getText() != null ? etDescription.getText().toString().trim() : "";
         boolean locOk = !Double.isNaN(selectedLat) && !Double.isNaN(selectedLng);
