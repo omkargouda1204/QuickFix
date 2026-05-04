@@ -406,130 +406,76 @@ public class EmergencyHelpActivity extends BaseActivity {
         setStatus("Sending emergency request...");
         btnSubmit.setEnabled(false);
         btnSubmit.setAlpha(0.6f);
+        btnSubmit.setText("Please wait...");
 
         new Thread(() -> {
             try {
-                // ── Pre-flight location check ────────────────────────────────
-                Log.d("BOOKING", "User ID: " + currentUserId);
-                Log.d("BOOKING", "Lat: " + selectedLat);
-                Log.d("BOOKING", "Lng: " + selectedLng);
-                Log.d("BOOKING", "Category: " + category);
-
                 if (Double.isNaN(selectedLat) || Double.isNaN(selectedLng)) {
                     throw new IllegalStateException("Location not available. Please select your location first.");
                 }
-                if (selectedLat == 0.0 && selectedLng == 0.0) {
-                    throw new IllegalStateException("Location appears to be (0,0) — GPS not ready. Please wait or select location manually.");
-                }
 
-                // NOTE: Emergency limit is enforced server-side by the DB trigger
-                // (trg_limit BEFORE INSERT on emergency_requests).
-                // The Edge Function also does a pre-check via can_create_emergency RPC.
-                // No client-side count needed here — the server will reject with LIMIT_EXCEEDED.
+                String addressLabel = AppLocationManager.composeLocationLabel(selectedCity, selectedPincode);
+                if (TextUtils.isEmpty(addressLabel)) addressLabel = selectedAddress;
 
-                // Edge Function will handle finding providers, fallback (50km/nearest), and validation.
-                Log.d(TAG, "[submitEmergency] Preparing to call edge function with lat=" + selectedLat + " lng=" + selectedLng + " category=" + category);
-
-                // Build request payload
+                // ── Call Atomic RPC Function ────────────────────────────────
                 JSONObject body = new JSONObject();
-                body.put("user_id", currentUserId);
-                body.put("user_name", currentUserName);
-                body.put("phone", currentUserPhone);
-                body.put("category", category);
-                body.put("description", description);
-                body.put("lat", selectedLat);
-                body.put("lng", selectedLng);
-                body.put("city", selectedCity != null ? selectedCity : "");
-                body.put("area", selectedArea != null ? selectedArea : "");
-                body.put("address", selectedAddress != null ? selectedAddress : "");
-                // Send 25km; the Edge Function will auto-expand to 50km if no providers found
-                body.put("radius_meters", 25000);
+                body.put("p_category", category);
+                body.put("p_description", description);
+                body.put("p_location", addressLabel);
+                body.put("p_user_id", currentUserId); // currentUserId is a String (Firebase UID)
 
-                Log.d(TAG, "[submitEmergency] Full request body: " + body.toString());
-
-                // IMPORTANT: Supabase Edge Functions require Authorization: Bearer <ANON_KEY>
-                // NOT a Firebase ID token — Firebase tokens are rejected as UNAUTHORIZED_ASYMMETRIC_JWT
-                // The Edge Function uses the service role key internally for DB writes.
-                String anonKey = BuildConfig.SUPABASE_ANON_KEY;
-                if (anonKey == null || anonKey.isEmpty()) {
-                    throw new IllegalStateException("Supabase ANON key is not configured.");
-                }
-
-                String url = (BuildConfig.SUPABASE_CREATE_EMERGENCY_URL != null
-                        && !BuildConfig.SUPABASE_CREATE_EMERGENCY_URL.isEmpty())
-                        ? BuildConfig.SUPABASE_CREATE_EMERGENCY_URL
-                        : BuildConfig.SUPABASE_URL + "/functions/v1/create-emergency";
-
-                Log.d(TAG, "[submitEmergency] Calling URL: " + url);
+                String url = BuildConfig.SUPABASE_URL + "/rest/v1/rpc/create_emergency_request";
 
                 Request req = new Request.Builder()
                         .url(url)
                         .post(RequestBody.create(body.toString(), JSON))
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Content-Type", "application/json")
-                        .addHeader("apikey", anonKey)
-                        .addHeader("Authorization", "Bearer " + anonKey)
                         .build();
 
                 try (Response res = http.newCall(req).execute()) {
                     String raw = res.body() != null ? res.body().string() : "";
-                    Log.d(TAG, "[submitEmergency] HTTP " + res.code() + " response: " + raw);
-
-                    if (res.code() == 401) {
-                        runOnUiThread(() -> {
-                            setLoading(false);
-                            isSubmitting = false;
-                            btnSubmit.setEnabled(true);
-                            btnSubmit.setAlpha(1f);
-                            setStatus("✗ Session expired, please login again.");
-                            Toast.makeText(this, "Session expired, please login again.", Toast.LENGTH_LONG).show();
-                        });
-                        return;
-                    }
+                    Log.d(TAG, "[submitEmergency] RPC Result: " + raw);
 
                     if (!res.isSuccessful()) {
-                        final String errMsg;
-                        if (raw.contains("LIMIT_EXCEEDED") || raw.contains("EMERGENCY_LIMIT_EXCEEDED") || raw.contains("LIMIT_REACHED") || raw.contains("2 emergency requests")) {
-                            errMsg = "⚠️ Monthly limit reached. You can only make 2 emergency requests per month.";
-                        } else {
-                            errMsg = parseErrorMessage(raw, res.code());
-                        }
-                        Log.e(TAG, "[submitEmergency] Failed: HTTP " + res.code() + " " + raw);
+                        String errMsg = parseErrorMessage(raw, res.code());
                         runOnUiThread(() -> {
                             setLoading(false);
                             isSubmitting = false;
-                            btnSubmit.setEnabled(true);
-                            btnSubmit.setAlpha(1f);
                             setStatus("✗ " + errMsg);
-                            Toast.makeText(this, errMsg, Toast.LENGTH_LONG).show();
+                            showToast(errMsg);
                         });
                         return;
                     }
 
                     JSONObject result = new JSONObject(raw);
-                    boolean success = result.optBoolean("success", false);
-                    final String requestId = result.optString("request_id", "");
-                    final int providersCount = result.optInt("providers_count", 0);
-                    final String nearestDist = result.optString("nearest_provider_distance_km", "");
-                    final String message = result.optString("message",
-                            success ? "Emergency request sent!" : "Request sent, no providers nearby");
+                    String status = result.optString("status", "");
+                    
+                    if ("error".equals(status)) {
+                        String msg = result.optString("message", "Request failed");
+                        runOnUiThread(() -> {
+                            setLoading(false);
+                            isSubmitting = false;
+                            if (msg.contains("limit reached")) {
+                                btnSubmit.setEnabled(false);
+                                btnSubmit.setText("Limit reached (Try next month)");
+                            }
+                            setStatus("✗ " + msg);
+                            showToast(msg);
+                        });
+                        return;
+                    }
 
-                    Log.d(TAG, "[submitEmergency] Result: success=" + success
-                            + " providers=" + providersCount
-                            + " requestId=" + requestId
-                            + " nearest=" + nearestDist);
+                    final String requestId = result.optString("booking_id", "");
 
                     runOnUiThread(() -> {
                         setLoading(false);
                         activeRequestId = requestId;
-                        if (providersCount > 0) {
-                            String statusMsg = "✓ Emergency sent! " + providersCount + " provider(s) notified.";
-                            if (!nearestDist.isEmpty()) statusMsg += " Nearest: " + nearestDist;
-                            setStatus(statusMsg + " Waiting...");
-                            Toast.makeText(this, "Emergency sent! " + providersCount + " provider(s) notified.", Toast.LENGTH_LONG).show();
-                        } else {
-                            setStatus("✓ Request saved. No providers found nearby. We'll alert you when one is available.");
-                            Toast.makeText(this, "Emergency saved. No providers found in your area yet.", Toast.LENGTH_LONG).show();
-                        }
+                        setStatus("✓ Emergency sent! Providers notified. Waiting...");
+                        showToast("Emergency request sent successfully");
+                        btnSubmit.setEnabled(false);
+                        btnSubmit.setAlpha(0.6f);
                     });
 
                     if (!requestId.isEmpty()) {
@@ -538,24 +484,18 @@ public class EmergencyHelpActivity extends BaseActivity {
                 }
             } catch (Exception e) {
                 Log.e(TAG, "[submitEmergency] Exception:", e);
-                final String userMsg;
-                if (e.getMessage() != null && (e.getMessage().contains("LIMIT_EXCEEDED") || e.getMessage().contains("EMERGENCY_LIMIT_EXCEEDED") || e.getMessage().contains("LIMIT_REACHED"))) {
-                    userMsg = "⚠️ Monthly limit reached. You can only make 2 emergency requests per month.";
-                } else if (e.getMessage() != null && e.getMessage().contains("Only 2 emergency")) {
-                    userMsg = "⚠️ Monthly limit reached. You can only make 2 emergency requests per month.";
-                } else {
-                    userMsg = "Failed to send emergency request: " + e.getMessage();
-                }
                 runOnUiThread(() -> {
                     setLoading(false);
                     isSubmitting = false;
-                    btnSubmit.setEnabled(true);
-                    btnSubmit.setAlpha(1f);
-                    setStatus("✗ " + userMsg);
-                    Toast.makeText(this, userMsg, Toast.LENGTH_LONG).show();
+                    setStatus("✗ Error: " + e.getMessage());
+                    showToast("Failed to send request: " + e.getMessage());
                 });
             }
         }).start();
+    }
+
+    private void showToast(String msg) {
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
     }
 
     /** Extracts a user-friendly error message from a JSON error response body. */
@@ -919,7 +859,7 @@ public class EmergencyHelpActivity extends BaseActivity {
     private void pollStatus() {
         new Thread(() -> {
             try {
-                String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?id=eq." + activeRequestId + "&select=*,assigned_provider:provider_profiles(*)";
+                String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_bookings?id=eq." + activeRequestId + "&select=*,assigned_provider:provider_profiles(*)";
                 String pollToken = AuthTokenProvider.getIdTokenBlocking(10);
                 String pollAuth = (pollToken != null && !pollToken.isEmpty())
                         ? "Bearer " + pollToken
@@ -965,7 +905,7 @@ public class EmergencyHelpActivity extends BaseActivity {
                 String updateAuth = (updateToken != null && !updateToken.isEmpty())
                         ? "Bearer " + updateToken
                         : "Bearer " + BuildConfig.SUPABASE_ANON_KEY;
-                Request.Builder rb = new Request.Builder().url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?id=eq." + activeRequestId)
+                Request.Builder rb = new Request.Builder().url(BuildConfig.SUPABASE_URL + "/rest/v1/emergency_bookings?id=eq." + activeRequestId)
                         .patch(RequestBody.create(body.toString(), JSON))
                         .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                         .addHeader("Authorization", updateAuth)

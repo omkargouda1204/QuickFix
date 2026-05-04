@@ -293,7 +293,7 @@ public class NotificationsActivity extends BaseActivity
         new Thread(() -> {
             try {
                 // Fetch emergency request details
-                String fetchUrl = BASE_URL + "/rest/v1/emergency_requests?id=eq." + requestId + "&select=*&limit=1";
+                String fetchUrl = BASE_URL + "/rest/v1/emergency_bookings?id=eq." + requestId + "&select=*&limit=1";
                 Request fetchReq = new Request.Builder().url(fetchUrl)
                         .addHeader("apikey", ANON_KEY)
                         .addHeader("Authorization", "Bearer " + ANON_KEY)

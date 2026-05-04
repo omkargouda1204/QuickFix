@@ -1192,7 +1192,7 @@ public class SupabaseClient {
                         buildIdentityFilters(encodedIds, "receiver_id", "user_id", "firebase_uid"),
                         true, failures);
 
-                deleteWithFallbackFilters("emergency_requests",
+                deleteWithFallbackFilters("emergency_bookings",
                         buildIdentityFilters(encodedIds, "user_id", "assigned_provider_id"),
                         true, failures);
 

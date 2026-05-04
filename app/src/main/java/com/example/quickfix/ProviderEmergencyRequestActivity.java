@@ -220,10 +220,10 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
     }
 
     private JSONObject fetchRequestById(String id) throws Exception {
-        // Query the 'bookings' table
-        String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
+        // Query provider_emergency_requests joined with emergency_bookings
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_emergency_requests"
                 + "?id=eq." + urlEncode(id)
-                + "&select=*";
+                + "&select=*,emergency_bookings(*)&limit=1";
 
         Request.Builder rb = new Request.Builder()
                 .url(url)
@@ -236,11 +236,21 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         try (Response response = http.newCall(request).execute()) {
             String body = response.body() != null ? response.body().string() : "[]";
             if (response.code() != 200) {
-                throw new IllegalStateException("Booking lookup failed HTTP " + response.code());
+                throw new IllegalStateException("Provider request lookup failed HTTP " + response.code());
             }
             JSONArray arr = new JSONArray(body);
-            if (arr.length() == 0) throw new IllegalStateException("Emergency booking not found");
-            return arr.getJSONObject(0);
+            if (arr.length() == 0) throw new IllegalStateException("Emergency request not found");
+            
+            JSONObject providerReq = arr.getJSONObject(0);
+            activeBookingId = providerReq.optString("booking_id");
+            JSONObject booking = providerReq.optJSONObject("emergency_bookings");
+            if (booking == null) throw new IllegalStateException("Booking details missing");
+            
+            // Mirror some provider-specific info into the booking object for bindRequest
+            booking.put("provider_request_id", providerReq.optString("id"));
+            booking.put("provider_request_status", providerReq.optString("status"));
+            
+            return booking;
         }
     }
 
@@ -251,14 +261,14 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         setText(tvEmergencyCategory, "Category: " + fallback(request.optString("category", ""), "General"));
         requestLatitude = readLatitude(request);
         requestLongitude = readLongitude(request);
-        String rawAddress = fallback(request.optString("address", ""), fallback(request.optString("location_label", ""), "Not available"));
+        String rawAddress = fallback(request.optString("address", ""), fallback(request.optString("location", ""), "Not available"));
         setText(tvEmergencyAddress, "Location: " + rawAddress);
         updateDistanceLabel();
         setText(tvEmergencyDescription, "Problem: " + fallback(request.optString("description", ""), "Not specified"));
 
         String status = safe(request.optString("status", "pending")).toLowerCase(Locale.getDefault());
         String statusLine = "Status: " + (status.isEmpty() ? "pending" : status);
-        String assignedProviderId = safe(request.optString("provider_id", ""));
+        String assignedProviderId = safe(request.optString("accepted_by", ""));
         if ("accepted".equals(status) && !TextUtils.isEmpty(assignedProviderId)) {
             if (assignedProviderId.equals(providerProfileId)) {
                 statusLine += " (You accepted this request)";
@@ -301,7 +311,7 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
 
     private void updateAcceptStateFromStatus(JSONObject request) {
         String status = safe(request.optString("status", "pending")).toLowerCase(Locale.getDefault());
-        String assignedProviderId = safe(request.optString("provider_id", ""));
+        String assignedProviderId = safe(request.optString("accepted_by", ""));
         boolean alreadyClosed = !"pending".equals(status);
         boolean acceptedByOther = "accepted".equals(status)
                 && !TextUtils.isEmpty(assignedProviderId)
@@ -341,139 +351,107 @@ public class ProviderEmergencyRequestActivity extends BaseActivity {
         setLoading(true);
         new Thread(() -> {
             try {
-                JSONObject body = new JSONObject();
-                body.put("status", status);
-
                 if ("accepted".equals(status)) {
-                    // ✅ Only include columns that exist in the bookings table
-                    body.put("provider_id",     providerProfileId);
-                    body.put("provider_name",   fallback(providerName, "Provider"));
-                    body.put("accepted_provider_id", providerProfileId);
-                    if (technicianName  != null && !technicianName.isEmpty())
-                        body.put("technician_name",  technicianName);
-                    if (technicianPhone != null && !technicianPhone.isEmpty())
-                        body.put("technician_phone", technicianPhone);
-                }
+                    // Call final atomic RPC for acceptance
+                    JSONObject body = new JSONObject();
+                    body.put("p_booking_id", activeBookingId);
+                    body.put("p_provider_id", providerProfileId);
 
-                // PATCH only the pending row to prevent race conditions
-                String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings"
-                        + "?id=eq." + urlEncode(requestId)
-                        + "&status=eq.pending"
-                        + "&accepted_provider_id=is.null";
+                    String url = BuildConfig.SUPABASE_URL + "/rest/v1/rpc/accept_emergency_booking";
 
-                Request.Builder rb = new Request.Builder()
-                        .url(url)
-                        .patch(RequestBody.create(body.toString(), JSON))
-                        .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Content-Type",  "application/json")
-                        .addHeader("Prefer",        "return=representation");
-                Request request = rb.build();
+                    Request req = new Request.Builder()
+                            .url(url)
+                            .post(RequestBody.create(body.toString(), JSON))
+                            .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                            .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                            .addHeader("Content-Type", "application/json")
+                            .build();
 
-                try (Response response = http.newCall(request).execute()) {
-                    String rawBody = response.body() != null ? response.body().string() : "[]";
-                    if (!response.isSuccessful()) {
-                        Log.e(TAG, "PATCH failed HTTP " + response.code() + " body=" + rawBody);
-                        runOnUiThread(() -> {
-                            setLoading(false);
-                            showToast("Error " + response.code() + ": " + rawBody);
-                        });
-                        return;
-                    }
+                    try (Response res = http.newCall(req).execute()) {
+                        String raw = res.body() != null ? res.body().string().trim() : "false";
+                        String result = raw.replace("\"", "");
 
-                    JSONArray updatedRows = new JSONArray(rawBody);
-
-                    // Race condition: another provider already accepted
-                    if (updatedRows.length() == 0 && "accepted".equals(status)) {
-                        runOnUiThread(() -> {
-                            setLoading(false);
-                            showToast("Already accepted by another provider.");
-                        });
-                        refreshStateAfterConflict();
-                        return;
-                    }
-
-                    if ("cancelled".equals(status)) {
-                        rejectedByCurrentProvider = true;
-                    } else {
-                        rejectedByCurrentProvider = false;
-                    }
-
-                    // Send FCM notifications
-                    if (updatedRows.length() > 0) {
-                        JSONObject updatedBooking = updatedRows.getJSONObject(0);
-                        String customerId   = updatedBooking.optString("customer_id", "");
-                        String category     = updatedBooking.optString("category", "");
-                        String customerName = updatedBooking.optString("customer_name", "Customer");
-
-                        if ("accepted".equals(status)) {
-                            // Notify the USER their emergency was accepted
-                            notifyUserBookingUpdate(
-                                    customerId,
-                                    "🔧 Provider On the Way!",
-                                    "Your emergency request for " + fallback(category, "service") +
-                                    " has been accepted. Technician: " + fallback(technicianName, providerName),
-                                    requestId
-                            );
-                        } else if ("cancelled".equals(status)) {
-                            // Notify the USER their request was rejected (provider declined)
-                            notifyUserBookingUpdate(
-                                    customerId,
-                                    "Request Declined",
-                                    "A provider declined your emergency request. We are looking for another...",
-                                    requestId
-                            );
-                        }
-                    }
-
-                    upsertProviderResponse(status);
-
-                    runOnUiThread(() -> {
-                        setLoading(false);
-                        if ("accepted".equals(status)) {
-                            showToast("✅ Request Accepted!");
-                            // Permanently disable the Accept button — this request is yours
-                            if (btnAccept != null) {
+                        if ("success".equalsIgnoreCase(result)) {
+                            runOnUiThread(() -> {
+                                setLoading(false);
+                                showToast("Accepted successfully");
                                 btnAccept.setEnabled(false);
                                 btnAccept.setText("✓ Accepted");
                                 btnAccept.setAlpha(0.7f);
-                            }
-                            if (btnReject != null) btnReject.setVisibility(View.GONE);
+                                if (btnReject != null) btnReject.setVisibility(View.GONE);
+                            });
+                            updateTechnicianDetails(technicianName, technicianPhone);
                         } else {
-                            showToast("Request Declined");
-                            finish();
+                            runOnUiThread(() -> {
+                                setLoading(false);
+                                showToast(result.isEmpty() ? "Already accepted by another provider" : result);
+                                btnAccept.setEnabled(false);
+                                btnAccept.setText("Already accepted");
+                                btnAccept.setAlpha(0.5f);
+                                if (btnReject != null) btnReject.setVisibility(View.GONE);
+                            });
                         }
-                        if (updatedRows.length() > 0) {
-                            try {
-                                bindRequest(updatedRows.getJSONObject(0));
-                                if (!"accepted".equals(status)) {
-                                    updateAcceptStateFromStatus(updatedRows.getJSONObject(0));
-                                }
-                            } catch (Exception e) {
-                                Log.e(TAG, "Error binding updated request", e);
-                            }
-                        }
-                    });
+                    }
+                } else {
+                    performRejection(status);
                 }
             } catch (Exception e) {
                 Log.e(TAG, "updateBookingStatus failed", e);
-                final String msg = e.getMessage() != null ? e.getMessage() : "";
-                final String userMsg;
-                if (msg.contains("ALREADY_ACCEPTED")) {
-                    userMsg = "This request was already accepted by another provider.";
-                    // Refresh UI so button is hidden and status updated
-                    new Thread(() -> refreshStateAfterConflict()).start();
-                } else if (msg.contains("LIMIT_EXCEEDED") || msg.contains("EMERGENCY_LIMIT_EXCEEDED") || msg.contains("LIMIT_REACHED")) {
-                    userMsg = "Emergency request limit reached. Try next month.";
-                } else {
-                    userMsg = "Could not update status: " + msg;
-                }
                 runOnUiThread(() -> {
                     setLoading(false);
-                    showToast(userMsg);
+                    showToast("Error: " + e.getMessage());
                 });
             }
         }).start();
+    }
+
+    private String activeBookingId = "";
+
+    private void updateTechnicianDetails(String name, String phone) {
+        if (TextUtils.isEmpty(name) && TextUtils.isEmpty(phone)) return;
+        new Thread(() -> {
+            try {
+                JSONObject body = new JSONObject();
+                body.put("technician_name", name);
+                body.put("technician_phone", phone);
+                
+                String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_bookings?id=eq." + activeBookingId;
+                Request req = new Request.Builder()
+                        .url(url)
+                        .patch(RequestBody.create(body.toString(), JSON))
+                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                        .addHeader("Content-Type", "application/json")
+                        .build();
+                http.newCall(req).execute();
+            } catch (Exception e) {
+                Log.e(TAG, "updateTechnicianDetails failed", e);
+            }
+        }).start();
+    }
+
+    private void performRejection(String status) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("status", "rejected");
+            // Reject the specific provider request
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/provider_emergency_requests?id=eq." + requestId;
+            Request req = new Request.Builder()
+                    .url(url)
+                    .patch(RequestBody.create(body.toString(), JSON))
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .build();
+            http.newCall(req).execute();
+            runOnUiThread(() -> {
+                setLoading(false);
+                showToast("Request Declined");
+                finish();
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "performRejection failed", e);
+        }
     }
 
 

@@ -171,11 +171,11 @@ public class TransactionActivity extends BaseActivity {
 
                 // Load emergency requests
                 List<Booking> emergencies = fetchTransactionRows(
-                        BASE_URL + "/rest/v1/emergency_requests"
+                        BASE_URL + "/rest/v1/emergency_bookings"
                                 + "?select=*"
                                 + "&user_id=eq." + android.net.Uri.encode(uid)
                                 + "&order=created_at.desc",
-                        "emergency_requests");
+                        "emergency_bookings");
                 list.addAll(emergencies);
                 Log.d(TAG, "Loaded " + emergencies.size() + " emergency requests");
 

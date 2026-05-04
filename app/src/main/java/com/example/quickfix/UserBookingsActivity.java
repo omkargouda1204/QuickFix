@@ -195,7 +195,7 @@ public class UserBookingsActivity extends BaseActivity
 
                 // Load emergency requests and convert to bookings for unified display
                 String emergencyUrl = BASE_URL
-                    + "/rest/v1/emergency_requests?user_id=eq." + uid
+                    + "/rest/v1/emergency_bookings?user_id=eq." + uid
                     + "&select=*&order=created_at.desc";
                 
                 Request.Builder rbEmerg = new Request.Builder().url(emergencyUrl)
@@ -206,7 +206,7 @@ public class UserBookingsActivity extends BaseActivity
                 
                 try (Response rEmerg = HTTP.newCall(rbEmerg.build()).execute()) {
                     String bodyEmerg = rEmerg.body() != null ? rEmerg.body().string() : "[]";
-                    Log.d(TAG, "emergency_requests response: HTTP " + rEmerg.code() + " | Body length: " + bodyEmerg.length());
+                    Log.d(TAG, "emergency_bookings response: HTTP " + rEmerg.code() + " | Body length: " + bodyEmerg.length());
                     if (rEmerg.code() == 200) {
                         JSONArray arrEmerg = new JSONArray(bodyEmerg);
                         for (int i = 0; i < arrEmerg.length(); i++) {
@@ -249,13 +249,14 @@ public class UserBookingsActivity extends BaseActivity
         try {
             Booking b = new Booking();
             b.id = o.optString("id", "");
-            b.customerId = o.optString("user_firebase_uid", "");
-            b.providerName = o.optString("assigned_provider_name", "Awaiting Provider");
+            b.customerId = o.optString("user_id", "");
+            b.providerId = o.optString("accepted_by", "");
+            b.providerName = "Awaiting Provider"; // Will be resolved by resolveMissingProviderNames
             b.serviceCategory = o.optString("category", "Emergency");
             b.serviceName = "🚨 " + o.optString("category", "Emergency Service");
             b.status = o.optString("status", "pending");
             b.price = 0;
-            b.location = o.optString("location_label", "");
+            b.location = o.optString("location", "");
             b.description = o.optString("description", "Emergency request");
             b.createdAt = o.optString("created_at", "");
             b.isEmergency = true;
