@@ -36,6 +36,7 @@ public class Booking {
     public String completedAt = "";
     public String description = "";
     public String type = "";
+    public String bookingType = "normal"; // "normal" or "emergency"
     public boolean isEmergency;
     public String emergencyRequestId = "";
     public String couponCode = "";
@@ -119,7 +120,11 @@ public class Booking {
         b.completedAt = s(o, "completed_at");
         b.description = s(o, "description");
         b.type = s(o, "type");
-        b.isEmergency = o.optBoolean("is_emergency", false)
+        b.bookingType = s(o, "booking_type");
+        if (b.bookingType.isEmpty()) b.bookingType = "normal";
+
+        b.isEmergency = "emergency".equalsIgnoreCase(b.bookingType)
+                || o.optBoolean("is_emergency", false)
                 || "emergency".equalsIgnoreCase(b.type)
                 || "emergency".equalsIgnoreCase(b.category)
                 || "emergency".equalsIgnoreCase(b.serviceName);

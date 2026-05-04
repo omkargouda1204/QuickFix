@@ -170,11 +170,11 @@ public class UserBookingsActivity extends BaseActivity
                 String uid = android.net.Uri.encode(userId);
                 List<Booking> list = new ArrayList<>();
 
-                // Build an OR query to find bookings by multiple possible ids (db id or firebase uid)
+                // Load unified bookings from view
                 String orClause = "or=(customer_id.eq." + android.net.Uri.encode(userDbId)
                         + ",customer_id.eq." + android.net.Uri.encode(userId) + ")";
 
-                String url = BASE_URL + "/rest/v1/bookings?select=*&" + orClause + "&order=created_at.desc";
+                String url = BASE_URL + "/rest/v1/all_bookings?select=*&" + orClause + "&order=created_at.desc";
                 Request.Builder rb = new Request.Builder().url(url)
                         .get()
                         .addHeader("apikey", ANON_KEY)
@@ -183,35 +183,11 @@ public class UserBookingsActivity extends BaseActivity
                 
                 try (Response r = HTTP.newCall(rb.build()).execute()) {
                     String body = r.body() != null ? r.body().string() : "[]";
-                    Log.d(TAG, "bookings response: HTTP " + r.code() + " | Body length: " + body.length());
+                    Log.d(TAG, "all_bookings response: HTTP " + r.code() + " | Body length: " + body.length());
                     if (r.code() == 200) {
                         JSONArray arr = new JSONArray(body);
                         for (int i = 0; i < arr.length(); i++) {
                             Booking b = Booking.fromJson(arr.getJSONObject(i));
-                            if (b != null) list.add(b);
-                        }
-                    }
-                }
-
-                // Load emergency requests and convert to bookings for unified display
-                String emergencyUrl = BASE_URL
-                    + "/rest/v1/emergency_bookings?user_id=eq." + uid
-                    + "&select=*&order=created_at.desc";
-                
-                Request.Builder rbEmerg = new Request.Builder().url(emergencyUrl)
-                        .get()
-                        .addHeader("apikey", ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + ANON_KEY)
-                        .addHeader("Accept", "application/json");
-                
-                try (Response rEmerg = HTTP.newCall(rbEmerg.build()).execute()) {
-                    String bodyEmerg = rEmerg.body() != null ? rEmerg.body().string() : "[]";
-                    Log.d(TAG, "emergency_bookings response: HTTP " + rEmerg.code() + " | Body length: " + bodyEmerg.length());
-                    if (rEmerg.code() == 200) {
-                        JSONArray arrEmerg = new JSONArray(bodyEmerg);
-                        for (int i = 0; i < arrEmerg.length(); i++) {
-                            JSONObject o = arrEmerg.getJSONObject(i);
-                            Booking b = convertEmergencyToBooking(o);
                             if (b != null) list.add(b);
                         }
                     }

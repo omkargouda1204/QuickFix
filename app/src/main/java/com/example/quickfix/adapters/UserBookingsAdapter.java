@@ -90,8 +90,12 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
 
         void bind(Booking b) {
             String serviceTitle = b.serviceName == null || b.serviceName.isEmpty() ? "Service" : b.serviceName;
-            if (b.isEmergency) {
-                serviceTitle = "EMERGENCY - " + serviceTitle;
+            if (b.isEmergency || "emergency".equalsIgnoreCase(b.bookingType)) {
+                serviceTitle = "🚨 EMERGENCY - " + serviceTitle;
+                tvPrice.setText("₹0");
+            } else {
+                double shownAmount = b.paymentAmount > 0 ? b.paymentAmount : b.price;
+                tvPrice.setText("₹" + String.format(Locale.US, "%.0f", shownAmount));
             }
             tvServiceName.setText(serviceTitle);
             
@@ -123,9 +127,6 @@ public class UserBookingsAdapter extends RecyclerView.Adapter<UserBookingsAdapte
             } else {
                 tvTechnicianDetails.setVisibility(View.GONE);
             }
-            
-            double shownAmount = b.paymentAmount > 0 ? b.paymentAmount : b.price;
-            tvPrice.setText("₹" + String.format(Locale.US, "%.0f", shownAmount));
 
             applyStatusStyle(status);
 

@@ -218,14 +218,15 @@ public class MyBookingsActivity extends BaseActivity implements BookingsAdapter.
 
     private void loadBookingsWithProviderId() {
         String encodedProviderId = encodeValue(providerId);
+        // Load unified bookings from view for provider
         String filter = "provider_id=eq." + encodedProviderId;
 
-        String url = SUPABASE_URL + "/rest/v1/bookings"
+        String url = SUPABASE_URL + "/rest/v1/all_bookings"
                 + "?" + filter
                 + "&order=created_at.desc"
                 + "&select=*";
 
-        Log.d(TAG, "loadBookingsWithProviderId URL: " + url);
+        Log.d(TAG, "loadBookingsWithProviderId (View) URL: " + url);
 
         final List<Booking> allLoadedBookings = new ArrayList<>();
 
