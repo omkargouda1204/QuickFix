@@ -698,29 +698,47 @@ public class SupabaseClient {
         }
     }
 
+    /**
+     * Updates a user's role via the admin_set_user_role RPC function (SECURITY DEFINER).
+     * This bypasses RLS so the admin panel can promote users without hitting 403.
+     * Also syncs the boolean flags (is_admin, is_service_provider, is_user).
+     */
     private static void updateUserRoleAsync(String firebaseUid, String newRole,
                                              Callback2 callback) {
         try {
             JSONObject body = new JSONObject();
-            body.put("role", newRole);
+            body.put("p_firebase_uid", firebaseUid);
+            body.put("p_new_role", newRole);
+
             Request req = new Request.Builder()
-                    .url(SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + firebaseUid)
-                    .patch(RequestBody.create(body.toString(), JSON_TYPE))
+                    .url(SUPABASE_URL + "/rest/v1/rpc/admin_set_user_role")
+                    .post(RequestBody.create(body.toString(), JSON_TYPE))
                     .addHeader("apikey", ANON_KEY)
                     .addHeader("Authorization", "Bearer " + ANON_KEY)
                     .addHeader("Content-Type", "application/json")
+                    .addHeader("Accept", "application/json")
                     .build();
+
             HTTP.newCall(req).enqueue(new okhttp3.Callback() {
                 @Override public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "updateUserRoleAsync RPC failed: " + e.getMessage());
                     MAIN.post(() -> callback.onError(e.getMessage()));
                 }
                 @Override public void onResponse(Call call, Response response) throws IOException {
-                    int code = response.code(); response.close();
-                    if (code == 200 || code == 204) MAIN.post(callback::onSuccess);
-                    else MAIN.post(() -> callback.onError("HTTP " + code));
+                    int code = response.code();
+                    String responseBody = response.body() != null ? response.body().string() : "";
+                    response.close();
+                    Log.d(TAG, "updateUserRoleAsync RPC HTTP " + code + " uid=" + firebaseUid + " role=" + newRole);
+                    if (code == 200 || code == 204) {
+                        MAIN.post(callback::onSuccess);
+                    } else {
+                        Log.e(TAG, "updateUserRoleAsync RPC error: " + responseBody);
+                        MAIN.post(() -> callback.onError("HTTP " + code + ": " + responseBody));
+                    }
                 }
             });
         } catch (Exception e) {
+            Log.e(TAG, "updateUserRoleAsync exception: " + e.getMessage());
             MAIN.post(() -> callback.onError(e.getMessage()));
         }
     }

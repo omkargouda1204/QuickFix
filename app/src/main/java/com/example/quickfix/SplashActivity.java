@@ -100,15 +100,47 @@ public class SplashActivity extends BaseActivity {
 
     private void routeAfterSplash() {
         FirebaseUser current = FirebaseAuth.getInstance().getCurrentUser();
-        boolean isAdminEmail = current != null && current.getEmail() != null && current.getEmail().equals("admin@gmail.com");
         boolean fromAdmin = getIntent().getBooleanExtra("from_admin", false);
 
-        if (isAdminEmail || fromAdmin) {
+        if (current == null) {
+            checkMaintenanceAndRoute(false, null);
+            return;
+        }
+
+        if (!(current.isEmailVerified() || isGoogleUser(current))) {
+            checkMaintenanceAndRoute(false, current);
+            return;
+        }
+
+        final String uid = current.getUid();
+        final String email = current.getEmail() == null ? "" : current.getEmail();
+
+        // 1. Fetch Role dynamically
+        SupabaseClient.getUserRoleWithEmail(uid, email, new SupabaseClient.RoleInfoCallback() {
+            @Override
+            public void onSuccess(SupabaseClient.RoleInfo info) {
+                if (isFinishing()) return;
+                boolean isAdmin = info.isAdmin || fromAdmin;
+                checkMaintenanceAndRoute(isAdmin, current);
+            }
+
+            @Override
+            public void onError(String message) {
+                Log.w(TAG, "Role lookup failed in splash: " + message);
+                if (isFinishing()) return;
+                // Treat as non-admin if lookup fails
+                checkMaintenanceAndRoute(fromAdmin, current);
+            }
+        });
+    }
+
+    private void checkMaintenanceAndRoute(boolean isAdmin, FirebaseUser current) {
+        if (isAdmin) {
             proceedWithUser(current);
             return;
         }
 
-        String url = BuildConfig.SUPABASE_URL + "/rest/v1/app_settings?select=maintenance_mode,maintenance_message&limit=1";
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/admin_settings?select=maintenance_mode,maintenance_message&limit=1";
         okhttp3.Request req = new okhttp3.Request.Builder()
                 .url(url)
                 .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)

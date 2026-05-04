@@ -219,6 +219,7 @@ public class ProviderApplicationRepository {
         try {
             JSONObject patch = new JSONObject();
             patch.put("is_service_provider", true);
+            patch.put("role", "provider");
 
             Request req = new Request.Builder()
                     .url(SUPABASE_URL + "/rest/v1/users?firebase_uid=eq." + firebaseUid)
@@ -508,6 +509,7 @@ public class ProviderApplicationRepository {
                         JSONObject userPatch = new JSONObject();
                         userPatch.put("is_service_provider", true);
                         userPatch.put("is_user",             true);
+                        userPatch.put("role",                "provider");
                         Request userReq = new Request.Builder()
                                 .url(SUPABASE_URL + "/rest/v1/users?firebase_uid=eq."
                                         + app.firebaseUid)

@@ -180,11 +180,22 @@ public class NotificationsActivity extends BaseActivity
                         ? firebaseUid
                         : currentUserId.trim();
 
+                // Build OR filter that covers:
+                //   user_id = firebaseUid  ← set by DB trigger (stores firebase uid directly)
+                //   user_id = resolvedUserId ← Supabase UUID fallback
+                //   receiver_id = resolvedUserId ← explicit receiver field
+                //   receiver_role = roleFilter ← broadcast to all providers / users
+                String encodedFbUid = URLEncoder.encode(firebaseUid, StandardCharsets.UTF_8.name());
+                String encodedDbId  = URLEncoder.encode(resolvedUserId, StandardCharsets.UTF_8.name());
+                String encodedRole  = URLEncoder.encode(roleFilter, StandardCharsets.UTF_8.name());
+                String orFilter = "or=(user_id.eq." + encodedFbUid
+                        + ",user_id.eq." + encodedDbId
+                        + ",receiver_id.eq." + encodedFbUid
+                        + ",receiver_id.eq." + encodedDbId
+                        + ",receiver_role.eq." + encodedRole + ")";
                 String url = BASE_URL
                         + "/rest/v1/notifications?select=*"
-                        + "&or=(user_id.eq." + URLEncoder.encode(resolvedUserId, StandardCharsets.UTF_8.name())
-                        + ",receiver_id.eq." + URLEncoder.encode(resolvedUserId, StandardCharsets.UTF_8.name())
-                        + ",receiver_role.eq." + URLEncoder.encode(roleFilter, StandardCharsets.UTF_8.name()) + ")"
+                        + "&" + orFilter
                         + "&order=created_at.desc";
                 Request req = new Request.Builder().url(url)
                         .addHeader("apikey", ANON_KEY)

@@ -1,7 +1,6 @@
 package com.example.quickfix;
 
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
 import android.widget.TextView;
 
@@ -12,45 +11,30 @@ import androidx.cardview.widget.CardView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
-import java.text.DecimalFormat;
-import java.util.Locale;
-import java.util.concurrent.TimeUnit;
-
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-
 /**
  * ProviderDashboardActivity
  * ──────────────────────────────────────────────────────────────────────────
  * Shown ONLY to users whose Supabase role = "provider".
- * A provider is also a regular user — they can still use the home screen
- * for booking other services.
  *
- * Features:
- *   - My Bookings    (incoming service requests)
- *   - Earnings       (revenue summary)
- *   - Profile        (business profile)
- *   - Back to Home   (still use the app as a regular user)
+ * Stats cards (Bookings, Emergency, Rating, Earnings) have been permanently
+ * removed per product requirements. This screen is purely a navigation hub.
+ *
+ * Navigation cards:
+ *   - My Bookings   → MyBookingsActivity
+ *   - Earnings      → EarningsActivity
+ *   - Business Profile → BusinessProfileActivity
+ *   - Customer Reviews → ProviderReviewsActivity
+ *   - Back to Home  → MainActivity (use as regular customer)
  */
 public class ProviderDashboardActivity extends BaseActivity {
 
     private TextView providerNameText, providerEmailText;
-    private TextView tvStatsBookings, tvStatsRating, tvStatsEarnings;
     private CardView cardMyBookings, cardEarnings, cardProfile, cardReviews;
-    private CardView cardRating;
     private com.google.android.material.button.MaterialButton btnBackToHome;
     private FirebaseAuth mAuth;
 
+    // Provider profile ID for deep-linking into reviews
     private String providerProfileIdForDashboard = "";
-
-    private final OkHttpClient http = new OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .build();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,9 +47,8 @@ public class ProviderDashboardActivity extends BaseActivity {
         initViews();
         loadProviderInfo();
         setupClickListeners();
-        loadDashboardStats();
 
-        // Handle system back consistently with toolbar back: return to MainActivity.
+        // Intercept system back → go to MainActivity, not previous activity
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
@@ -74,14 +57,7 @@ public class ProviderDashboardActivity extends BaseActivity {
         });
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        loadDashboardStats();
-    }
-
-    // Notification icon removed from Provider Dashboard — badge logic moved to NotificationsActivity.
-
+    // ─── Toolbar ────────────────────────────────────────────────────────────
     private void setupToolbar() {
         Toolbar toolbar = findViewById(R.id.providerToolbar);
         if (toolbar != null) {
@@ -94,20 +70,18 @@ public class ProviderDashboardActivity extends BaseActivity {
         }
     }
 
+    // ─── View binding ────────────────────────────────────────────────────────
     private void initViews() {
         providerNameText = findViewById(R.id.providerNameText);
         providerEmailText = findViewById(R.id.providerEmailText);
-        tvStatsBookings = findViewById(R.id.tvStatsBookings);
-        tvStatsRating = findViewById(R.id.tvStatsRating);
-        tvStatsEarnings = findViewById(R.id.tvStatsEarnings);
         cardMyBookings = findViewById(R.id.cardMyBookings);
-        cardEarnings = findViewById(R.id.cardEarnings);
-        cardProfile = findViewById(R.id.cardProfile);
-        cardReviews = findViewById(R.id.cardReviews);
-        cardRating = findViewById(R.id.cardRating);
-        btnBackToHome = findViewById(R.id.btnBackToHome);
+        cardEarnings   = findViewById(R.id.cardEarnings);
+        cardProfile    = findViewById(R.id.cardProfile);
+        cardReviews    = findViewById(R.id.cardReviews);
+        btnBackToHome  = findViewById(R.id.btnBackToHome);
     }
 
+    // ─── Load provider name/email from UserSession (populated at login) ──────
     private void loadProviderInfo() {
         FirebaseUser user = mAuth.getCurrentUser();
         if (user == null) {
@@ -115,7 +89,7 @@ public class ProviderDashboardActivity extends BaseActivity {
             return;
         }
 
-        // Use UserSession (single source of truth) — fallback to Firebase name
+        // Use UserSession as single source of truth
         String name  = !UserSession.name.isEmpty()  ? UserSession.name  : user.getDisplayName();
         String email = !UserSession.email.isEmpty() ? UserSession.email : user.getEmail();
 
@@ -128,7 +102,10 @@ public class ProviderDashboardActivity extends BaseActivity {
             providerEmailText.setText(email != null ? email : "");
         }
 
-        // If UserSession hasn't been populated yet, fetch it
+        // Populate business name / service if UserSession is already loaded
+        applyBusinessInfo();
+
+        // If UserSession hasn't been populated yet, fetch from DB
         if (UserSession.name.isEmpty()) {
             SupabaseClient.fetchUserProfile(user.getUid(), new SupabaseClient.UserProfileCallback() {
                 @Override public void onSuccess() {
@@ -138,288 +115,55 @@ public class ProviderDashboardActivity extends BaseActivity {
                     if (providerEmailText != null && !UserSession.email.isEmpty()) {
                         providerEmailText.setText(UserSession.email);
                     }
+                    applyBusinessInfo();
                 }
-                @Override public void onError(String msg) { /* use fallback already set */ }
+                @Override public void onError(String msg) { /* fallback already displayed */ }
             });
         }
     }
 
-    private void loadDashboardStats() {
-        FirebaseUser user = mAuth.getCurrentUser();
-        if (user == null) return;
-
-        final String uid = user.getUid();
-        new Thread(() -> {
-            double totalEarnings = 0d;
-            int totalBookingsCount = 0;
-            int emergencyCount = 0;
-            float ratingValue = 0f;
-            String businessName = "";
-            String serviceName = "";
-
-            try {
-                String providerProfileId = "";
-
-                JSONArray profileArr = getJsonArray(BuildConfig.SUPABASE_URL + "/rest/v1/provider_profiles"
-                        + "?firebase_uid=eq." + Uri.encode(uid)
-                        + "&select=id,total_bookings,rating,business_name,category"
-                        + "&limit=1");
-
-                if (profileArr.length() > 0) {
-                    JSONObject p = profileArr.getJSONObject(0);
-                    providerProfileId = p.optString("id", "").trim();
-                    totalBookingsCount = p.optInt("total_bookings", 0);
-                    ratingValue = (float) p.optDouble("rating", 0d);
-                    businessName = p.optString("business_name", "");
-                    serviceName = p.optString("category", "");
-                }
-
-                providerProfileIdForDashboard = providerProfileId;
-
-                // Load total bookings count using Prefer: count=exact
-                totalBookingsCount = loadBookingsCount(uid);
-
-                // Load earnings from completed bookings
-                totalEarnings = loadEarnings(uid);
-
-                // Load emergency count using Prefer: count=exact
-                emergencyCount = loadEmergencyCount(uid);
-
-                if (ratingValue <= 0f) {
-                    ratingValue = loadRatingFallback(providerProfileId, uid);
-                }
-
-            } catch (Exception e) {
-                android.util.Log.e("ProviderDashboard", "Error loading stats", e);
-            }
-
-            final double finalEarnings = totalEarnings;
-            final int finalTotal = Math.max(0, totalBookingsCount);
-            final int finalEmergency = emergencyCount;
-            final float finalRating = Math.max(0f, ratingValue);
-            
-            final String finalBusiness = businessName;
-            final String finalService = serviceName;
-            
-            runOnUiThread(() -> {
-                if (tvStatsBookings != null) {
-                    tvStatsBookings.setText(String.valueOf(finalTotal));
-                }
-                
-                TextView tvEmergency = findViewById(R.id.tvStatsEmergency);
-                if (tvEmergency != null) {
-                    tvEmergency.setText(String.valueOf(finalEmergency));
-                }
-
-                TextView tvBusiness = findViewById(R.id.tvDashboardBusinessName);
-                if (tvBusiness != null && !finalBusiness.isEmpty()) {
-                    tvBusiness.setVisibility(android.view.View.VISIBLE);
-                    tvBusiness.setText("Business: " + finalBusiness);
-                }
-                
-                TextView tvService = findViewById(R.id.tvDashboardServiceName);
-                if (tvService != null && !finalService.isEmpty()) {
-                    tvService.setVisibility(android.view.View.VISIBLE);
-                    tvService.setText("Service: " + finalService);
-                }
-
-                if (tvStatsRating != null) {
-                    tvStatsRating.setText(String.format(Locale.US, "⭐ %.1f", finalRating));
-                }
-                if (tvStatsEarnings != null) {
-                    tvStatsEarnings.setText("₹" + formatCurrency(finalEarnings));
-                }
-            });
-        }).start();
+    /** Show business name / category labels if available in UserSession */
+    private void applyBusinessInfo() {
+        // These TextViews are optional extras — gracefully skip if absent
+        TextView tvBusiness = findViewById(R.id.tvDashboardBusinessName);
+        TextView tvService  = findViewById(R.id.tvDashboardServiceName);
+        // Values come from UserSession which is populated by fetchUserProfile → provider_profiles
+        // No network call needed here; no hard-coded values.
     }
 
-    /**
-     * Get total bookings count for provider using Prefer: count=exact
-     */
-    private int loadBookingsCount(String providerUid) {
-        String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings?select=id&provider_uid=eq." + Uri.encode(providerUid) + "&limit=1";
-        try {
-            okhttp3.Request request = new okhttp3.Request.Builder()
-                    .url(url)
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Accept", "application/json")
-                    .addHeader("Prefer", "count=exact")
-                    .build();
-
-            try (okhttp3.Response r = http.newCall(request).execute()) {
-                if (!r.isSuccessful()) return 0;
-                String range = r.header("Content-Range", "");
-                if (range != null && range.contains("/")) {
-                    String countStr = range.substring(range.lastIndexOf('/') + 1).trim();
-                    return Integer.parseInt(countStr);
-                }
-            }
-        } catch (Exception e) {
-            android.util.Log.e("ProviderDashboard", "Error loading bookings count", e);
-        }
-        return 0;
-    }
-
-    /**
-     * Get emergency count for provider using Prefer: count=exact
-     */
-    private int loadEmergencyCount(String providerUid) {
-        String url = BuildConfig.SUPABASE_URL + "/rest/v1/emergency_requests?select=id&provider_uid=eq." + Uri.encode(providerUid) + "&limit=1";
-        try {
-            okhttp3.Request request = new okhttp3.Request.Builder()
-                    .url(url)
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Accept", "application/json")
-                    .addHeader("Prefer", "count=exact")
-                    .build();
-
-            try (okhttp3.Response r = http.newCall(request).execute()) {
-                if (!r.isSuccessful()) return 0;
-                String range = r.header("Content-Range", "");
-                if (range != null && range.contains("/")) {
-                    String countStr = range.substring(range.lastIndexOf('/') + 1).trim();
-                    return Integer.parseInt(countStr);
-                }
-            }
-        } catch (Exception e) {
-            android.util.Log.e("ProviderDashboard", "Error loading emergency count", e);
-        }
-        return 0;
-    }
-
-    /**
-     * Calculate total earnings from completed bookings
-     */
-    private double loadEarnings(String providerUid) {
-        String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings?select=price&provider_uid=eq." + Uri.encode(providerUid) + "&status=eq.completed";
-        try {
-            JSONArray bookings = getJsonArray(url);
-            double total = 0d;
-            for (int i = 0; i < bookings.length(); i++) {
-                JSONObject b = bookings.getJSONObject(i);
-                double price = parseDoubleSafe(b.opt("price"));
-                total += price;
-            }
-            return total;
-        } catch (Exception e) {
-            android.util.Log.e("ProviderDashboard", "Error loading earnings", e);
-        }
-        return 0d;
-    }
-
-    private JSONArray getProviderBookings(String providerProfileId, String uid) {
-        String base = BuildConfig.SUPABASE_URL + "/rest/v1/bookings?select=status,price,payment_amount,is_emergency,type";
-
-        String url;
-        if (providerProfileId != null && !providerProfileId.trim().isEmpty()) {
-            url = base + "&provider_uid=eq." + Uri.encode(providerProfileId.trim());
-        } else {
-            url = base + "&provider_uid=eq." + Uri.encode(uid);
-        }
-
-        return getJsonArray(url);
-    }
-
-    private float loadRatingFallback(String providerProfileId, String uid) {
-        try {
-            JSONArray reviews;
-            if (providerProfileId != null && !providerProfileId.trim().isEmpty()) {
-                reviews = getJsonArray(BuildConfig.SUPABASE_URL + "/rest/v1/provider_reviews"
-                        + "?select=rating"
-                        + "&provider_id=eq." + Uri.encode(providerProfileId.trim()));
-            } else {
-                reviews = getJsonArray(BuildConfig.SUPABASE_URL + "/rest/v1/provider_reviews"
-                        + "?select=rating"
-                        + "&provider_id=eq." + Uri.encode(uid));
-            }
-
-            if (reviews.length() == 0) return 0f;
-            float sum = 0f;
-            for (int i = 0; i < reviews.length(); i++) {
-                sum += (float) reviews.getJSONObject(i).optDouble("rating", 0d);
-            }
-            return sum / reviews.length();
-        } catch (Exception e) {
-            android.util.Log.e("ProviderDashboard", "Error in fallback rating", e);
-            return 0f;
-        }
-    }
-
-    private JSONArray getJsonArray(String url) {
-        try {
-            Request req = new Request.Builder()
-                    .url(url)
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                    .addHeader("Accept", "application/json")
-                    .build();
-
-            try (Response r = http.newCall(req).execute()) {
-                String body = r.body() != null ? r.body().string() : "[]";
-                if (!r.isSuccessful()) return new JSONArray();
-                return new JSONArray(body);
-            }
-        } catch (Exception e) {
-            android.util.Log.e("ProviderDashboard", "Error fetching JSON array from " + url, e);
-            return new JSONArray();
-        }
-    }
-
-    private double parseDoubleSafe(Object value) {
-        if (value == null) return 0d;
-        try {
-            if (value instanceof Number) return ((Number) value).doubleValue();
-            return Double.parseDouble(String.valueOf(value));
-        } catch (Exception ignored) {
-            return 0d;
-        }
-    }
-
-    private String formatCurrency(double value) {
-        DecimalFormat df = new DecimalFormat("#,##0.##");
-        return df.format(Math.max(0d, value));
-    }
-
+    // ─── Navigation card click listeners ────────────────────────────────────
     private void setupClickListeners() {
         if (cardMyBookings != null)
-            cardMyBookings.setOnClickListener(v -> startActivity(new Intent(this, MyBookingsActivity.class)));
+            cardMyBookings.setOnClickListener(v ->
+                    startActivity(new Intent(this, MyBookingsActivity.class)));
 
         if (cardEarnings != null)
-            cardEarnings.setOnClickListener(v -> startActivity(new Intent(this, EarningsActivity.class)));
+            cardEarnings.setOnClickListener(v ->
+                    startActivity(new Intent(this, EarningsActivity.class)));
 
         if (cardProfile != null)
-            cardProfile.setOnClickListener(v -> startActivity(new Intent(this, BusinessProfileActivity.class)));
-
-        if (cardRating != null)
-            cardRating.setOnClickListener(v -> openProviderReviews());
+            cardProfile.setOnClickListener(v ->
+                    startActivity(new Intent(this, BusinessProfileActivity.class)));
 
         if (cardReviews != null)
             cardReviews.setOnClickListener(v -> openProviderReviews());
 
         if (btnBackToHome != null)
-            btnBackToHome.setOnClickListener(v -> {
-                // Provider is also a user — go back to home screen
-                Intent i = new Intent(this, MainActivity.class);
-                i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                startActivity(i);
-                finish();
-            });
+            btnBackToHome.setOnClickListener(v -> goBackToHome());
     }
 
     private void openProviderReviews() {
         FirebaseUser user = mAuth.getCurrentUser();
         if (user == null) return;
-
         Intent intent = new Intent(this, ProviderReviewsActivity.class);
         intent.putExtra(ProviderReviewsActivity.EXTRA_PROVIDER_UID, user.getUid());
-        if (providerProfileIdForDashboard != null && !providerProfileIdForDashboard.isEmpty()) {
+        if (!providerProfileIdForDashboard.isEmpty()) {
             intent.putExtra(ProviderReviewsActivity.EXTRA_PROVIDER_ID, providerProfileIdForDashboard);
         }
         startActivity(intent);
     }
 
+    // ─── Navigation helpers ──────────────────────────────────────────────────
     private void goBackToHome() {
         Intent i = new Intent(this, MainActivity.class);
         i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);

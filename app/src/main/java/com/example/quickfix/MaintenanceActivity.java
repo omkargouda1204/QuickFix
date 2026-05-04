@@ -26,6 +26,14 @@ public class MaintenanceActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maintenance);
 
+        // Disable back navigation
+        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                // Do nothing to block going back
+            }
+        });
+
         bindAndFill();
         setupRefreshButton();
     }

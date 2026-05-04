@@ -282,6 +282,30 @@ async function insertBooking(
   return arr[0];
 }
 
+async function insertEmergencyRequest(
+  supabaseUrl: string,
+  serviceKey: string,
+  requestData: Record<string, unknown>
+): Promise<void> {
+  const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/emergency_requests`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: serviceKey,
+      authorization: `Bearer ${serviceKey}`,
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify(requestData),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Insert emergency request failed HTTP ${res.status}: ${text}`);
+  }
+}
+
 async function notifyProviders(
   supabaseUrl: string,
   serviceKey: string,
@@ -297,10 +321,10 @@ async function notifyProviders(
       continue;
     }
 
-    // Fetch FCM token from users table
+    // Fetch FCM token from users table using firebase_uid (not Supabase UUID)
     let fcmToken = null;
     try {
-      const userRes = await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${firebaseUid}&select=fcm_token`, {
+      const userRes = await fetch(`${supabaseUrl}/rest/v1/users?firebase_uid=eq.${firebaseUid}&select=fcm_token&limit=1`, {
         method: 'GET',
         headers: {
           apikey: serviceKey,
@@ -438,7 +462,7 @@ Deno.serve(async (req) => {
 
     const emergencyAllowed = await canCreateEmergency(SUPABASE_URL, SERVICE_KEY, String(payload.user_id));
     if (!emergencyAllowed) {
-      return json({ error: 'Only 2 emergency requests allowed per month' }, 429);
+      return json({ error: 'LIMIT_REACHED: You can only make 2 emergency requests per month.' }, 429);
     }
 
     // ── 5. Find nearby providers ──────────────────────────────────────────────
@@ -496,7 +520,8 @@ Deno.serve(async (req) => {
       const providerBookingData = {
         ...baseBookingData,
         provider_id: p.id,
-        provider_firebase_uid: p.firebase_uid,
+        provider_uid: p.firebase_uid,           // firebase UID for provider-side queries
+        provider_firebase_uid: p.firebase_uid,  // legacy alias kept for compatibility
         provider_name: p.business_name || 'Awaiting Acceptance'
       };
 
@@ -504,6 +529,24 @@ Deno.serve(async (req) => {
         const created = await insertBooking(SUPABASE_URL, SERVICE_KEY, providerBookingData);
         if (!firstBookingId) firstBookingId = created.id;
         
+        // Insert into emergency_requests — required for DB triggers:
+        //   BEFORE INSERT: check_emergency_limit uses user_firebase_uid (NOT NULL column)
+        //   AFTER INSERT:  create_emergency_notification inserts notification row
+        await insertEmergencyRequest(SUPABASE_URL, SERVICE_KEY, {
+          user_firebase_uid: String(payload.user_id), // maps firebase UID to NOT NULL column
+          user_name: String(payload.user_name || ''),
+          provider_uid: p.firebase_uid,
+          booking_id: created.id,
+          category: p_category,
+          description: String(payload.description || ''),
+          city: String(payload.city || ''),
+          area: String(payload.area || ''),
+          lat: p_lat,
+          lng: p_lng,
+          status: 'pending',
+          created_at: new Date().toISOString(),
+        });
+
         notifiedProviders.push({
           ...p,
           booking_id: created.id
