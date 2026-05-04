@@ -1,54 +1,36 @@
 package com.example.quickfix;
 
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
+import android.util.Log;
 
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Helper to obtain current Firebase ID token in synchronous (blocking) manner
- * suitable for background threads. Returns null on timeout or when not available.
+ * Helper to obtain the Supabase REST bearer token used by this app.
+ *
+ * The project currently does not include a Supabase Auth session SDK, so the
+ * anonymous Supabase JWT is used as the stable bearer token for public table
+ * access. Callers should still run this from a background thread.
  */
 public class AuthTokenProvider {
 
-    /**
-     * Attempts to fetch the current user's Firebase ID token, waiting up to
-     * {@code timeoutSeconds}. Callers should run this from a background thread.
-     */
     public static String getIdTokenBlocking(long timeoutSeconds) {
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null) return null;
-
-        final String[] tokenHolder = new String[1];
-        final CountDownLatch latch = new CountDownLatch(1);
-
-        // forceRefresh=true ensures we never send an expired token to Supabase.
-        // Firebase caches tokens internally (valid 1 hr), so this is cheap when
-        // the token is fresh and automatically re-fetches when it has expired.
-        user.getIdToken(true).addOnCompleteListener(task -> {
+        // Keep the signature for existing call sites, but return the stable
+        // Supabase JWT used by the app's REST requests.
+        if (timeoutSeconds > 0) {
             try {
-                if (task.isSuccessful() && task.getResult() != null) {
-                    String token = task.getResult().getToken();
-                    android.util.Log.d("AuthTokenProvider",
-                            "ID token obtained: " + (token != null ? "OK (len=" + token.length() + ")" : "NULL"));
-                    tokenHolder[0] = token;
-                } else {
-                    android.util.Log.e("AuthTokenProvider",
-                            "getIdToken failed: " + (task.getException() != null ? task.getException().getMessage() : "unknown"));
-                }
-            } catch (Exception ignored) {}
-            latch.countDown();
-        });
+                TimeUnit.MILLISECONDS.sleep(10L);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
 
-        try {
-            boolean ok = latch.await(timeoutSeconds, TimeUnit.SECONDS);
-            if (!ok) return null;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        String token = BuildConfig.SUPABASE_ANON_KEY;
+        if (token.trim().isEmpty()) {
+            Log.e("AuthTokenProvider", "Supabase anon key is missing; cannot build Authorization header");
             return null;
         }
 
-        return tokenHolder[0];
+        Log.d("TOKEN", token);
+        return token.trim();
     }
 }

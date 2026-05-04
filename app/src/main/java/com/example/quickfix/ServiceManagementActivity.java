@@ -10,6 +10,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.AutoCompleteTextView;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
@@ -17,7 +18,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -65,13 +65,24 @@ public class ServiceManagementActivity extends BaseActivity {
     private static final MediaType JSON      = MediaType.get("application/json; charset=utf-8");
 
     // ── Exact columns that exist in the services table ────────────────────
-    private static final String SELECT_COLS =
-            "id,title,description,category,price,price_unit,duration_mins,is_active,created_at";
+    private static final String SELECT_COLS = "*";
 
     private final OkHttpClient http = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(15,  TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
+            .addInterceptor(chain -> {
+                okhttp3.Request original = chain.request();
+                String token = com.example.quickfix.AuthTokenProvider.getIdTokenBlocking(5);
+                String accessToken = (token != null && !token.isEmpty()) ? token : BuildConfig.SUPABASE_ANON_KEY;
+                Log.d("TOKEN", accessToken);
+                okhttp3.Request request = original.newBuilder()
+                        .header("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Content-Type", "application/json")
+                        .build();
+                return chain.proceed(request);
+            })
             .build();
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -173,6 +184,7 @@ public class ServiceManagementActivity extends BaseActivity {
         String url = SUPABASE_URL + "/rest/v1/services"
                 + "?select=" + SELECT_COLS
                 + "&order=title.asc";
+        Log.d(TAG, "API_URL=" + url);
 
         Request req = supabaseBuilder(url).get().build();
         http.newCall(req).enqueue(new Callback() {
@@ -215,6 +227,7 @@ public class ServiceManagementActivity extends BaseActivity {
                 JSONObject o   = arr.getJSONObject(i);
                 AdminService s = new AdminService();
                 s.id           = o.optString("id",           "");
+                s.providerUid  = o.optString("provider_uid", "");
                 s.title        = o.optString("title",        "");
                 s.category     = o.optString("category",     "");
                 s.description  = o.optString("description",  "");
@@ -291,6 +304,11 @@ public class ServiceManagementActivity extends BaseActivity {
         TextInputLayout tilIcon = dialogView.findViewById(R.id.tilIconUrl);
         if (tilIcon != null) tilIcon.setHint("Duration (mins)");
 
+        Button btnSaveService = dialogView.findViewById(R.id.btnSaveService);
+        if (btnSaveService != null) {
+            btnSaveService.setText(isEdit ? "Update Service" : "Save Service");
+        }
+
         // Populate category dropdown from existing data
         List<String> catOptions = new ArrayList<>(categoryNames);
         if (!catOptions.contains("All")) catOptions.remove("All");
@@ -319,32 +337,39 @@ public class ServiceManagementActivity extends BaseActivity {
             if (swActive != null) swActive.setChecked(true);
         }
 
-        new AlertDialog.Builder(this,
-                com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog_Centered)
+        AlertDialog dialog = new AlertDialog.Builder(this,
+                android.R.style.Theme_Material_Light_Dialog_Alert)
                 .setTitle(isEdit ? "✏️ Edit Service" : "➕ Add Service")
                 .setView(dialogView)
-                .setPositiveButton(isEdit ? "Update" : "Add", (d, w) -> {
-                    String title    = t(etTitle);
-                    String priceStr = t(etPrice);
-                    String desc     = t(etDesc);
-                    String durStr   = t(etDuration);
-                    String cat      = t(acCat);
-                    boolean active  = swActive != null && swActive.isChecked();
-
-                    if (title.isEmpty()) {
-                        if (tilTitle != null) tilTitle.setError("Title required");
-                        return;
-                    }
-                    double price;
-                    try { price = Double.parseDouble(priceStr); } catch (Exception e) { price = 0; }
-                    int dur;
-                    try { dur = Integer.parseInt(durStr); } catch (Exception e) { dur = 0; }
-
-                    if (isEdit) updateService(existing.id, title, cat, desc, price, dur, active);
-                    else        insertService(title, cat, desc, price, dur, active);
-                })
                 .setNegativeButton("Cancel", null)
-                .show();
+                .create();
+
+        if (btnSaveService != null) {
+            btnSaveService.setOnClickListener(v -> {
+                String title    = t(etTitle);
+                String priceStr = t(etPrice);
+                String desc     = t(etDesc);
+                String durStr   = t(etDuration);
+                String cat      = t(acCat);
+                boolean active  = swActive != null && swActive.isChecked();
+
+                if (title.isEmpty()) {
+                    if (tilTitle != null) tilTitle.setError("Required");
+                    return;
+                }
+
+                double price;
+                try { price = Double.parseDouble(priceStr); } catch (Exception e) { price = 0; }
+                int dur;
+                try { dur = Integer.parseInt(durStr); } catch (Exception e) { dur = 0; }
+
+                if (isEdit) updateService(existing.id, title, cat, desc, price, dur, active);
+                else        insertService(title, cat, desc, price, dur, active);
+                dialog.dismiss();
+            });
+        }
+
+        dialog.show();
     }
 
     // ── INSERT SERVICE ────────────────────────────────────────────────────
@@ -353,13 +378,16 @@ public class ServiceManagementActivity extends BaseActivity {
         try {
             JSONObject body = new JSONObject();
             body.put("id",            UUID.randomUUID().toString());
-            body.put("title",         title);          // ✅ correct column
-            body.put("category",      category);       // ✅ correct column
+            body.put("provider_uid",  adminUid);
+            body.put("title",         title);
+            body.put("category",      category);
             body.put("description",   desc);
-            body.put("price",         price);          // ✅ correct column
-            body.put("price_unit",    "fixed");        // ✅ correct column
-            body.put("duration_mins", durationMins);   // ✅ correct column
+            body.put("price",         price);
+            body.put("price_unit",    "per visit");
+            body.put("duration_mins", durationMins);
             body.put("is_active",     active);
+            Log.d(TAG, "API_URL=" + SUPABASE_URL + "/rest/v1/services");
+            Log.d(TAG, "RESPONSE_BODY=" + body.toString());
 
             Request req = supabaseBuilder(SUPABASE_URL + "/rest/v1/services")
                     .addHeader("Prefer", "return=minimal")
@@ -391,12 +419,16 @@ public class ServiceManagementActivity extends BaseActivity {
                                String desc, double price, int durationMins, boolean active) {
         try {
             JSONObject body = new JSONObject();
+            body.put("provider_uid",  adminUid);
             body.put("title",         title);
             body.put("category",      category);
             body.put("description",   desc);
             body.put("price",         price);
+            body.put("price_unit",    "per visit");
             body.put("duration_mins", durationMins);
             body.put("is_active",     active);
+            Log.d(TAG, "API_URL=" + SUPABASE_URL + "/rest/v1/services?id=eq." + id);
+            Log.d(TAG, "RESPONSE_BODY=" + body.toString());
 
             Request req = supabaseBuilder(SUPABASE_URL + "/rest/v1/services?id=eq." + id)
                     .addHeader("Prefer", "return=minimal")
@@ -428,6 +460,8 @@ public class ServiceManagementActivity extends BaseActivity {
         try {
             JSONObject body = new JSONObject();
             body.put("is_active", newStatus);  // ✅ this column exists
+            Log.d(TAG, "API_URL=" + SUPABASE_URL + "/rest/v1/services?id=eq." + svc.id);
+            Log.d(TAG, "RESPONSE_BODY=" + body.toString());
 
             Request req = supabaseBuilder(SUPABASE_URL + "/rest/v1/services?id=eq." + svc.id)
                     .addHeader("Prefer", "return=minimal")
@@ -454,7 +488,7 @@ public class ServiceManagementActivity extends BaseActivity {
     // ── DELETE SERVICE ────────────────────────────────────────────────────
     private void confirmDeleteService(AdminService svc) {
         new AlertDialog.Builder(this,
-                com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog_Centered)
+                android.R.style.Theme_Material_Light_Dialog_Alert)
                 .setTitle("🗑 Delete Service")
                 .setMessage("Delete \"" + svc.title + "\"? This cannot be undone.")
                 .setPositiveButton("Delete", (d, w) -> deleteService(svc))
@@ -511,13 +545,16 @@ public class ServiceManagementActivity extends BaseActivity {
                     try {
                         JSONObject b = new JSONObject();
                         b.put("id",            UUID.randomUUID().toString());
-                        b.put("title",         row[0]);   // ✅ title
-                        b.put("category",      row[1]);   // ✅ category
+                        b.put("provider_uid",  adminUid);
+                        b.put("title",         row[0]);
+                        b.put("category",      row[1]);
                         b.put("description",   row[2]);
-                        b.put("price",         Double.parseDouble(row[3])); // ✅ price
-                        b.put("price_unit",    "fixed");  // ✅ price_unit
-                        b.put("duration_mins", Integer.parseInt(row[4]));   // ✅ duration_mins
+                        b.put("price",         Double.parseDouble(row[3]));
+                        b.put("price_unit",    "per visit");
+                        b.put("duration_mins", Integer.parseInt(row[4]));
                         b.put("is_active",     true);
+                        Log.d(TAG, "API_URL=" + SUPABASE_URL + "/rest/v1/services");
+                        Log.d(TAG, "RESPONSE_BODY=" + b.toString());
                         Request req = supabaseBuilder(SUPABASE_URL + "/rest/v1/services")
                                 .addHeader("Prefer", "resolution=ignore-duplicates,return=minimal")
                                 .post(RequestBody.create(b.toString(), JSON)).build();

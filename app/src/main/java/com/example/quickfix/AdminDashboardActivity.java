@@ -28,7 +28,9 @@ import com.example.quickfix.adapters.HomeBannerAdapter;
 import com.example.quickfix.adapters.HomeOfferAdapter;
 import com.example.quickfix.api.BannerApi;
 import com.example.quickfix.api.OfferApi;
+import com.example.quickfix.api.ProviderApi;
 import com.example.quickfix.api.RetrofitProvider;
+import com.example.quickfix.api.model.Provider;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
@@ -110,6 +112,7 @@ public class AdminDashboardActivity extends BaseActivity {
     // ── Admin content preview (banners + offers) ─────────────────────────
     private BannerApi bannerApi;
     private OfferApi offerApi;
+    private ProviderApi providerApi;
     private ViewPager2 vpAdminBanners;
     private WormDotsIndicator adminBannerDots;
     private RecyclerView rvAdminOffers;
@@ -140,6 +143,7 @@ public class AdminDashboardActivity extends BaseActivity {
         locationManager = new AppLocationManager(this);
         bannerApi = RetrofitProvider.get().create(BannerApi.class);
         offerApi = RetrofitProvider.get().create(OfferApi.class);
+        providerApi = RetrofitProvider.get().create(ProviderApi.class);
 
         bindViews();
         setupHeaderFromIntent();
@@ -727,16 +731,14 @@ public class AdminDashboardActivity extends BaseActivity {
 
     private void loadQuickStats() {
         // Load total users count
-        loadStatCount("/rest/v1/users?select=id&is_user=eq.true",
+        loadStatCount("/rest/v1/users?select=id",
                 statTotalUsers);
 
         // Provider count from providers table.
-        loadStatCount("/rest/v1/providers?select=id",
-                statTotalProviders);
+        loadProviderCount(null, statTotalProviders);
 
-        // Load pending approvals count — from provider_applications
-        loadStatCount("/rest/v1/provider_applications?select=id&status=eq.pending",
-                statPendingApprovals);
+        // Load pending approvals count — from providers table
+        loadProviderCount("eq.false", statPendingApprovals);
 
         // Active bookings count
         loadStatCount("/rest/v1/bookings?select=id",
@@ -749,7 +751,7 @@ public class AdminDashboardActivity extends BaseActivity {
 
     private void loadNotificationBadges() {
         // Red dot on bell icon
-        loadCountAsync("/rest/v1/admin_notifications?select=id&is_read=eq.false", count -> {
+        loadCountAsync("/rest/v1/notifications?select=id&is_read=eq.false", count -> {
             if (notificationBadge != null) {
                 notificationBadge.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
             }
@@ -822,7 +824,7 @@ public class AdminDashboardActivity extends BaseActivity {
     private void loadStatCount(String path, TextView targetView) {
         if (targetView == null) return;
 
-        String url = BuildConfig.SUPABASE_URL + path + "&limit=1";
+        String url = BuildConfig.SUPABASE_URL + path;
 
         okhttp3.Request request = new okhttp3.Request.Builder()
                 .url(url)
@@ -844,6 +846,75 @@ public class AdminDashboardActivity extends BaseActivity {
             public void onResponse(okhttp3.Call call, okhttp3.Response response) {
                 int count = extractCountFromResponse(response);
                 runOnUiThread(() -> targetView.setText(String.valueOf(Math.max(0, count))));
+            }
+        });
+    }
+
+    private void loadRowArrayCount(String path, TextView targetView) {
+        if (targetView == null) return;
+
+        String url = BuildConfig.SUPABASE_URL + path;
+        Log.d(TAG, "API_URL=" + url);
+
+        okhttp3.Request request = new okhttp3.Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey",        BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                .addHeader("Accept",        "application/json")
+                .build();
+
+        http.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(okhttp3.Call call, java.io.IOException e) {
+                Log.w(TAG, "loadRowArrayCount failed: " + e.getMessage());
+                runOnUiThread(() -> targetView.setText("0"));
+            }
+
+            @Override
+            public void onResponse(okhttp3.Call call, okhttp3.Response response) {
+                try {
+                    String body = response.body() != null ? response.body().string() : "[]";
+                    Log.d(TAG, "RESPONSE=" + body);
+                    int count = new org.json.JSONArray(body).length();
+                    runOnUiThread(() -> targetView.setText(String.valueOf(Math.max(0, count))));
+                } catch (Exception e) {
+                    Log.w(TAG, "loadRowArrayCount parse failed: " + e.getMessage());
+                    runOnUiThread(() -> targetView.setText("0"));
+                } finally {
+                    response.close();
+                }
+            }
+        });
+    }
+
+    private void loadProviderCount(String approvedFilter, TextView targetView) {
+        if (providerApi == null || targetView == null) return;
+
+        String url = BuildConfig.SUPABASE_URL + "/rest/v1/providers?select=id"
+                + (approvedFilter != null ? "&approved=" + approvedFilter : "");
+        Log.d(TAG, "API_URL=" + url);
+
+        providerApi.getProviders(
+                BuildConfig.SUPABASE_ANON_KEY,
+                "Bearer " + BuildConfig.SUPABASE_ANON_KEY,
+                "id",
+                approvedFilter,
+                1000
+        ).enqueue(new retrofit2.Callback<List<Provider>>() {
+            @Override
+            public void onResponse(Call<List<Provider>> call, Response<List<Provider>> response) {
+                int count = (response.isSuccessful() && response.body() != null)
+                        ? response.body().size()
+                        : 0;
+                Log.d(TAG, "RESPONSE providers count=" + count);
+                runOnUiThread(() -> targetView.setText(String.valueOf(count)));
+            }
+
+            @Override
+            public void onFailure(Call<List<Provider>> call, Throwable t) {
+                Log.w(TAG, "loadProviderCount failed: " + t.getMessage());
+                runOnUiThread(() -> targetView.setText("0"));
             }
         });
     }

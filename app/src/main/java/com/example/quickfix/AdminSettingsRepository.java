@@ -192,6 +192,7 @@ public final class AdminSettingsRepository {
         try {
             String token = AuthTokenProvider.getIdTokenBlocking(10);
             String authHeader = "Bearer " + (token != null ? token : ANON_KEY);
+            Log.d(TAG, "API_URL=" + SUPABASE_URL + "/rest/v1/admin_settings?select=*&limit=1");
             Call<List<AdminSettingsDto>> call = getApi().fetchSingleRow(
                     ANON_KEY,
                     authHeader,
@@ -207,6 +208,7 @@ public final class AdminSettingsRepository {
                     arr.put(dtoToJson(body.get(0)));
                 }
                 Log.d(TAG, "fetchRows Retrofit HTTP 200 rows=" + (body == null ? 0 : body.size()));
+                Log.d(TAG, "RESPONSE=" + arr.toString());
                 return arr;
             }
             String err = r.errorBody() != null ? r.errorBody().string() : "";
@@ -218,58 +220,29 @@ public final class AdminSettingsRepository {
     }
 
     private static AppSettings.Snapshot createDefaultRow() throws Exception {
-        // Prefer minimal row creation so DB defaults populate all columns.
-        JSONObject minimalDefaults = new JSONObject();
-        minimalDefaults.put("id", java.util.UUID.randomUUID().toString());
-        minimalDefaults.put("maintenance_end_time", JSONObject.NULL);
-
         JSONObject primary = new JSONObject();
-        primary.put("id", java.util.UUID.randomUUID().toString());
-        primary.put("push_notifications",     AppSettings.DEFAULT_PUSH_NOTIFICATIONS);
-        primary.put("email_notifications",    AppSettings.DEFAULT_EMAIL_NOTIFICATIONS);
-        primary.put("admin_alerts",           AppSettings.DEFAULT_ADMIN_ALERTS);
-        primary.put("dark_mode",              AppSettings.DEFAULT_DARK_MODE);
-        primary.put("auto_approve_providers", AppSettings.DEFAULT_AUTO_APPROVE_PROVIDERS);
-        primary.put("daily_email_digest",     AppSettings.DEFAULT_DAILY_EMAIL_DIGEST);
-        primary.put("maintenance_mode",       AppSettings.DEFAULT_MAINTENANCE_MODE);
+        primary.put("auto_approve_providers", false);
+        primary.put("maintenance_mode",       false);
         primary.put("maintenance_message",    AppSettings.DEFAULT_MAINTENANCE_MESSAGE);
         primary.put("maintenance_end_time",   JSONObject.NULL);
 
-        JSONObject legacy = new JSONObject();
-        legacy.put("id", java.util.UUID.randomUUID().toString());
-        legacy.put("push_notifications",     AppSettings.DEFAULT_PUSH_NOTIFICATIONS);
-        legacy.put("email_notifications",    AppSettings.DEFAULT_EMAIL_NOTIFICATIONS);
-        legacy.put("admin_alerts",           AppSettings.DEFAULT_ADMIN_ALERTS);
-        legacy.put("dark_mode",              AppSettings.DEFAULT_DARK_MODE);
-        legacy.put("auto_approve",           AppSettings.DEFAULT_AUTO_APPROVE_PROVIDERS);
-        legacy.put("daily_digest",           AppSettings.DEFAULT_DAILY_EMAIL_DIGEST);
-        legacy.put("maintenance_mode",       AppSettings.DEFAULT_MAINTENANCE_MODE);
-        legacy.put("maintenance_message",    AppSettings.DEFAULT_MAINTENANCE_MESSAGE);
-        legacy.put("maintenance_end_time",   JSONObject.NULL);
+        String token = AuthTokenProvider.getIdTokenBlocking(10);
+        String authHeader = "Bearer " + (token != null ? token : ANON_KEY);
 
-        JSONObject[] payloads = new JSONObject[]{ minimalDefaults, primary, legacy };
-
-        for (JSONObject body : payloads) {
-            Request req = new Request.Builder()
-                    .url(SUPABASE_URL + "/rest/v1/admin_settings")
-                    .post(RequestBody.create(body.toString(), JSON_TYPE))
-                    .addHeader("apikey",        ANON_KEY)
-                    .addHeader("Authorization", "Bearer " + ANON_KEY)
-                    .addHeader("Content-Type",  "application/json")
-                    .addHeader("Prefer",        "return=representation")
-                    .build();
-            try (Response r = HTTP.newCall(req).execute()) {
-                String resp = r.body() != null ? r.body().string() : "[]";
-                Log.d(TAG, "createDefaultRow HTTP " + r.code() + " payload=" + body + " resp=" + resp);
-                if (r.code() == 200 || r.code() == 201) {
-                    JSONArray arr = new JSONArray(resp);
-                    if (arr.length() > 0) return parseSnapshot(arr.getJSONObject(0));
-                }
-                // If row already exists, just fetch and continue.
-                if (r.code() == 409) {
-                    JSONArray retry = fetchRows();
-                    if (retry.length() > 0) return parseSnapshot(retry.getJSONObject(0));
-                }
+        Request req = new Request.Builder()
+                .url(SUPABASE_URL + "/rest/v1/admin_settings")
+                .post(RequestBody.create(primary.toString(), JSON_TYPE))
+                .addHeader("apikey",        ANON_KEY)
+                .addHeader("Authorization", authHeader)
+                .addHeader("Content-Type",  "application/json")
+                .addHeader("Prefer",        "return=representation")
+                .build();
+        try (Response r = HTTP.newCall(req).execute()) {
+            String resp = r.body() != null ? r.body().string() : "[]";
+            Log.d(TAG, "createDefaultRow HTTP " + r.code() + " resp=" + resp);
+            if (r.code() == 200 || r.code() == 201) {
+                JSONArray arr = new JSONArray(resp);
+                if (arr.length() > 0) return parseSnapshot(arr.getJSONObject(0));
             }
         }
 
@@ -289,7 +262,7 @@ public final class AdminSettingsRepository {
         } catch (Exception firstErr) {
             Log.w(TAG, "patchSettingsRow first attempt failed, retrying: " + firstErr.getMessage());
             // Fetch fresh rowId and retry once
-            AppSettings.Snapshot fresh = fetchOrCreateSync(QuickFixApp.getInstance());
+            AppSettings.Snapshot fresh = fetchOrCreateSync(context);
             if (fresh != null && fresh.hasValidRowId() && !fresh.rowId.equals(rowId)) {
                 Log.d(TAG, "patchSettingsRow retrying with fresh rowId=" + fresh.rowId);
                 return patchSettingsRowInternal(fresh.rowId, patchBody);
@@ -304,6 +277,7 @@ public final class AdminSettingsRepository {
             Map<String, Object> patchMap = jsonToMap(patchBody);
             String token = AuthTokenProvider.getIdTokenBlocking(10);
             String authHeader = "Bearer " + (token != null ? token : ANON_KEY);
+            Log.d(TAG, "API_URL=" + SUPABASE_URL + "/rest/v1/admin_settings?id=eq." + rowId);
 
             Call<List<AdminSettingsDto>> call = getApi().updateById(
                     ANON_KEY,
@@ -317,6 +291,7 @@ public final class AdminSettingsRepository {
             if (r.code() == 200) {
                 List<AdminSettingsDto> body = r.body();
                 if (body != null && !body.isEmpty()) {
+                    Log.d(TAG, "RESPONSE=" + dtoToJson(body.get(0)).toString());
                     return parseSnapshot(dtoToJson(body.get(0)));
                 }
                 return fetchSingleRowById(rowId);
@@ -336,6 +311,7 @@ public final class AdminSettingsRepository {
         String url = SUPABASE_URL + "/rest/v1/admin_settings?select=*&id=eq." + rowId + "&limit=1";
         String token = AuthTokenProvider.getIdTokenBlocking(10);
         String authHeader = "Bearer " + (token != null ? token : ANON_KEY);
+        Log.d(TAG, "API_URL=" + url);
 
         Request req = new Request.Builder()
                 .url(url).get()
@@ -347,6 +323,7 @@ public final class AdminSettingsRepository {
             String body = r.body() != null ? r.body().string() : "[]";
             Log.d(TAG, "fetchSingleRowById HTTP " + r.code() + " rowId=" + rowId);
             if (r.code() == 200) {
+                Log.d(TAG, "RESPONSE=" + body);
                 JSONArray arr = new JSONArray(body);
                 if (arr.length() > 0) return parseSnapshot(arr.getJSONObject(0));
             }
@@ -389,21 +366,14 @@ public final class AdminSettingsRepository {
         String rawId = obj.optString("id", "");
         s.rowId = rawId.isEmpty() ? null : rawId;
 
-        s.pushNotifications    = optBoolNullFalse(obj, "push_notifications");
-        s.emailNotifications   = optBoolNullFalse(obj, "email_notifications");
-        s.adminAlerts          = optBoolNullFalse(obj, "admin_alerts");
-        s.darkMode             = optBoolNullFalse(obj, "dark_mode");
-        s.autoApproveProviders = optBoolAnyNullFalse(obj,
-                new String[]{"auto_approve_providers", "auto_approve"});
-        s.dailyEmailDigest     = optBoolAnyNullFalse(obj,
-                new String[]{"daily_email_digest", "daily_digest"});
+        s.autoApproveProviders = optBoolNullFalse(obj, "auto_approve_providers");
         s.maintenanceMode      = optBoolNullFalse(obj, "maintenance_mode");
-        s.maintenanceMessage   = sanitize(obj.optString("maintenance_message", ""),
+        s.maintenanceMessage   = sanitize(obj.optString("maintenance_message", AppSettings.DEFAULT_MAINTENANCE_MESSAGE),
                 AppSettings.DEFAULT_MAINTENANCE_MESSAGE);
-        s.maintenanceEndTime   = sanitize(obj.optString("maintenance_end_time", ""), "");
+        s.maintenanceEndTime   = sanitize(obj.optString("maintenance_end_time", AppSettings.DEFAULT_MAINTENANCE_END_TIME),
+                AppSettings.DEFAULT_MAINTENANCE_END_TIME);
 
-        Log.d(TAG, "parseSnapshot rowId=" + s.rowId + " darkMode=" + s.darkMode
-                + " maintenance=" + s.maintenanceMode);
+        Log.d(TAG, "parseSnapshot rowId=" + s.rowId + " maintenance=" + s.maintenanceMode);
         return s;
     }
 
@@ -455,15 +425,16 @@ public final class AdminSettingsRepository {
                                                                       JSONObject originalBody) throws Exception {
         try {
             return patchSettingsRow(context, rowId, originalBody);
-        } catch (Exception first) {
-            String fallbackColumn = aliasColumn(column);
-            if (!fallbackColumn.equals(column)) {
-                Log.w(TAG, "Retrying updateBooleanField with alias column=" + fallbackColumn);
-                JSONObject fallbackBody = new JSONObject();
-                fallbackBody.put(fallbackColumn, value);
-                return patchSettingsRow(context, rowId, fallbackBody);
+        } catch (Exception primary) {
+            String alias = aliasColumn(column);
+            if (alias.isEmpty() || alias.equals(column)) {
+                throw primary;
             }
-            throw first;
+
+            JSONObject aliasBody = new JSONObject();
+            aliasBody.put(alias, value);
+            Log.w(TAG, "patchBooleanWithAliasFallback retrying alias column=" + alias);
+            return patchSettingsRow(context, rowId, aliasBody);
         }
     }
 
@@ -498,14 +469,7 @@ public final class AdminSettingsRepository {
     private static JSONObject dtoToJson(AdminSettingsDto d) throws Exception {
         JSONObject o = new JSONObject();
         o.put("id", d.id);
-        if (d.pushNotifications != null) o.put("push_notifications", d.pushNotifications);
-        if (d.emailNotifications != null) o.put("email_notifications", d.emailNotifications);
-        if (d.adminAlerts != null) o.put("admin_alerts", d.adminAlerts);
-        if (d.darkMode != null) o.put("dark_mode", d.darkMode);
         if (d.autoApproveProviders != null) o.put("auto_approve_providers", d.autoApproveProviders);
-        if (d.autoApproveLegacy != null) o.put("auto_approve", d.autoApproveLegacy);
-        if (d.dailyEmailDigest != null) o.put("daily_email_digest", d.dailyEmailDigest);
-        if (d.dailyDigestLegacy != null) o.put("daily_digest", d.dailyDigestLegacy);
         if (d.maintenanceMode != null) o.put("maintenance_mode", d.maintenanceMode);
         if (d.maintenanceMessage != null) o.put("maintenance_message", d.maintenanceMessage);
         if (d.maintenanceEndTime != null) o.put("maintenance_end_time", d.maintenanceEndTime);

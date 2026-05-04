@@ -56,8 +56,6 @@ public class AdminProviderManagementActivity extends BaseActivity
     private View progressBar;
 
     private TextView tvTotalProviders;
-    private TextView tvAvailableProviders;
-    private TextView tvApprovedProviders;
 
     private final List<ProviderProfile> providers = new ArrayList<>();
     private AdminProviderManagementAdapter adapter;
@@ -83,8 +81,6 @@ public class AdminProviderManagementActivity extends BaseActivity
         progressBar = findViewById(R.id.progressBar);
 
         tvTotalProviders = findViewById(R.id.tvTotalProviders);
-        tvAvailableProviders = findViewById(R.id.tvAvailableProviders);
-        tvApprovedProviders = findViewById(R.id.tvApprovedProviders);
 
         if (btnBack != null) btnBack.setOnClickListener(v -> finish());
         if (btnRefresh != null) btnRefresh.setOnClickListener(v -> loadProviders());
@@ -176,15 +172,7 @@ public class AdminProviderManagementActivity extends BaseActivity
 
     private void updateStats() {
         int total = providers.size();
-        int available = 0;
-        int approved = 0;
-        for (ProviderProfile p : providers) {
-            if (p.isAvailable) available++;
-            if (p.isApproved) approved++;
-        }
         tvTotalProviders.setText(String.valueOf(total));
-        tvAvailableProviders.setText(String.valueOf(available));
-        tvApprovedProviders.setText(String.valueOf(approved));
     }
 
     private void updateListState() {
